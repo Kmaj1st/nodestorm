@@ -116,10 +116,13 @@ export const GraphExport = z.object({
 });
 export type GraphExport = z.infer<typeof GraphExport>;
 
-/** A place in an imported document. */
+/** Where something came from: a page of an imported document, or an encyclopedia entry (`site` + `url`). */
 export const SourceRef = z.object({
   title: z.string().max(300),
   page: z.number().int().min(1).optional(),
+  /** The site a looked-up definition came from ("ProofWiki", "Wikipedia"…) and its page. */
+  site: z.string().max(60).optional(),
+  url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
 
@@ -182,6 +185,8 @@ export const Sense = z.object({
   name: z.string(),
   domain: z.string(),
   definition: z.string(),
+  /** Set when the meaning was looked up in an encyclopedia rather than suggested by the AI. */
+  source: z.lazy(() => SourceRef).optional(),
 });
 export type Sense = z.infer<typeof Sense>;
 

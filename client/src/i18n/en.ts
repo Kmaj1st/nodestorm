@@ -802,6 +802,19 @@ export const en = {
   "dt.importedUnread": "Imported {title}, but {n, plural, one {# scanned page} other {# scanned pages}} couldn't be read. Open it to paste the text.",
   "dt.importFailed": "Couldn't import {title}: {error}",
   "dt.noProblems": "No problems found on {title}.",
+  "toast.lookupNothing": "Nothing found for “{name}” in the encyclopedias.",
+  "task.lookup": "Looking up “{name}”…",
+  "toast.lookupNoAi": "Definitions come from the encyclopedias. Set up AI in Settings to also check prerequisites.",
+  "node.source": "Source",
+  "node.sourceLink": "{site}: {title}",
+  "node.lookupAgain": "Look up again",
+  "settings.lookup": "Definitions",
+  "settings.lookupEnabled": "Look definitions up in encyclopedias before asking the AI",
+  "settings.lookupProofWiki": "ProofWiki (rigorous mathematical definitions)",
+  "settings.lookupWikipedia": "Wikipedia and Wikidata (broad, many languages)",
+  "settings.lookupHint": "Concept names are sent to the sites you tick. The AI is asked only when they find nothing.",
+  "settings.lookupPaused": "{sites} refused recent requests and will be skipped for a few minutes.",
+  "sense.from": "from {site}",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

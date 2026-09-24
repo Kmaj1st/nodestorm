@@ -65,6 +65,19 @@ no key needed) or an empty graph.
   dollar, and prices like "$5 and $10" stay text (a `$` followed by a space can't open a formula, and one after a
   space or before a digit can't close it). A formula KaTeX can't read is shown as written.
 
+- **Definitions from encyclopedias**, before the AI is asked. When you add a concept without a definition, NodeStorm
+  looks it up in these sources, in this order:
+  - **ProofWiki**, for rigorous maths definitions. Its macros become standard LaTeX.
+  - **Wikipedia and Wikidata**, in your answer language. Formulas are kept as LaTeX.
+
+  Several meanings go to "what do you mean?", each naming its site. The definition keeps a link to its source, and the
+  inspector can **Look up again**. The AI is asked only when nothing is found, and with no AI key set up you still get
+  definitions. Settings → **Definitions** switches each source on or off.
+
+  Concept names are sent to the sites you enable. ProofWiki sits behind a Cloudflare bot check that often refuses
+  apps; NodeStorm then skips it for 10 minutes and uses Wikipedia. `npm run smoke:lookup` checks the sites from your
+  machine.
+
 ### Study tools
 
 - **Explain more.** In the inspector pick a level (*intuitive*, *rigorous* or *example-driven*). The AI writes a

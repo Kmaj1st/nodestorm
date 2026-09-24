@@ -22,6 +22,8 @@ interface SettingsState {
   clarify: { enabled: boolean; options: number };
   /** Limits for "Install all missing": how many levels of prerequisites to follow, and how many concepts to add. */
   installAll: { maxDepth: number; maxNodes: number };
+  /** Look definitions up in encyclopedias before asking the AI (see lib/lookup.ts), and which ones. */
+  lookup: { enabled: boolean; proofwiki: boolean; wikipedia: boolean };
   /** When a prerequisite check closes a dependency cycle, let the AI pick the wrong link and remove it. */
   autoResolveCycles: boolean;
   /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
@@ -107,6 +109,7 @@ export const useSettings = create<SettingsStore>()(
       visionModels: {},
       clarify: { enabled: true, options: 3 },
       installAll: { maxDepth: 3, maxNodes: 15 },
+      lookup: { enabled: true, proofwiki: true, wikipedia: true },
       autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,
@@ -134,6 +137,7 @@ export const useSettings = create<SettingsStore>()(
           configs: { ...emptyConfigs(), ...(p.configs ?? {}) },
           clarify: { ...current.clarify, ...(p.clarify ?? {}) },
           installAll: { ...current.installAll, ...(p.installAll ?? {}) },
+          lookup: { ...current.lookup, ...(p.lookup ?? {}) },
         };
       },
     },

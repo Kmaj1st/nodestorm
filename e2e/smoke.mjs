@@ -39,6 +39,11 @@ try {
   browser = await chromium.launch();
   // A context (not browser.newPage) so the share-link section can open a second page with the same storage.
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
+  // Never ask the real encyclopedias: every concept's definition then comes from the offline demo AI, as the
+  // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead.
+  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org/;
+  const blockLookups = (ctx) => ctx.route(LOOKUP_SITES, (r) => r.abort());
+  await blockLookups(context);
   // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
   // the end switches the interface language itself, and that choice is kept across its reloads.
   await context.addInitScript(() => {
@@ -923,6 +928,7 @@ try {
   // Fresh browser contexts: a first visit, with nothing in localStorage but the interface language.
   const firstVisit = async (lang, viewport = { width: 1400, height: 900 }) => {
     const ctx = await browser.newContext({ viewport, locale: lang === "zh" ? "zh-CN" : "en-US" });
+    await blockLookups(ctx);
     await ctx.addInitScript((l) => {
       try {
         if (!localStorage.getItem("nodestorm-ui-language")) localStorage.setItem("nodestorm-ui-language", l);
@@ -1609,6 +1615,78 @@ try {
     assert((await panel.locator(".derive-session").count()) === 2 && (await panel.locator(".derive-doc").count()) === 3, "documents and derivations survive a reload");
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
+  }
+
+  console.log("Definitions from encyclopedias");
+  {
+    // Fixtures shaped like ProofWiki's and Wikimedia's real API answers.
+    const json = (body) => ({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
+    const kernel = [
+      "== Definition ==",
+      "Let $\\phi: G \\to H$ be a [[Definition:Group Homomorphism|group homomorphism]].",
+      "The '''kernel''' of $\\phi$ is the [[Definition:Set|set]]:",
+      ":$\\map \\ker \\phi := \\set {x \\in G: \\map \\phi x = e_H}$",
+      "{{Proofread}}",
+      "== Also see ==",
+      "* [[Kernel is Normal Subgroup of Domain]]",
+    ].join("\n");
+    await context.unrouteAll();
+    await context.route(LOOKUP_SITES, (route) => {
+      const url = decodeURIComponent(route.request().url()).replace(/\+/g, " ");
+      if (url.includes("proofwiki") && url.includes("page=Definition:Kernel")) return route.fulfill(json({ parse: { title: "Definition:Kernel", wikitext: kernel } }));
+      if (url.includes("proofwiki")) return route.fulfill({ status: 403, contentType: "text/html", headers: { "cf-mitigated": "challenge" }, body: "Just a moment..." });
+      if (url.includes("titles=Expectation&")) return route.fulfill(json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "Expectation may refer to:" }] } }));
+      if (url.includes("wbsearchentities")) {
+        return route.fulfill(json({ search: [
+          { id: "Q200125", label: "expected value", description: "long-run average value of a random variable" },
+          { id: "Q7", label: "expectation", description: "belief about the future" },
+        ] }));
+      }
+      if (url.includes("wbgetentities")) return route.fulfill(json({ entities: { Q200125: { sitelinks: { enwiki: { title: "Expected value" } } } } }));
+      if (url.includes("titles=Expected value")) {
+        return route.fulfill(json({ query: { pages: [{ title: "Expected value", extract: "In probability theory, the expected value is a generalization of the weighted average.", fullurl: "https://en.wikipedia.org/wiki/Expected_value" }] } }));
+      }
+      return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+    });
+    // Wikipedia's language follows the AI answer language, which an earlier section set to 中文.
+    const lang = await openSettings();
+    await lang.getByLabel("AI answers in").selectOption({ label: "Auto (match the concept names)" });
+    await lang.getByRole("button", { name: "Save", exact: true }).click();
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+
+    await addByName("Kernel");
+    await waitBadge("Kernel", "blocked"); // looked up, then the AI found its prerequisites
+    await node("Kernel").click();
+    const def = await page.getByTestId("definition").inputValue();
+    assert(def.startsWith("Let $\\phi: G \\to H$ be a group homomorphism.") && def.includes("\\left\\{x \\in G"), "a new concept's definition comes from ProofWiki, macros turned into standard LaTeX");
+    const link = page.getByTestId("definition-source").getByRole("link");
+    assert((await link.textContent()) === "ProofWiki: Definition:Kernel" && (await link.getAttribute("href")) === "https://proofwiki.org/wiki/Definition:Kernel", "…with a link to its source");
+    await audit("inspector with a looked-up definition");
+
+    // ProofWiki refuses this one (a bot check), so Wikipedia and Wikidata answer: two meanings to choose from.
+    await addByName("Expectation");
+    const sense = page.getByRole("dialog", { name: "What do you mean?" });
+    await sense.waitFor();
+    assert((await sense.textContent()).includes("from Wikipedia") && (await sense.textContent()).includes("from Wikidata"), "several looked-up meanings go to “what do you mean?”, each naming its site");
+    await sense.getByText("Expected value", { exact: true }).click();
+    await sense.getByRole("button", { name: "Use this meaning" }).click();
+    await node("Expected value").click();
+    assert((await page.getByTestId("definition").inputValue()).startsWith("In probability theory"), "the chosen meaning brings its definition");
+
+    const st = await openSettings();
+    await st.getByText("ProofWiki refused recent requests").waitFor();
+    assert(true, "Settings says ProofWiki is being skipped for now");
+    await audit("Settings with the definitions section");
+    await st.getByLabel("Look definitions up in encyclopedias before asking the AI").uncheck();
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+    await addByName("Normal Subgroup");
+    await waitBadge("Normal Subgroup", "blocked");
+    await node("Normal Subgroup").click();
+    assert((await page.getByTestId("definition").inputValue()).startsWith("A subgroup $N$"), "with lookups off, the AI defines new concepts again");
+    await context.unrouteAll();
+    await blockLookups(context);
   }
 
   console.log("\nE2E passed");

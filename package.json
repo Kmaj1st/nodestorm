@@ -16,7 +16,8 @@
     "test": "vitest run",
     "e2e": "node e2e/smoke.mjs",
     "e2e:pwa": "npm run build && node e2e/pwa.mjs",
-    "smoke:live": "tsx --env-file-if-exists=server/.env scripts/live-smoke.mts"
+    "smoke:live": "tsx --env-file-if-exists=server/.env scripts/live-smoke.mts",
+    "smoke:lookup": "tsx scripts/lookup-smoke.mts"
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",

@@ -3,7 +3,9 @@ import {
   ArrowDown,
   ArrowLeftRight,
   ArrowRight,
+  BookOpen,
   ChevronRight,
+  ExternalLink,
   GraduationCap,
   PenLine,
   Highlighter,
@@ -24,9 +26,11 @@ import {
   installAllMissing,
   installDep,
   mix,
+  relookup,
   resolveCycle,
 } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { sourceLabel } from "../lib/export";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
@@ -156,6 +160,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         />
       </label>
       <MathPreview text={node.definition} testId="definition-preview" />
+      <SourceLine node={node} viewing={viewing} />
 
       {node.status === "error" && (
         <div className="error-box">
@@ -588,5 +593,37 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
         </button>
       </div>
     </aside>
+  );
+}
+
+/** Where the definition came from (an encyclopedia page, or a page of an imported document); a looked-up one can be redone. */
+function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) {
+  const t = useT();
+  const busy = useGraphStore((s) => Object.keys(s.busy).some((k) => k.startsWith("relookup:") && k.endsWith(node.id)));
+  const src = node.source;
+  const lookupOn = useSettings((s) => s.lookup.enabled);
+  const canLookup = !viewing && lookupOn;
+  // Only for a concept with a source: others were defined by the AI or by hand, and the row would cost space.
+  if (!src) return null;
+  return (
+    <div className="source-line small" data-testid="definition-source">
+      <span className="muted">
+        {t("node.source")}:{" "}
+        {src.url ? (
+          <a href={src.url} target="_blank" rel="noopener noreferrer">
+            {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}
+            <Icon icon={ExternalLink} size={12} />
+          </a>
+        ) : (
+          sourceLabel(src)
+        )}
+      </span>
+      {canLookup && src.url && (
+        <button className="link link--icon" onClick={() => void relookup(node.id)} disabled={busy || node.status === "checking"}>
+          <Icon icon={BookOpen} size={12} />
+          {t("node.lookupAgain")}
+        </button>
+      )}
+    </div>
   );
 }

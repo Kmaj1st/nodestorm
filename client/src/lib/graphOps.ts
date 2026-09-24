@@ -3,6 +3,7 @@ import {
   normalizeName,
   type ConceptNode,
   type DepRole,
+  type SourceRef,
   type DirRel,
   type Graph,
   type Prerequisite,
@@ -269,7 +270,7 @@ export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
 export function applySense(
   g: Graph,
   nodeId: string,
-  sense: { name: string; definition: string },
+  sense: { name: string; definition: string; source?: SourceRef },
 ): { graph: Graph; id: string; merged: boolean } {
   const node = g.nodes.find((n) => n.id === nodeId);
   if (!node) return { graph: g, id: nodeId, merged: false };
@@ -282,6 +283,8 @@ export function applySense(
     name,
     definition: sense.definition.trim(),
     aliases,
+    // A looked-up meaning records where it came from; one the AI or the user wrote has no source.
+    source: sense.source,
     senses: undefined,
     status: "checking",
     error: undefined,

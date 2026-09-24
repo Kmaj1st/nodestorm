@@ -207,6 +207,37 @@ answer. Hints get stronger with `nth`. Post-processing drops citation numbers th
 dedupes concepts, and counts `solved` only for an `ok` step. `splitProblems` runs `cleanProblems` (dedupe; pages
 outside the sheet become null).
 
+### Encyclopedia lookups (`shared/src/lookup/`, `client/src/lib/lookup.ts`)
+
+These are plain `fetch` calls to public APIs, not an AI task. They work the same in the browser and in Node, and `fetch` is injectable for tests.
+- `lookupConcept({name, lang, sites, max})` tries the sites in order and returns the first answer, as `LookupSense[]` (name, domain, definition, aliases, `source`). It also returns `blocked`: the sites that refused.
+- **`proofwiki.ts` part of `sites.ts`**:
+  - Reads `Definition:<Title Case Name>` through `api.php?action=parse&prop=wikitext`.
+  - Follows one `{{:…}}` transclusion.
+  - On a disambiguation page, or when there is no page, takes the listed definitions or a `prefixsearch`.
+  - `wikitext.ts` turns the Definition section into prose: links become their text, templates, refs and categories are dropped, and ProofWiki's macros (`\map`, `\set`, `\paren`, `\closedint`, …) are expanded into standard LaTeX by `expandMacros`.
+- **Wikipedia**:
+  - `action=query&prop=extracts|description|pageprops|info` with `explaintext`.
+  - Its plain text writes each formula as a MathML dump plus `{\displaystyle …}`; `mathFromExtract` keeps the LaTeX as `$…$` and drops the dump.
+  - A missing or disambiguation page falls back to Wikidata `wbsearchentities`, one sense per item. `wbgetentities` gets each item's article; all the intros come back in one more query.
+- **`http.ts`**:
+  - Every request sends `Api-User-Agent`, as Wikimedia's rules ask.
+  - A Cloudflare challenge (`cf-mitigated`, a non-JSON answer, or a CORS or network failure) or a 429 is a `SiteBlockedError`; a 404 is "nothing there".
+- **Client (`lib/lookup.ts`)**:
+  - Settings: `lookup.enabled/proofwiki/wikipedia`.
+  - `lookupLanguage` goes from the answer language, or the name's script, to a Wikipedia code.
+  - A localStorage cache holds 500 names for 30 days; only clean answers are cached.
+  - A site that refused is paused for 10 minutes, and Settings shows that.
+- **In `analyzeNode`**: a concept without a definition is looked up first.
+  - One sense gives the definition and `source` (plus the looked-up title as an alias).
+  - Several senses go to `SenseDialog` (`Sense.source` shows "from Wikipedia").
+  - Nothing found falls through to the AI `clarify`.
+  - With no AI ready, a looked-up concept is left `ok` and a one-time notice appears, instead of opening Settings.
+  - `relookup` backs "Look up again" (one undo step).
+- **Tests never touch the real sites**:
+  - `test-setup.ts` makes those hosts fail in vitest.
+  - The e2e routes abort them, except the "Definitions from encyclopedias" section, which serves fixtures.
+
 ### Browser mode vs server mode
 
 ```mermaid
@@ -616,6 +647,10 @@ and server-binding items are real problems worth fixing.
   previews under it). Relation labels on the canvas, tooltips, concept names and the Mermaid export stay plain text
   (the PNG export captures the cards as they are on screen).
   The currency rule guesses: "$5 for $x$" works, but "$5 and 10$" is a formula.
+- **Encyclopedia lookups**:
+  - ProofWiki's Cloudflare bot check refuses most programmatic requests, so in practice definitions usually come from Wikipedia.
+  - Wikipedia's first paragraph can be long or general; it is cut at about 500 characters.
+  - Wikimedia rate-limits shared cloud IPs, so lookups work best from the user's own browser.
 - **Derive together**:
   - Retrieval is keyword-based (BM25), not embeddings, so a reference that words things differently can be missed.
   - Documents stay in this browser: they are not in JSON exports or share links.

@@ -931,3 +931,8 @@ kbd {
   .shortcuts__group dd { margin-bottom: 6px; }
   .shortcuts__group dt { white-space: normal; }
 }
+
+/* Where a definition came from (inspector), and indented sub-options in Settings. */
+.source-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin-top: calc(-1 * var(--space-2)); }
+.source-line a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
+.check.indent { padding-left: var(--space-5); min-height: 28px; }

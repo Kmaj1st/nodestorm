@@ -65,6 +65,7 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
             <span>
               <span className="sense__head">
                 <b>{s.name}</b> <span className="role">{s.domain}</span>
+                {s.source?.site && s.source.site !== s.domain && <span className="muted small"> {t("sense.from", { site: s.source.site })}</span>}
               </span>
               <span className="muted small"><MathText text={s.definition} /></span>
             </span>

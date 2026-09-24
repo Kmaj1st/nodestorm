@@ -42,6 +42,10 @@ together.
 - `npm run smoke:live` checks a real key and model end to end.
 
 ### Study and thinking tools
+- **Definitions from encyclopedias**:
+  - ProofWiki (with its maths macros turned into standard LaTeX), then Wikipedia and Wikidata (formulas kept), are asked before the AI.
+  - Each definition keeps a link to its source, and several meanings go to "what do you mean?".
+  - It works without an AI key. Each source can be switched on or off in Settings.
 - **Derive together**: a tutor mode for working a problem out yourself.
   - Import PDFs (scanned pages are read by a vision model), text or Markdown, as problem sheets or references.
   - Pick a problem from a sheet, select one in a document, or type your own.

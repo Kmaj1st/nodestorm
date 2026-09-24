@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref } from "../i18n";
 import { api } from "../lib/api";
+import { pausedSites } from "../lib/lookup";
 import { useTheme, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
@@ -40,6 +41,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [clarify, setClarify] = useState(saved.clarify);
   const [installAll, setInstallAll] = useState(saved.installAll);
   const [autoResolveCycles, setAutoResolveCycles] = useState(saved.autoResolveCycles);
+  const [lookup, setLookup] = useState(saved.lookup);
   const [language, setLanguage] = useState(saved.language);
   // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
   const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
@@ -98,7 +100,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setPref(theme);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, autoResolveCycles, language: lang, aiConcurrency,
+      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, autoResolveCycles, language: lang, aiConcurrency,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
@@ -354,6 +356,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           />
           {t("settings.concepts")}
         </label>
+      </fieldset>
+
+      <fieldset className="choice">
+        <legend>{t("settings.lookup")}</legend>
+        <label className="check">
+          <input type="checkbox" checked={lookup.enabled} onChange={(e) => setLookup({ ...lookup, enabled: e.target.checked })} />
+          {t("settings.lookupEnabled")}
+        </label>
+        <label className="check indent">
+          <input type="checkbox" checked={lookup.proofwiki} disabled={!lookup.enabled} onChange={(e) => setLookup({ ...lookup, proofwiki: e.target.checked })} />
+          {t("settings.lookupProofWiki")}
+        </label>
+        <label className="check indent">
+          <input type="checkbox" checked={lookup.wikipedia} disabled={!lookup.enabled} onChange={(e) => setLookup({ ...lookup, wikipedia: e.target.checked })} />
+          {t("settings.lookupWikipedia")}
+        </label>
+        <span className="muted small">{t("settings.lookupHint")}</span>
+        {lookup.enabled && pausedSites().length > 0 && (
+          <span className="warn small">{t("settings.lookupPaused", { sites: pausedSites().map((s) => (s === "proofwiki" ? "ProofWiki" : "Wikipedia")).join(", ") })}</span>
+        )}
       </fieldset>
 
       <fieldset className="choice">
