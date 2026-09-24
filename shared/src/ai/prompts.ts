@@ -1,5 +1,5 @@
-import type { DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "@nodestorm/shared";
-import type { ChatMessage } from "../providers/Provider.js";
+import type { DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "../model";
+import type { ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "relate" | "deps" | "derive";
 

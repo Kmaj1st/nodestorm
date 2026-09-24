@@ -1,19 +1,19 @@
-import type { ProvidersResponse } from "@nodestorm/shared";
-import { useEffect, useRef, useState } from "react";
+import { providerMeta } from "@nodestorm/shared";
+import { useRef } from "react";
 import { mix } from "../lib/actions";
-import { api, setProvider as setApiProvider } from "../lib/api";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+import { isReady, useSettings } from "../store/settingsStore";
 
 export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () => void }) {
   const s = useGraphStore();
   const graph = useGraphStore(activeGraph);
-  const [providers, setProviders] = useState<ProvidersResponse | null>(null);
+  const settings = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
-
-  useEffect(() => {
-    api.providers().then(setProviders).catch(() => setProviders(null));
-  }, []);
-  useEffect(() => setApiProvider(s.provider), [s.provider]);
+  const ready = isReady(settings);
+  const meta = providerMeta(settings.provider);
+  const model =
+    (settings.connection === "browser" ? settings.configs[settings.provider]?.model : settings.serverModels[settings.provider]) ||
+    (settings.connection === "browser" ? meta.defaultModel : "server default");
 
   const selected = graph.nodes.filter((n) => s.selection.includes(n.id));
   const blocked = selected.filter((n) => n.status === "blocked");
@@ -76,21 +76,14 @@ export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () =
       </div>
 
       <div className="toolbar__group toolbar__right">
-        <select
-          value={s.provider ?? ""}
-          onChange={(e) => s.setProvider(e.target.value || null)}
-          aria-label="AI provider"
-          title="AI provider"
+        <button
+          className={ready ? "ai-button" : "ai-button ai-button--warn"}
+          onClick={() => s.setSettingsOpen(true)}
+          title="AI settings"
+          aria-label="AI settings"
         >
-          <option value="">
-            AI: default{providers ? ` (${providers.providers.find((p) => p.id === providers.default)?.label})` : ""}
-          </option>
-          {providers?.providers.map((p) => (
-            <option key={p.id} value={p.id} disabled={!p.configured}>
-              {p.label} · {p.model}{p.configured ? "" : " (no key)"}
-            </option>
-          ))}
-        </select>
+          ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
+        </button>
         <button onClick={doExport}>Export</button>
         <button onClick={() => fileRef.current?.click()}>Import</button>
         <input

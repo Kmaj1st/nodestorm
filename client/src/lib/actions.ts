@@ -1,6 +1,6 @@
 import { findByName, toBrief, type DerivedProposal, type NameCandidate } from "@nodestorm/shared";
 import { useGraphStore } from "../store/graphStore";
-import { api } from "./api";
+import { api, NeedsSetupError } from "./api";
 import * as ops from "./graphOps";
 
 /** Async flows that combine AI calls with graph mutations. Each binds to the graph it started in. */
@@ -8,12 +8,18 @@ import * as ops from "./graphOps";
 const store = () => useGraphStore.getState();
 const graph = (id: string) => store().graphs[id];
 
+/** Report an AI failure; a missing key opens Settings instead of just complaining. */
+function reportError(e: unknown, prefix = "") {
+  if (e instanceof NeedsSetupError) store().setSettingsOpen(true);
+  store().setToast(prefix + (e instanceof Error ? e.message : String(e)));
+}
+
 async function withBusy<T>(key: string, label: string, fn: () => Promise<T>): Promise<T | undefined> {
   store().setBusy(key, label);
   try {
     return await fn();
   } catch (e) {
-    store().setToast(e instanceof Error ? e.message : String(e));
+    reportError(e);
     return undefined;
   } finally {
     store().setBusy(key, null);
@@ -34,7 +40,7 @@ export async function checkDeps(nodeId: string, graphId = store().activeId) {
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     store().mutate((g) => ops.setNodeError(g, nodeId, msg), graphId);
-    store().setToast(`Dependency check failed: ${msg}`);
+    reportError(e, "Dependency check failed: ");
   }
 }
 

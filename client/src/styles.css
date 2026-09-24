@@ -150,3 +150,26 @@ textarea { resize: vertical; width: 100%; }
   .main { flex-direction: column; }
   .inspector { width: auto; max-height: 45vh; border-left: none; border-top: 1px solid var(--border); }
 }
+
+/* Settings */
+.settings { width: min(620px, calc(100vw - 32px)); }
+.choice { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; margin: 0; }
+.choice legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
+.choice label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
+.choice label > span { display: flex; flex-direction: column; }
+.choice input { margin-top: 4px; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 14px; cursor: pointer; }
+.field .row input { flex: 1; min-width: 0; }
+.ok { color: var(--ok); }
+.warn { color: var(--checking); }
+.model-list {
+  list-style: none; margin: 0; padding: 4px; max-height: 180px; overflow-y: auto;
+  border: 1px solid var(--border); border-radius: 8px; display: flex; flex-direction: column;
+}
+.model { width: 100%; text-align: left; border: none; border-radius: 4px; padding: 4px 8px; font-size: 13px; }
+.model--on { background: var(--accent-soft); color: var(--accent); }
+.keynote { background: var(--bg); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
+.keynote p { margin: 0; }
+.ai-button { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-button--warn { border-color: var(--checking); color: var(--checking); background: #fffbeb; }
+code { font-size: 12px; background: var(--bg); padding: 0 3px; border-radius: 3px; }

@@ -47,6 +47,45 @@ try {
     await page.getByRole("button", { name: "Add", exact: true }).click();
   };
 
+  console.log("AI setup");
+  assert((await page.getByRole("button", { name: "AI settings" }).textContent()).includes("Set up AI"), "toolbar asks to set up AI on first visit");
+  await page.getByRole("button", { name: "+ Add concept" }).click();
+  await page.getByRole("button", { name: "Describe it" }).click();
+  await page.getByLabel("Concept description").fill("a map between groups that preserves the operation");
+  await page.getByRole("button", { name: "Find a name" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).waitFor();
+  assert(true, "using AI without a key opens Settings");
+
+  // Fake SiliconFlow so model discovery can be tested without a real key.
+  await page.route("https://api.siliconflow.cn/v1/models**", (route) => {
+    const auth = route.request().headers()["authorization"];
+    if (auth !== "Bearer sk-good") return route.fulfill({ status: 401, contentType: "application/json", body: '{"message":"Invalid token"}' });
+    return route.fulfill({ contentType: "application/json", body: JSON.stringify({ data: [{ id: "deepseek-ai/DeepSeek-V3" }, { id: "Qwen/Qwen3-32B" }, { id: "moonshotai/Kimi-K2-Instruct" }] }) });
+  });
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.getByLabel("API key", { exact: true }).fill("sk-bad");
+  await settings.getByTestId("models-error").waitFor();
+  assert((await settings.getByTestId("models-error").textContent()).includes("401"), "a wrong key shows an auth error");
+  await settings.getByLabel("API key", { exact: true }).fill("sk-good");
+  await settings.getByTestId("models-ok").waitFor();
+  assert((await settings.getByRole("list", { name: "Available models" }).getByRole("button").count()) === 3, "models discovered from the API");
+  await settings.getByLabel("Model", { exact: true }).fill("qwen");
+  assert((await settings.getByRole("list", { name: "Available models" }).getByRole("button").count()) === 1, "typing filters the model list");
+  await settings.getByRole("button", { name: "Qwen/Qwen3-32B" }).click();
+  await page.screenshot({ path: `${shots}0-settings.png` });
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  assert((await page.getByRole("button", { name: "AI settings" }).textContent()).includes("Qwen3-32B"), "toolbar shows chosen provider and model");
+  const stored = await page.evaluate(() => localStorage.getItem("nodestorm-settings") ?? "");
+  assert(!stored.includes("sk-good") && stored.includes("Qwen/Qwen3-32B"), "key not written to localStorage when 'remember' is off");
+
+  // Saving returns to the Add dialog that triggered setup; close it.
+  await page.getByRole("dialog", { name: "Add concept" }).getByRole("button", { name: "Cancel" }).click();
+
+  // Switch to the offline demo provider for the rest of the flow.
+  await page.getByRole("button", { name: "AI settings" }).click();
+  await settings.getByLabel("Provider", { exact: true }).selectOption("mock");
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+
   console.log("Naming from a description");
   await page.getByRole("button", { name: "+ Add concept" }).click();
   await page.getByRole("button", { name: "Describe it" }).click();
@@ -112,6 +151,18 @@ try {
   await page.getByRole("button", { name: "Merge back" }).click();
   await node("Kernel").waitFor();
   assert((await page.getByTestId("sandbox-banner").count()) === 0, "merged back into main graph, which now has Kernel");
+
+  console.log("Server mode");
+  await page.getByRole("button", { name: "AI settings" }).click();
+  await settings.getByText("Through the local NodeStorm server").click();
+  await settings.getByTestId("models-ok").waitFor();
+  assert(true, "server mode discovers models through the local server");
+  await settings.getByRole("button", { name: "Save", exact: true }).click();
+  await page.getByTestId(`arrow-${relId}-aToB`).click({ force: true });
+  await page.getByRole("button", { name: "Re-analyze with AI" }).click();
+  await page.waitForFunction(() => !document.querySelector(".status"));
+  const toastText = (await page.locator(".toast").count()) ? await page.locator(".toast").textContent() : "";
+  assert(toastText === "", `AI calls work through the server ${toastText}`);
 
   console.log("Persistence");
   await page.reload();

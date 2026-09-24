@@ -1,5 +1,5 @@
-import { normalizeName } from "@nodestorm/shared";
-import type { ChatMessage, Provider } from "./Provider.js";
+import { normalizeName } from "../model";
+import type { ChatMessage, ModelInfo, Provider } from "./provider";
 
 /**
  * Offline provider with a tiny abstract-algebra knowledge base.
@@ -61,6 +61,10 @@ export class MockProvider implements Provider {
   label = "Mock (offline)";
   model = "mock-kb";
   configured = true;
+
+  async listModels(): Promise<ModelInfo[]> {
+    return [{ id: "mock-kb", label: "Built-in algebra knowledge base" }];
+  }
 
   async complete(messages: ChatMessage[]): Promise<string> {
     const task = messages[0]?.content.match(/\[task:(\w+)\]/)?.[1];

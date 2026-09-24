@@ -7,10 +7,10 @@ import {
   NameResponse,
   RelateRequest,
   RelateResponse,
-} from "@nodestorm/shared";
+} from "../model";
 import type { z } from "zod";
-import { ProviderError, type ChatMessage, type Provider } from "../providers/Provider.js";
-import { depsPrompt, derivePrompt, namePrompt, relatePrompt } from "./prompts.js";
+import { ProviderError, type ChatMessage, type Provider } from "./provider";
+import { depsPrompt, derivePrompt, namePrompt, relatePrompt } from "./prompts";
 
 /** Pull the first JSON object out of a model reply (tolerates code fences and stray prose). */
 export function extractJson(text: string): unknown {

@@ -14,34 +14,51 @@ Graphs autosave to your browser's localStorage. **Export** and **Import** move t
 
 ```bash
 npm install
-cp server/.env.example server/.env   # then add your API key
-npm run dev                          # server on :8787, UI on http://localhost:5173
+npm run web        # UI only: http://localhost:5173
 ```
 
-To try it without an API key, use the offline mock provider. It has a tiny built-in abstract-algebra knowledge base.
+Click **⚙ Set up AI** in the toolbar, choose a provider and paste your API key. The model list loads straight from the provider's API. Start typing to filter it, then pick a model. To try the app without a key, choose **Offline demo**. It has a tiny built-in abstract-algebra knowledge base.
+
+`npm run build` produces a static site in `client/dist/` that runs without a server. You can open it from any static host.
+
+### Where your key goes
+
+In **Directly from this browser** mode, the page calls the provider itself. Your key goes only to that provider and never to a NodeStorm server.
+- By default the key is kept only for the current tab and forgotten when you close it.
+- If you tick **Remember keys on this device**, it is saved in the browser's localStorage instead. Only do that on your own device. Browser extensions and anyone using the same browser profile can read it.
+- Use a separate key with a spending limit.
+- **Forget all saved keys** removes them.
+
+### Server mode (optional)
+
+If you'd rather keep keys out of the browser, put them in `server/.env` and switch Settings to **Through the local NodeStorm server**:
 
 ```bash
-npm run dev:mock
+cp server/.env.example server/.env   # add your keys
+npm run dev                          # server on :8787 + UI on :5173
 ```
 
 ## AI providers
 
-Providers are pluggable (`server/src/providers/`). You set the default with `AI_PROVIDER` in `server/.env`, and you can switch per session from the dropdown in the toolbar.
+| Provider | Model discovery | Notes |
+|---|---|---|
+| SiliconFlow (default) | `GET /v1/models?type=text&sub_type=chat` | default model `deepseek-ai/DeepSeek-V3` |
+| Anthropic Claude | `GET /v1/models` | default `claude-opus-5`; optional web search when naming/relating |
+| OpenAI-compatible | `GET {baseURL}/models` (non-chat models hidden) | any compatible endpoint: OpenAI, Ollama, vLLM, DeepSeek… |
+| Offline demo | built-in | no key; deterministic, used by tests |
 
-| id            | Provider                           | Env vars                                                     |
-|---------------|------------------------------------|--------------------------------------------------------------|
-| `siliconflow` | SiliconFlow (default), OpenAI-compatible | `SILICONFLOW_API_KEY`, `SILICONFLOW_MODEL` (default `deepseek-ai/DeepSeek-V3`), `SILICONFLOW_BASE_URL` |
-| `anthropic`   | Anthropic Claude                   | `ANTHROPIC_API_KEY`, `ANTHROPIC_MODEL` (default `claude-opus-5`), `ANTHROPIC_WEB_SEARCH=1` to let it search the web when naming or relating |
-| `openai`      | Any OpenAI-compatible endpoint     | `OPENAI_API_KEY`, `OPENAI_BASE_URL`, `OPENAI_MODEL`         |
-| `mock`        | Offline, deterministic             | none                                                           |
+In server mode the same providers are configured by env vars (`SILICONFLOW_API_KEY`, `SILICONFLOW_MODEL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_WEB_SEARCH=1`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, …). See `server/.env.example`.
 
-To add a provider, implement the `Provider` interface (`complete(messages, opts) → string`) and register it in `server/src/providers/registry.ts`. Everything else is shared across providers: the prompts (`server/src/ai/prompts.ts`), JSON extraction, zod validation, and the retry on malformed output.
+The provider code lives in `shared/src/ai/`, so the browser and the server run the same prompts, JSON extraction, zod validation and retry. To add a provider:
+1. Implement the `Provider` interface: `complete(messages, opts)` and `listModels()`.
+2. Add it to `PROVIDERS` and `createProvider` in `shared/src/ai/factory.ts`.
+3. Map its env vars in `server/src/providers/registry.ts`.
 
 ## Layout
 
 ```
-shared/   zod schemas + types shared by client and server (graph model, AI task I/O)
-server/   Express API: POST /api/{name,relate,deps,derive}, GET /api/providers
+shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
+server/   optional Express API: POST /api/{name,relate,deps,derive}, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/graphOps.ts
 e2e/      Playwright smoke test (runs against the mock provider)
 ```
@@ -50,6 +67,6 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, dependency/install/sandbox logic
-npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium
+npm test        # vitest: AI task parsing/validation, model discovery, dependency/install/sandbox logic
+npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 ```

@@ -12,12 +12,12 @@ interface State {
   graphs: Record<string, Graph>;
   mainId: string;
   activeId: string;
-  provider: string | null;
   // UI state (not persisted)
   selection: string[];
   inspect: Inspect;
   busy: Record<string, string>; // key -> label of running AI tasks
   toast: string | null;
+  settingsOpen: boolean;
 }
 
 interface Actions {
@@ -25,7 +25,7 @@ interface Actions {
   mutate(fn: (g: Graph) => Graph, graphId?: string): void;
   setSelection(ids: string[]): void;
   setInspect(i: Inspect): void;
-  setProvider(id: string | null): void;
+  setSettingsOpen(open: boolean): void;
   setBusy(key: string, label: string | null): void;
   setToast(msg: string | null): void;
   switchTo(graphId: string): void;
@@ -48,11 +48,11 @@ export const useGraphStore = create<GraphStore>()(
   persist(
     (set, get) => ({
       ...initial(),
-      provider: null,
       selection: [],
       inspect: null,
       busy: {},
       toast: null,
+      settingsOpen: false,
 
       mutate(fn, graphId) {
         const id = graphId ?? get().activeId;
@@ -62,7 +62,7 @@ export const useGraphStore = create<GraphStore>()(
       },
       setSelection: (selection) => set({ selection }),
       setInspect: (inspect) => set({ inspect }),
-      setProvider: (provider) => set({ provider }),
+      setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
       setBusy(key, label) {
         const busy = { ...get().busy };
         if (label) busy[key] = label;
@@ -121,7 +121,7 @@ export const useGraphStore = create<GraphStore>()(
       name: "nodestorm",
       version: 1,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ graphs: s.graphs, mainId: s.mainId, activeId: s.activeId, provider: s.provider }),
+      partialize: (s) => ({ graphs: s.graphs, mainId: s.mainId, activeId: s.activeId }),
       // Nodes left mid-check when the page closed would otherwise spin forever.
       onRehydrateStorage: () => (state) => {
         if (!state) return;

@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
-import { extractJson, tasks } from "../src/ai/tasks.js";
-import { MockProvider } from "../src/providers/mock.js";
-import type { ChatMessage, Provider } from "../src/providers/Provider.js";
+import { extractJson, tasks } from "../src/ai/tasks";
+import { MockProvider } from "../src/ai/mock";
+import type { ChatMessage, Provider } from "../src/ai/provider";
 
 describe("extractJson", () => {
   it("parses plain, fenced, and prose-wrapped JSON", () => {
@@ -48,7 +48,7 @@ describe("structured output retry", () => {
     const replies = ["not json", '{"aToB":{"kind":"k","explanation":"e"},"bToA":{"kind":"k2","explanation":"e2"}}'];
     const seen: ChatMessage[][] = [];
     const flaky: Provider = {
-      id: "flaky", label: "Flaky", model: "m", configured: true,
+      id: "flaky", label: "Flaky", model: "m", configured: true, listModels: async () => [],
       complete: async (m) => { seen.push(m); return replies.shift()!; },
     };
     const r = await tasks.relate(flaky, { a: { name: "A" }, b: { name: "B" } });

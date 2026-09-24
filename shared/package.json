@@ -5,6 +5,11 @@
   "type": "module",
   "main": "src/index.ts",
   "types": "src/index.ts",
-  "scripts": { "typecheck": "tsc -p ." },
-  "dependencies": { "zod": "^4.1.0" }
+  "scripts": {
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "zod": "^4.1.0",
+    "@anthropic-ai/sdk": "^0.128.0"
+  }
 }

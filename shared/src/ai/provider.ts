@@ -11,13 +11,20 @@ export interface CompleteOptions {
   maxTokens?: number;
 }
 
-/** A pluggable LLM backend. Implementations only need to turn messages into text. */
+export interface ModelInfo {
+  id: string;
+  label?: string;
+}
+
+/** A pluggable LLM backend. Runs in the browser or in Node — implementations only use fetch / isomorphic SDKs. */
 export interface Provider {
   id: string;
   label: string;
   model: string;
   configured: boolean;
   complete(messages: ChatMessage[], opts?: CompleteOptions): Promise<string>;
+  /** Models this account can use, for the model picker. */
+  listModels(): Promise<ModelInfo[]>;
 }
 
 export class ProviderError extends Error {
