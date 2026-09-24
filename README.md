@@ -20,7 +20,7 @@ For bigger graphs:
 - **View ▾** hides relation kinds (dependency links, mixed or derived relations) or the relation labels. **To-do only** hides ready concepts, so only blocked, unclear and failed ones are left. These choices are remembered in this browser. Hidden concepts and relations can't be deleted with the Delete key.
 - Relation labels are left out when you zoom far out, and with 150 or more concepts only what's on screen is rendered. `node e2e/perf.mjs` times a generated 300-concept, 600-relation graph.
 
-The theme menu in the toolbar switches between **Auto** (follows your system's light/dark setting), **Light** and **Dark**. Everything works from the keyboard: dialogs trap focus and close with Escape, and Tab reaches each relation arrowhead (Enter opens it). On phones the less-used toolbar buttons fold into a **☰** menu and the inspector becomes a bottom sheet you can collapse.
+The theme menu in the toolbar switches between **Auto** (follows your system's light/dark setting), **Light** and **Dark**. Everything works from the keyboard (press **?** for the list of shortcuts): dialogs trap focus and close with Escape, and Tab reaches each relation arrowhead (Enter opens it). On phones the less-used toolbar buttons fold into a **☰** menu and the inspector becomes a bottom sheet you can collapse.
 
 Everything the AI suggests can be fixed by hand: rename a concept (the old name stays as an alias) or edit a relation's text in the inspector, and press **Delete** to remove the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
 
@@ -52,6 +52,14 @@ Click **⚙ Set up AI** in the toolbar, choose a provider and paste your API key
 `.github/workflows/pages.yml` builds `client/` and publishes it to GitHub Pages. It only runs when you start it by hand from the Actions tab (**Run workflow**), because publishing a public site is your decision. Browser mode needs no server, so the published site works fully: visitors bring their own API key or use the offline demo.
 
 To turn it on once: open the repository's **Settings → Pages** and under **Build and deployment → Source** choose **GitHub Actions**. Then run the workflow; the run shows the site's URL. To deploy on every push instead, add a `push: branches: [main]` trigger to the workflow.
+
+### Install as an app / offline
+
+The built site (`npm run build`, or the GitHub Pages deployment) is an installable web app. In Chrome or Edge use **Install app** in the address bar or menu; on iPhone and iPad use Safari's **Share → Add to Home Screen**. It then opens in its own window with the NodeStorm icon.
+
+After the first visit a service worker keeps a copy of the app itself, so it also opens without a network. Your projects are in the browser's localStorage anyway. While you're offline a banner says so, and AI actions stop right away with a message instead of waiting for a timeout; the **Offline demo** provider still works. Only the app's own files are stored. Calls to AI providers and to the local server's `/api/*` always go to the network and are never cached. When a new version has been deployed, a small **New version available — Reload** notice appears. Nothing changes until you press **Reload**. `npm run dev` never registers the service worker.
+
+The icons are drawn in `client/public/icon.svg` and `client/pwa/icon-maskable.svg`; `node client/pwa/make-icons.mjs` renders the PNGs from them.
 
 ### Where your key goes
 
@@ -103,6 +111,7 @@ e2e/      Playwright smoke test (runs against the mock provider)
 npm run typecheck
 npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
+npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker, offline start and the update notice
 ```
 
-`.github/workflows/ci.yml` runs all three on every push and pull request. When the e2e run fails, its screenshots are uploaded as the `e2e-screenshots` artifact.
+`.github/workflows/ci.yml` runs all of them on every push and pull request. When the e2e run fails, its screenshots are uploaded as the `e2e-screenshots` artifact.

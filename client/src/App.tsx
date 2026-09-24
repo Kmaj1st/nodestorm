@@ -7,10 +7,13 @@ import { AddNodeDialog } from "./panels/AddNodeDialog";
 import { DeriveDialog } from "./panels/DeriveDialog";
 import { FindDialog } from "./panels/FindDialog";
 import { Inspector } from "./panels/Inspector";
+import { OfflineBanner } from "./panels/OfflineBanner";
 import { SenseDialog } from "./panels/SenseDialog";
 import { SettingsDialog } from "./panels/SettingsDialog";
+import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
+import { UpdateNotice } from "./panels/UpdateNotice";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 import { toggleFocus, useView, visibleNow } from "./store/viewStore";
 
@@ -101,6 +104,7 @@ export function App() {
       <div className={`app${viewing ? " app--viewing" : ""}`}>
         <Toolbar onAdd={() => setAdding(true)} onDerive={() => setDeriveFrom(selection)} onFind={() => setFinding(true)} />
         {viewing && <ViewerBanner />}
+        <OfflineBanner /><UpdateNotice /><ShortcutsHelp />
         {graph.parentId && (
           <div className="sandbox-banner" data-testid="sandbox-banner">
             🧪 Sandbox mode — <b>{graph.name}</b>. Changes here don't affect the original graph until you merge back.
