@@ -8,7 +8,7 @@ import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
 import { isReady, useSettings } from "../store/settingsStore";
-import { ExtractDialog, ShareDialog } from "./lazy";
+import { ExtractDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 
@@ -48,7 +48,11 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
       <h1 className="toolbar__brand">NodeStorm</h1>
-      {viewing ? <span className="toolbar__shared">{t("toolbar.sharedGraph")}</span> : <ProjectMenu />}
+      {viewing ? (
+        <span className="toolbar__shared">{t(s.view?.kind === "snapshot" ? "toolbar.versionPreview" : "toolbar.sharedGraph")}</span>
+      ) : (
+        <ProjectMenu />
+      )}
 
       {!viewing && (
         <div className="toolbar__group toolbar__history">
@@ -142,8 +146,9 @@ const text = (s: string, type: string) => new Blob([s], { type: `${type};charset
 type Item = { label: MessageKey; title: MessageKey; head?: MessageKey; action: () => void | Promise<void> };
 
 /**
- * "File ▾": import a project from JSON, or concepts from a text (Extract from text); export the current project as JSON, or the active graph as Markdown notes,
- * Mermaid or a PNG image; and share the graph as a link. In the read-only viewer only export and share remain.
+ * "File ▾": import a project from JSON, or concepts from a text (Extract from text); save and restore versions of the
+ * project (Versions); export the current project as JSON, or the active graph as Markdown notes, Mermaid or a PNG
+ * image; and share the graph as a link. In the read-only viewer only export and share remain.
  */
 function FileMenu() {
   const t = useT();
@@ -161,6 +166,8 @@ function FileMenu() {
   const projectName = view?.name ?? project.name;
   const [sharing, setSharing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  // "Versions…" opens the list; "Save snapshot…" the same dialog with its label field focused.
+  const [versions, setVersions] = useState<"list" | "save" | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -202,6 +209,8 @@ function FileMenu() {
           { label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() },
           { label: "file.extract", title: "file.extractTitle", action: () => setExtracting(true) },
           { label: "file.quiz", title: "file.quizTitle", action: () => useQuiz.getState().openQuiz() },
+          { label: "file.snapshot", title: "file.snapshotTitle", action: () => setVersions("save") },
+          { label: "file.versions", title: "file.versionsTitle", action: () => setVersions("list") },
         ] satisfies Item[])),
     {
       head: "file.exportHead",
@@ -272,6 +281,7 @@ function FileMenu() {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
       />
       {extracting && !view && <ExtractDialog onClose={() => setExtracting(false)} />}
+      {versions && !view && <VersionsDialog focusSave={versions === "save"} onClose={() => setVersions(null)} />}
       {sharing && (
         <ShareDialog
           graph={graph}

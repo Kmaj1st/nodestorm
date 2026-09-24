@@ -38,8 +38,11 @@ interface State {
    * A shared graph opened from a link (read-only viewer mode). It is shown as the active graph `id` in `graphs`
    * but is never persisted and can't be edited; `returnId` is the user's own graph to go back to.
    */
-  view: { id: string; name: string; returnId: string } | null;
+  view: { id: string; name: string; returnId: string; kind?: ViewKind } | null;
 }
+
+/** What the read-only viewer shows: a graph from a share link, or an earlier version of a project (Versions). */
+export type ViewKind = "share" | "snapshot";
 
 /**
  * How a mutation shows up in undo history:
@@ -95,8 +98,12 @@ interface Actions {
   exportJson(): string;
   /** Add a file's graphs as a new project and switch to it, repairing what it can. */
   importJson(text: string): { name: string; fixes: string[] };
+  /** Add graphs (main first, e.g. a restored version) as a new project with fresh ids and switch to it. Returns its name. */
+  addProject(graphs: Graph[], name: string): string;
+  /** Replace a project's graphs with a restored version and open it. Its undo stacks are cleared. */
+  restoreProject(projectId: string, graphs: Graph[]): void;
   /** Show a shared graph read-only (see `view`). Replaces a shared graph that is already open. */
-  openView(graph: Graph, name: string): void;
+  openView(graph: Graph, name: string, kind?: ViewKind): void;
   /** Leave the viewer, back to the user's own graph. */
   closeView(): void;
   /** Add the shared graph as a new project (fresh ids) and switch to it. Returns the project's name. */
@@ -277,13 +284,27 @@ export const useGraphStore = create<GraphStore>()(
         set({ ...next, ...cleared });
         return { name: next.projects[next.projectId].name, fixes };
       },
-      openView(graph, name) {
+      addProject(graphs, name) {
+        const next = proj.importProject(workspace(get()), graphs, name);
+        set({ ...next, ...cleared });
+        return next.projects[next.projectId].name;
+      },
+      restoreProject(projectId, graphs) {
+        const before = get();
+        const p = before.projects[projectId];
+        if (!p) return;
+        // Undo steps belong to the replaced graphs; the way back is the "before restore" snapshot (Versions).
+        const history = { ...before.history };
+        for (const g of proj.projectGraphs(before, p)) delete history[g.id];
+        set({ ...proj.replaceProjectGraphs(workspace(before), projectId, graphs), history, ...cleared });
+      },
+      openView(graph, name, kind = "share") {
         const ws = workspace(get());
         const id = uid("g"); // a fresh id, so the canvas starts anew (fit view)
         set({
           graphs: { ...ws.graphs, [id]: { ...graph, id } },
           activeId: id,
-          view: { id, name, returnId: ws.activeId },
+          view: { id, name, returnId: ws.activeId, kind },
           selection: [],
           inspect: null,
           highlight: null,

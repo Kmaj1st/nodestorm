@@ -15,6 +15,7 @@ import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
 import { UpdateNotice } from "./panels/UpdateNotice";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
+import { autoSnapshot } from "./store/snapshotStore";
 import { toggleFocus, useView, visibleNow } from "./store/viewStore";
 
 export function App() {
@@ -161,7 +162,10 @@ async function openShareLink() {
   }
 }
 
-/** Shown while a shared graph is open read-only: save it as a project of your own, or go back to your work. */
+/**
+ * Shown while a shared graph (or an earlier version previewed from Versions) is open read-only: save it as a project
+ * of your own, or go back to your work.
+ */
 function ViewerBanner() {
   const t = useT();
   const view = useGraphStore((s) => s.view);
@@ -177,7 +181,11 @@ function ViewerBanner() {
   };
   return (
     <div className="viewer-banner" data-testid="viewer-banner" role="status">
-      <span>{view?.name ? rich("viewer.bannerNamed", { name: view.name }) : t("viewer.banner")}</span>
+      <span>
+        {view?.kind === "snapshot"
+          ? rich("viewer.snapshotBanner", { name: view.name })
+          : view?.name ? rich("viewer.bannerNamed", { name: view.name }) : t("viewer.banner")}
+      </span>
       <span className="viewer-banner__actions">
         <button className="primary" onClick={saveCopy}>{t("viewer.saveCopy")}</button>
         <button onClick={close} title={t("viewer.closeTitle")}>{t("common.close")}</button>
@@ -196,10 +204,17 @@ function SandboxBanner() {
     <div className="sandbox-banner" data-testid="sandbox-banner">
       <span>{rich("sandbox.banner", { name: graph.name })}</span>
       <span className="sandbox-banner__actions">
-        <button onClick={() => mergeSandbox(graph.id)} title={t("sandbox.mergeTitle")}>{t("sandbox.merge")}</button>
+        {/* Neither can be undone, so each leaves a restore point in Versions first. */}
+        <button onClick={() => { autoSnapshot("merge"); mergeSandbox(graph.id); }} title={t("sandbox.mergeTitle")}>
+          {t("sandbox.merge")}
+        </button>
         <button
           className="danger"
-          onClick={() => confirm(t("sandbox.discardConfirm", { name: graph.name })) && discardSandbox(graph.id)}
+          onClick={() => {
+            if (!confirm(t("sandbox.discardConfirm", { name: graph.name }))) return;
+            autoSnapshot("discard");
+            discardSandbox(graph.id);
+          }}
           title={t("sandbox.discardTitle")}
         >
           {t("sandbox.discard")}
