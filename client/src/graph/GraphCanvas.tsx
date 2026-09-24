@@ -55,7 +55,13 @@ export function GraphCanvas() {
 
   const onNodeDragStop = useCallback(
     (_: unknown, _node: ConceptFlowNode, dragged: ConceptFlowNode[]) => {
-      mutate((g) => dragged.reduce((acc, n) => updateNode(acc, n.id, { position: n.position }), g));
+      // One undo step per drag (all dragged nodes together); a drag that ends where it started is none.
+      mutate((g) =>
+        dragged.reduce((acc, n) => {
+          const p = acc.nodes.find((c) => c.id === n.id)?.position;
+          return p && p.x === n.position.x && p.y === n.position.y ? acc : updateNode(acc, n.id, { position: n.position });
+        }, g),
+      );
     },
     [mutate],
   );
@@ -82,7 +88,7 @@ export function GraphCanvas() {
         onSelectionChange={onSelectionChange}
         onPaneClick={() => setInspect(null)}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
-        deleteKeyCode={null}
+        deleteKeyCode={null} // Delete/Backspace are handled in App so deletions are undoable
         nodesConnectable={false}
         fitView
         fitViewOptions={{ maxZoom: 1.2 }}

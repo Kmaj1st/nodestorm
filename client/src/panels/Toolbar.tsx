@@ -1,12 +1,14 @@
 import { providerMeta } from "@nodestorm/shared";
 import { useRef } from "react";
 import { mix } from "../lib/actions";
-import { activeGraph, useGraphStore } from "../store/graphStore";
+import { activeGraph, canRedo, canUndo, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 
 export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () => void }) {
   const s = useGraphStore();
   const graph = useGraphStore(activeGraph);
+  const undoable = useGraphStore(canUndo);
+  const redoable = useGraphStore(canRedo);
   const settings = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
   const ready = isReady(settings);
@@ -47,6 +49,11 @@ export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () =
   return (
     <header className="toolbar">
       <div className="toolbar__brand">NodeStorm</div>
+
+      <div className="toolbar__group toolbar__history">
+        <button onClick={() => s.undo()} disabled={!undoable} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+        <button onClick={() => s.redo()} disabled={!redoable} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+      </div>
 
       <div className="toolbar__group">
         <button className="primary" onClick={onAdd}>+ Add concept</button>

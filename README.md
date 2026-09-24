@@ -8,6 +8,8 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
   *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem uses homomorphisms and derives an isomorphism, so it shows as blocked with *Isomorphism* missing. Install it and the theorem becomes ready.
 - **Sandbox mode.** **Fork sandbox** makes a copy of the current graph. You can derive (**Derive ✦**), mix and install in the copy without touching the original. When you're done, **Merge back** or **Discard**.
 
+Everything the AI suggests can be fixed by hand: rename a concept (the old name stays as an alias) or edit a relation's text in the inspector, and press **Delete** to remove the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
+
 Graphs autosave to your browser's localStorage. **Export** and **Import** move them in and out as JSON.
 
 ## Setup

@@ -72,7 +72,19 @@ textarea { resize: vertical; width: 100%; }
 .role { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 1px 5px; }
 .rel-title { display: flex; flex-direction: column; gap: 4px; }
 .rel-kind { color: var(--accent); font-size: 14px; font-weight: 500; }
-.rel-kind::before { content: "↓ "; }
+.rel-kind { display: flex; align-items: baseline; gap: 4px; }
+.rel-kind::before { content: "↓"; }
+.rel-kind input { color: var(--accent); font-weight: 500; }
+/* Inline-editable text (DraftField): looks like plain text until hovered or focused. */
+.draft { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.inspector__title .draft, .rel-kind .draft { flex: 1; }
+.draft input, .draft textarea { border-color: transparent; background: transparent; padding: 3px 6px; margin-left: -6px; }
+.draft input:hover, .draft textarea:hover { border-color: var(--border); }
+.draft input:focus, .draft textarea:focus { border-color: var(--accent); background: var(--panel); outline: none; }
+.draft .invalid, .draft .invalid:hover { border-color: var(--blocked); }
+.title-input { font-size: 18px; font-weight: 600; width: 100%; }
+.rel-explanation { font-size: 14px; line-height: 1.5; }
+.toolbar__history button { padding: 6px 9px; }
 .dir-switch button { width: 100%; }
 .form__actions { display: flex; gap: 8px; justify-content: flex-end; flex-wrap: wrap; }
 

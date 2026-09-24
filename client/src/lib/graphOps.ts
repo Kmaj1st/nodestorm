@@ -239,6 +239,35 @@ export function installPosition(g: Graph, dependentId: string, index: number) {
   return { x: base.x + (index - 0.5) * 300, y: base.y - 240 };
 }
 
+// ---------- Hand edits ----------
+
+/**
+ * Rename a concept by hand. The old name is kept as an alias, and nodes waiting on a missing dependency
+ * with the new name get linked. Empty names and names (or aliases) of other concepts are rejected.
+ */
+export function renameNode(g: Graph, nodeId: string, rawName: string): { graph: Graph; error?: string } {
+  const node = g.nodes.find((n) => n.id === nodeId);
+  if (!node) return { graph: g };
+  const name = rawName.trim();
+  if (!name) return { graph: g, error: "The name can't be empty." };
+  if (name === node.name) return { graph: g };
+  const dup = findByName(g.nodes.filter((n) => n.id !== nodeId), name);
+  if (dup) return { graph: g, error: `“${dup.name}” is already in the graph.` };
+  // Old name becomes an alias; the new name itself is never an alias, and aliases stay unique.
+  const aliases: string[] = [];
+  for (const a of [...node.aliases, node.name]) {
+    const k = normalizeName(a);
+    if (k !== normalizeName(name) && !aliases.some((b) => normalizeName(b) === k)) aliases.push(a);
+  }
+  return { graph: satisfyMissing(updateNode(g, nodeId, { name, aliases }), nodeId) };
+}
+
+/** Edit one direction of a relation by hand. */
+export function updateRelation(g: Graph, relationId: string, dir: "aToB" | "bToA", patch: Partial<DirRel>): Graph {
+  if (!g.relations.some((r) => r.id === relationId)) return g;
+  return { ...g, relations: g.relations.map((r) => (r.id === relationId ? { ...r, [dir]: { ...r[dir], ...patch } } : r)) };
+}
+
 // ---------- Sandboxes ----------
 
 /** Deep-copy a graph as a sandbox. Node/relation ids are kept so merge-back can match them. */
