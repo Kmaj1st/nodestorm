@@ -204,3 +204,12 @@ button.concept__badge:hover { text-decoration: underline; }
 .sense__other { gap: 6px !important; }
 .spacer { flex: 1; }
 input.num { width: 64px; }
+
+.menu { position: relative; }
+.menu__list {
+  position: absolute; right: 0; top: calc(100% + 4px); z-index: 20; min-width: 180px; padding: 4px;
+  display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border);
+  border-radius: 8px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.12);
+}
+.menu__list button { border-color: transparent; text-align: left; white-space: nowrap; }
+.menu__list button:hover { background: var(--accent-soft); }
