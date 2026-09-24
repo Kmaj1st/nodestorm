@@ -365,7 +365,10 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       if (!nodes.has(n.id)) nodes.set(n.id, { ...n, status: "error", error: t("task.mergeInterrupted") });
       continue;
     }
-    nodes.set(n.id, n);
+    // Quiz progress isn't versioned: keep whichever side was reviewed last, not the sandbox's by default.
+    const mine = nodes.get(n.id)?.mastery;
+    const newer = !mine || (n.mastery && n.mastery.reviewedAt >= mine.reviewedAt) ? n.mastery : mine;
+    nodes.set(n.id, newer === n.mastery ? n : { ...n, mastery: newer });
   }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));
   for (const r of sb.relations) {

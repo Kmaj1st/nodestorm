@@ -1,9 +1,8 @@
-import { lazy, Suspense, useEffect } from "react";
+import { useEffect } from "react";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
-
-// Loaded on first use: most sessions never open a quiz.
-const QuizDialog = lazy(() => import("./QuizDialog").then((m) => ({ default: m.QuizDialog })));
+// Loaded lazily like the other dialogs (with their "couldn't be loaded" fallback): most sessions never open a quiz.
+import { QuizDialog } from "./lazy";
 
 /** Mounts the "Quiz me" dialog while it is open. It closes when the graph changes or a shared graph is shown. */
 export function QuizHost() {
@@ -16,10 +15,6 @@ export function QuizHost() {
     if (stale) close();
   }, [stale, close]);
   if (!open || stale) return null;
-  return (
-    <Suspense fallback={null}>
-      {/* Opening it again for another concept starts afresh. */}
-      <QuizDialog key={`${open.graphId}:${open.rootId}:${open.pathFirst}`} {...open} onClose={close} />
-    </Suspense>
-  );
+  // Opening it again for another concept starts afresh.
+  return <QuizDialog key={`${open.graphId}:${open.rootId}:${open.pathFirst}`} {...open} onClose={close} />;
 }

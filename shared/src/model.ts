@@ -332,13 +332,16 @@ export interface ProvidersResponse {
 // ---------- Helpers ----------
 
 export function normalizeName(s: string): string {
-  return s
-    .toLowerCase()
-    .normalize("NFKD")
-    .replace(/[̀-ͯ]/g, "")
-    .replace(/[^a-z0-9一-鿿]+/g, " ")
-    .trim()
-    .replace(/s\b/g, ""); // crude plural folding: "groups" ~ "group"
+  return (
+    s
+      .toLowerCase()
+      .normalize("NFKD")
+      .replace(/[\u0300-\u036f]/g, "") // Latin accents: "Poincaré" ~ "poincare"
+      // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
+      .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
+      .trim()
+      .replace(/([a-z])s(?=\s|$)/g, "$1") // crude plural folding for Latin words: "groups" ~ "group"
+  );
 }
 
 /** Find the node matching a name via name or aliases (case/plural-insensitive). */

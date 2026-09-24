@@ -1267,6 +1267,22 @@ try {
     assert(await node("Isomorphism").isVisible(), "closing the preview returns to the current project");
   }
 
+  console.log("Keys behind dialogs");
+  {
+    // With a dialog open and focus on <body> (as between quiz cards), Delete/Backspace/Ctrl+Z must not act behind it.
+    const count = await page.locator(".react-flow__node").count();
+    await page.locator(".react-flow__node").first().click();
+    await page.keyboard.press("Shift+?");
+    const shortcuts = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+    await shortcuts.waitFor();
+    await page.evaluate(() => (document.activeElement instanceof HTMLElement ? document.activeElement.blur() : undefined));
+    await page.keyboard.press("Backspace");
+    await page.keyboard.press("Delete");
+    await page.waitForTimeout(200);
+    assert((await page.locator(".react-flow__node").count()) === count, "Delete/Backspace do nothing behind an open dialog");
+    await shortcuts.getByRole("button", { name: "Close" }).click();
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

@@ -77,7 +77,10 @@ export function takeSnapshot(opts: { reason?: AutoReason; label?: string; projec
     if (!(await loadSnapshots())) return null;
     const latest = useSnapshots.getState().metas.find((m) => m.projectId === projectId);
     const named = opts.label !== undefined;
-    if (!named && latest?.hash === cap.hash) return null;
+    if (!named && latest?.hash === cap.hash) {
+      dirtySince.delete(projectId); // nothing new since the latest snapshot: stop re-checking every minute
+      return null;
+    }
     const meta: SnapshotMeta = {
       id: uid("s"),
       projectId,

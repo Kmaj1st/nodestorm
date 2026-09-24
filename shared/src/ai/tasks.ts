@@ -166,7 +166,7 @@ export const tasks = {
     runStructured(p, explainPrompt(ExplainRequest.parse(body)), ExplainResponse, o),
   extract: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = ExtractRequest.parse(body);
-    // Up to 30 concepts with quotes plus their relations: more room than the default answer budget.
+    // Up to 40 concepts with quotes plus their relations: more room than the default answer budget.
     const out = await runStructured(p, extractPrompt(req), ExtractResponse, { ...o, maxTokens: 8192 });
     return cleanExtraction(out, req.existing);
   },

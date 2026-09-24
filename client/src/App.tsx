@@ -47,6 +47,8 @@ export function App() {
       // Leave keys alone while typing, and while a dialog is open.
       const t = e.target instanceof Element ? e.target : null;
       if (t?.closest("input, textarea, select, [contenteditable=true], .modal")) return;
+      // A dialog may be open while focus sits on <body> (e.g. between quiz cards): keys never act behind it.
+      if (document.querySelector(".modal")) return;
       const s = useGraphStore.getState();
       const mod = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();

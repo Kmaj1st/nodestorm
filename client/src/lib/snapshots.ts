@@ -64,8 +64,16 @@ export function capture(ws: Pick<Workspace, "graphs" | "projects">, projectId: s
   if (!graphs.length) return null;
   const doc: GraphExport = { format: "nodestorm/v1", project: { name: p.name }, graphs };
   const data = JSON.stringify(doc);
+  // Quiz mastery isn't versioned (restore keeps the current one), so grading alone must not look like a change.
+  const withoutMastery = JSON.stringify(doc, (key, value) => (key === "mastery" ? undefined : value));
   const main = graphs[0];
-  return { data, hash: hashString(data), concepts: main.nodes.length, relations: main.relations.length, sandboxes: graphs.length - 1 };
+  return {
+    data,
+    hash: hashString(withoutMastery),
+    concepts: main.nodes.length,
+    relations: main.relations.length,
+    sandboxes: graphs.length - 1,
+  };
 }
 
 /**

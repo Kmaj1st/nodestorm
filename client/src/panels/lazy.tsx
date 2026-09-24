@@ -16,6 +16,7 @@ const loaders = {
   settings: () => import("./SettingsDialog"),
   share: () => import("./ShareDialog"),
   shortcuts: () => import("./ShortcutsDialog"),
+  quiz: () => import("./QuizDialog"),
   versions: () => import("./VersionsDialog"),
 };
 
@@ -87,6 +88,7 @@ export const FindDialog = lazyDialog(() => loaders.find().then((m) => m.FindDial
 export const SettingsDialog = lazyDialog(() => loaders.settings().then((m) => m.SettingsDialog));
 export const ShareDialog = lazyDialog(() => loaders.share().then((m) => m.ShareDialog));
 export const ShortcutsDialog = lazyDialog(() => loaders.shortcuts().then((m) => m.ShortcutsDialog));
+export const QuizDialog = lazyDialog(() => loaders.quiz().then((m) => m.QuizDialog));
 export const VersionsDialog = lazyDialog(() => loaders.versions().then((m) => m.VersionsDialog));
 
 // Closing after a failed load leaves the concept "unclear"; its badge reopens the dialog.

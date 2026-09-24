@@ -487,6 +487,7 @@ export function derive(selectedIds: string[], goal?: string) {
 
 /** "Extract from text": ask the AI for candidate concepts and relations in a pasted text (see ExtractDialog). */
 export function extractFromText(text: string, focus?: string) {
+  if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   return withBusy("extract", t("task.extract"), (signal) =>
     api.extract({ text, existing: g.nodes.map(toBrief), focus: focus?.trim() || undefined }, signal),
