@@ -8,7 +8,13 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
   *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem uses homomorphisms and derives an isomorphism, so it shows as blocked with *Isomorphism* missing. Install it and the theorem becomes ready.
 - **Sandbox mode.** **Fork sandbox** makes a copy of the current graph. You can derive (**Derive ✦**), mix and install in the copy without touching the original. When you're done, **Merge back** or **Discard**.
 
-Graphs autosave to your browser's localStorage. **Export** and **Import** move them in and out as JSON.
+Graphs autosave to your browser's localStorage. **Export ▾** saves them in several forms:
+- **JSON (all graphs)**: everything, including sandboxes. Load it again with **Import**.
+- **Markdown notes**: the current graph as study notes. Concepts come in study order (prerequisites first), with aliases, definitions and prerequisites, and every relation is written out in both directions.
+- **Mermaid diagram**: flowchart text for GitHub, Notion, etc. It is copied to the clipboard and also downloaded.
+- **PNG image**: a picture of the whole current graph.
+
+**Import** repairs files from older or newer versions and hand-edited files instead of rejecting them. It fills in missing fields and drops relations or prerequisite links that point to concepts that aren't in the file. A notice lists what was fixed.
 
 ## Setup
 
@@ -20,6 +26,12 @@ npm run web        # UI only: http://localhost:5173
 Click **⚙ Set up AI** in the toolbar, choose a provider and paste your API key. The model list loads straight from the provider's API. Start typing to filter it, then pick a model. To try the app without a key, choose **Offline demo**. It has a tiny built-in abstract-algebra knowledge base.
 
 `npm run build` produces a static site in `client/dist/` that runs without a server. You can open it from any static host.
+
+### Deploy to GitHub Pages
+
+`.github/workflows/pages.yml` builds `client/` and publishes it to GitHub Pages on every push to the repository's default branch. You can also run it by hand from the Actions tab (**Run workflow**). Browser mode needs no server, so the published site works fully: visitors bring their own API key or use the offline demo.
+
+To turn it on once: open the repository's **Settings → Pages** and under **Build and deployment → Source** choose **GitHub Actions**. The next push to the default branch (or a manual run) deploys the site, and the workflow run shows its URL.
 
 ### Where your key goes
 
@@ -67,6 +79,8 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, dependency/install/sandbox logic
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, export formats, import repair
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 ```
+
+`.github/workflows/ci.yml` runs all three on every push and pull request. When the e2e run fails, its screenshots are uploaded as the `e2e-screenshots` artifact.
