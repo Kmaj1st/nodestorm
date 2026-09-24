@@ -1,4 +1,4 @@
-import { normalizeName } from "../model";
+import { normalizeName, type ConceptKind, type TheoremAnatomy } from "../model";
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 
 /** The offline demo's Mathlib names for its concepts (real Mathlib declarations), plus one that doesn't exist. */
@@ -85,7 +85,89 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
       { name: "Isomorphism", role: "derives", reason: "Its conclusion is an isomorphism $G/\\ker\\varphi \\cong \\operatorname{im}\\varphi$." },
     ],
   },
+  "lagrange's theorem": {
+    definition: "For a finite group $G$ and a subgroup $H \\le G$, the order $|H|$ divides $|G|$.",
+    aliases: [],
+    deps: [{ name: "Subgroup", role: "uses", reason: "The theorem is about the order of a subgroup $H$ of $G$." }],
+  },
 };
+
+/** What sort of statement each KB entry is; the rest are definitions. */
+const KB_KIND: Record<string, ConceptKind> = {
+  "first isomorphism theorem": "theorem",
+  "lagrange's theorem": "theorem",
+  chicken: "other",
+  egg: "other",
+};
+const kindOf = (key: string): ConceptKind => KB_KIND[key] ?? "definition";
+
+/** A kind read off a name that says what it is ("Zorn's lemma", "Axiom of choice"), else null. */
+export function kindFromName(name: string): ConceptKind | null {
+  const m = name.toLowerCase().match(/\b(theorem|lemma|proposition|corollary|axiom|conjecture|notation|example|definition)\b/);
+  return m ? (m[1] as ConceptKind) : null;
+}
+
+/** "Theorem anatomy" answers for the KB theorems; other theorems get one built from their definition. */
+const ANATOMY: Record<string, TheoremAnatomy> = {
+  "first isomorphism theorem": {
+    hypotheses: [
+      {
+        text: "$G$ and $H$ are groups.",
+        whyNeeded: "Quotients $G/N$ and images are only groups when the structures are groups.",
+        counterexampleIfDropped: "For monoids, a surjective homomorphism $(\\mathbb{N}, +) \\to \\{0, 1\\}$ with $1 + 1 = 1$ has trivial kernel $\\{0\\}$ but is not injective, so the kernel alone does not determine the quotient.",
+      },
+      {
+        text: "$\\varphi: G \\to H$ is a homomorphism.",
+        whyNeeded: "The kernel is a normal subgroup, and the induced map is well defined, only because $\\varphi$ preserves products.",
+        counterexampleIfDropped: "For the map $x \\mapsto x + 1$ on $\\mathbb{Z}$, the preimage of $0$ is $\\{-1\\}$, not a subgroup, so $G/\\ker\\varphi$ makes no sense.",
+      },
+    ],
+    conclusion: "$G / \\ker\\varphi \\cong \\operatorname{im}\\varphi$, via $g\\ker\\varphi \\mapsto \\varphi(g)$.",
+    proofIdea: "Define $\\bar\\varphi(g\\ker\\varphi) = \\varphi(g)$. It is well defined and injective because $\\varphi(g) = \\varphi(h)$ exactly when $g^{-1}h \\in \\ker\\varphi$. It is a homomorphism because $\\varphi$ is, and it is onto $\\operatorname{im}\\varphi$ by construction.",
+    examples: [
+      "$\\det: GL_n(\\mathbb{R}) \\to \\mathbb{R}^\\times$ gives $GL_n(\\mathbb{R}) / SL_n(\\mathbb{R}) \\cong \\mathbb{R}^\\times$.",
+      "Reduction $\\mathbb{Z} \\to \\mathbb{Z}/n\\mathbb{Z}$ gives $\\mathbb{Z}/n\\mathbb{Z} \\cong \\mathbb{Z}/n\\mathbb{Z}$, the definition of the quotient.",
+    ],
+    nonExamples: [
+      "It does not say $G \\cong \\ker\\varphi \\times \\operatorname{im}\\varphi$: $\\mathbb{Z}/4\\mathbb{Z} \\to \\mathbb{Z}/2\\mathbb{Z}$ has kernel and image $\\mathbb{Z}/2\\mathbb{Z}$, yet $\\mathbb{Z}/4\\mathbb{Z} \\not\\cong (\\mathbb{Z}/2\\mathbb{Z})^2$.",
+    ],
+  },
+  "lagrange's theorem": {
+    hypotheses: [
+      {
+        text: "$G$ is a finite group.",
+        whyNeeded: "Orders are numbers only for finite groups; the cosets are counted.",
+        counterexampleIfDropped: "For infinite $G$ the statement has no meaning as divisibility of integers; one uses the index $[G:H]$ instead.",
+      },
+      {
+        text: "$H$ is a subgroup of $G$.",
+        whyNeeded: "The cosets of a subgroup partition $G$ into pieces of equal size $|H|$.",
+        counterexampleIfDropped: "For mere subsets it fails: any 4-element subset of $S_3$ has 4 elements, and 4 does not divide 6.",
+      },
+    ],
+    conclusion: "$|H|$ divides $|G|$, and $|G| = [G:H]\\,|H|$.",
+    proofIdea: "The left cosets $gH$ partition $G$, and $h \\mapsto gh$ is a bijection $H \\to gH$, so every coset has $|H|$ elements. Counting $G$ coset by coset gives $|G| = [G:H]\\,|H|$.",
+    examples: ["In $S_3$ (order 6), the subgroups have orders 1, 2, 3 and 6."],
+    nonExamples: ["The converse fails: $A_4$ has order 12 but no subgroup of order 6."],
+  },
+};
+
+function anatomyOf(node: { name: string; definition?: string }): TheoremAnatomy {
+  const entry = kbGet(node.name);
+  if (entry && ANATOMY[entry.key]) return ANATOMY[entry.key];
+  const statement = node.definition?.trim() || entry?.definition || `${node.name}, as stated in your graph.`;
+  // Split "If A, then B" / "For A, B" into a hypothesis and a conclusion; otherwise the whole statement concludes.
+  const m = statement.match(/^(?:if|for|let)\s+(.+?),\s*(?:then\s+)?(.+)$/i);
+  return {
+    hypotheses: m
+      ? [{ text: m[1], whyNeeded: "The statement is only made under this assumption.", counterexampleIfDropped: "" }]
+      : [],
+    conclusion: m ? m[2] : statement,
+    proofIdea: `The offline demo has no proof sketch for ${node.name}; look at how its prerequisites combine.`,
+    examples: [],
+    nonExamples: [],
+  };
+}
 
 /** Names with several meanings, for exercising the "what do you mean?" flow offline. */
 const AMBIGUOUS: Record<string, { name: string; domain: string; definition: string }[]> = {
@@ -269,6 +351,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.checkStep(inp));
       case "absurdChain":
         return JSON.stringify(this.absurdChain(inp));
+      case "anatomy":
+        return JSON.stringify(anatomyOf(inp.node ?? { name: "" }));
       default:
         return "{}";
     }
@@ -411,12 +495,12 @@ export class MockProvider implements Provider {
 
   private name(desc: string) {
     const d = desc.toLowerCase();
-    const pick = (k: string) => ({ name: title(k), definition: KB[k].definition, aliases: KB[k].aliases });
+    const pick = (k: string) => ({ name: title(k), definition: KB[k].definition, aliases: KB[k].aliases, kind: kindOf(k) });
     if (d.includes("bijective") || d.includes("same structure")) return { candidates: [pick("isomorphism"), pick("homomorphism")] };
     if (d.includes("preserv")) return { candidates: [pick("homomorphism"), pick("isomorphism")] };
     if (d.includes("identity") && d.includes("send")) return { candidates: [pick("kernel")] };
     const words = desc.split(/\s+/).filter(Boolean).slice(0, 3).join(" ");
-    return { candidates: [{ name: title(words || "Unnamed idea"), definition: desc, aliases: [] }] };
+    return { candidates: [{ name: title(words || "Unnamed idea"), definition: desc, aliases: [], kind: kindFromName(desc) }] };
   }
 
   /**
@@ -441,7 +525,7 @@ export class MockProvider implements Provider {
     const entry = kbGet(name);
     return {
       ambiguous: false,
-      senses: [{ name, domain: entry ? "algebra" : "general", definition: entry?.definition ?? "" }],
+      senses: [{ name, domain: entry ? "algebra" : "general", definition: entry?.definition ?? "", kind: entry ? kindOf(entry.key) : kindFromName(name) }],
     };
   }
 
@@ -476,6 +560,7 @@ export class MockProvider implements Provider {
         );
         return { ...d, matchesExisting: match?.name ?? null };
       }),
+      kind: entry ? kindOf(entry.key) : kindFromName(name),
     };
   }
 
@@ -586,18 +671,19 @@ export class MockProvider implements Provider {
       const e = existing.find((x) => kbGet(x.name)?.key === key || (x.aliases ?? []).some((a) => kbGet(a)?.key === key));
       return e?.name ?? title(key);
     };
-    const concepts: { name: string; definition: string; aliases: string[]; quote: string }[] = found.map((f) => ({
+    const concepts: { name: string; definition: string; aliases: string[]; quote: string; kind: ConceptKind | null }[] = found.map((f) => ({
       name: display(f.key),
       definition: KB[f.key].definition,
       aliases: KB[f.key].aliases,
       quote: quoteAt(f.at),
+      kind: kindOf(f.key),
     }));
     const relations: { from: string; to: string; aToB: { kind: string; explanation: string }; bToA: { kind: string; explanation: string } }[] = [];
     for (const m of text.matchAll(/["“]([^"”\n]{2,60})["”]|\*\*([^*\n]{2,60})\*\*/g)) {
       const term = (m[1] ?? m[2]).trim();
       if (kbGet(term) || concepts.some((c) => normalizeName(c.name) === normalizeName(term))) continue;
       const quote = quoteAt(m.index ?? 0);
-      concepts.push({ name: title(term), definition: quote, aliases: [], quote });
+      concepts.push({ name: title(term), definition: quote, aliases: [], quote, kind: kindFromName(term) });
       const sentence = sentenceOf(m.index ?? 0).replace(m[0], "");
       const near = found.find((f) => f.re.test(sentence));
       if (near) {
@@ -631,6 +717,7 @@ export class MockProvider implements Provider {
             name: "Kernel",
             definition: KB.kernel.definition,
             aliases: KB.kernel.aliases,
+            kind: "definition",
             links: [
               {
                 to: names.find((n) => kbGet(n)?.key === "homomorphism")!,
@@ -648,6 +735,7 @@ export class MockProvider implements Provider {
           name: `Synthesis of ${names.join(" & ")}`,
           definition: `A combined idea drawing on ${names.join(", ")}.`,
           aliases: [],
+          kind: "other",
           links: names.map((n) => ({
             to: n,
             fromNew: { kind: "builds on", explanation: `Extends ${n}.` },

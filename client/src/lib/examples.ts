@@ -1,4 +1,4 @@
-import { DepRole, DirRel, type ConceptNode, type Graph } from "@nodestorm/shared";
+import { ConceptKind, DepRole, DirRel, type ConceptNode, type Graph } from "@nodestorm/shared";
 import groupTheory from "../data/groupTheory.json";
 import { depRelation, setPositions, uid, upsertRelation } from "./graphOps";
 import { layeredLayout } from "./layout";
@@ -16,7 +16,7 @@ interface ExampleDep {
 
 export interface ExampleData {
   name: string;
-  concepts: { name: string; definition: string; aliases: string[]; dependsOn?: ExampleDep[]; missing?: ExampleDep[] }[];
+  concepts: { name: string; kind?: string; definition: string; aliases: string[]; dependsOn?: ExampleDep[]; missing?: ExampleDep[] }[];
   relations: { a: string; b: string; aToB: DirRel; bToA: DirRel }[];
 }
 
@@ -41,6 +41,7 @@ export function buildExample(g: Graph, data: ExampleData): Graph {
       position: { x: 0, y: 0 },
       dependsOn: (c.dependsOn ?? []).map((d) => id(d.name)),
       missingDeps,
+      ...(c.kind ? { kind: ConceptKind.parse(c.kind) } : {}),
     };
   });
   let out: Graph = { ...g, nodes: [...g.nodes, ...nodes] };

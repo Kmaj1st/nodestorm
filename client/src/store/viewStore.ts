@@ -1,6 +1,8 @@
 import type { Graph } from "@nodestorm/shared";
 import { create } from "zustand";
-import { DEFAULT_VIEW, sanitizeView, visibleParts, type ViewPrefs, type Visible } from "../lib/view";
+import { t } from "../i18n";
+import { DEFAULT_VIEW, kindFilterOf, sanitizeView, visibleParts, type ViewPrefs, type Visible } from "../lib/view";
+import { viewport } from "../lib/viewport";
 import { useGraphStore, type GraphStore } from "./graphStore";
 
 /**
@@ -35,8 +37,8 @@ export const useView = create<ViewState>()((set, get) => ({
   ...load(),
   focus: null,
   setPrefs(patch) {
-    const { origins, edgeLabels, todoOnly, hops } = { ...get(), ...patch };
-    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops });
+    const { origins, edgeLabels, todoOnly, hops, kinds } = { ...get(), ...patch };
+    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds });
     try {
       localStorage.setItem(KEY, JSON.stringify(prefs));
     } catch {
@@ -58,6 +60,24 @@ export function visibleNow(s: GraphStore = useGraphStore.getState()): Visible {
   const v = useView.getState();
   const g = s.graphs[s.activeId];
   return visibleParts(g, v, activeFocus(v, g));
+}
+
+/**
+ * Select a concept of the active graph and centre the view on it (Find, the notation glossary). A concept the to-do
+ * view or a kind filter hides would be selected but invisible, so those filters are turned off first, with a notice.
+ * (In focus mode that's not needed: selecting moves the focus to it.)
+ */
+export function goToConcept(id: string) {
+  const s = useGraphStore.getState();
+  const view = useView.getState();
+  const node = s.graphs[s.activeId]?.nodes.find((n) => n.id === id);
+  const kindHidden = node && !view.kinds[kindFilterOf(node)];
+  if (!visibleNow().nodes.has(id) && (view.todoOnly || kindHidden) && !view.focus) {
+    view.setPrefs({ todoOnly: false, ...(node && kindHidden ? { kinds: { ...view.kinds, [kindFilterOf(node)]: true } } : {}) });
+    s.setToast(t("find.revealed"), "info");
+  }
+  // Let the canvas render the newly visible node before centring on it.
+  requestAnimationFrame(() => viewport.focus(id));
 }
 
 /** The concept "Focus" applies to: the single selected one. */

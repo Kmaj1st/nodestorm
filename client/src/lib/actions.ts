@@ -214,6 +214,8 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       return; // continues in chooseSense once the user picks a meaning
     }
     if (res.senses[0]?.definition) set({ definition: res.senses[0].definition });
+    const kind = res.senses[0]?.kind;
+    if (kind) bg((g) => ops.suggestKind(g, nodeId, kind));
   }
 
   const current = find();
@@ -227,7 +229,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     handlers,
   );
   if (!res) return;
-  bg((g) => ops.applyDeps(g, nodeId, res.prerequisites));
+  bg((g) => ops.suggestKind(ops.applyDeps(g, nodeId, res.prerequisites), nodeId, res.kind));
   // A prerequisite that (transitively) needs this node back is almost always a wrong AI answer.
   const cycle = find() ? paths.cycleThrough(graph(graphId), nodeId) : null;
   if (cycle && !opts.quiet) {
@@ -343,7 +345,7 @@ export async function findInMathlib(nodeId: string, graphId = store().activeId) 
   if (!res.decls.length) store().setToast(t("formal.none", { name: node.name }), "info");
 }
 
-export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "source">) {
+export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "source" | "kind">) {
   let id = nodeId;
   let merged = false;
   store().mutate((g) => {
@@ -396,7 +398,7 @@ export function suggestNames(description: string) {
 }
 
 export function addCandidate(c: NameCandidate) {
-  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases });
+  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind });
 }
 
 /**
@@ -624,6 +626,30 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
   );
 }
 
+export const anatomyKey = (graphId: string, nodeId: string) => `anatomy:${graphId}:${nodeId}`;
+
+/**
+ * "Theorem anatomy": ask the AI to take a theorem-like concept apart (hypotheses and why each is needed, conclusion,
+ * proof idea, examples and non-examples). Like "Explain more", the answer is stored on the node as a background change
+ * (not an undo step); cancelling it from the status bar leaves the node as it was.
+ */
+export async function anatomyNode(nodeId: string, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const res = await withBusy(anatomyKey(graphId, nodeId), t("task.anatomy", { name: node.name }), (signal) =>
+    api.anatomy({ node: { ...toBrief(node), kind: node.kind }, prerequisites }, signal),
+  );
+  if (!res) return;
+  store().mutate(
+    (g) => ops.updateNode(g, nodeId, { anatomy: { ...res, createdAt: Date.now() } }),
+    graphId,
+    { history: "background" },
+  );
+}
+
 export const quizKey = (graphId: string) => `quiz:${graphId}`;
 
 /** "Quiz me": one question about a concept, given its prerequisites in the graph (see panels/QuizDialog.tsx). */
@@ -696,7 +722,10 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const cx = anchors.reduce((s, n) => s + n.position.x, 0) / Math.max(anchors.length, 1);
   const cy = Math.max(...anchors.map((n) => n.position.y), 0);
   // Preferred spot: below the anchors; addNode shifts it to the nearest free place.
-  const id = addConcept({ name: p.name, definition: p.definition, aliases: p.aliases, position: { x: cx, y: cy + 200 } }, graphId);
+  const id = addConcept(
+    { name: p.name, definition: p.definition, aliases: p.aliases, kind: p.kind, position: { x: cx, y: cy + 200 } },
+    graphId,
+  );
   store().mutate((g) => {
     let out = g;
     for (const l of p.links) {

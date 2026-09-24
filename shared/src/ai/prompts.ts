@@ -1,6 +1,7 @@
 import type {
   AbsurdChainRequest,
   AbsurdStyle,
+  AnatomyRequest,
   ClarifyRequest,
   DepsRequest,
   DeriveRequest,
@@ -23,12 +24,16 @@ import type {
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
 Reply with a single JSON object only — no prose, no markdown fences.
 Mathematical notation: in definitions, explanations, relations, examples and quiz text, write symbols and formulas as LaTeX between single dollar signs, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ or $G / \\ker\\varphi \\cong \\operatorname{im}\\varphi$; use $$…$$ only for a formula on a line of its own. Plain words stay plain text, concept names never contain $, and money is written without $ (e.g. "5 USD"). In the JSON every backslash must be escaped: write "$\\\\ker\\\\varphi$", not "$\\ker\\varphi$".`;
+
+/** The schema fragment and instruction for a concept's "kind" (see ConceptKind in model.ts). */
+const KIND_VALUES = `"definition"|"theorem"|"lemma"|"proposition"|"corollary"|"axiom"|"conjecture"|"example"|"notation"|"other"`;
+const KIND_GUIDE = `"kind" says what sort of statement the concept is: "definition" (introduces a notion), "theorem" / "lemma" / "proposition" / "corollary" (a proved result, by its usual standing: a major result, a helper result, a minor result, a direct consequence), "axiom" (assumed without proof), "conjecture" (believed but unproved), "example" (a specific instance), "notation" (a symbol or naming convention), "other" (an idea, technique, method or whole field). Use null if unsure.`;
 
 function brief(n: NodeBrief) {
   const aka = n.aliases?.length ? ` (aka ${n.aliases.join(", ")})` : "";
@@ -58,8 +63,8 @@ export function languageInstruction(language: string | undefined): string {
   if (!lang) return "";
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
-  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes) in ${target}.
-Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes, hypotheses, conclusions and proof ideas) in ${target}.
+Keep the JSON keys, the "role" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
 /** Add the output-language paragraph to the system message of a task prompt. */
@@ -75,7 +80,8 @@ export function namePrompt(req: NameRequest): ChatMessage[] {
       "name",
       `The user describes something they cannot name. Identify the established name(s) for it.
 Return 3-5 candidates, best first. If no standard term exists, coin a short descriptive name and say so in the definition.
-Schema: {"candidates":[{"name":string,"definition":string (one or two sentences),"aliases":string[]}]}`,
+${KIND_GUIDE}
+Schema: {"candidates":[{"name":string,"definition":string (one or two sentences),"aliases":string[],"kind":${KIND_VALUES}|null}]}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nDescription: ${req.description}`),
   ];
@@ -89,8 +95,9 @@ export function clarifyPrompt(req: ClarifyRequest): ChatMessage[] {
 Use the concepts already in the graph and any hint: if they make one meaning clearly intended, it is NOT ambiguous.
 If ambiguous: set "ambiguous": true and return exactly ${req.count} distinct senses, most likely first (given the graph).
 If not ambiguous: set "ambiguous": false and return a single sense with a precise definition.
-Each sense: "name" = display name, disambiguated with a parenthetical only if needed (e.g. "Expectation (probability)"); "domain" = short field label; "definition" = one or two sentences.
-Schema: {"ambiguous":boolean,"senses":[{"name":string,"domain":string,"definition":string}]}`,
+Each sense: "name" = display name, disambiguated with a parenthetical only if needed (e.g. "Expectation (probability)"); "domain" = short field label; "definition" = one or two sentences (for a result, its statement).
+${KIND_GUIDE}
+Schema: {"ambiguous":boolean,"senses":[{"name":string,"domain":string,"definition":string,"kind":${KIND_VALUES}|null}]}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nName: ${req.name}${req.hint ? `\nHint: ${req.hint}` : ""}`),
   ];
@@ -119,7 +126,8 @@ export function depsPrompt(req: DepsRequest): ChatMessage[] {
 Only direct dependencies (not transitive ones), at most 6, most essential first. Skip universal basics (sets, functions, numbers) unless the concept is itself basic.
 role: "uses" (its definition/statement relies on it), "derives" (it produces / concludes an instance of it — e.g. a theorem that yields an isomorphism derives "isomorphism"), "assumes" (a hypothesis or background assumption).
 If a prerequisite is the same concept as one already in the graph (even under another name), set "matchesExisting" to that existing concept's exact name; otherwise null.
-Schema: {"prerequisites":[{"name":string,"role":"uses"|"derives"|"assumes","reason":string,"matchesExisting":string|null}]}`,
+Also classify the concept being analysed (not its prerequisites): ${KIND_GUIDE}
+Schema: {"prerequisites":[{"name":string,"role":"uses"|"derives"|"assumes","reason":string,"matchesExisting":string|null}],"kind":${KIND_VALUES}|null}`,
     ),
     input(req, `${contextBlock(req.existing)}\n\nConcept to analyse:\n${brief(req.node)}`),
   ];
@@ -132,7 +140,8 @@ export function derivePrompt(req: DeriveRequest): ChatMessage[] {
       `Propose 1-4 new concepts that follow from, combine, or naturally extend the selected concepts (e.g. a consequence, a construction, a generalization, a conjecture worth checking).
 Do not repeat concepts already in the graph. For each proposal give links to the selected concepts by exact name:
 "fromNew" = what the new concept does to that concept, "toNew" = what that concept does to the new one.
-Schema: {"proposals":[{"name":string,"definition":string,"aliases":string[],"links":[{"to":string,"fromNew":{"kind":string,"explanation":string},"toNew":{"kind":string,"explanation":string}}]}]}`,
+${KIND_GUIDE} A consequence you are not sure is true is a "conjecture".
+Schema: {"proposals":[{"name":string,"definition":string,"aliases":string[],"kind":${KIND_VALUES}|null,"links":[{"to":string,"fromNew":{"kind":string,"explanation":string},"toNew":{"kind":string,"explanation":string}}]}]}`,
     ),
     input(
       req,
@@ -181,15 +190,35 @@ export function extractPrompt(req: ExtractRequest): ChatMessage[] {
 "concepts": the distinct concepts the text introduces, defines or relies on (at most 30, most central first). Skip vague everyday words.
 For each: "name" = its standard name (singular); "definition" = one or two sentences, from the text where it defines the concept, else the standard one; "aliases" = other names the text uses; "quote" = a short excerpt (at most ~25 words) copied verbatim from the text, in its original language, that supports it.
 If a concept is already in the graph (even under another name), use the graph's exact name for it.
+${KIND_GUIDE} Where the text labels a statement ("Theorem 2.1", "Lemma", "Definition"), follow its label.
 "relations": relations the text states or clearly implies between two concepts (extracted ones or ones already in the graph), by exact name, separately in each direction: "aToB" = what "from" does to "to", "bToA" = what "to" does to "from"; "kind" is a short verb phrase (2-5 words), "explanation" 1-2 sentences.
 "prerequisites": only where the text says one concept needs another to be stated or understood: "dependent" needs "prerequisite"; role "uses" | "derives" | "assumes"; "reason" is one sentence.
-Schema: {"concepts":[{"name":string,"definition":string,"aliases":string[],"quote":string}],"relations":[{"from":string,"to":string,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}],"prerequisites":[{"dependent":string,"prerequisite":string,"role":"uses"|"derives"|"assumes","reason":string}]}`,
+Schema: {"concepts":[{"name":string,"definition":string,"aliases":string[],"quote":string,"kind":${KIND_VALUES}|null}],"relations":[{"from":string,"to":string,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}],"prerequisites":[{"dependent":string,"prerequisite":string,"role":"uses"|"derives"|"assumes","reason":string}]}`,
     ),
     // The text itself is only in the INPUT payload (the "text" field), so a long paste isn't sent twice.
     input(
       req,
       `${contextBlock(req.existing)}${req.focus ? `\n\nFocus: ${req.focus}` : ""}\n\nExtract from the "text" field of the INPUT below.`,
     ),
+  ];
+}
+
+export function anatomyPrompt(req: AnatomyRequest): ChatMessage[] {
+  const prereqs = req.prerequisites.length
+    ? `Its prerequisites in the graph (the reader knows these):\n${req.prerequisites.map(brief).join("\n")}`
+    : "It has no prerequisites in the graph.";
+  return [
+    sys(
+      "anatomy",
+      `Take a mathematical statement (a theorem, lemma, proposition, corollary or conjecture) apart for a learner.
+"hypotheses": every assumption of the standard statement, one per entry, in the order they are usually stated (include the implicit ones, e.g. "G is finite"). For each: "text" = the hypothesis; "whyNeeded" = one sentence on what it is used for in the proof; "counterexampleIfDropped" = a concrete counterexample showing the conclusion can fail without it, or "" if dropping it is known not to matter.
+"conclusion": what the statement asserts, in one or two sentences.
+"proofIdea": a sketch of the key idea of the proof in 2-4 sentences: the construction or trick, not a full proof. For a conjecture, say instead what evidence or partial results support it.
+"examples": 1-3 short concrete instances of the statement. "nonExamples": 1-3 short cases that look similar but where it does not apply, or common misreadings of it.
+Use the prerequisites' names where they come up.
+Schema: {"hypotheses":[{"text":string,"whyNeeded":string,"counterexampleIfDropped":string}],"conclusion":string,"proofIdea":string,"examples":string[],"nonExamples":string[]}`,
+    ),
+    input(req, [`Statement to take apart${req.node.kind ? ` (a ${req.node.kind})` : ""}:\n${brief(req.node)}`, prereqs].join("\n\n")),
   ];
 }
 

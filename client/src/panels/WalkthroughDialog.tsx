@@ -1,3 +1,4 @@
+import { KindTag } from "../graph/KindTag";
 import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LocateFixed, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
@@ -21,6 +22,7 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
   const [at, setAt] = useState(0);
   const i = Math.min(at, Math.max(0, slides.length - 1)); // the graph may shrink behind the overlay (undo elsewhere)
   const slide = slides[i];
+  const slideKind = slide && graph.nodes.find((n) => n.id === slide.id)?.kind;
   const count = slides.length;
   const go = (to: number) => setAt(Math.max(0, Math.min(count - 1, to)));
   // Start with focus on the slide (not the ✕ button, where Space would close the overlay); Modal keeps it there.
@@ -73,6 +75,7 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
         <p className="walk__empty">{t("walk.empty")}</p>
       ) : (
         <article className="walk__slide" ref={slideRef} tabIndex={-1} data-testid="walk-slide">
+          {slideKind && <div className="walk__kind"><KindTag kind={slideKind} /></div>}
           <h2 className="walk__name" data-testid="walk-name">{slide.name}</h2>
           <p className={`walk__def${slide.definition.trim() ? "" : " muted"}`}>
             {slide.definition.trim() ? <MathText text={slide.definition} /> : t("walk.noDefinition")}

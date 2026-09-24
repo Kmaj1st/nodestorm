@@ -2,8 +2,9 @@ import type { RelationOrigin } from "@nodestorm/shared";
 import { ChevronDown, Eye, Focus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT, type MessageKey } from "../i18n";
-import { isFiltered } from "../lib/view";
-import { useGraphStore } from "../store/graphStore";
+import { KIND_LABEL } from "../lib/kinds";
+import { isFiltered, KIND_FILTERS, kindFilterOf } from "../lib/view";
+import { activeGraph, useGraphStore } from "../store/graphStore";
 import { focusTarget, toggleFocus, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 
@@ -41,6 +42,13 @@ export function ViewMenu() {
   const ref = useRef<HTMLDivElement>(null);
   const view = useView();
   const filtered = isFiltered(view);
+  // Kind filters for the kinds this graph uses, plus any that are hidden now (so they can be shown again). A graph
+  // without any kinds gets no kind section at all.
+  const graph = useGraphStore(activeGraph);
+  const used = new Set(graph.nodes.map(kindFilterOf));
+  const kinds = used.size === 1 && used.has("none") && view.kinds.none
+    ? []
+    : KIND_FILTERS.filter((k) => used.has(k) || !view.kinds[k]);
 
   useEffect(() => {
     if (!open) return;
@@ -83,6 +91,24 @@ export function ViewMenu() {
               {t(k.label)}
             </label>
           ))}
+          {kinds.length > 0 && (
+            <>
+              <hr className="menu__sep" />
+              <div className="view-menu__head" title={t("view.kindsTitle")}>{t("view.showKinds")}</div>
+              <div className="view-menu__kinds">
+                {kinds.map((k) => (
+                  <label key={k} className="check">
+                    <input
+                      type="checkbox"
+                      checked={view.kinds[k]}
+                      onChange={(e) => view.setPrefs({ kinds: { ...view.kinds, [k]: e.target.checked } })}
+                    />
+                    {t(k === "none" ? "view.untyped" : KIND_LABEL[k])}
+                  </label>
+                ))}
+              </div>
+            </>
+          )}
           <hr className="menu__sep" />
           <label className="check">
             <input type="checkbox" checked={view.edgeLabels} onChange={(e) => view.setPrefs({ edgeLabels: e.target.checked })} />

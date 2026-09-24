@@ -1,9 +1,11 @@
 import {
+  ConceptKind,
   DepRole,
   GraphExport,
   Mastery,
   SourceRef,
   NodeFormal,
+  NodeAnatomy,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -166,6 +168,17 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     const src = SourceRef.safeParse(n.source);
     if (src.success) node.source = src.data;
     else fixes.add(t("repair.droppedSource"));
+  }
+  if (n.kind !== undefined && n.kind !== null) {
+    // Older files have no kind; a file edited by hand may say "Theorem" or something unknown.
+    const kind = ConceptKind.safeParse(typeof n.kind === "string" ? n.kind.trim().toLowerCase() : n.kind);
+    if (kind.success) node.kind = kind.data;
+    else fixes.add(t("repair.droppedKind"));
+  }
+  if (n.anatomy !== undefined) {
+    const an = NodeAnatomy.safeParse(n.anatomy);
+    if (an.success) node.anatomy = an.data;
+    else fixes.add(t("repair.droppedAnatomy"));
   }
   if (n.mastery !== undefined) {
     const m = Mastery.safeParse(n.mastery);

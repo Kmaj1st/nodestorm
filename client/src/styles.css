@@ -60,6 +60,17 @@
   --sandbox-border: #a5e8f6;
   --edge: #9ca3af;
   --edge-none: #d5d8de;
+  /* Concept kinds (tags on cards): definitions, proved results, axioms, conjectures, examples */
+  --kind-def: #1d4ed8;
+  --kind-def-soft: #eaf1ff;
+  --kind-result: #7e22ce;
+  --kind-result-soft: #f5ecff;
+  --kind-axiom: #8a3c0b;
+  --kind-axiom-soft: #fdf1e1;
+  --kind-conj: #b3174f;
+  --kind-conj-soft: #fdedf3;
+  --kind-example: #0e6f86;
+  --kind-example-soft: #e6f8fc;
   --status-bg: #1b1e25;
   --status-text: #ffffff;
   --toast-bg: #a3241a;
@@ -120,6 +131,16 @@
   --sandbox-border: #175e6b;
   --edge: #5f6674;
   --edge-none: #343944;
+  --kind-def: #9dbbff;
+  --kind-def-soft: #172340;
+  --kind-result: #d4acff;
+  --kind-result-soft: #2a1b3f;
+  --kind-axiom: #f3b86a;
+  --kind-axiom-soft: #2e2211;
+  --kind-conj: #f79bc0;
+  --kind-conj-soft: #36172a;
+  --kind-example: #5fd8ee;
+  --kind-example-soft: #0d2429;
   --status-bg: #262a33;
   --status-text: #f1f2f6;
   --toast-bg: #8f2119;
@@ -431,6 +452,21 @@ button.concept__badge:hover:not(:disabled) { border-color: currentColor; }
 button.concept__badge--error:hover:not(:disabled) { background: var(--error-badge); }
 button.concept__badge--unclear:hover:not(:disabled) { background: var(--accent-soft); }
 
+/* Concept kind tags: a small uppercase label above the name (cards) or next to it (inspector, walkthrough). */
+.concept__kind { display: flex; margin: -2px 0 var(--space-1); }
+.kind-tag {
+  display: inline-flex; align-items: center; height: 18px; padding: 0 6px; border-radius: var(--radius-sm);
+  font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; line-height: 1;
+  white-space: nowrap; background: var(--surface); color: var(--muted);
+}
+.kind-tag--def { background: var(--kind-def-soft); color: var(--kind-def); }
+.kind-tag--result { background: var(--kind-result-soft); color: var(--kind-result); }
+.kind-tag--axiom { background: var(--kind-axiom-soft); color: var(--kind-axiom); }
+.kind-tag--conj { background: var(--kind-conj-soft); color: var(--kind-conj); }
+.kind-tag--example { background: var(--kind-example-soft); color: var(--kind-example); }
+/* Chinese labels read better without letter-spacing and case changes. */
+:lang(zh) .kind-tag { letter-spacing: 0; text-transform: none; font-size: 11px; }
+
 /* ---- Edges ---- */
 .relation { stroke: var(--edge); stroke-width: 1.5; fill: none; }
 .relation--dependency { stroke-dasharray: 5 4; }
@@ -506,6 +542,9 @@ button.edge-label--active:hover:not(:disabled) {
 .inspector .form__actions button { min-height: var(--control-h-dense); padding: 0 10px; font-size: var(--text-xs); }
 .field { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-xs); font-weight: 500; color: var(--muted); }
 .field > input, .field > textarea, .field > select, .field .row { font-weight: 400; }
+/* A short control on the same line as its label (the concept kind). */
+.field--inline { flex-direction: row; align-items: center; justify-content: space-between; gap: var(--space-3); }
+.field--inline > select { width: auto; min-width: 160px; }
 .help { margin: 0; padding-left: 20px; line-height: 1.55; font-size: var(--text-sm); color: var(--text); display: flex; flex-direction: column; gap: var(--space-2); }
 .help li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
 .section-head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); margin-bottom: var(--space-2); }
@@ -591,6 +630,11 @@ textarea.title-input { resize: none; field-sizing: content; min-height: 0; line-
 .explain__summary { font-weight: 500; }
 .explain__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .explain .form__actions { margin-top: var(--space-2); }
+/* Theorem anatomy: numbered hypotheses, each with why it is needed and what fails without it. */
+.anatomy__hyps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: var(--space-2); }
+.anatomy__hyps li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.anatomy__hyps .small { color: var(--muted); margin-top: 2px; }
+.anatomy__label { font-weight: 600; color: var(--text); }
 
 /* Install-all popover, learning path */
 .popover-anchor { position: relative; }
@@ -791,6 +835,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 .view-menu { min-width: 250px; padding: var(--space-2) var(--space-3); gap: var(--space-2); }
 .view-menu__head { font-size: 11px; font-weight: 600; color: var(--muted); }
 .view-menu .check { font-size: var(--text-sm); min-height: 24px; }
+.view-menu__kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--space-3); }
 
 /* ==========================================================================================================
    Floating notices: task status, toasts, update notice
@@ -849,6 +894,17 @@ button.toast__close:hover:not(:disabled) {
 /* Keyboard shortcuts dialog */
 .shortcuts-button .icon { width: 14px; height: 14px; }
 .shortcuts__group h4 { margin: 0 0 var(--space-2); font-size: var(--text-xs); font-weight: 600; color: var(--muted); }
+/* Notation glossary (File → Notation…): symbol | concept rows. */
+.glossary__table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.glossary__table th {
+  text-align: left; font-size: var(--text-xs); font-weight: 600; color: var(--muted);
+  padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border);
+}
+.glossary__table td { padding: var(--space-2); border-bottom: 1px solid var(--border); vertical-align: top; }
+.glossary__table td.glossary__symbol { width: 1%; white-space: nowrap; font-size: var(--text-lg); padding-right: var(--space-4); }
+.glossary__concept { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.glossary__formula { color: var(--muted); margin-top: 2px; }
+.glossary__empty { font-size: var(--text-sm); }
 /* The same key column width in every group, so the descriptions line up. */
 .shortcuts__group dl { display: grid; grid-template-columns: 13.5rem 1fr; gap: var(--space-2) var(--space-4); margin: 0; align-items: baseline; }
 .shortcuts__group dt { white-space: nowrap; }

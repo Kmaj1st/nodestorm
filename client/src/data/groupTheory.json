@@ -3,35 +3,41 @@
   "concepts": [
     {
       "name": "Group",
+      "kind": "definition",
       "definition": "A set with an associative binary operation, an identity element, and inverses.",
       "aliases": []
     },
     {
       "name": "Subgroup",
+      "kind": "definition",
       "definition": "A subset of a group that is itself a group under the same operation.",
       "aliases": [],
       "dependsOn": [{ "name": "Group", "role": "uses", "reason": "A subgroup is a subset of a group closed under its operation." }]
     },
     {
       "name": "Normal subgroup",
+      "kind": "definition",
       "definition": "A subgroup $N$ of $G$ with $gNg^{-1} = N$ for every $g \\in G$.",
       "aliases": [],
       "dependsOn": [{ "name": "Subgroup", "role": "uses", "reason": "A normal subgroup is a subgroup invariant under conjugation." }]
     },
     {
       "name": "Homomorphism",
+      "kind": "definition",
       "definition": "A map $\\varphi: G \\to H$ between groups with $\\varphi(ab) = \\varphi(a)\\varphi(b)$.",
       "aliases": ["group homomorphism"],
       "dependsOn": [{ "name": "Group", "role": "uses", "reason": "A homomorphism maps one group to another, preserving the operation." }]
     },
     {
       "name": "Kernel",
+      "kind": "definition",
       "definition": "The set of elements a homomorphism sends to the identity: $\\ker\\varphi = \\{ g \\in G : \\varphi(g) = e \\}$.",
       "aliases": ["ker"],
       "dependsOn": [{ "name": "Homomorphism", "role": "uses", "reason": "The kernel is defined for a homomorphism." }]
     },
     {
       "name": "Quotient group",
+      "kind": "definition",
       "definition": "The group $G/N$ of cosets of a normal subgroup $N$, with $(aN)(bN) = abN$.",
       "aliases": ["factor group"],
       "dependsOn": [
@@ -41,6 +47,7 @@
     },
     {
       "name": "First Isomorphism Theorem",
+      "kind": "theorem",
       "definition": "For a homomorphism $\\varphi: G \\to H$, $G/\\ker\\varphi$ is isomorphic to $\\operatorname{im}\\varphi$.",
       "aliases": ["fundamental homomorphism theorem"],
       "dependsOn": [

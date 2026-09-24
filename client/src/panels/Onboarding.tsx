@@ -226,6 +226,13 @@ function Tour() {
       let ring: DOMRect | null = null;
       if (step) {
         const a = ANCHORS[step.anchor]();
+        // The inspector may be a scrolled bottom sheet (phones): bring the Install button into it once, even when
+        // it starts out below the sheet's visible part (a long definition, the kind field).
+        // Until it is on screen, keep asking (the sheet may still be opening); after that, leave the user's scrolling alone.
+        if (a && step.id === "install" && !scrolled) {
+          a.scrollIntoView({ block: "nearest" });
+          if (onScreen(a.getBoundingClientRect(), windowSize())) scrolled = true;
+        }
         const r = a?.getBoundingClientRect();
         if (!r || !onScreen(r, windowSize())) {
           if (performance.now() - started > ANCHOR_WAIT_MS) {
@@ -238,9 +245,6 @@ function Tour() {
           return;
         }
         ring = r;
-        // The inspector may be a scrolled bottom sheet (phones): bring the Install button into it once.
-        if (step.id === "install" && !scrolled) a!.scrollIntoView({ block: "nearest" });
-        scrolled = true;
       }
       const p = placePopover(ring, size, windowSize());
       const key = `${p.left},${p.top},${p.side},${ring ? [ring.left, ring.top, ring.width, ring.height].join(",") : ""}`;

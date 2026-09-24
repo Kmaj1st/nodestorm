@@ -1,4 +1,4 @@
-import { loogleSearchUrl, mathlibDocUrl, type ConceptNode, type ExplainLevel, type Graph, type RelationOrigin } from "@nodestorm/shared";
+import { isTheoremLike, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -9,6 +9,7 @@ import {
   GraduationCap,
   PenLine,
   Highlighter,
+  ListTree,
   Presentation,
   RefreshCw,
   Search,
@@ -21,6 +22,9 @@ import { useEffect, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   analyzeNode,
+  anatomyKey,
+  anatomyNode,
+  cancelTask,
   explainKey,
   explainNode,
   findInMathlib,
@@ -33,8 +37,9 @@ import {
   relookupKey,
   resolveCycle,
 } from "../lib/actions";
-import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
 import { sourceLabel } from "../lib/export";
+import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
@@ -151,6 +156,20 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
       </header>
 
+      <label className="field field--inline">
+        {t("kind.label")}
+        <select
+          value={node.kind ?? ""}
+          disabled={viewing}
+          data-testid="kind-select"
+          // A hand-picked kind is a user edit: an undo step. The AI never overrides it (graphOps.suggestKind).
+          onChange={(e) => mutate((g) => setKind(g, node.id, (e.target.value || null) as ConceptKind | null), graphId)}
+        >
+          <option value="">{t("kind.none")}</option>
+          {KINDS.map((k) => <option key={k} value={k}>{t(KIND_LABEL[k])}</option>)}
+        </select>
+      </label>
+
       <label className="field">
         {t("node.definition")}
         <textarea
@@ -243,6 +262,8 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           })}
         </ul>
       </section>
+
+      {isTheoremLike(node.kind) && <AnatomySection key={`anatomy:${node.id}`} node={node} graphId={graphId} />}
 
       <ExplainSection key={node.id} node={node} graphId={graphId} />
       <FormalSection node={node} graphId={graphId} viewing={viewing} />
@@ -393,6 +414,89 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
               <Icon icon={ArrowDown} size={14} />{t("explain.useSummary")}
             </button>
           </div>
+        </details>
+      )}
+    </section>
+  );
+}
+
+/**
+ * "Theorem anatomy" (theorem-like kinds): the AI takes the statement apart into hypotheses (each with why it is
+ * needed and a counterexample without it), the conclusion, a proof idea, examples and non-examples. Kept on the node.
+ */
+function AnatomySection({ node, graphId }: { node: ConceptNode; graphId: string }) {
+  const t = useT();
+  const lang = useLang();
+  const viewing = useGraphStore(isViewing);
+  const key = anatomyKey(graphId, node.id);
+  const running = useGraphStore((s) => Boolean(s.busy[key]));
+  const [open, setOpen] = useState(true);
+  const an = node.anatomy;
+  if (viewing && !an) return null;
+  return (
+    <section data-testid="anatomy">
+      <div className="section-head">
+        <h4>{t("anatomy.title")}</h4>
+        {!viewing && (
+          <div className="explain__controls">
+            {running && (
+              <button className="small-btn" onClick={() => cancelTask(key)} data-testid="anatomy-cancel">
+                {t("common.cancel")}
+              </button>
+            )}
+            <button className="small-btn" onClick={() => void anatomyNode(node.id, graphId)} disabled={running} data-testid="anatomy-button">
+              {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={ListTree} size={14} />}
+              {t(running ? "anatomy.running" : an ? "anatomy.regenerate" : "anatomy.run")}
+            </button>
+          </div>
+        )}
+      </div>
+      {!an && !running && <p className="muted small">{t("anatomy.empty")}</p>}
+      {an && (
+        <details className="explain anatomy" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+          <summary>
+            <Icon icon={ChevronRight} size={14} className="explain__chevron" />
+            {t("anatomy.heading")}{" "}
+            <span className="muted small">· {new Date(an.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
+          </summary>
+          <h5>{t("anatomy.hypotheses")}</h5>
+          {an.hypotheses.length === 0 ? (
+            <p className="muted small">{t("anatomy.noHypotheses")}</p>
+          ) : (
+            <ol className="anatomy__hyps" data-testid="anatomy-hypotheses">
+              {an.hypotheses.map((h, i) => (
+                <li key={i}>
+                  <MathText text={h.text} />
+                  {h.whyNeeded && (
+                    <div className="small"><span className="anatomy__label">{t("anatomy.why")}</span> <MathText text={h.whyNeeded} /></div>
+                  )}
+                  {h.counterexampleIfDropped && (
+                    <div className="small"><span className="anatomy__label">{t("anatomy.without")}</span> <MathText text={h.counterexampleIfDropped} /></div>
+                  )}
+                </li>
+              ))}
+            </ol>
+          )}
+          <h5>{t("anatomy.conclusion")}</h5>
+          <p className="explain__summary" data-testid="anatomy-conclusion"><MathText text={an.conclusion} /></p>
+          {an.proofIdea && (
+            <>
+              <h5>{t(node.kind === "conjecture" ? "anatomy.evidence" : "anatomy.proofIdea")}</h5>
+              <p className="small"><MathText text={an.proofIdea} /></p>
+            </>
+          )}
+          {an.examples.length > 0 && (
+            <>
+              <h5>{t("anatomy.examples")}</h5>
+              <ul className="explain__list">{an.examples.map((x, i) => <li key={i}><MathText text={x} /></li>)}</ul>
+            </>
+          )}
+          {an.nonExamples.length > 0 && (
+            <>
+              <h5>{t("anatomy.nonExamples")}</h5>
+              <ul className="explain__list">{an.nonExamples.map((x, i) => <li key={i}><MathText text={x} /></li>)}</ul>
+            </>
+          )}
         </details>
       )}
     </section>

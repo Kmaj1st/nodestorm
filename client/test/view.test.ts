@@ -1,6 +1,6 @@
 import type { Graph, NodeStatus, RelationOrigin } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_VIEW, isFiltered, neighbourhood, sanitizeView, showsEverything, visibleParts, type ViewPrefs } from "../src/lib/view";
+import { DEFAULT_VIEW, isFiltered, KIND_FILTERS, kindFilterOf, neighbourhood, sanitizeView, showsEverything, visibleParts, type ViewPrefs } from "../src/lib/view";
 
 /**
  * A chain A – B – C – D – E (mixed, dependency, derived, mixed) plus F linked to A by a dependency.
@@ -91,7 +91,13 @@ describe("view prefs", () => {
     expect(sanitizeView(null)).toEqual(DEFAULT_VIEW);
     expect(sanitizeView("garbage")).toEqual(DEFAULT_VIEW);
     const v = sanitizeView({ origins: { mix: false, bogus: false }, edgeLabels: "no", todoOnly: true, hops: 9 });
-    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true, extract: true }, edgeLabels: true, todoOnly: true, hops: 3 });
+    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true, extract: true }, edgeLabels: true, todoOnly: true, hops: 3, kinds: DEFAULT_VIEW.kinds });
+    // Kind filters: unknown kinds dropped, missing ones shown.
+    const k = sanitizeView({ kinds: { theorem: false, remark: false, none: "x" } }).kinds;
+    expect(k.theorem).toBe(false);
+    expect(k.none).toBe(true);
+    expect(Object.keys(k)).toHaveLength(11);
+    expect("remark" in k).toBe(false);
     expect(sanitizeView({ hops: 0 }).hops).toBe(1);
     expect(sanitizeView({ hops: 2.4 }).hops).toBe(2);
   });
@@ -102,5 +108,34 @@ describe("view prefs", () => {
     expect(isFiltered(prefs({ todoOnly: true }))).toBe(true);
     expect(isFiltered(prefs({ origins: { ...DEFAULT_VIEW.origins, derive: false } }))).toBe(true);
     expect(showsEverything(DEFAULT_VIEW, { nodeId: "A", hops: 1 })).toBe(false);
+    expect(isFiltered(prefs({ kinds: { ...DEFAULT_VIEW.kinds, none: false } }))).toBe(true);
+  });
+});
+
+describe("kind filter", () => {
+  // A and C are theorems, B a definition, the rest have no kind.
+  const typed = (): Graph => {
+    const g = chain();
+    const kinds: Record<string, "theorem" | "definition"> = { A: "theorem", B: "definition", C: "theorem" };
+    return { ...g, nodes: g.nodes.map((n) => (kinds[n.id] ? { ...n, kind: kinds[n.id] } : n)) };
+  };
+
+  it("hides concepts of an unticked kind and their relations", () => {
+    const v = visibleParts(typed(), prefs({ kinds: { ...DEFAULT_VIEW.kinds, theorem: false } }));
+    expect(sorted(v.nodes)).toEqual(["B", "D", "E", "F"]);
+    expect(sorted(v.relations)).toEqual(["de"]);
+  });
+
+  it("'none' stands for concepts without a kind", () => {
+    const v = visibleParts(typed(), prefs({ kinds: { ...DEFAULT_VIEW.kinds, none: false } }));
+    expect(sorted(v.nodes)).toEqual(["A", "B", "C"]);
+    expect(kindFilterOf({})).toBe("none");
+    expect(kindFilterOf({ kind: "lemma" })).toBe("lemma");
+  });
+
+  it("keeps the focused concept even when its kind is hidden", () => {
+    const v = visibleParts(typed(), prefs({ kinds: { ...DEFAULT_VIEW.kinds, theorem: false } }), { nodeId: "C", hops: 1 });
+    expect(sorted(v.nodes)).toEqual(["B", "C", "D"]);
+    expect(KIND_FILTERS).toContain("none");
   });
 });

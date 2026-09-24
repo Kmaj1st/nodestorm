@@ -50,6 +50,60 @@ export const Mastery = z.object({
 });
 export type Mastery = z.infer<typeof Mastery>;
 
+/**
+ * What sort of statement a concept is, for the formal sciences: a definition, a result (theorem, lemma, proposition,
+ * corollary), an axiom, a conjecture, an example, a piece of notation, or anything else ("other": ideas, techniques,
+ * whole fields). Optional on a node: most brainstorms never set it.
+ */
+export const ConceptKind = z.enum([
+  "definition",
+  "theorem",
+  "lemma",
+  "proposition",
+  "corollary",
+  "axiom",
+  "conjecture",
+  "example",
+  "notation",
+  "other",
+]);
+export type ConceptKind = z.infer<typeof ConceptKind>;
+
+/** Kinds that have hypotheses and a conclusion, so "Theorem anatomy" applies to them. */
+export const THEOREM_KINDS: readonly ConceptKind[] = ["theorem", "lemma", "proposition", "corollary", "conjecture"];
+export const isTheoremLike = (kind: ConceptKind | null | undefined): boolean => !!kind && THEOREM_KINDS.includes(kind);
+
+/**
+ * A kind in an AI answer: case-insensitive, and an unknown or missing value becomes null instead of failing the
+ * whole answer (older prompts, and models that invent "remark" or "principle").
+ */
+export const AiConceptKind = z
+  .preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), ConceptKind.nullish())
+  .catch(null);
+
+/** One hypothesis of a theorem-like statement, why it is there, and what goes wrong without it. */
+export const AnatomyHypothesis = z.object({
+  text: z.string().default(""),
+  whyNeeded: z.string().default(""),
+  counterexampleIfDropped: z.string().default(""),
+});
+export type AnatomyHypothesis = z.infer<typeof AnatomyHypothesis>;
+
+/** "Theorem anatomy": a theorem taken apart (the "anatomy" task's answer). */
+export const TheoremAnatomy = z.object({
+  hypotheses: z.array(AnatomyHypothesis).default([]),
+  conclusion: z.string().trim().min(1),
+  /** A sketch of the proof in a few sentences, never a full proof. */
+  proofIdea: z.string().default(""),
+  examples: z.array(z.string()).default([]),
+  nonExamples: z.array(z.string()).default([]),
+});
+export type TheoremAnatomy = z.infer<typeof TheoremAnatomy>;
+
+/** The latest anatomy stored on a node, with when it was asked for. */
+export const NodeAnatomy = TheoremAnatomy.extend({ createdAt: z.number() });
+export type NodeAnatomy = z.infer<typeof NodeAnatomy>;
+
 export const ConceptNode = z.object({
   id: z.string(),
   name: z.string(),
@@ -74,6 +128,10 @@ export const ConceptNode = z.object({
   formal: z.lazy(() => NodeFormal).optional(),
   /** Where the concept came from: an imported document and page (see "Derive together"). */
   source: z.lazy(() => SourceRef).optional(),
+  /** Definition, theorem, lemma…: set by the AI's check (only while unset) or by hand in the inspector. */
+  kind: ConceptKind.optional(),
+  /** The latest "Theorem anatomy" answer (theorem-like kinds). AI study material, like `explanation`. */
+  anatomy: NodeAnatomy.optional(),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -167,6 +225,7 @@ export const NameCandidate = z.object({
   name: z.string(),
   definition: z.string(),
   aliases: z.array(z.string()).default([]),
+  kind: AiConceptKind,
 });
 export type NameCandidate = z.infer<typeof NameCandidate>;
 
@@ -198,6 +257,8 @@ export type Prerequisite = z.infer<typeof Prerequisite>;
 
 export const DepsResponse = z.object({
   prerequisites: z.array(Prerequisite),
+  /** What sort of statement the analysed concept is (null when the model can't tell or gives none). */
+  kind: AiConceptKind,
 });
 export type DepsResponse = z.infer<typeof DepsResponse>;
 
@@ -208,6 +269,7 @@ export const Sense = z.object({
   definition: z.string(),
   /** Set when the meaning was looked up in an encyclopedia rather than suggested by the AI. */
   source: z.lazy(() => SourceRef).optional(),
+  kind: AiConceptKind,
 });
 export type Sense = z.infer<typeof Sense>;
 
@@ -239,6 +301,7 @@ export const DerivedProposal = z.object({
   name: z.string(),
   definition: z.string(),
   aliases: z.array(z.string()).default([]),
+  kind: AiConceptKind,
   /** How the proposal relates to the selected nodes (by name). */
   links: z.array(
     z.object({
@@ -274,6 +337,16 @@ export type ExplainRequest = z.infer<typeof ExplainRequest>;
 
 export const ExplainResponse = Explanation;
 export type ExplainResponse = Explanation;
+
+export const AnatomyRequest = z.object({
+  node: NodeBrief.extend({ kind: ConceptKind.optional() }),
+  /** Its prerequisites that are in the graph. */
+  prerequisites: z.array(NodeBrief).default([]),
+});
+export type AnatomyRequest = z.infer<typeof AnatomyRequest>;
+
+export const AnatomyResponse = TheoremAnatomy;
+export type AnatomyResponse = TheoremAnatomy;
 
 /**
  * What a quiz question asks: "recall" the concept itself, "apply" it to a small concrete case, or "connect" it to one
@@ -346,6 +419,7 @@ export const ExtractedConcept = z.object({
   aliases: z.array(z.string()).default([]),
   /** A short excerpt of the text that supports the concept. */
   quote: z.string().nullish(),
+  kind: AiConceptKind,
 });
 export type ExtractedConcept = z.infer<typeof ExtractedConcept>;
 

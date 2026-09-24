@@ -87,11 +87,35 @@ no key needed) or an empty graph.
   apps; NodeStorm then skips it for 10 minutes and uses Wikipedia. `npm run smoke:lookup` checks the sites from your
   machine.
 
+### Mathematics, logic and other formal sciences
+
+- **Concept kinds.** A concept can be a *definition*, *theorem*, *lemma*, *proposition*, *corollary*, *axiom*,
+  *conjecture*, *example*, *notation* or *other*. The AI's check sets the kind while it is unset (as do naming, the
+  "what do you mean?" choice, Derive and Extract from text, which follows the text's own "Lemma 2.1"); you can change
+  it in the inspector's **Kind** field, and the AI never overrides your choice. Each card shows its kind as a small
+  colour-coded label (the proved results share a colour, and so do definitions and notation). **View** can hide
+  concepts by kind (only the kinds in the graph are listed, plus *No kind set*). The kind is kept in JSON exports,
+  share links and the Markdown notes, and the Group theory example is typed.
+- **Theorem anatomy** (inspector, for theorems, lemmas, propositions, corollaries and conjectures): **Take apart** asks
+  the AI for each hypothesis with *why it is needed* and a *counterexample without it*, the conclusion, a proof idea
+  (a sketch in a few sentences, never a full proof; for a conjecture, why it is believed), examples and non-examples,
+  all typeset. It is kept on the concept like an explanation (not an undo step), can be cancelled while it runs, and
+  appears in the Markdown notes; share links leave it out.
 - **Lean / Mathlib** (inspector: **Find in Mathlib**): the Lean 4 declarations in Mathlib that formalise a concept.
   - The AI suggests names, and each one is checked against Mathlib with Loogle.
   - Only declarations that really exist are listed, each with its type, docstring and a link to the Mathlib docs.
   - Names that don't exist are shown as dropped. Formal-science work can go straight from an idea to its formal
     statement.
+- **LaTeX document** (**File → LaTeX document (.tex)**): an `amsart` article with one `amsthm` environment per concept
+  (Definition, Theorem, Lemma…; concepts without a kind are *Concept*), in study order, each labelled and saying what
+  it uses (*Uses: Definition 3 (Kernel)*, as `\ref`s), with missing prerequisites, aliases, sources, your notes as
+  remarks and a stored anatomy's proof idea as a proof sketch. Text is escaped for LaTeX (`# % & _ { } ~ ^ \` and
+  common symbols like → or φ) while `$…$` formulas are kept as written. It compiles with `pdflatex`; a graph with
+  Chinese, Japanese or Korean text asks for `xelatex` (and loads `xeCJK` there).
+- **Notation…** (**File**): a glossary of the symbols the graph introduces, built without the AI: for every
+  *definition* and *notation* concept, the left-hand side of its defining equation (`$\ker\varphi = …$` gives
+  $\ker\varphi$) or else its first short formula that isn't a lone variable, in study order. Each entry links to its
+  concept (turning off a View filter that hid it).
 
 ### Study tools
 
@@ -172,8 +196,10 @@ Projects autosave to your browser's localStorage (data from earlier versions bec
   of rejecting them: it fills in missing fields and drops relations or prerequisite links that point to missing
   concepts, and a notice lists what was fixed.
 - **Markdown notes**: the current graph as study notes, in study order (prerequisites first), with aliases,
-  definitions and prerequisites, and every relation written out in both directions. Formulas are kept as `$…$`,
-  which GitHub and most Markdown editors typeset.
+  kinds, definitions and prerequisites, stored explanations and theorem anatomies, and every relation written out in
+  both directions. Formulas are kept as `$…$`, which GitHub and most Markdown editors typeset.
+- **LaTeX document (.tex)**: the current graph as a compilable `amsart` article, one theorem-style environment per
+  concept (see *Mathematics, logic and other formal sciences* above).
 - **Mermaid diagram**: flowchart text for GitHub, Notion, etc., copied to the clipboard and downloaded.
 - **PNG image**: a picture of the whole current graph.
 - **Flashcards (Anki)…**: the current graph, or the selected concept's learning path, as question-and-answer cards
@@ -302,6 +328,9 @@ Actions**, then run the workflow; the run shows the site's URL. To deploy on eve
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
 server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract,quiz,resolveCycle,readPage,splitProblems,tutorHint,checkStep,absurdChain}, GET /api/providers, GET /api/models
+
+server/   optional Express API: POST /api/<task> (name, clarify, relate, deps, derive, explain, anatomy, extract, quiz,
+          resolveCycle, readPage, splitProblems, tutorHint, checkStep), GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
 e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
 scripts/  live smoke test against real providers

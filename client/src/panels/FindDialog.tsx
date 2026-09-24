@@ -2,9 +2,8 @@ import { Search } from "lucide-react";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useT } from "../i18n";
 import { noteMatch, searchNodes } from "../lib/fuzzy";
-import { viewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
-import { useView, visibleNow } from "../store/viewStore";
+import { goToConcept } from "../store/viewStore";
 import { Modal } from "./Modal";
 import { Icon } from "../ui/Icon";
 
@@ -25,15 +24,7 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
 
   const pick = (id: string) => {
     onClose();
-    // A concept the to-do view hides would be selected but invisible: show everything again first.
-    // (In focus mode that's not needed — selecting moves the focus to it.)
-    const view = useView.getState();
-    if (!visibleNow().nodes.has(id) && view.todoOnly && !view.focus) {
-      view.setPrefs({ todoOnly: false });
-      useGraphStore.getState().setToast(t("find.revealed"), "info");
-    }
-    // Let the canvas render the newly visible node before centring on it.
-    requestAnimationFrame(() => viewport.focus(id));
+    goToConcept(id);
   };
   const onKey = (e: KeyboardEvent) => {
     if (e.key === "ArrowDown" || e.key === "ArrowUp") {

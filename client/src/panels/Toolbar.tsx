@@ -1,6 +1,7 @@
 import { providerMeta } from "@nodestorm/shared";
 import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
 import {
+  BookA,
   ChevronDown,
   Drama,
   FileJson,
@@ -22,6 +23,7 @@ import {
   Search,
   Settings,
   Shuffle,
+  Sigma,
   Sparkles,
   Undo2,
   Upload,
@@ -32,6 +34,7 @@ import { useEffect, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
+import { toLatex } from "../lib/latex";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useAbsurd } from "../store/absurdStore";
@@ -39,7 +42,7 @@ import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
-import { ExtractDialog, FlashcardsDialog, ShareDialog, VersionsDialog } from "./lazy";
+import { ExtractDialog, FlashcardsDialog, GlossaryDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 import { Icon } from "../ui/Icon";
@@ -213,8 +216,9 @@ type Item = { label: MessageKey; title: MessageKey; icon: LucideIcon; head?: Mes
 
 /**
  * "File": import a project from JSON, or concepts from a text (Extract from text); save and restore versions of the
- * project (Versions); export the current project as JSON, or the active graph as Markdown notes, Mermaid, a PNG
- * image or flashcards; and share the graph as a link. In the read-only viewer only export and share remain.
+ * project (Versions); list the graph's notation (Notation…); export the current project as JSON, or the active graph as
+ * Markdown notes, a LaTeX document, Mermaid, a PNG image or flashcards; and share the graph as a link. In the
+ * read-only viewer only the walkthrough, notation, export and share remain.
  */
 function FileMenu() {
   const t = useT();
@@ -232,6 +236,7 @@ function FileMenu() {
   const projectName = view?.name ?? project.name;
   const [sharing, setSharing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [glossary, setGlossary] = useState(false);
   // "Flashcards (Anki)…" remembers the concept selected when it was opened, for its learning-path option.
   const [flashcards, setFlashcards] = useState<{ rootId?: string } | null>(null);
   // "Versions…" opens the list; "Save snapshot…" the same dialog with its label field focused.
@@ -284,6 +289,7 @@ function FileMenu() {
         ] satisfies Item[])),
     // Read-only, so the share viewer has it too: presenting a shared graph is a main use.
     { label: "file.walkthrough", title: "file.walkthroughTitle", icon: Presentation, action: () => useWalkthrough.getState().openWalkthrough() },
+    { label: "file.glossary", title: "file.glossaryTitle", icon: BookA, action: () => setGlossary(true) },
     {
       head: "file.exportHead",
       label: view ? "file.jsonGraph" : "file.jsonProject",
@@ -296,6 +302,12 @@ function FileMenu() {
       title: "file.markdownTitle",
       icon: FileText,
       action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
+    },
+    {
+      label: "file.latex",
+      title: "file.latexTitle",
+      icon: Sigma,
+      action: () => download(`${base}.tex`, text(toLatex(graph, { title: graph.parentId ? `${projectName}: ${graph.name}` : projectName }), "application/x-tex")),
     },
     {
       label: "file.mermaid",
@@ -364,6 +376,7 @@ function FileMenu() {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
       />
       {extracting && !view && <ExtractDialog onClose={() => setExtracting(false)} />}
+      {glossary && <GlossaryDialog graph={graph} onClose={() => setGlossary(false)} />}
       {versions && !view && <VersionsDialog focusSave={versions === "save"} onClose={() => setVersions(null)} />}
       {flashcards && (
         <FlashcardsDialog graph={graph} project={projectName} rootId={flashcards.rootId} onClose={() => setFlashcards(null)} />

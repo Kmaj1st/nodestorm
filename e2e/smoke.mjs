@@ -835,8 +835,8 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…",
-        "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
+        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…", "Notation…",
+        "JSON (this project)", "Markdown notes", "LaTeX document (.tex)", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File holds import, Extract from text, Quiz me, Derive together, Absurd chain, Versions, every export format and the share link",
   );
@@ -1819,6 +1819,131 @@ try {
     await audit("inspector with Mathlib declarations");
     await context.unrouteAll();
     await blockLookups(context);
+  }
+
+  console.log("Concept kinds");
+  {
+    // Still the offline demo in browser mode; a fresh project.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Lagrange's theorem");
+    await waitBadge("Lagrange's theorem", "blocked"); // needs Subgroup
+    const tag = (name) => node(name).locator(".kind-tag");
+    await tag("Lagrange's theorem").waitFor();
+    assert((await tag("Lagrange's theorem").textContent()) === "Theorem", "the check classifies a theorem, and its card says so");
+    await page.getByTestId("install-Subgroup").click();
+    await tag("Subgroup").waitFor();
+    assert((await tag("Subgroup").textContent()) === "Definition", "an installed prerequisite gets its kind too");
+    await node("Lagrange's theorem").click();
+    const select = page.getByTestId("kind-select");
+    assert((await select.inputValue()) === "theorem", "the inspector shows the kind");
+    await select.selectOption("lemma");
+    await tag("Lagrange's theorem").filter({ hasText: "Lemma" }).waitFor({ timeout: 5000 });
+    assert(true, "changing the kind in the inspector updates the card");
+    await select.selectOption("");
+    await tag("Lagrange's theorem").waitFor({ state: "detached", timeout: 5000 });
+    assert(true, "…and “Not set” removes the tag");
+    await select.selectOption("theorem");
+    await audit("kind tags on cards and the kind select");
+    await setTheme("dark");
+    await audit("kind tags on cards and the kind select, dark theme");
+    await setTheme("light");
+
+    // The View menu filters by kind.
+    await page.getByRole("button", { name: /^View/ }).click();
+    const view = page.getByRole("dialog", { name: "View" });
+    await view.getByRole("checkbox", { name: "Theorem", exact: true }).uncheck();
+    await node("Lagrange's theorem").waitFor({ state: "detached" });
+    assert(await node("Subgroup").isVisible(), "unticking Theorem in View hides the theorems, and only them");
+    assert((await page.getByRole("button", { name: "View (filters on)" }).count()) === 1, "…and the View button says a filter is on");
+    await audit("View menu with kind filters");
+    await view.getByRole("checkbox", { name: "Theorem", exact: true }).check();
+    await node("Lagrange's theorem").waitFor();
+    await page.keyboard.press("Escape");
+  }
+
+  console.log("Theorem anatomy");
+  {
+    await node("Subgroup").click();
+    assert((await page.getByTestId("anatomy").count()) === 0, "a definition has no theorem anatomy");
+    await node("Lagrange's theorem").click();
+    await page.getByTestId("anatomy-button").click();
+    const conclusion = page.getByTestId("anatomy-conclusion");
+    await conclusion.waitFor();
+    assert((await page.getByTestId("anatomy-hypotheses").locator("li").count()) === 2, "a theorem is taken apart into its hypotheses…");
+    assert((await conclusion.locator(".katex").count()) > 0, "…and a conclusion with its formulas typeset");
+    const section = page.getByTestId("anatomy");
+    assert(
+      (await section.textContent()).includes("Why needed:") && (await section.textContent()).includes("Non-examples"),
+      "each hypothesis says why it is needed; examples and non-examples follow",
+    );
+    assert((await page.getByTestId("anatomy-button").textContent()).includes("Regenerate"), "the button offers to regenerate it");
+    await page.locator(".inspector").screenshot({ path: `${shots}30-anatomy.png` });
+    await audit("theorem anatomy in the inspector");
+    await setTheme("dark");
+    await audit("theorem anatomy in the inspector, dark theme");
+    await setTheme("light");
+    await page.reload();
+    await node("Lagrange's theorem").click();
+    await page.getByTestId("anatomy-conclusion").waitFor();
+    assert(true, "the anatomy is kept on the concept across a reload");
+  }
+
+  console.log("LaTeX export");
+  {
+    const tex = await exportAs("LaTeX document (.tex)");
+    const src = tex.data.toString("utf8");
+    assert(tex.name.endsWith(".tex") && src.includes("\\documentclass{amsart}") && src.trimEnd().endsWith("\\end{document}"), "File exports a LaTeX document");
+    assert(
+      src.indexOf("\\begin{definition}[{Subgroup}]\\label{c:subgroup}") >= 0 &&
+        src.indexOf("\\label{c:subgroup}") < src.indexOf("\\begin{theorem}[{Lagrange's theorem}]"),
+      "each concept is an environment of its kind, prerequisites first",
+    );
+    assert(src.includes("\\emph{Uses:} Definition~\\ref{c:subgroup} (Subgroup)."), "a theorem refers to the definition it uses");
+    assert(src.includes("\\begin{proof}[Proof idea]") && src.includes("$|H|$ divides $|G|$"), "the anatomy's proof idea is a proof sketch, formulas kept");
+  }
+
+  console.log("Notation glossary");
+  {
+    const openGlossary = async () => {
+      await page.getByRole("button", { name: "File", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Notation…" }).click();
+      const dialog = page.getByRole("dialog", { name: "Notation" });
+      await dialog.waitFor();
+      return dialog;
+    };
+    let dialog = await openGlossary();
+    assert((await dialog.textContent()).includes("No notation yet"), "a graph without symbols says how to get some");
+    await dialog.getByRole("button", { name: "Close" }).click();
+
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.getByRole("button", { name: "Load example: Group theory" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+    // Hide the definitions: jumping to one from the glossary must show it again.
+    await page.getByRole("button", { name: /^View/ }).click();
+    await page.getByRole("dialog", { name: "View" }).getByRole("checkbox", { name: "Definition", exact: true }).uncheck();
+    await page.keyboard.press("Escape");
+    await node("Kernel").waitFor({ state: "detached" });
+    dialog = await openGlossary();
+    const rows = dialog.getByTestId("glossary").locator("tbody tr");
+    assert((await rows.count()) >= 3, "the glossary lists the symbols the definitions introduce");
+    const kernelRow = rows.filter({ hasText: "Kernel" });
+    assert((await kernelRow.locator(".glossary__symbol .katex").count()) === 1, "…typeset, e.g. the kernel's symbol");
+    await audit("notation glossary");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await setTheme("dark");
+    dialog = await openGlossary();
+    await audit("notation glossary, dark theme");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await setTheme("light");
+    dialog = await openGlossary();
+    await dialog.getByRole("button", { name: "Kernel" }).click();
+    await dialog.waitFor({ state: "detached" });
+    await node("Kernel").waitFor();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Rename concept"]')?.value === "Kernel");
+    assert(true, "a glossary entry jumps to its concept, turning off the filter that hid it");
   }
 
   console.log("\nE2E passed");
