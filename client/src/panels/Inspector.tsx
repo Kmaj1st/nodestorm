@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
 import { cycleThrough, learningPath } from "../lib/paths";
-import { activeGraph, useGraphStore } from "../store/graphStore";
+import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
 
 /**
@@ -20,6 +20,7 @@ function DraftField({ value, save, multiline, className, label, testId }: {
 }) {
   const [draft, setDraft] = useState(value);
   const [error, setError] = useState<string>();
+  const readOnly = useGraphStore(isViewing); // a shared graph (its other controls are hidden in styles.css)
   useEffect(() => { setDraft(value); setError(undefined); }, [value]); // e.g. after undo
 
   const commit = () => {
@@ -28,6 +29,7 @@ function DraftField({ value, save, multiline, className, label, testId }: {
   };
   const props = {
     value: draft,
+    readOnly,
     className: `${className ?? ""}${error ? " invalid" : ""}`,
     "aria-label": label,
     "aria-invalid": !!error,
@@ -79,6 +81,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const mutate = useGraphStore((s) => s.mutate);
   const setInspect = useGraphStore((s) => s.setInspect);
   const setClarifying = useGraphStore((s) => s.setClarifying);
+  const viewing = useGraphStore(isViewing);
   const graphId = graph.id;
   const deps = graph.nodes.filter((n) => node.dependsOn.includes(n.id));
   const dependents = graph.nodes.filter((n) => n.dependsOn.includes(node.id));
@@ -108,6 +111,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           rows={3}
           value={node.definition}
           data-testid="definition"
+          readOnly={viewing}
           // Typing into the field is one undo step.
           onChange={(e) =>
             mutate((g) => updateNode(g, node.id, { definition: e.target.value }), graphId, { key: `def:${node.id}` })}
@@ -140,6 +144,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           value={node.notes ?? ""}
           placeholder="Your own notes: questions, examples, where you read about it…"
           data-testid="notes"
+          readOnly={viewing}
           // Typing into the field is one undo step; an emptied field removes the notes.
           onChange={(e) =>
             mutate((g) => updateNode(g, node.id, { notes: e.target.value || undefined }), graphId, { key: `notes:${node.id}` })}

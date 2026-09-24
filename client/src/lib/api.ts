@@ -18,7 +18,7 @@ import {
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
-import { useGraphStore } from "../store/graphStore";
+import { isViewing, useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, useSettings } from "../store/settingsStore";
 import { addUsage } from "../store/usageStore";
 import { createLimiter } from "./aiQueue";
@@ -57,6 +57,8 @@ type TaskResult<N extends TaskName> = Awaited<ReturnType<(typeof tasks)[N]>>;
 const queue = createLimiter(() => useSettings.getState().aiConcurrency ?? DEFAULT_CONCURRENCY);
 
 function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
+  // The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
+  if (isViewing(useGraphStore.getState())) return Promise.reject(new Error("Save a copy of the shared graph to use AI features."));
   return queue.run(() => runNow(name, req, signal), {
     signal,
     onState: (state) => useGraphStore.getState().setBusyState(signal, state),
