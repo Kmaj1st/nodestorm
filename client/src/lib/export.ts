@@ -1,4 +1,4 @@
-import type { ConceptNode, Graph, NodeAnatomy, NodeExplanation, SourceRef } from "@nodestorm/shared";
+import type { ConceptNode, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
 import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
 
@@ -52,6 +52,21 @@ function mdEscapeText(s: string, atStart: boolean): string {
   return atStart ? out.replace(/^[#+=-]/, "\\$&").replace(/^(\d+)([.)])/, "$1\\$2") : out;
 }
 
+/** "Authors, year, venue": a paper's byline, whichever parts it has. */
+export function paperByline(w: Pick<PaperWork, "authors" | "year" | "venue">): string {
+  return [w.authors, w.year ? String(w.year) : "", w.venue ?? ""].filter(Boolean).join(", ");
+}
+
+/** A URL as a Markdown link target: characters that would end it are percent-encoded. */
+const mdUrl = (u: string) => u.replace(/[()<>\s\\]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`);
+
+/** One stored paper as a Markdown list item's text: linked title, byline, citations, a free copy. */
+function paperMd(w: PaperWork): string {
+  const by = paperByline(w);
+  const oa = w.openAccessUrl ? ` [Free copy](${mdUrl(w.openAccessUrl)})` : "";
+  return `[${mdEscape(w.title)}](${mdUrl(w.url)})${by ? ` — ${mdEscape(by)}` : ""}. Cited by ${w.citedBy}.${oa}`;
+}
+
 export function toMarkdown(g: Graph): string {
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const ordered = studyOrder(g);
@@ -78,6 +93,7 @@ export function toMarkdown(g: Graph): string {
     }
     if (n.source) lines.push(`*Source:* ${mdEscape(sourceLabel(n.source))}`, "");
     if (n.formal?.decls.length) lines.push(`*In Lean's Mathlib:* ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
+    if (n.papers?.works.length) lines.push("**Further reading** (from OpenAlex):", "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");
     if (n.anatomy) lines.push(...anatomyMd(n.anatomy));
     if (n.explanation) lines.push(...explanationMd(n.explanation));
     if (n.notes?.trim()) {

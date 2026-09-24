@@ -88,7 +88,8 @@ classDiagram
   of prerequisites that are in the graph; `missingDeps` holds prerequisites the AI named that aren't (each with a
   `role`: `uses`, `derives` or `assumes`, and a `reason`). Optional personal data: `explanation` (the latest
   "Explain more" answer with its level, its narrator `voice` if not plain, and time), `anatomy` (the latest "Theorem anatomy", `NodeAnatomy`), `notes`
-  (free text) and `mastery` (quiz score, review count, last review time).
+  (free text) and `mastery` (quiz score, review count, last review time). Stored lookups: `formal` (Mathlib
+  declarations) and `papers` (OpenAlex works).
 - **Concept kind** (`ConceptKind`, optional `kind`): `definition`, `theorem`, `lemma`, `proposition`, `corollary`,
   `axiom`, `conjecture`, `example`, `notation`, `other`. Graph content (unlike the personal data above, it travels in
   share links). `THEOREM_KINDS` / `isTheoremLike` say which kinds get Theorem anatomy. In AI answers the kind is an
@@ -302,6 +303,41 @@ These are plain `fetch` calls to public APIs, not an AI task. They work the same
 - **Show:** the inspector's "Lean / Mathlib" section links each declaration to `mathlib4_docs/<module path>.html#<name>` (`mathlibDocUrl`).
 - **Tests:** Loogle is blocked in tests like the encyclopedias; the e2e serves fixtures.
 
+### Papers (`shared/src/lookup/openalex.ts`, `findPapers` in `actions.ts`)
+
+The same pattern with no AI at all: real literature for a concept, where an AI's reading list could invent sources.
+
+- **Search:** `findPapers({name, context, max})` asks `api.openalex.org/works` with
+  `filter=title_and_abstract.search:"<name>",is_retracted:false,type:!paratext|erratum|…` (relevance order, which
+  counts citations), `per_page` and a `select` of the fields shown. `searchPhrase` keeps letters, digits, spaces,
+  hyphens and apostrophes only, lower-cased, since `,` `|` quotes and upper-case AND/OR/NOT are filter syntax.
+  - Why not `search=`: it also reads full texts, so "normal subgroup" finds medical studies of a "normal" patient
+    "subgroup". OpenAlex calls the `.search` filters legacy but still serves them; if they go, `search=` plus a field
+    filter is the fallback.
+  - **Disambiguation:** a one-word name ("Kernel") is searched as `"kernel" AND ("group homomorphism" OR …)` with up to
+    four prerequisite names (in-graph, then missing); fewer than half of `max` results → a second request with the
+    name alone fills the list. Longer names are specific already: requiring a prerequisite in the abstract only traded
+    the standard references for obscure ones in live tests, so they are searched alone.
+  - `toPaper` maps a work to `PaperWork`: bare DOI, `url` = DOI link, else landing page, else `openalex.org/W…`
+    (https only), first three authors plus "et al.", venue, `citedBy`, `openAccessUrl` (https, not a repeat of `url`).
+    Markup in titles is stripped.
+- **Headers and budget:** OpenAlex's CORS allows only standard headers (Accept, Authorization, Content-Type…), so
+  `identify` in `http.ts` gives it none. The polite pool (`mailto=`) was replaced by API keys in February 2026 and
+  `mailto` is ignored, so none is sent. Without a key every IP address gets $0.10 of usage a day, and a search costs
+  $0.001: about 100 searches per network per day, renewed at midnight UTC. A spent budget is a 429, i.e. a
+  `SiteBlockedError("rate limited")`, which the action turns into "the free daily allowance is used up".
+- **Store:** `{works, query, checkedAt}` in `node.papers` (`NodePapers` in `model.ts`: at most 25 works, bounded
+  strings, `url`/`openAccessUrl` must be https). A background mutation like `formal`; `merge` keeps the newer list;
+  import repair drops a malformed one; share links leave it out. Markdown lists the works under **Further reading**;
+  the LaTeX export writes a `remark[Further reading]` with `\href`s (`texUrl` escapes `%` and `#` and percent-encodes
+  braces, backslashes and spaces).
+- **Show:** the inspector's "Papers" section (after Lean / Mathlib; hidden in the share viewer, which never has
+  papers): Find papers / Search again with Cancel while running, each title linking out (`target=_blank`,
+  `rel=noopener noreferrer`), byline · citations · free copy, the query used and a "Search OpenAlex yourself" link.
+- **Tests:** `api.openalex.org` is blocked in vitest and the e2e like the other lookup hosts; `shared/test/papers.test.ts`
+  checks the query, parsing and headers with a fake fetch, `client/test/papers.test.ts` the action and exports, and
+  the e2e "Papers" section serves fixtures. `npm run smoke:papers` (`scripts/papers-smoke.mts`) queries the real API.
+
 ### Browser mode vs server mode
 
 ```mermaid
@@ -355,7 +391,7 @@ sequenceDiagram
   registers `busy[key]` for the status bar, drops answers that arrive after a cancel, and turns errors into a toast
   (or the caller's `onError`). `cancelTask(key)` is what the status bar's cancel (X) button and dialogs' Cancel call. Busy keys
   follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
-  `explain:<graphId>:<nodeId>`, `anatomy:<graphId>:<nodeId>`, `mathlib:<graphId>:<nodeId>`, `relookup:<graphId>:<nodeId>`,
+  `explain:<graphId>:<nodeId>`, `anatomy:<graphId>:<nodeId>`, `mathlib:<graphId>:<nodeId>`, `papers:<graphId>:<nodeId>`, `relookup:<graphId>:<nodeId>`,
   `quiz:<graphId>`, `name`, `derive`, `extract`, `absurd`, and Derive together's `derive-hint`, `derive-check`,
   `derive-referee` (`DERIVE_KEYS`).
 - **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
@@ -530,7 +566,7 @@ undo step in the parent; child sandboxes are re-parented. **Discard** → `autoS
 ### Share link
 
 `ShareDialog` → `encodeShare(graph, name)`: `packGraph` (short ids, drops empty fields, settles `checking`/`error`,
-**leaves out notes, explanations, anatomies and mastery**; keeps kinds) → JSON → raw deflate (`CompressionStream`, or `fflate` loaded on
+**leaves out notes, explanations, anatomies, mastery and stored lookups (Mathlib, papers)**; keeps kinds) → JSON → raw deflate (`CompressionStream`, or `fflate` loaded on
 demand) → base64url → `#share=1.<data>`. The hash never reaches a server. Opening: `openShareLink` in
 `client/src/App.tsx` (on load and on `hashchange`) → `decodeShare` (length caps, inflate with a 5 MB bomb guard,
 `repairImport`) → `graphStore.openView(graph, name)` (fresh id, `view` set, read-only). `ViewerBanner` offers **Save a
@@ -633,7 +669,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
   中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes), walkthrough, cycle
-  resolution, Derive together, encyclopedia definitions, Lean / Mathlib, absurd chain (free-form and from the
+  resolution, Derive together, encyclopedia definitions, Lean / Mathlib, papers (OpenAlex fixtures, cancel, links,
+  a reload, axe in both themes), absurd chain (free-form and from the
   selection, roll again, copy, add to a sandbox, axe in both themes), concept kinds, theorem anatomy, LaTeX export,
   the notation glossary, and parody voices & Reviewer 2 (a voiced explanation that fits the inspector and survives a
   reload, a referee report and its outdated note, Surprise me; axe in both themes). The run is **pinned
@@ -783,3 +820,10 @@ and server-binding items are real problems worth fixing.
     outside formulas (other than CJK, which switches to xeCJK) may need xelatex or lualatex. A `%` inside a formula is
     passed through and comments out the rest of its line, as in any LaTeX source.
   - Theorem anatomies, like explanations, are left out of share links.
+- **Papers**:
+  - OpenAlex's keyless budget is per IP address (about 100 searches a day), so a shared network (a university, a
+    cloud machine) can use it up for everyone on it. OpenAlex's remedy is a free API key (`api_key=` or
+    `Authorization: Bearer`, both allowed by its CORS); a Settings field for one would be the follow-up.
+  - Relevance is OpenAlex's: for a basic concept ("normal subgroup") research papers on variations can rank above
+    textbooks, and a one-word name without prerequisites in the graph isn't disambiguated.
+  - The search uses the legacy `title_and_abstract.search` filter (see above).

@@ -107,6 +107,17 @@ no key needed) or an empty graph.
   - Only declarations that really exist are listed, each with its type, docstring and a link to the Mathlib docs.
   - Names that don't exist are shown as dropped. Formal-science work can go straight from an idea to its formal
     statement.
+- **Papers** (inspector: **Find papers**): published papers about a concept, from [OpenAlex](https://openalex.org), the
+  open index of research. An AI's "further reading" can invent sources; every paper here exists. No AI needed.
+  - Works with the concept's name in their title or abstract, most relevant first (relevance counts citations). A
+    one-word name such as "Kernel" is searched together with its prerequisites, so group theory doesn't turn up
+    machine-learning kernels.
+  - Each shows its title (linked to the DOI or publisher page), authors, year, journal, citation count and a free copy
+    when one exists, plus a link to search OpenAlex yourself.
+  - Kept on the concept (not an undo step), in JSON exports, the Markdown notes and as *Further reading* in the LaTeX
+    export; share links leave it out.
+  - OpenAlex gives every network about 100 free searches a day without a key (renewed at midnight UTC); after that
+    NodeStorm says the allowance is used up. `npm run smoke:papers` checks it from your machine.
 - **Import LaTeX** (**File → Import LaTeX (.tex)…**): every definition, theorem, lemma, proposition, corollary… of a
   paper or lecture notes becomes a concept of that kind. Environments that `\newtheorem` declares are included.
   - **Links**: a result needs whatever it `\ref`s, in its statement or in the proof that follows it.
@@ -349,7 +360,7 @@ server/   optional Express API: POST /api/<task> (name, clarify, relate, deps, d
           GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
 e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
-scripts/  live smoke test against real providers
+scripts/  live smoke tests against real providers, the encyclopedias and OpenAlex
 docs/     ARCHITECTURE.md, the maintainer's guide
 ```
 

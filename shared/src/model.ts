@@ -143,6 +143,8 @@ export const ConceptNode = z.object({
   mastery: Mastery.optional(),
   /** Its counterparts in Lean's Mathlib, each checked to exist (see "Find in Mathlib"). */
   formal: z.lazy(() => NodeFormal).optional(),
+  /** Published papers about it, found on OpenAlex (see "Find papers"). Personal lookup data: not in share links. */
+  papers: z.lazy(() => NodePapers).optional(),
   /** Where the concept came from: an imported document and page (see "Derive together"). */
   source: z.lazy(() => SourceRef).optional(),
   /** Definition, theorem, lemma…: set by the AI's check (only while unset) or by hand in the inspector. */
@@ -221,6 +223,33 @@ export const NodeFormal = z.object({
   checkedAt: z.number(),
 });
 export type NodeFormal = z.infer<typeof NodeFormal>;
+
+/** A link the app may open: https only, so an imported file can't smuggle in `javascript:` or plain http. */
+const HttpsUrl = z.string().max(1000).regex(/^https:\/\/[^\s]+$/);
+
+/** A published work about a concept, as OpenAlex lists it (see `findPapers` in shared/src/lookup/openalex.ts). */
+export const PaperWork = z.object({
+  /** OpenAlex work id ("W2741809807"). */
+  id: z.string().regex(/^W\d{1,20}$/),
+  title: z.string().min(1).max(500),
+  year: z.number().int().min(0).max(3000).optional(),
+  /** The first three authors, then "et al.". */
+  authors: z.string().max(300),
+  venue: z.string().max(300).optional(),
+  doi: z.string().max(300).optional(),
+  url: HttpsUrl,
+  citedBy: z.number().int().min(0),
+  openAccessUrl: HttpsUrl.optional(),
+});
+export type PaperWork = z.infer<typeof PaperWork>;
+
+export const NodePapers = z.object({
+  works: z.array(PaperWork).max(25),
+  /** The search expression that found them (OpenAlex's title-and-abstract search syntax). */
+  query: z.string().max(1000),
+  checkedAt: z.number(),
+});
+export type NodePapers = z.infer<typeof NodePapers>;
 
 // ---------- AI task I/O ----------
 

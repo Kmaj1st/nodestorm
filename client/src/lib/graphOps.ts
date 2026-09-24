@@ -396,7 +396,7 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       continue;
     }
     // Quiz progress and stored AI results aren't versioned with the graph: for each, keep whichever side has the
-    // newer one (the parent may have got an explanation, anatomy or Mathlib result after the fork).
+    // newer one (the parent may have got an explanation, anatomy, Mathlib result or papers after the fork).
     const p = nodes.get(n.id);
     if (!p) {
       nodes.set(n.id, n);
@@ -410,6 +410,7 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       explanation: pick(p.explanation, n.explanation, (e) => e.createdAt),
       anatomy: pick(p.anatomy, n.anatomy, (a) => a.createdAt),
       formal: pick(p.formal, n.formal, (f) => f.checkedAt),
+      papers: pick(p.papers, n.papers, (x) => x.checkedAt),
       // A kind set on the parent after the fork survives a sandbox that never had one.
       kind: n.kind ?? p.kind,
     });

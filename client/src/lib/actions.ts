@@ -14,6 +14,8 @@ import {
   type FormalDecl,
   type Sense,
   loogleDeclaration,
+  findPapers as searchPapers,
+  SiteBlockedError,
 } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
@@ -351,6 +353,41 @@ export async function findInMathlib(nodeId: string, graphId = store().activeId) 
   if (!res) return;
   store().mutate((g) => (g.nodes.some((n) => n.id === nodeId) ? ops.updateNode(g, nodeId, { formal: res }) : g), graphId, { history: "background" });
   if (!res.decls.length) store().setToast(t("formal.none", { name: node.name }), "info");
+}
+
+export const papersKey = (graphId: string, nodeId: string) => `papers:${graphId}:${nodeId}`;
+
+/** How many papers "Find papers" lists. */
+export const PAPERS_MAX = 8;
+
+/**
+ * "Find papers": published works about the concept, from OpenAlex (real literature, unlike an AI's reading list).
+ * A one-word name is told apart by its prerequisites ("Kernel" next to "Group homomorphism"). Needs no AI. Stored on
+ * the node like a Mathlib result: not an undo step, not in share links.
+ */
+export async function findPapers(nodeId: string, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const byId = new Map(g.nodes.map((n) => [n.id, n]));
+  const context = [
+    ...node.dependsOn.map((id) => byId.get(id)?.name).filter((n): n is string => !!n),
+    ...node.missingDeps.map((d) => d.name),
+  ].slice(0, 4);
+  const res = await withBusy(papersKey(graphId, nodeId), t("task.papers", { name: node.name }), async (signal) => {
+    try {
+      const r = await searchPapers({ name: node.name, context, max: PAPERS_MAX }, { signal });
+      return { ...r, checkedAt: Date.now() };
+    } catch (e) {
+      if (!(e instanceof SiteBlockedError)) throw e;
+      // OpenAlex answers 429 when the free daily allowance of the user's network is spent (it resets at midnight UTC).
+      throw new Error(t(/rate limited/.test(e.message) ? "papers.limit" : "papers.unreachable"));
+    }
+  });
+  if (!res) return;
+  store().mutate((g) => (g.nodes.some((n) => n.id === nodeId) ? ops.updateNode(g, nodeId, { papers: res }) : g), graphId, { history: "background" });
+  if (!res.works.length) store().setToast(t("papers.none", { name: node.name }), "info");
 }
 
 export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "source" | "kind">) {

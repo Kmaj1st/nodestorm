@@ -70,6 +70,11 @@ together.
 
 ### Study and thinking tools
 - **Import LaTeX**: a paper's definitions, theorems and lemmas become concepts of their kind, linked by what each `\ref`s in its statement or proof. You review it before adding, and no AI is involved.
+- **Papers** (`claude/feature-papers`): **Find papers** in the inspector lists real published works about a concept
+  from OpenAlex (title and abstract match, most relevant first; a one-word name is narrowed by its prerequisites), with
+  authors, year, venue, citations, a DOI link and a free copy when there is one. No AI involved, so nothing is
+  invented. Stored on the node (not an undo step), validated by import repair, in the Markdown and LaTeX exports,
+  not in share links. `npm run smoke:papers` checks OpenAlex live.
 - **Lean / Mathlib**: the AI suggests Mathlib declarations for a concept and each is verified with Loogle. Only real declarations are shown, with their types, docstrings and doc links.
 - **Definitions from encyclopedias**:
   - ProofWiki (with its maths macros turned into standard LaTeX), then Wikipedia and Wikidata (formulas kept), are asked before the AI.
