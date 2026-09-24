@@ -50,7 +50,7 @@ export function extractJson(text: string): unknown {
       continue;
     }
     try {
-      return JSON.parse(repairTexEscapes(body.slice(start, end + 1)));
+      return parseWithTexRepair(body.slice(start, end + 1));
     } catch (e) {
       lastError = e; // e.g. braces in prose before the real answer
     }
@@ -67,6 +67,27 @@ const TEX_AFTER_ESCAPE = new RegExp(
     "|t(?:imes|heta|au|ext(?:bf|it|rm)?|o|ilde|op|frac|riangle(?:left|right)?(?:eq)?)(?![a-zA-Z])" +
     "|r(?:ho|ight(?:arrow)?|angle|floor|ceil|times|estriction|m)(?![a-zA-Z]))",
 );
+
+/**
+ * Parse a JSON object, repairing unescaped LaTeX only when the plain parse fails or shows its damage: a form feed or
+ * backspace anywhere ("\frac", "\beta"), or a line break/tab inside a $…$ formula ("$x \neq y$"). Valid prose with
+ * real line breaks ("Let\nu = x^2" meaning a new line) is never touched.
+ */
+function parseWithTexRepair(json: string): unknown {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(json);
+  } catch {
+    return JSON.parse(repairTexEscapes(json));
+  }
+  return texDamaged(parsed) ? JSON.parse(repairTexEscapes(json)) : parsed;
+}
+
+function texDamaged(v: unknown): boolean {
+  if (typeof v === "string") return /[\b\f]/.test(v) || /\$[^$]*[\n\t\r][^$]*\$/.test(v);
+  if (Array.isArray(v)) return v.some(texDamaged);
+  return typeof v === "object" && v !== null && Object.values(v).some(texDamaged);
+}
 
 /**
  * Double the backslashes of LaTeX that a model put into a JSON string unescaped ("$\varphi$" instead of

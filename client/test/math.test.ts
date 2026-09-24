@@ -92,3 +92,13 @@ describe("exports keep LaTeX", () => {
     expect(toMermaid(graph)).toContain("Kernel");
   });
 });
+
+describe("performance on unmatched delimiters (final review)", () => {
+  it("stays fast on 12k characters of unmatched \\( openers", () => {
+    const text = "\\(".repeat(6000);
+    const t0 = performance.now();
+    const segments = splitMath(text);
+    expect(performance.now() - t0).toBeLessThan(100); // was ~675 ms (quadratic)
+    expect(segments.map((s) => (s.kind === "text" ? s.text : "")).join("")).toBe(text);
+  });
+});

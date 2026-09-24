@@ -221,3 +221,13 @@ function parseCsv(text: string): string[][] {
   }
   return rows;
 }
+
+describe("CSV formula injection (final review)", () => {
+  it("neutralises fields a spreadsheet would run as formulas", () => {
+    expect(csvField('=HYPERLINK("http://x","a")')).toBe(`"'=HYPERLINK(""http://x"",""a"")"`);
+    expect(csvField("-2+3")).toBe("'-2+3");
+    expect(csvField("+1")).toBe("'+1");
+    expect(csvField("@SUM(A1)")).toBe("'@SUM(A1)");
+    expect(csvField("plain text")).toBe("plain text");
+  });
+});

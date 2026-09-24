@@ -59,3 +59,20 @@ describe("prompts ask for LaTeX", () => {
     expect(BASE_PROMPT).toContain(String.raw`write "$\\ker\\varphi$", not "$\ker\varphi$"`);
   });
 });
+
+describe("TeX repair never touches valid prose (final review)", () => {
+  it.each([
+    "Let\nu = x^2",
+    "constant:\ne = 2.718",
+    "Examples:\ne.g. groups",
+    "x\ne y",
+    "Plan:\nmid-term",
+    "Cols:\to the right",
+  ])("keeps the real line break/tab in %j", (text) => {
+    expect(extractJson(JSON.stringify({ d: text }))).toEqual({ d: text });
+  });
+
+  it("still repairs unescaped TeX inside a formula", () => {
+    expect(extractJson('{"d": "$x \\neq y$ and $\\frac{a}{b}$"}')).toEqual({ d: "$x \\neq y$ and $\\frac{a}{b}$" });
+  });
+});

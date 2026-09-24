@@ -59,13 +59,17 @@ export function splitMath(text: string): MathSegment[] {
     if (buf) out.push({ kind: "text", text: buf });
     buf = "";
   };
+  // A closing delimiter that isn't found from one opener won't be found from any later one either: remember that, so
+  // text full of unmatched "\(" stays linear instead of rescanning to the end for each opener.
+  const unclosed = new Set<string>();
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && text[i + 1] === "$") { buf += "$"; i += 2; continue; }
     const pair = PAIRS.find((p) => text.startsWith(p.open, i));
     if (pair) {
-      const end = findClose(text, pair.close, i + pair.open.length);
+      const end = unclosed.has(pair.close) ? -1 : findClose(text, pair.close, i + pair.open.length);
+      if (end < 0) unclosed.add(pair.close);
       const tex = end < 0 ? "" : text.slice(i + pair.open.length, end);
       if (tex.trim()) {
         flush();

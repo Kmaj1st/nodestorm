@@ -163,7 +163,10 @@ export function toAnki(cards: Flashcard[], deck: string): string {
 }
 
 /** One RFC 4180 field: quoted (with doubled quotes) when it holds a comma, quote or line break, or starts with a space. */
-export function csvField(s: string): string {
+export function csvField(raw: string): string {
+  // A leading = + - @ (or tab/CR) makes spreadsheets run the field as a formula; names and definitions can come from
+  // AI output or someone else's share link, so neutralise it with an apostrophe (the OWASP CSV-injection advice).
+  const s = /^[=+\-@\t\r]/.test(raw) ? `'${raw}` : raw;
   return /[",\r\n]|^\s|\s$/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
