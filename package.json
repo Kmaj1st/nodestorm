@@ -15,7 +15,8 @@
     "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w client",
     "test": "vitest run",
     "e2e": "node e2e/smoke.mjs",
-    "e2e:pwa": "npm run build && node e2e/pwa.mjs"
+    "e2e:pwa": "npm run build && node e2e/pwa.mjs",
+    "smoke:live": "tsx --env-file-if-exists=server/.env scripts/live-smoke.mts"
   },
   "devDependencies": {
     "concurrently": "^9.2.0",

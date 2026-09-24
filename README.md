@@ -114,4 +114,14 @@ npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium
 npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker, offline start and the update notice
 ```
 
+All of these use the offline demo AI. To check a **real** provider and model end to end, put its key in `server/.env` and run:
+
+```bash
+npm run smoke:live                        # default provider (AI_PROVIDER, else SiliconFlow)
+npm run smoke:live -- anthropic           # a specific provider
+npm run smoke:live -- siliconflow 中文     # …and an answer language
+```
+
+It runs every AI task once, validates each answer against the same schemas the app uses and prints the timings. It costs a few cents at most.
+
 `.github/workflows/ci.yml` runs all of them on every push and pull request. When the e2e run fails, its screenshots are uploaded as the `e2e-screenshots` artifact.
