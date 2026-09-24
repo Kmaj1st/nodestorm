@@ -1,4 +1,4 @@
-import { findByName, type AbsurdChainResponse, type AbsurdStyle, type Graph } from "@nodestorm/shared";
+import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle, type Graph } from "@nodestorm/shared";
 import { t } from "../i18n";
 import * as ops from "./graphOps";
 
@@ -92,4 +92,57 @@ export function applyAbsurdChain(
     linked++;
   });
   return { graph: out, added, linked };
+}
+
+/**
+ * Ends for "Surprise me" when the graph has fewer than two concepts: things with real, well-known links to some
+ * mathematics (cicadas and primes, sunflowers and the golden ratio, toast and the Maillard reaction…).
+ */
+export const FUN_ENDS = [
+  "Fourier transform",
+  "Toast",
+  "Prime number",
+  "Cicada",
+  "Golden ratio",
+  "Sunflower",
+  "Möbius strip",
+  "Conveyor belt",
+  "Heat equation",
+  "Chicken",
+  "Pythagorean theorem",
+  "Guitar",
+  "Euler's identity",
+  "Pizza",
+] as const;
+
+/**
+ * Two different random ends for "Surprise me": concepts of the graph when it has at least two, else its one concept
+ * (always one of the ends then) and fun ends. Avoids handing back the pair already shown, either way round.
+ */
+export function surprisePair(
+  names: string[],
+  current: [string, string] = ["", ""],
+  rand: () => number = Math.random,
+): [string, string] {
+  const seen = new Set<string>();
+  const unique = (xs: readonly string[]) =>
+    xs.filter((x) => {
+      const k = normalizeName(x);
+      return Boolean(k) && !seen.has(k) && Boolean(seen.add(k));
+    });
+  const own = unique(names);
+  const pool = own.length >= 2 ? own : [...own, ...unique(FUN_ENDS)];
+  const same = (a: string, b: string) => normalizeName(a) === normalizeName(b);
+  const shown = ([a, b]: [string, string]) =>
+    (same(a, current[0]) && same(b, current[1])) || (same(a, current[1]) && same(b, current[0]));
+  const index = (n: number) => Math.min(n - 1, Math.floor(rand() * n));
+  const pick = (): [string, string] => {
+    const i = own.length === 1 ? 0 : index(pool.length);
+    let j = index(pool.length - 1);
+    if (j >= i) j++;
+    return own.length !== 1 && rand() < 0.5 ? [pool[j], pool[i]] : [pool[i], pool[j]];
+  };
+  let pair = pick();
+  for (let tries = 0; tries < 10 && shown(pair); tries++) pair = pick();
+  return pair;
 }

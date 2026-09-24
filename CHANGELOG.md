@@ -7,6 +7,19 @@ Everything below landed on `claude/hopeful-pascal-bc67up` in one day. Most featu
 axe accessibility audit green after each merge. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits
 together.
 
+### Parody voices and Reviewer 2 (`claude/feature-parody-voices`)
+- **Narrators for Explain more**: next to the level, pick the plain voice or a parody narrator (nature documentary,
+  sports commentator, noir detective, medieval scholar, overexcited infomercial, Shakespearean). Only the telling
+  changes: the prompt insists the mathematics stays correct and at the chosen level, formulas stay `$…$`, and the
+  summary stays a plain definition. The voice is stored with the explanation (optional, so older data still loads;
+  import repair resets an unknown one) and named in its heading and in the Markdown export.
+- **Reviewer 2** in Derive together (new `refereeReport` AI task): a deliberately pedantic referee report on the
+  derivation so far, with a verdict, a weary summary, points by step and severity, and grudging praise. Every point is
+  meant to be accurate, and like the tutor it never writes the fix or the answer. Shown as a collapsible card, kept
+  with the session, marked outdated when the steps change, and included in Copy as Markdown.
+- **Surprise me** in the Absurd chain dialog: two random concepts of the graph (or fun ends for a nearly empty graph),
+  built straight away.
+
 ### Formal sciences (`claude/feature-formal`)
 - **Concept kinds**: definition, theorem, lemma, proposition, corollary, axiom, conjecture, example, notation or
   other. Set by the AI (only while unset) or by hand in the inspector; a colour-coded, text-labelled tag on each card;

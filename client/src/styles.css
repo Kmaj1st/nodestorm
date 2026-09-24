@@ -617,6 +617,13 @@ textarea.title-input { resize: none; field-sizing: content; min-height: 0; line-
 .warn-box__link { display: flex; justify-content: space-between; gap: var(--space-2); align-items: baseline; }
 .explain__controls { display: flex; align-items: center; gap: 6px; }
 .explain__controls select { min-height: var(--control-h-dense); font-size: var(--text-xs); padding: 2px 26px 2px 8px; background-position: right 6px center; background-size: 14px; }
+/* Level and narrator voice, side by side under the heading, sharing the width. */
+.explain__options { margin: calc(-1 * var(--space-1)) 0 var(--space-2); }
+.explain__options select { flex: 1 1 0; min-width: 0; }
+.explain__voice {
+  display: inline-flex; align-items: center; gap: var(--space-1); padding: 0 6px; border: 1px solid var(--border);
+  border-radius: var(--radius-sm); font-size: var(--text-xs); font-weight: 500; color: var(--muted);
+}
 .explain {
   background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 10px var(--space-3); font-size: var(--text-sm); line-height: 1.55;

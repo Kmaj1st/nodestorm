@@ -31,7 +31,8 @@ const inputs: Partial<Record<TaskName, unknown>> = {
   relate: { a: thm, b: hom },
   deps: { node: thm, existing: [hom] },
   derive: { selected: [hom], context: [hom] },
-  explain: { node: hom, level: "intuitive" },
+  // A parody narrator: the answer must still parse (and should still be correct mathematics).
+  explain: { node: hom, level: "rigorous", voice: "noir-detective" },
   resolveCycle: {
     links: [
       { from: hom, to: thm, reason: "The theorem is about homomorphisms." },
@@ -60,6 +61,13 @@ const inputs: Partial<Record<TaskName, unknown>> = {
   anatomy: {
     node: { name: "Lagrange's theorem", definition: "For a finite group $G$ and a subgroup $H$, $|H|$ divides $|G|$.", aliases: [], kind: "theorem" },
     prerequisites: [{ name: "Subgroup", definition: "A subset of a group that is a group under the same operation.", aliases: [] }],
+  },
+  refereeReport: {
+    problem: kernelProblem,
+    steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$.", "Then $\\varphi(gkg^{-1}) = e$, so the kernel is normal."],
+    checks: [{ step: 1, verdict: "ok" }],
+    references: [notes],
+    context: [hom],
   },
   checkStep: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], step: "Then $gkg^{-1} \\in \\ker\\varphi$.", references: [notes], context: [hom] },
 };

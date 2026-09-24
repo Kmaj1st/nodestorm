@@ -4,6 +4,8 @@ import {
   type CheckStepResponse,
   type Graph,
   type RefChunk,
+  type RefereeResponse,
+  type StepCheckBrief,
   type SourceRef,
   type StepVerdict,
   type TutorConcept,
@@ -55,12 +57,20 @@ export interface Problem {
   source?: { docId: string; title: string; page?: number };
 }
 
+/** A "Reviewer 2" report, with the steps it was about (see `stepsKey`) so an outdated one can say so. */
+export interface RefereeReport extends RefereeResponse {
+  stepsKey: string;
+  createdAt: number;
+}
+
 export interface Derivation {
   id: string;
   projectId: string;
   problem: Problem;
   steps: DerivStep[];
   hints: Hint[];
+  /** The latest referee report; kept (marked outdated) when the steps change. */
+  referee?: RefereeReport;
   createdAt: number;
   updatedAt: number;
 }
@@ -126,6 +136,34 @@ export function nextHintNumber(d: Derivation): number {
 export function isSolved(d: Derivation): boolean {
   const last = d.steps.at(-1)?.check;
   return Boolean(last?.solved && last.verdict === "ok");
+}
+
+/** Identifies the steps' text, to tell whether a referee report is about the current steps. */
+export function stepsKey(steps: DerivStep[]): string {
+  let h = 0x811c9dc5;
+  const s = `${steps.length}\u0000${steps.map((x) => x.text).join("\u0000")}`;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 0x01000193);
+  return `${steps.length}:${(h >>> 0).toString(36)}`;
+}
+
+/**
+ * The tutor's earlier checks of the steps the referee gets (the same last MAX_STEPS_SENT as `stepsForTutor`,
+ * numbered as sent).
+ */
+export function checksForReferee(steps: DerivStep[]): StepCheckBrief[] {
+  const sent = steps.slice(-MAX_STEPS_SENT);
+  return sent.flatMap((s, i) =>
+    s.check ? [{ step: i + 1, verdict: s.check.verdict, comment: s.check.comment.slice(0, 1000), solved: s.check.solved }] : [],
+  );
+}
+
+export function setReferee(d: Derivation, report: RefereeResponse, key: string, now = Date.now()): Derivation {
+  return touch(d, { referee: { ...report, stepsKey: key, createdAt: now } });
+}
+
+/** True when the steps changed after the referee report was written. */
+export function refereeOutdated(d: Derivation): boolean {
+  return Boolean(d.referee && d.referee.stepsKey !== stepsKey(d.steps));
 }
 
 /** A short title for lists: the label and the start of the statement. */
@@ -247,6 +285,13 @@ export function toMarkdown(d: Derivation, opts: { hints?: boolean } = {}): strin
   if (opts.hints !== false && d.hints.length) {
     lines.push("", "**Hints:**");
     for (const h of d.hints) lines.push(`- ${h.text}`);
+  }
+  // The referee report goes with the copy (not into the graph's notes), and only while it is about these steps.
+  const r = d.referee;
+  if (opts.hints !== false && r && !refereeOutdated(d)) {
+    lines.push("", `**Referee report (Reviewer 2): ${r.verdict}.** ${r.summary}`);
+    for (const p of r.points) lines.push(`- ${p.step ? `Step ${p.step}` : "General"} (${p.severity}): ${p.comment}`);
+    if (r.grudgingPraise) lines.push("", `*${r.grudgingPraise}*`);
   }
   return lines.join("\n");
 }

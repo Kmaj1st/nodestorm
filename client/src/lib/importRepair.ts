@@ -6,6 +6,7 @@ import {
   SourceRef,
   NodeFormal,
   NodeAnatomy,
+  ExplainVoice,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -152,7 +153,14 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   if (error) node.error = error;
   if (senses?.length) node.senses = senses;
   if (n.explanation !== undefined) {
-    const ex = NodeExplanation.safeParse(n.explanation);
+    let raw = n.explanation;
+    // A narrator this version doesn't know (or a malformed one) falls back to the plain voice; the text is kept.
+    if (isObj(raw) && raw.voice !== undefined && !ExplainVoice.safeParse(raw.voice).success) {
+      const { voice: _unknown, ...rest } = raw;
+      raw = rest;
+      fixes.add(t("repair.resetVoices"));
+    }
+    const ex = NodeExplanation.safeParse(raw);
     if (ex.success) node.explanation = ex.data;
     else fixes.add(t("repair.droppedExplanations"));
   }

@@ -62,8 +62,9 @@ no key needed) or an empty graph.
   true, checkable relation stated soberly as a **fact**; only the narration under it, the title and the closing
   **moral** are silly. **Roll again** asks for a different route, **Copy as text** puts the chain on the clipboard,
   and **Add to a sandbox** forks the graph into a sandbox named after the chain and adds its concepts and links there
-  (one undo step), so your graph only changes if you merge it back. The facts come from an AI: check before quoting
-  one.
+  (one undo step), so your graph only changes if you merge it back. **Surprise me** picks two random concepts of the
+  graph (with fewer than two, fun ends such as *Cicada* or *Sunflower*) and builds a chain between them straight
+  away. The facts come from an AI: check before quoting one.
 - **Fix anything by hand.** Rename a concept (the old name stays as an alias), edit a relation's text in the inspector,
   **Delete** removes the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or
   Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
@@ -121,7 +122,11 @@ no key needed) or an empty graph.
 
 - **Explain more.** In the inspector pick a level (*intuitive*, *rigorous* or *example-driven*). The AI writes a
   summary, the intuition, key points, examples, common pitfalls and further reading (described in words, never
-  links), building on the concept's prerequisites and relations. The latest explanation is kept on the concept;
+  links), building on the concept's prerequisites and relations. Next to the level, pick a **narrator**: the plain
+  voice, or a parody one (*nature documentary*, *sports commentator*, *noir detective*, *medieval scholar*,
+  *overexcited infomercial*, *Shakespearean*). A narrator changes only the telling: the mathematics stays correct and
+  at the chosen level, formulas are still typeset, and the summary stays a plain definition. The explanation's heading
+  says who told it. The latest explanation is kept on the concept;
   **Use summary as definition** copies its summary. Each concept also has a free-text **My notes** field. Both appear
   in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias
   matches).
@@ -149,6 +154,11 @@ no key needed) or an empty graph.
   - **Choosing a problem**: select a passage in a document and choose **Use selection as problem**, or type any problem.
   - **Steps**: write each step. **Check** marks it *Correct*, *Gap* (true, but relies on something unstated, which it
     names), *Error* or *Unclear*. **Hint** gets more specific each time you ask for the same step.
+  - **Reviewer 2**: a referee report on your derivation so far, in the style of the infamously pedantic anonymous
+    referee: a verdict (*accept*, *minor* or *major revisions*, *reject*), a weary summary, points by step with their
+    severity (*fatal*, *major*, *minor*, *pedantic*) and some grudging praise. The tone is a parody; every point is
+    meant to be a real gap, error or notation problem, and like the tutor it never writes the fix or the answer. The
+    report is kept with the derivation (and in **Copy as Markdown**) and says when your steps changed after it.
   - **Add to graph**: tick what goes in. The problem becomes a concept that depends on the concepts it used, with the
     source page recorded and your steps saved in its notes. It is one undo step.
   - Documents and derivations are kept per project in this browser (IndexedDB). They are not part of JSON exports or
@@ -327,10 +337,9 @@ Actions**, then run the workflow; the run shows the site's URL. To deploy on eve
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract,quiz,resolveCycle,readPage,splitProblems,tutorHint,checkStep,absurdChain}, GET /api/providers, GET /api/models
-
 server/   optional Express API: POST /api/<task> (name, clarify, relate, deps, derive, explain, anatomy, extract, quiz,
-          resolveCycle, readPage, splitProblems, tutorHint, checkStep), GET /api/providers, GET /api/models
+          resolveCycle, readPage, splitProblems, tutorHint, checkStep, refereeReport, absurdChain, mathlib),
+          GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
 e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
 scripts/  live smoke test against real providers

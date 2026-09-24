@@ -20,6 +20,21 @@ export type NodeStatus = z.infer<typeof NodeStatus>;
 export const ExplainLevel = z.enum(["intuitive", "rigorous", "example-driven"]);
 export type ExplainLevel = z.infer<typeof ExplainLevel>;
 
+/**
+ * Who narrates an "Explain more" answer: "plain" (the default) or a parody narrator. A voice only changes the telling;
+ * the content stays correct and at the chosen level (see VOICE_GUIDE in ai/prompts.ts).
+ */
+export const ExplainVoice = z.enum([
+  "plain",
+  "nature-documentary",
+  "sports-commentator",
+  "noir-detective",
+  "medieval-scholar",
+  "infomercial",
+  "shakespearean",
+]);
+export type ExplainVoice = z.infer<typeof ExplainVoice>;
+
 /** A longer AI explanation of one concept (the "explain" task's answer). */
 export const Explanation = z.object({
   summary: z.string().min(1),
@@ -35,6 +50,8 @@ export type Explanation = z.infer<typeof Explanation>;
 /** The latest explanation stored on a node, with how and when it was asked for. */
 export const NodeExplanation = Explanation.extend({
   level: ExplainLevel,
+  /** Absent in data from before voices existed, and for plain explanations. */
+  voice: ExplainVoice.optional(),
   createdAt: z.number(),
 });
 export type NodeExplanation = z.infer<typeof NodeExplanation>;
@@ -332,6 +349,7 @@ export const ExplainRequest = z.object({
   prerequisites: z.array(NodeBrief).default([]),
   relations: z.array(ExplainRelation).default([]),
   level: ExplainLevel.default("intuitive"),
+  voice: ExplainVoice.default("plain"),
 });
 export type ExplainRequest = z.infer<typeof ExplainRequest>;
 
@@ -622,6 +640,46 @@ export const CheckStepResponse = z.object({
   solved: z.boolean().default(false),
 });
 export type CheckStepResponse = z.infer<typeof CheckStepResponse>;
+
+/** An earlier tutor check of step `step` (1-based), passed to the referee so it can build on it. */
+export const StepCheckBrief = z.object({
+  step: z.number().int().min(1),
+  verdict: StepVerdict,
+  comment: z.string().max(1000).default(""),
+  /** The tutor said this step completes the solution. */
+  solved: z.boolean().default(false),
+});
+export type StepCheckBrief = z.infer<typeof StepCheckBrief>;
+
+/** "Reviewer 2": a pedantic (but accurate) referee report on the derivation so far. */
+export const RefereeRequest = TutorBase.extend({
+  checks: z.array(StepCheckBrief).max(60).default([]),
+});
+export type RefereeRequest = z.infer<typeof RefereeRequest>;
+
+export const RefereeVerdict = z.enum(["accept", "minor revisions", "major revisions", "reject"]);
+export type RefereeVerdict = z.infer<typeof RefereeVerdict>;
+export const RefereeSeverity = z.enum(["fatal", "major", "minor", "pedantic"]);
+export type RefereeSeverity = z.infer<typeof RefereeSeverity>;
+
+/** Enum values from a model, case-insensitive ("Major Revisions", "major_revisions"). */
+const lenientWords = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCase().replace(/[\s_-]+/g, " ") : v);
+
+export const RefereePoint = z.object({
+  /** The step it is about (1-based), or none for the derivation as a whole. */
+  step: z.number().int().min(1).nullish().transform((v) => v ?? undefined).optional(),
+  severity: z.preprocess(lenientWords, RefereeSeverity).catch("minor"),
+  comment: z.string().trim().min(1),
+});
+export type RefereePoint = z.infer<typeof RefereePoint>;
+
+export const RefereeResponse = z.object({
+  verdict: z.preprocess(lenientWords, RefereeVerdict),
+  summary: z.string().trim().min(1),
+  points: z.array(RefereePoint).default([]),
+  grudgingPraise: z.string().default(""),
+});
+export type RefereeResponse = z.infer<typeof RefereeResponse>;
 
 export interface ProviderInfo {
   id: string;
