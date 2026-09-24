@@ -20,6 +20,8 @@ interface State {
   settingsOpen: boolean;
   /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
   clarifying: { graphId: string; nodeId: string } | null;
+  /** Node whose learning path is highlighted on the canvas (everything else is dimmed). */
+  highlight: { graphId: string; nodeId: string } | null;
 }
 
 export interface BusyTask {
@@ -34,7 +36,9 @@ interface Actions {
   setInspect(i: Inspect): void;
   setSettingsOpen(open: boolean): void;
   setClarifying(c: State["clarifying"]): void;
+  /** Show, relabel (e.g. progress; keeps the start time) or clear (null) a running task. */
   setBusy(key: string, label: string | null): void;
+  setHighlight(h: State["highlight"]): void;
   setToast(msg: string | null): void;
   switchTo(graphId: string): void;
   forkActive(): void;
@@ -62,6 +66,7 @@ export const useGraphStore = create<GraphStore>()(
       toast: null,
       settingsOpen: false,
       clarifying: null,
+      highlight: null,
 
       mutate(fn, graphId) {
         const id = graphId ?? get().activeId;
@@ -75,11 +80,12 @@ export const useGraphStore = create<GraphStore>()(
       setClarifying: (clarifying) => set({ clarifying }),
       setBusy(key, label) {
         const busy = { ...get().busy };
-        if (label) busy[key] = { label, startedAt: Date.now() };
+        if (label) busy[key] = { label, startedAt: busy[key]?.startedAt ?? Date.now() };
         else delete busy[key];
         set({ busy });
       },
       setToast: (toast) => set({ toast }),
+      setHighlight: (highlight) => set({ highlight }),
       switchTo: (activeId) => set({ activeId, selection: [], inspect: null }),
 
       forkActive() {

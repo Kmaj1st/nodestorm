@@ -9,6 +9,7 @@ import {
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { updateNode } from "../lib/graphOps";
+import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
@@ -24,6 +25,14 @@ export function GraphCanvas() {
 
   // React Flow keeps measurement/selection state on its node objects, so we hold a local copy
   // and re-sync the concept data from the store whenever the graph changes.
+  const highlight = useGraphStore((s) => s.highlight);
+  const cycles = useMemo(() => cycleInfo(graph), [graph]);
+  // Learning-path highlight: the chosen node plus everything it (transitively) depends on.
+  const chain = useMemo(() => {
+    const root = highlight?.graphId === graph.id ? graph.nodes.find((n) => n.id === highlight.nodeId) : undefined;
+    return root ? new Set([root.id, ...prerequisiteClosure(graph, root.id)]) : null;
+  }, [graph, highlight]);
+
   const [nodes, setNodes] = useState<ConceptFlowNode[]>([]);
   useEffect(() => {
     setNodes((prev) => {
@@ -35,16 +44,29 @@ export function GraphCanvas() {
           id: c.id,
           type: "concept" as const,
           position: old?.dragging ? old.position : c.position,
-          data: { concept: c },
+          className: chain ? (chain.has(c.id) ? "path-on" : "path-dim") : undefined,
+          data: { concept: c, inCycle: cycles.nodes.has(c.id) },
         };
       });
     });
-  }, [graph]);
+  }, [graph, chain, cycles]);
 
-  const edges = useMemo<RelationFlowEdge[]>(
-    () => graph.relations.map((r) => ({ id: r.id, source: r.a, target: r.b, type: "bi" as const, data: { relation: r } })),
-    [graph.relations],
-  );
+  const edges = useMemo<RelationFlowEdge[]>(() => {
+    const deps = new Map(graph.nodes.map((n) => [n.id, n.dependsOn]));
+    const isDep = (x: string, y: string) => Boolean(deps.get(x)?.includes(y));
+    return graph.relations.map((r) => {
+      // Only dependency links inside the chain belong to the path; other relations between its nodes are dimmed.
+      const onPath = chain && chain.has(r.a) && chain.has(r.b) && (isDep(r.a, r.b) || isDep(r.b, r.a));
+      return {
+        id: r.id,
+        source: r.a,
+        target: r.b,
+        type: "bi" as const,
+        className: chain ? (onPath ? "path-on" : "path-dim") : undefined,
+        data: { relation: r, cycle: cycles.links.has(linkKey(r.a, r.b)) || cycles.links.has(linkKey(r.b, r.a)) },
+      };
+    });
+  }, [graph, chain, cycles]);
 
   const onNodesChange = useCallback(
     (changes: NodeChange<ConceptFlowNode>[]) => {
@@ -70,7 +92,7 @@ export function GraphCanvas() {
   );
 
   return (
-    <div className={`canvas${graph.parentId ? " canvas--sandbox" : ""}`}>
+    <div className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}`}>
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
         nodes={nodes}

@@ -4,7 +4,7 @@ import { memo } from "react";
 import { analyzeNode } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
 
-export type ConceptFlowNode = Node<{ concept: CN }, "concept">;
+export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
 
 const badge: Record<CN["status"], string> = {
   ok: "ready",
@@ -26,7 +26,10 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
         ? () => setClarifying({ graphId, nodeId: c.id })
         : undefined;
   return (
-    <div className={`concept concept--${c.status}${selected ? " concept--selected" : ""}`} data-testid={`node-${c.name}`}>
+    <div
+      className={`concept concept--${c.status}${data.inCycle ? " concept--cycle" : ""}${selected ? " concept--selected" : ""}`}
+      data-testid={`node-${c.name}`}
+    >
       {/* Edges are drawn node-to-node ("floating"); handles only exist because React Flow requires them. */}
       <Handle type="target" position={Position.Top} className="concept__handle" isConnectable={false} />
       <Handle type="source" position={Position.Bottom} className="concept__handle" isConnectable={false} />
@@ -51,6 +54,11 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       {c.missingDeps.length > 0 && (
         <div className="concept__missing">
           missing: {c.missingDeps.map((d) => d.name).join(", ")}
+        </div>
+      )}
+      {data.inCycle && (
+        <div className="concept__cycle" title="This concept is (indirectly) its own prerequisite. Open it to fix the links.">
+          ⚠ dependency cycle
         </div>
       )}
     </div>

@@ -27,6 +27,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [serverModels, setServerModels] = useState(saved.serverModels);
   const [rememberKeys, setRememberKeys] = useState(saved.rememberKeys);
   const [clarify, setClarify] = useState(saved.clarify);
+  const [installAll, setInstallAll] = useState(saved.installAll);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<ModelsState>({ status: "idle" });
   const [server, setServer] = useState<ProvidersResponse | { error: string } | null>(null);
@@ -76,7 +77,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }, [provider, connection, cfg.apiKey, cfg.baseURL, canDiscover]);
 
   const save = () => {
-    saved.update({ connection, provider, configs, serverModels, rememberKeys, clarify });
+    saved.update({ connection, provider, configs, serverModels, rememberKeys, clarify, installAll });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
   };
@@ -252,6 +253,33 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               className="num"
             />
             meanings (plus “something else”)
+          </label>
+        </fieldset>
+
+        <fieldset className="choice">
+          <legend>Install all missing</legend>
+          <label className="check">
+            Follow prerequisites up to
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={installAll.maxDepth}
+              onChange={(e) => setInstallAll({ ...installAll, maxDepth: Math.min(10, Math.max(1, Number(e.target.value) || 3)) })}
+              aria-label="Install depth limit"
+              className="num"
+            />
+            levels deep, adding at most
+            <input
+              type="number"
+              min={1}
+              max={100}
+              value={installAll.maxNodes}
+              onChange={(e) => setInstallAll({ ...installAll, maxNodes: Math.min(100, Math.max(1, Number(e.target.value) || 15)) })}
+              aria-label="Install concept limit"
+              className="num"
+            />
+            concepts
           </label>
         </fieldset>
 

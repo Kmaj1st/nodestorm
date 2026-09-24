@@ -18,6 +18,8 @@ interface SettingsState {
   serverModels: Partial<Record<ProviderKind, string>>;
   /** Ask "what do you mean?" when a concept name has several meanings, offering this many options. */
   clarify: { enabled: boolean; options: number };
+  /** Limits for "Install all missing": how many levels of prerequisites to follow, and how many concepts to add. */
+  installAll: { maxDepth: number; maxNodes: number };
 }
 
 interface SettingsActions {
@@ -81,6 +83,7 @@ export const useSettings = create<SettingsStore>()(
       rememberKeys: false,
       serverModels: {},
       clarify: { enabled: true, options: 3 },
+      installAll: { maxDepth: 3, maxNodes: 15 },
 
       update: (patch) => set(patch),
       updateConfig: (kind, patch) =>
@@ -104,6 +107,7 @@ export const useSettings = create<SettingsStore>()(
           ...p,
           configs: { ...emptyConfigs(), ...(p.configs ?? {}) },
           clarify: { ...current.clarify, ...(p.clarify ?? {}) },
+          installAll: { ...current.installAll, ...(p.installAll ?? {}) },
         };
       },
     },

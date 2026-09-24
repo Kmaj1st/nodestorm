@@ -247,6 +247,67 @@ try {
   await waitBadge("Group", "ready");
   assert(true, "retry succeeds once the API answers");
 
+  console.log("Dependency tools");
+  {
+    const st = await openSettings();
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  const pathSteps = () => page.getByTestId("learning-path").locator("li").allTextContents();
+  // Mock KB: Quotient group → Group (present), Normal subgroup → Subgroup → Group.
+  await addByName("Quotient Group");
+  await waitBadge("Quotient Group", "blocked");
+  assert(
+    JSON.stringify(await pathSteps()) === JSON.stringify(["Group", "Normal subgroup missing", "Quotient Group"]),
+    "learning path lists the present prerequisite and marks the missing one",
+  );
+  await page.getByTestId("install-all").click();
+  const confirm = page.getByRole("dialog", { name: "Install all missing" });
+  assert((await confirm.locator("li").allTextContents()).join() === "Normal subgroup", "confirm popover lists the depth-1 install");
+  await confirm.getByTestId("install-all-confirm").click();
+  await waitBadge("Quotient Group", "ready");
+  await waitBadge("Normal subgroup", "ready");
+  await waitBadge("Subgroup", "ready");
+  assert(true, "install-all reached depth 2 (Normal subgroup → Subgroup) and unblocked the chain");
+  await page.locator(".toast").waitFor();
+  assert((await page.locator(".toast").textContent()).includes("Installed 2 prerequisites of Quotient Group (2 levels)"), "the run is summarised");
+  await page.locator(".toast").click();
+  const steps = await pathSteps();
+  assert(
+    JSON.stringify(steps) === JSON.stringify(["Group", "Subgroup", "Normal subgroup", "Quotient Group"]),
+    `learning path in study order: ${steps.join(" → ")}`,
+  );
+  const wrapper = (name) => page.locator(".react-flow__node", { has: node(name) });
+  await page.getByTestId("highlight-path").click();
+  assert((await wrapper("Subgroup").getAttribute("class")).includes("path-on"), "highlight marks the chain on the canvas");
+  assert((await wrapper("Homomorphism").getAttribute("class")).includes("path-dim"), "highlight dims unrelated nodes");
+  assert((await page.locator(".react-flow__edge.path-on").count()) === 4, "the 4 dependency links of the chain are highlighted");
+  await page.screenshot({ path: `${shots}8-learning-path.png` });
+  await page.getByTestId("highlight-path").click();
+  assert((await page.locator(".path-on, .path-dim").count()) === 0, "toggling highlight off restores the canvas");
+
+  // Simulate a wrong AI answer that makes Group depend on Quotient Group (which depends on Group).
+  await page.evaluate(() => {
+    const saved = JSON.parse(localStorage.getItem("nodestorm"));
+    const g = saved.state.graphs[saved.state.activeId];
+    const id = (name) => g.nodes.find((n) => n.name === name).id;
+    g.nodes.find((n) => n.name === "Group").dependsOn.push(id("Quotient Group"));
+    localStorage.setItem("nodestorm", JSON.stringify(saved));
+  });
+  await page.reload();
+  await node("Group").waitFor();
+  assert((await node("Group").getAttribute("class")).includes("concept--cycle"), "nodes on a dependency cycle are flagged");
+  await page.locator(".relation--cycle").first().waitFor({ state: "attached", timeout: 5000 });
+  // Both loops are flagged: Group ⇄ Quotient Group, and Group → Quotient Group → Normal subgroup → Subgroup → Group.
+  assert((await page.locator(".relation--cycle").count()) === 4, "every dependency link on a cycle is flagged");
+  await node("Group").click();
+  const cyc = page.getByTestId("cycle-warning");
+  assert((await cyc.textContent()).includes("Group → Quotient Group → Group"), "inspector explains the cycle");
+  await page.screenshot({ path: `${shots}9-cycle.png` });
+  await cyc.getByTestId("remove-link-Group-Quotient Group").click();
+  assert((await page.getByTestId("cycle-warning").count()) === 0 && (await page.locator(".concept--cycle, .relation--cycle").count()) === 0, "'remove this link' breaks the cycle");
+  assert((await page.getByTestId("node-panel").textContent()).includes("Needed by"), "the correct direction (Quotient Group needs Group) is kept");
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);
