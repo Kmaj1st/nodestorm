@@ -260,6 +260,7 @@ code { font-size: 12px; background: var(--bg); padding: 0 3px; border-radius: 3p
 .status { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; }
 .status__row { display: flex; align-items: center; gap: 8px; }
 .status__time { opacity: 0.7; font-variant-numeric: tabular-nums; }
+.status__queued { font-size: 11px; opacity: 0.75; border: 1px dashed currentColor; border-radius: 3px; padding: 0 4px; }
 .status__cancel { background: transparent; border: 1px solid currentColor; color: inherit; padding: 0 6px; font-size: 12px; }
 .spinner {
   width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgb(127 127 127 / 0.45); border-top-color: currentColor;

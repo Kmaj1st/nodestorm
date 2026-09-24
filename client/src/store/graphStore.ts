@@ -43,7 +43,12 @@ export interface MutateOptions {
 export interface BusyTask {
   label: string;
   startedAt: number;
+  /** "queued" while its AI call waits for a free slot (see lib/aiQueue.ts); absent means running. */
+  state?: "queued" | "running";
 }
+
+/** Abort signal of each busy task, so the AI queue can mark the task it belongs to as queued (not UI state). */
+const busySignals = new Map<string, AbortSignal>();
 
 interface Actions {
   /** Apply a pure graph operation to a specific graph (defaults to the active one). */
@@ -55,7 +60,9 @@ interface Actions {
   setSettingsOpen(open: boolean): void;
   setClarifying(c: State["clarifying"]): void;
   /** Show, relabel (e.g. progress; keeps the start time) or clear (null) a running task. */
-  setBusy(key: string, label: string | null): void;
+  setBusy(key: string, label: string | null, signal?: AbortSignal): void;
+  /** Mark the busy task that owns `signal` as queued or running. */
+  setBusyState(signal: AbortSignal | undefined, state: "queued" | "running"): void;
   setHighlight(h: State["highlight"]): void;
   setToast(msg: string | null): void;
   switchTo(graphId: string): void;
@@ -125,11 +132,22 @@ export const useGraphStore = create<GraphStore>()(
       setInspect: (inspect) => set({ inspect }),
       setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
       setClarifying: (clarifying) => set({ clarifying }),
-      setBusy(key, label) {
+      setBusy(key, label, signal) {
         const busy = { ...get().busy };
-        if (label) busy[key] = { label, startedAt: busy[key]?.startedAt ?? Date.now() };
+        // A relabel (progress text) keeps the task's start time, queued/running state and signal.
+        if (label) busy[key] = { ...busy[key], label, startedAt: busy[key]?.startedAt ?? Date.now() };
         else delete busy[key];
+        if (!label) busySignals.delete(key);
+        else if (signal) busySignals.set(key, signal);
         set({ busy });
+      },
+      setBusyState(signal, state) {
+        const key = [...busySignals].find(([, s]) => s === signal)?.[0];
+        const task = key && get().busy[key];
+        if (!key || !task || (task.state ?? "running") === state) return;
+        // Time spent waiting in the queue isn't the AI being slow; count from when the call really starts.
+        const startedAt = state === "running" ? Date.now() : task.startedAt;
+        set({ busy: { ...get().busy, [key]: { ...task, state, startedAt } } });
       },
       setToast: (toast) => set({ toast }),
       setHighlight: (highlight) => set({ highlight }),

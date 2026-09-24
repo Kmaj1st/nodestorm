@@ -303,13 +303,22 @@ try {
 
   console.log("Failures");
   let chatMode = "hang";
+  let rateLimitOnce = false;
+  const chatBodies = [];
   await page.route("https://api.siliconflow.cn/v1/chat/completions", async (route) => {
     if (chatMode === "hang") return; // never answer
     const body = route.request().postData() ?? "";
+    chatBodies.push(body);
+    if (rateLimitOnce) {
+      rateLimitOnce = false;
+      const headers = { "retry-after": "1", "access-control-expose-headers": "retry-after" };
+      return route.fulfill({ status: 429, headers, contentType: "application/json", body: '{"message":"rate limited"}' });
+    }
     const content = body.includes("[task:clarify]")
       ? { ambiguous: false, senses: [{ name: "Group", domain: "algebra", definition: "A set with an associative operation, identity and inverses." }] }
       : { prerequisites: [] };
-    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }) });
+    const reply = { choices: [{ message: { content: JSON.stringify(content) } }], usage: { total_tokens: 1234 } };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify(reply) });
   });
   {
     const st = await openSettings();
@@ -447,6 +456,38 @@ try {
   assert(box.x >= 0 && box.x + box.width <= 390 && (await noHScroll()), "Add concept dialog fits the phone screen");
   await page.screenshot({ path: `${shots}9-mobile-dialog.png` });
   await page.keyboard.press("Escape");
+
+  console.log("Rate limits, answer language, queue");
+  {
+    const st = await openSettings();
+    // Earlier sections may have switched to the offline demo; this one talks to the routed SiliconFlow.
+    await st.getByLabel("Provider", { exact: true }).selectOption("siliconflow");
+    await st.getByLabel("AI answers in").selectOption({ label: "中文" });
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  chatBodies.length = 0;
+  rateLimitOnce = true;
+  await addByName("Monoid");
+  await waitBadge("Monoid", "ready", 15000);
+  assert(chatBodies.length >= 3 && (await page.locator(".toast").count()) === 0, "a 429 is retried after Retry-After; node ends up ready, no error toast");
+  assert(chatBodies.every((b) => b.includes("Output language") && b.includes("Chinese (中文)")), "the 中文 setting puts the language instruction into the prompt");
+  {
+    const st = await openSettings();
+    assert(/This session: ~[\d.]+k tokens/.test(await st.getByTestId("token-usage").textContent()), "token usage of this session shown in Settings");
+    await st.getByLabel("Concurrent AI requests").fill("1");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  chatMode = "hang";
+  await addByName("Semigroup");
+  await addByName("Lattice");
+  const queuedTask = page.locator('[data-testid="task"][data-state="queued"]');
+  await queuedTask.waitFor();
+  assert((await queuedTask.textContent()).includes("queued") && (await page.getByTestId("task").count()) === 2, "with a limit of 1 the second AI call waits as 'queued'");
+  await queuedTask.getByRole("button", { name: /^Cancel:/ }).click();
+  await waitBadge("Lattice", "failed – retry", 3000);
+  assert((await page.getByTestId("task").count()) === 1, "a queued call can be cancelled");
+  await page.getByRole("button", { name: /^Cancel:/ }).click();
+  await waitBadge("Semigroup", "failed – retry", 3000);
 
   console.log("\nE2E passed");
 } catch (e) {

@@ -56,7 +56,7 @@ async function withBusy<T>(
   const ctrl = new AbortController();
   controllers.set(key, ctrl);
   store().setBusy(key, null); // restart the clock if this superseded an older run
-  store().setBusy(key, label);
+  store().setBusy(key, label, ctrl.signal);
   try {
     const res = await fn(ctrl.signal);
     // An answer that arrives after the user cancelled is dropped, like one that never came.

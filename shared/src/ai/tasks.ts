@@ -12,7 +12,7 @@ import {
 } from "../model";
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
-import { clarifyPrompt, depsPrompt, derivePrompt, namePrompt, relatePrompt } from "./prompts";
+import { clarifyPrompt, depsPrompt, derivePrompt, namePrompt, relatePrompt, withLanguage } from "./prompts";
 
 /** Pull the first JSON object out of a model reply (tolerates code fences and stray prose). */
 export function extractJson(text: string): unknown {
@@ -46,6 +46,7 @@ async function runStructured<S extends z.ZodTypeAny>(
   opts: RequestOptions & { search?: boolean } = {},
 ): Promise<z.infer<S>> {
   let lastErr = "";
+  messages = withLanguage(messages, opts.language);
   for (let attempt = 0; attempt < 2; attempt++) {
     const msgs = attempt === 0
       ? messages

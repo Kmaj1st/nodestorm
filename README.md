@@ -68,6 +68,8 @@ npm run dev                          # server on :8787 + UI on :5173
 | OpenAI-compatible | `GET {baseURL}/models` (non-chat models hidden) | any compatible endpoint: OpenAI, Ollama, vLLM, DeepSeek… |
 | Offline demo | built-in | no key; deterministic, used by tests |
 
+In Settings, **AI answers in** picks the language for names, definitions and relations: *Auto* matches the language of your concept names, or pick one (English, 中文, …) or type your own. Rate limits (HTTP 429) and brief provider outages (5xx, network errors) are retried up to twice with backoff, honouring `Retry-After`, within the request timeout. At most 3 AI requests run at once (configurable); the rest show as *queued* in the status bar and can be cancelled there. In browser mode Settings also shows roughly how many tokens this session used.
+
 In server mode the same providers are configured by env vars (`SILICONFLOW_API_KEY`, `SILICONFLOW_MODEL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_WEB_SEARCH=1`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, …). See `server/.env.example`.
 
 The provider code lives in `shared/src/ai/`, so the browser and the server run the same prompts, JSON extraction, zod validation and retry. To add a provider:

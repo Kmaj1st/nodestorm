@@ -1,6 +1,7 @@
 import {
   DEFAULT_TIMEOUT_MS,
   createProvider,
+  normalizeLanguage,
   withDeadline,
   type ClarifyRequest,
   providerMeta,
@@ -16,7 +17,10 @@ import {
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
-import { useSettings } from "../store/settingsStore";
+import { useGraphStore } from "../store/graphStore";
+import { DEFAULT_CONCURRENCY, useSettings } from "../store/settingsStore";
+import { addUsage } from "../store/usageStore";
+import { createLimiter } from "./aiQueue";
 
 /** Thrown when an AI call can't run until the user fills in Settings. */
 export class NeedsSetupError extends Error {}
@@ -48,13 +52,25 @@ async function serverFetch<T>(path: string, init: RequestInit = {}, signal?: Abo
 
 type TaskResult<N extends TaskName> = Awaited<ReturnType<(typeof tasks)[N]>>;
 
+/** At most `aiConcurrency` AI calls run at once; the rest wait (shown as "queued", still cancellable). */
+const queue = createLimiter(() => useSettings.getState().aiConcurrency ?? DEFAULT_CONCURRENCY);
+
+function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
+  return queue.run(() => runNow(name, req, signal), {
+    signal,
+    onState: (state) => useGraphStore.getState().setBusyState(signal, state),
+  });
+}
+
 /** Run an AI task either in the page (browser mode) or through the local server. */
-async function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
+async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
+  // Settings are read when the call starts, so a queued call uses the latest ones.
   const s = useSettings.getState();
   const timeoutMs = s.configs[s.provider]?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  const language = normalizeLanguage(s.language);
   if (s.connection === "browser") {
     const provider = browserProvider(s.provider, s.configs[s.provider]);
-    return (await tasks[name](provider, req, { signal })) as unknown as TaskResult<N>;
+    return (await tasks[name](provider, req, { signal, language, onUsage: addUsage })) as unknown as TaskResult<N>;
   }
   const model = s.serverModels[s.provider];
   return serverFetch<TaskResult<N>>(
@@ -65,6 +81,8 @@ async function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSign
         "content-type": "application/json",
         "x-ai-provider": s.provider,
         ...(model ? { "x-ai-model": model } : {}),
+        // Header values must be ASCII; the server decodes this.
+        ...(language ? { "x-ai-language": encodeURIComponent(language) } : {}),
       },
       body: JSON.stringify(req),
     },

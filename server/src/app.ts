@@ -1,7 +1,21 @@
 import express from "express";
-import { CancelledError, ProviderError, tasks, type TaskName } from "@nodestorm/shared";
+import { CancelledError, normalizeLanguage, ProviderError, tasks, type TaskName } from "@nodestorm/shared";
 import { ZodError } from "zod";
 import type { Registry } from "./providers/registry.js";
+
+/**
+ * Output language from the `x-ai-language` header. Header values must be ASCII, so the client URI-encodes it;
+ * normalizeLanguage keeps it short and on one line before it reaches a prompt.
+ */
+function headerLanguage(req: express.Request): string | undefined {
+  const raw = req.header("x-ai-language");
+  if (!raw || raw.length > 400) return undefined;
+  try {
+    return normalizeLanguage(decodeURIComponent(raw));
+  } catch {
+    return undefined; // malformed escape: ignore rather than fail the whole task
+  }
+}
 
 export function createApp(registry: Registry) {
   const app = express();
@@ -28,7 +42,7 @@ export function createApp(registry: Registry) {
         // Stop the upstream AI call if the browser gives up (cancel, timeout, closed tab).
         const ctrl = new AbortController();
         res.on("close", () => !res.writableFinished && ctrl.abort());
-        res.json(await tasks[name](provider, req.body, { signal: ctrl.signal }));
+        res.json(await tasks[name](provider, req.body, { signal: ctrl.signal, language: headerLanguage(req) }));
       } catch (err) {
         if (err instanceof CancelledError) {
           if (!res.headersSent) res.status(499).end();
