@@ -1,7 +1,8 @@
-import { GraphExport, type Graph } from "@nodestorm/shared";
+import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { emptyGraph, fork, merge } from "../lib/graphOps";
+import { repairImport } from "../lib/importRepair";
 
 export type Inspect =
   | { kind: "node"; id: string }
@@ -41,7 +42,8 @@ interface Actions {
   mergeSandbox(sandboxId: string): void;
   discardSandbox(sandboxId: string): void;
   exportJson(): string;
-  importJson(text: string): void;
+  /** Replace all graphs with a file's contents, repairing what it can. Returns the fixes applied. */
+  importJson(text: string): string[];
   reset(): void;
 }
 
@@ -119,11 +121,11 @@ export const useGraphStore = create<GraphStore>()(
         return JSON.stringify(doc, null, 2);
       },
       importJson(text) {
-        const doc = GraphExport.parse(JSON.parse(text));
-        if (!doc.graphs.length) throw new Error("File contains no graphs");
+        const { doc, fixes } = repairImport(JSON.parse(text));
         const graphs = Object.fromEntries(doc.graphs.map((g) => [g.id, g]));
         const main = doc.graphs.find((g) => !g.parentId) ?? doc.graphs[0];
         set({ graphs, mainId: main.id, activeId: main.id, selection: [], inspect: null });
+        return fixes;
       },
       reset: () => set({ ...initial(), selection: [], inspect: null }),
     }),
