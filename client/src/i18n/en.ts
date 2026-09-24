@@ -951,6 +951,11 @@ export const en = {
   "texImport.title": "Import from LaTeX: {title}",
   "texImport.intro": "Every definition, theorem, lemma… in the document, and what each refers to (\\ref in its statement or proof). Links through a defined term it mentions start unticked. Rename or untick before adding.",
   "texImport.none": "No definitions, theorems or lemmas found in {name}.",
+  "flash.kindAnatomy": "Theorem anatomy: the full statement, and why each hypothesis is needed",
+  "flash.cardStatementFront": "State {name} with all its hypotheses.",
+  "flash.cardThen": "Then: {conclusion}",
+  "flash.cardHypothesisFront": "{name}: why is this hypothesis needed?\n{hypothesis}",
+  "flash.cardWithout": "Without it: {counterexample}",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

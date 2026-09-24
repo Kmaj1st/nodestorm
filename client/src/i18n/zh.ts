@@ -939,4 +939,9 @@ export const zh: Record<MessageKey, string> = {
   "texImport.title": "从 LaTeX 导入：{title}",
   "texImport.intro": "文档中的每个定义、定理、引理……以及各自引用的内容（陈述或证明中的 \\ref）。通过提到已定义术语建立的链接默认不勾选。添加前可以改名或取消勾选。",
   "texImport.none": "在 {name} 中没有找到定义、定理或引理。",
+  "flash.kindAnatomy": "定理剖析：完整陈述，以及每个前提为何必要",
+  "flash.cardStatementFront": "完整陈述“{name}”（包括所有前提）。",
+  "flash.cardThen": "结论：{conclusion}",
+  "flash.cardHypothesisFront": "“{name}”：为什么需要这个前提？\n{hypothesis}",
+  "flash.cardWithout": "去掉它：{counterexample}",
 };

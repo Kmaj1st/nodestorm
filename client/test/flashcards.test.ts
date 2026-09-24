@@ -231,3 +231,33 @@ describe("CSV formula injection (final review)", () => {
     expect(csvField("plain text")).toBe("plain text");
   });
 });
+
+describe("anatomy cards", () => {
+  it("turn a stored theorem anatomy into a statement card and one card per hypothesis", () => {
+    const r = ops.addNode(ops.emptyGraph(), { name: "Lagrange's theorem", definition: "$|H|$ divides $|G|$." });
+    const g = ops.updateNode(r.graph, r.id, {
+      kind: "theorem",
+      anatomy: {
+        hypotheses: [
+          { text: "$G$ is finite", whyNeeded: "Orders must be numbers.", counterexampleIfDropped: "$\\mathbb Z$ has no order." },
+          { text: "$H \\le G$", whyNeeded: "", counterexampleIfDropped: "" },
+        ],
+        conclusion: "$|H|$ divides $|G|$",
+        proofIdea: "",
+        examples: [],
+        nonExamples: [],
+        createdAt: 1,
+      },
+    });
+    const cards = buildCards(g, { kinds: ["anatomy"] });
+    expect(cards.map((c) => c.front)).toEqual([
+      "State Lagrange's theorem with all its hypotheses.",
+      "Lagrange's theorem: why is this hypothesis needed?\n$G$ is finite",
+    ]);
+    expect(cards[0].back).toBe("1. $G$ is finite\n2. $H \\le G$\n\nThen: $|H|$ divides $|G|$");
+    expect(cards[1].back).toBe("Orders must be numbers.\n\nWithout it: $\\mathbb Z$ has no order.");
+    expect(cards[0].tags).toContain("card::anatomy");
+    // Not for a concept whose kind was changed away from theorem-like.
+    expect(buildCards(ops.updateNode(g, r.id, { kind: "definition" }), { kinds: ["anatomy"] })).toEqual([]);
+  });
+});

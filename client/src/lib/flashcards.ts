@@ -1,4 +1,4 @@
-import type { ConceptNode, DirRel, Graph, NodeStatus } from "@nodestorm/shared";
+import { isTheoremLike, type ConceptNode, type DirRel, type Graph, type NodeStatus } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { studyOrder } from "./export";
 import { splitMath } from "./math";
@@ -9,10 +9,11 @@ import { learningPath } from "./paths";
  * as an Anki import file (tab-separated, HTML fields, with the header lines Anki ≥ 2.1.55 reads) or as a plain CSV
  * (front,back,tags) for other apps. The card wording is in the interface language; tags are identifiers and stay as
  * they are. Quiz questions aren't stored on the concepts (only the resulting mastery is), so there are no quiz cards.
+ * A theorem taken apart ("Theorem anatomy") gives anatomy cards: its full statement, and why each hypothesis is needed.
  */
 
-export type CardKind = "definition" | "prerequisites" | "relation";
-export const CARD_KINDS: readonly CardKind[] = ["definition", "prerequisites", "relation"];
+export type CardKind = "definition" | "prerequisites" | "relation" | "anatomy";
+export const CARD_KINDS: readonly CardKind[] = ["definition", "prerequisites", "relation", "anatomy"];
 
 /** One card. `front`/`back` are plain text (newlines allowed, `$…$` math as typed); the writers escape them. */
 export interface Flashcard {
@@ -97,6 +98,34 @@ export function buildCards(g: Graph, opts: CardOptions = {}): Flashcard[] {
           front: t("flash.cardPrereqFront", { name: n.name }),
           back: all.map((p, i) => `${i + 1}. ${p}`).join("\n"),
           tags: tags(n, "prerequisites"),
+        });
+      }
+    }
+    // Theorem anatomy (stored for theorem-like concepts): the statement with all its hypotheses, then one card per
+    // hypothesis that says why it is needed (and what fails without it).
+    if (kinds.has("anatomy") && n.anatomy && isTheoremLike(n.kind)) {
+      const an = n.anatomy;
+      const hyps = an.hypotheses.filter((h) => h.text.trim());
+      if (an.conclusion.trim()) {
+        cards.push({
+          kind: "anatomy",
+          front: t("flash.cardStatementFront", { name: n.name }),
+          back: [
+            ...hyps.map((h, i) => `${i + 1}. ${h.text.trim()}`),
+            ...(hyps.length ? [""] : []),
+            t("flash.cardThen", { conclusion: an.conclusion.trim() }),
+          ].join("\n"),
+          tags: tags(n, "anatomy"),
+        });
+      }
+      for (const h of hyps) {
+        if (!h.whyNeeded.trim()) continue;
+        const without = h.counterexampleIfDropped.trim();
+        cards.push({
+          kind: "anatomy",
+          front: t("flash.cardHypothesisFront", { name: n.name, hypothesis: h.text.trim() }),
+          back: [h.whyNeeded.trim(), ...(without ? ["", t("flash.cardWithout", { counterexample: without })] : [])].join("\n"),
+          tags: tags(n, "anatomy"),
         });
       }
     }

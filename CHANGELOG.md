@@ -69,6 +69,7 @@ together.
 - `npm run smoke:live` checks a real key and model end to end.
 
 ### Study and thinking tools
+- **Anatomy flashcards**: a theorem taken apart exports as Anki/CSV cards. One card asks for the full statement with its hypotheses; the others ask why each hypothesis is needed and what fails without it.
 - **Import LaTeX**: a paper's definitions, theorems and lemmas become concepts of their kind, linked by what each `\ref`s in its statement or proof. You review it before adding, and no AI is involved.
 - **Lean / Mathlib**: the AI suggests Mathlib declarations for a concept and each is verified with Loogle. Only real declarations are shown, with their types, docstrings and doc links.
 - **Definitions from encyclopedias**:

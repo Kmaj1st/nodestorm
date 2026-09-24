@@ -14,6 +14,7 @@ const KIND_LABEL: Record<CardKind, MessageKey> = {
   definition: "flash.kindDefinition",
   prerequisites: "flash.kindPrereqs",
   relation: "flash.kindRelations",
+  anatomy: "flash.kindAnatomy",
 };
 /** How many cards the preview shows. */
 const PREVIEW = 4;
