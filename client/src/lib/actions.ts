@@ -3,6 +3,7 @@ import {
   findByName,
   toBrief,
   type DerivedProposal,
+  type ExplainLevel,
   type Graph,
   type NameCandidate,
   type Sense,
@@ -396,6 +397,35 @@ export async function mix(aId: string, bId: string) {
   store().mutate((g) => (both(g) ? ops.upsertRelation(g, aId, bId, res.aToB, res.bToA, "mix") : g), graphId);
   const rel = ops.findRelation(graph(graphId), aId, bId);
   if (rel) store().setInspect({ kind: "edge", relationId: rel.id, dir: rel.a === aId ? "aToB" : "bToA" });
+}
+
+export const explainKey = (graphId: string, nodeId: string) => `explain:${graphId}:${nodeId}`;
+
+/**
+ * "Explain more": ask the AI for a longer explanation of a concept at the chosen level, given its prerequisites and
+ * relations. The answer is stored on the node as a background change (like other AI results, not an undo step).
+ */
+export async function explainNode(nodeId: string, level: ExplainLevel, graphId = store().activeId) {
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const name = (id: string) => g.nodes.find((n) => n.id === id)?.name;
+  const relations = g.relations.flatMap((r) => {
+    if (r.a !== nodeId && r.b !== nodeId) return [];
+    const mine = r.a === nodeId;
+    const other = name(mine ? r.b : r.a);
+    return other ? [{ other, toOther: mine ? r.aToB : r.bToA, fromOther: mine ? r.bToA : r.aToB }] : [];
+  });
+  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const res = await withBusy(explainKey(graphId, nodeId), `Explaining ${node.name}…`, (signal) =>
+    api.explain({ node: toBrief(node), prerequisites, relations, level }, signal),
+  );
+  if (!res) return;
+  store().mutate(
+    (g) => ops.updateNode(g, nodeId, { explanation: { ...res, level, createdAt: Date.now() } }),
+    graphId,
+    { history: "background" },
+  );
 }
 
 export function derive(selectedIds: string[], goal?: string) {

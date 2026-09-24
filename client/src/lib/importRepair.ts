@@ -1,6 +1,7 @@
 import {
   DepRole,
   GraphExport,
+  NodeExplanation,
   NodeStatus,
   RelationOrigin,
   type ConceptNode,
@@ -144,6 +145,14 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   };
   if (error) node.error = error;
   if (senses?.length) node.senses = senses;
+  if (n.explanation !== undefined) {
+    const ex = NodeExplanation.safeParse(n.explanation);
+    if (ex.success) node.explanation = ex.data;
+    else fixes.add("dropped malformed explanations");
+  }
+  if (typeof n.notes === "string") {
+    if (n.notes) node.notes = n.notes;
+  } else if (n.notes !== undefined) fixes.add("dropped notes that aren't text");
   // Nothing left to block on / choose from: don't leave the node stuck.
   if (node.status === "blocked" && !missingDeps.length) node.status = "ok";
   if (node.status === "unclear" && !node.senses) node.status = "ok";

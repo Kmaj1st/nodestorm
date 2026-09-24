@@ -8,6 +8,7 @@ import {
   tasks,
   type DepsRequest,
   type DeriveRequest,
+  type ExplainRequest,
   type ModelInfo,
   type NameRequest,
   type Provider,
@@ -98,6 +99,7 @@ export const api = {
   relate: (req: RelateRequest, signal?: AbortSignal) => run("relate", req, signal),
   deps: (req: DepsRequest, signal?: AbortSignal) => run("deps", req, signal),
   derive: (req: DeriveRequest, signal?: AbortSignal) => run("derive", req, signal),
+  explain: (req: ExplainRequest, signal?: AbortSignal) => run("explain", req, signal),
 
   /** Providers configured on the local server (server mode only). */
   serverProviders: () => serverFetch<ProvidersResponse>("providers"),

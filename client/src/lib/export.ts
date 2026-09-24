@@ -1,4 +1,4 @@
-import type { ConceptNode, Graph } from "@nodestorm/shared";
+import type { ConceptNode, Graph, NodeExplanation } from "@nodestorm/shared";
 
 /** Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. */
 
@@ -61,6 +61,11 @@ export function toMarkdown(g: Graph): string {
     if (n.missingDeps.length) {
       lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
+    if (n.explanation) lines.push(...explanationMd(n.explanation));
+    if (n.notes?.trim()) {
+      // The user's notes are Markdown-ish already: keep them as written, quoted so their headings stay inside.
+      lines.push("**My notes:**", "", ...n.notes.trim().split(/\r?\n/).map((l) => (l.trim() ? `> ${l}` : ">")), "");
+    }
   }
 
   const rels = g.relations.filter((r) => byId.has(r.a) && byId.has(r.b));
@@ -76,6 +81,20 @@ export function toMarkdown(g: Graph): string {
     lines.push("");
   }
   return lines.join("\n");
+}
+
+/** A stored "Explain more" answer as a sub-section of its concept. */
+function explanationMd(ex: NodeExplanation): string[] {
+  const out = [`#### Explanation (${ex.level})`, "", mdEscape(ex.summary), ""];
+  if (ex.intuition.trim()) out.push(`*Intuition:* ${mdEscape(ex.intuition)}`, "");
+  const list = (heading: string, items: string[]) => {
+    if (items.length) out.push(`**${heading}:**`, "", ...items.map((i) => `- ${i}`), "");
+  };
+  list("Key points", ex.keyPoints.map(mdEscape));
+  list("Examples", ex.examples.map((x) => `*${mdEscape(x.title)}*${x.body.trim() ? `: ${mdEscape(x.body)}` : ""}`));
+  list("Pitfalls", ex.pitfalls.map(mdEscape));
+  list("Further reading", ex.furtherReading.map((r) => `${mdEscape(r.title)}${r.hint.trim() ? ` — ${mdEscape(r.hint)}` : ""}`));
+  return out;
 }
 
 /**

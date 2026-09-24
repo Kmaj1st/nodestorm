@@ -1,7 +1,16 @@
-import type { ClarifyRequest, DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "../model";
+import type {
+  ClarifyRequest,
+  DepsRequest,
+  DeriveRequest,
+  ExplainLevel,
+  ExplainRequest,
+  NameRequest,
+  NodeBrief,
+  RelateRequest,
+} from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain";
 
 const BASE = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -35,7 +44,7 @@ export function languageInstruction(language: string | undefined): string {
   if (!lang) return "";
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
-  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons) in ${target}.
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints) in ${target}.
 Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "to"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
@@ -115,5 +124,37 @@ Schema: {"proposals":[{"name":string,"definition":string,"aliases":string[],"lin
       req,
       `${contextBlock(req.context)}\n\nSelected:\n${req.selected.map(brief).join("\n")}${req.goal ? `\n\nUser goal: ${req.goal}` : ""}`,
     ),
+  ];
+}
+
+const LEVEL_GUIDE: Record<ExplainLevel, string> = {
+  intuitive: "Aim for intuition first: plain language, analogies and pictures in words; keep formulas to a minimum.",
+  rigorous:
+    "Be rigorous: state the precise definition with its hypotheses, the key properties or theorems, and why they hold (proof ideas).",
+  "example-driven":
+    "Teach through examples: several concrete, worked examples (including a non-example), then the general pattern they share.",
+};
+
+export function explainPrompt(req: ExplainRequest): ChatMessage[] {
+  const prereqs = req.prerequisites.length
+    ? `Its prerequisites in the graph (the reader knows these):\n${req.prerequisites.map(brief).join("\n")}`
+    : "It has no prerequisites in the graph.";
+  const rels = req.relations.length
+    ? `How it relates to other concepts in the graph:\n${req.relations
+        .map((r) => `- it ${r.toOther.kind} ${r.other}; ${r.other} ${r.fromOther.kind} it`)
+        .join("\n")}`
+    : "";
+  return [
+    sys(
+      "explain",
+      `Explain one concept to a learner in more depth than its one-line definition. ${LEVEL_GUIDE[req.level]}
+Build on the prerequisites and relations given, and refer to those concepts by their exact names.
+"summary": 1-3 sentences that could serve as the concept's definition. "intuition": a short paragraph on the idea behind it.
+"keyPoints": 3-6 facts worth remembering. "examples": 1-4 examples, each with a short "title" and a "body" of 1-4 sentences.
+"pitfalls": 1-4 common misconceptions or mistakes.
+"furtherReading": 1-4 sources described in words: "title" names the kind of source or a well-known text (e.g. "Any undergraduate abstract algebra textbook, chapter on homomorphisms"), "hint" says what to look for there. Never give URLs, DOIs or page numbers, and don't invent titles you are unsure exist.
+Schema: {"summary":string,"intuition":string,"keyPoints":string[],"examples":[{"title":string,"body":string}],"pitfalls":string[],"furtherReading":[{"title":string,"hint":string}]}`,
+    ),
+    input(req, [`Concept to explain:\n${brief(req.node)}`, prereqs, rels, `Level: ${req.level}`].filter(Boolean).join("\n\n")),
   ];
 }

@@ -1,6 +1,6 @@
-import type { ConceptNode, Graph } from "@nodestorm/shared";
+import type { ConceptNode, ExplainLevel, Graph } from "@nodestorm/shared";
 import { useEffect, useState } from "react";
-import { analyzeNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
+import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, useGraphStore } from "../store/graphStore";
@@ -107,6 +107,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         <textarea
           rows={3}
           value={node.definition}
+          data-testid="definition"
           // Typing into the field is one undo step.
           onChange={(e) =>
             mutate((g) => updateNode(g, node.id, { definition: e.target.value }), graphId, { key: `def:${node.id}` })}
@@ -129,6 +130,21 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       )}
 
       <CycleWarning node={node} graph={graph} />
+
+      <ExplainSection key={node.id} node={node} graphId={graphId} />
+
+      <label className="field">
+        My notes
+        <textarea
+          rows={3}
+          value={node.notes ?? ""}
+          placeholder="Your own notes: questions, examples, where you read about it…"
+          data-testid="notes"
+          // Typing into the field is one undo step; an emptied field removes the notes.
+          onChange={(e) =>
+            mutate((g) => updateNode(g, node.id, { notes: e.target.value || undefined }), graphId, { key: `notes:${node.id}` })}
+        />
+      </label>
 
       <section>
         <div className="section-head">
@@ -200,6 +216,94 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </button>
       </div>
     </aside>
+  );
+}
+
+const LEVELS: { value: ExplainLevel; label: string }[] = [
+  { value: "intuitive", label: "Intuitive" },
+  { value: "rigorous", label: "Rigorous" },
+  { value: "example-driven", label: "Example-driven" },
+];
+
+/** "Explain more": a longer AI explanation at a chosen level, kept on the node until regenerated. */
+function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string }) {
+  const mutate = useGraphStore((s) => s.mutate);
+  const running = useGraphStore((s) => Boolean(s.busy[explainKey(graphId, node.id)]));
+  const ex = node.explanation;
+  const [level, setLevel] = useState<ExplainLevel>(ex?.level ?? "intuitive");
+  const [open, setOpen] = useState(true);
+  const levelLabel = (l: ExplainLevel) => LEVELS.find((x) => x.value === l)?.label ?? l;
+  return (
+    <section data-testid="explain">
+      <div className="section-head">
+        <h4>Explain more</h4>
+        <div className="explain__controls">
+          <select aria-label="Explanation level" value={level} onChange={(e) => setLevel(e.target.value as ExplainLevel)}>
+            {LEVELS.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+          </select>
+          <button
+            className="small-btn"
+            onClick={() => void explainNode(node.id, level, graphId)}
+            disabled={running}
+            data-testid="explain-button"
+          >
+            {running ? "Explaining…" : ex ? "Regenerate" : "Explain"}
+          </button>
+        </div>
+      </div>
+      {!ex && !running && <p className="muted small">A longer explanation with examples and common pitfalls.</p>}
+      {ex && (
+        <details className="explain" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
+          <summary>
+            {levelLabel(ex.level)} explanation{" "}
+            <span className="muted small">· {new Date(ex.createdAt).toLocaleDateString()}</span>
+          </summary>
+          <p className="explain__summary" data-testid="explanation-summary">{ex.summary}</p>
+          {ex.intuition && <p className="small">{ex.intuition}</p>}
+          {ex.keyPoints.length > 0 && (
+            <>
+              <h5>Key points</h5>
+              <ul className="explain__list">{ex.keyPoints.map((k, i) => <li key={i}>{k}</li>)}</ul>
+            </>
+          )}
+          {ex.examples.length > 0 && (
+            <>
+              <h5>Examples</h5>
+              <ul className="explain__list">
+                {ex.examples.map((x, i) => <li key={i}><b>{x.title}</b>{x.body && <> — {x.body}</>}</li>)}
+              </ul>
+            </>
+          )}
+          {ex.pitfalls.length > 0 && (
+            <>
+              <h5>Pitfalls</h5>
+              <ul className="explain__list">{ex.pitfalls.map((p, i) => <li key={i}>{p}</li>)}</ul>
+            </>
+          )}
+          {ex.furtherReading.length > 0 && (
+            <>
+              <h5>Further reading</h5>
+              <ul className="explain__list">
+                {ex.furtherReading.map((r, i) => (
+                  <li key={i}>{r.title}{r.hint && <span className="muted"> — {r.hint}</span>}</li>
+                ))}
+              </ul>
+            </>
+          )}
+          <div className="form__actions">
+            <button
+              className="small-btn"
+              disabled={node.definition.trim() === ex.summary.trim()}
+              // A user decision, so a normal undo step.
+              onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary }), graphId)}
+              data-testid="use-summary"
+            >
+              Use summary as definition
+            </button>
+          </div>
+        </details>
+      )}
+    </section>
   );
 }
 

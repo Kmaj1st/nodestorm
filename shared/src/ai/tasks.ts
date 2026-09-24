@@ -5,6 +5,8 @@ import {
   DepsResponse,
   DeriveRequest,
   DeriveResponse,
+  ExplainRequest,
+  ExplainResponse,
   NameRequest,
   NameResponse,
   RelateRequest,
@@ -12,7 +14,7 @@ import {
 } from "../model";
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
-import { clarifyPrompt, depsPrompt, derivePrompt, namePrompt, relatePrompt, withLanguage } from "./prompts";
+import { clarifyPrompt, depsPrompt, derivePrompt, explainPrompt, namePrompt, relatePrompt, withLanguage } from "./prompts";
 
 /** Pull the first JSON object out of a model reply (tolerates code fences and stray prose). */
 export function extractJson(text: string): unknown {
@@ -78,5 +80,7 @@ export const tasks = {
     runStructured(p, depsPrompt(DepsRequest.parse(body)), DepsResponse, o),
   derive: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, derivePrompt(DeriveRequest.parse(body)), DeriveResponse, o),
+  explain: async (p: Provider, body: unknown, o?: RequestOptions) =>
+    runStructured(p, explainPrompt(ExplainRequest.parse(body)), ExplainResponse, o),
 };
 export type TaskName = keyof typeof tasks;

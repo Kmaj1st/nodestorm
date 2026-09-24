@@ -16,6 +16,29 @@ export type MissingDep = z.infer<typeof MissingDep>;
 export const NodeStatus = z.enum(["ok", "blocked", "checking", "unclear", "error"]);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
+/** How an "Explain more" answer is pitched. */
+export const ExplainLevel = z.enum(["intuitive", "rigorous", "example-driven"]);
+export type ExplainLevel = z.infer<typeof ExplainLevel>;
+
+/** A longer AI explanation of one concept (the "explain" task's answer). */
+export const Explanation = z.object({
+  summary: z.string().min(1),
+  intuition: z.string().default(""),
+  keyPoints: z.array(z.string()).default([]),
+  examples: z.array(z.object({ title: z.string(), body: z.string() })).default([]),
+  pitfalls: z.array(z.string()).default([]),
+  /** Sources described in words (a textbook chapter, a classic paper…), never URLs the model could invent. */
+  furtherReading: z.array(z.object({ title: z.string(), hint: z.string().default("") })).default([]),
+});
+export type Explanation = z.infer<typeof Explanation>;
+
+/** The latest explanation stored on a node, with how and when it was asked for. */
+export const NodeExplanation = Explanation.extend({
+  level: ExplainLevel,
+  createdAt: z.number(),
+});
+export type NodeExplanation = z.infer<typeof NodeExplanation>;
+
 export const ConceptNode = z.object({
   id: z.string(),
   name: z.string(),
@@ -30,6 +53,10 @@ export const ConceptNode = z.object({
   error: z.string().optional(),
   /** Candidate meanings offered while the node is "unclear". */
   senses: z.array(z.lazy(() => Sense)).optional(),
+  /** The latest "Explain more" answer. */
+  explanation: NodeExplanation.optional(),
+  /** The user's own free-text notes (Markdown-ish plain text). */
+  notes: z.string().optional(),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -178,6 +205,26 @@ export const DeriveResponse = z.object({
   proposals: z.array(DerivedProposal),
 });
 export type DeriveResponse = z.infer<typeof DeriveResponse>;
+
+/** One relation of the explained concept, seen from it: what it does to `other`, and what `other` does to it. */
+export const ExplainRelation = z.object({
+  other: z.string(),
+  toOther: DirRel,
+  fromOther: DirRel,
+});
+export type ExplainRelation = z.infer<typeof ExplainRelation>;
+
+export const ExplainRequest = z.object({
+  node: NodeBrief,
+  /** Its prerequisites that are in the graph. */
+  prerequisites: z.array(NodeBrief).default([]),
+  relations: z.array(ExplainRelation).default([]),
+  level: ExplainLevel.default("intuitive"),
+});
+export type ExplainRequest = z.infer<typeof ExplainRequest>;
+
+export const ExplainResponse = Explanation;
+export type ExplainResponse = Explanation;
 
 export interface ProviderInfo {
   id: string;

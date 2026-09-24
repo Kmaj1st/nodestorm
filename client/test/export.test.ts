@@ -62,6 +62,34 @@ describe("markdown", () => {
     expect(md).toContain("\ntwo paragraphs\n");
   });
 
+  it("includes a concept's explanation and the user's notes", () => {
+    const { g, hom } = scenario();
+    const withExtras = ops.updateNode(g, hom, {
+      explanation: {
+        summary: "Maps that keep the operation.",
+        intuition: "Map, then combine = combine, then map.",
+        keyPoints: ["φ(e) = e"],
+        examples: [{ title: "exp", body: "e^(x+y) = eˣeʸ" }],
+        pitfalls: ["Need not be injective"],
+        furtherReading: [{ title: "An algebra textbook", hint: "chapter on homomorphisms" }],
+        level: "rigorous",
+        createdAt: 0,
+      },
+      notes: "# Ask\nwhy *kernels*?\n\nsee lecture 3",
+    });
+    const md = toMarkdown(withExtras);
+    const section = md.slice(md.indexOf("### Homomorphism"), md.indexOf("### Isomorphism"));
+    expect(section).toContain("#### Explanation (rigorous)\n\nMaps that keep the operation.\n");
+    expect(section).toContain("*Intuition:* Map, then combine = combine, then map.");
+    expect(section).toContain("**Key points:**\n\n- φ(e) = e\n");
+    expect(section).toContain("**Examples:**\n\n- *exp*: e^(x+y) = eˣeʸ\n");
+    expect(section).toContain("**Pitfalls:**\n\n- Need not be injective\n");
+    expect(section).toContain("**Further reading:**\n\n- An algebra textbook — chapter on homomorphisms\n");
+    // Notes keep their own Markdown, quoted so a heading in them stays inside the concept.
+    expect(section).toContain("**My notes:**\n\n> # Ask\n> why *kernels*?\n>\n> see lecture 3\n");
+    expect(toMarkdown(g)).not.toMatch(/Explanation|My notes/);
+  });
+
   it("handles an empty graph", () => {
     expect(toMarkdown(ops.emptyGraph("Empty"))).toContain("No concepts yet");
   });

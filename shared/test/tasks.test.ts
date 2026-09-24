@@ -70,6 +70,67 @@ describe("tasks with mock provider", () => {
 
   it("rejects invalid requests", async () => {
     await expect(tasks.relate(mock, { a: { name: "x" } })).rejects.toThrow();
+    await expect(tasks.explain(mock, { node: { name: "x" }, level: "poetic" })).rejects.toThrow();
+  });
+
+  it("explains a known concept with a canned answer, at the requested level", async () => {
+    const r = await tasks.explain(mock, {
+      node: { name: "Homomorphism" },
+      prerequisites: [{ name: "Group" }],
+      level: "rigorous",
+    });
+    expect(r.summary).toMatch(/preserves the operations/);
+    expect(r.intuition).toMatch(/^Formally: .*builds on Group\./);
+    expect(r.keyPoints.length).toBeGreaterThan(1);
+    expect(r.examples.map((e) => e.title)).toContain("Exponential map");
+    expect(r.pitfalls.length).toBeGreaterThan(0);
+    expect(r.furtherReading.length).toBeGreaterThan(0);
+    // Described sources, not links.
+    expect(JSON.stringify(r.furtherReading)).not.toMatch(/https?:|www\./);
+  });
+
+  it("explains an unknown concept generically from its definition", async () => {
+    const r = await tasks.explain(mock, { node: { name: "Zorn's lemma", definition: "Every chain has an upper bound…" } });
+    expect(r.summary).toBe("Every chain has an upper bound…");
+    expect(r.intuition).toMatch(/^Intuitively: /);
+    expect(r.examples).toEqual([]);
+  });
+
+  it("sends prerequisites, relations, level and the answer language to the model", async () => {
+    const seen: ChatMessage[][] = [];
+    const spy: Provider = {
+      id: "spy", label: "Spy", model: "m", configured: true, listModels: async () => [],
+      complete: async (m) => { seen.push(m); return '{"summary":"S"}'; },
+    };
+    const r = await tasks.explain(
+      spy,
+      {
+        node: { name: "Kernel" },
+        prerequisites: [{ name: "Homomorphism" }],
+        relations: [{ other: "Isomorphism", toOther: { kind: "is trivial for", explanation: "" }, fromOther: { kind: "has", explanation: "" } }],
+        level: "example-driven",
+      },
+      { language: "Deutsch" },
+    );
+    // Missing lists are filled with defaults.
+    expect(r).toEqual({ summary: "S", intuition: "", keyPoints: [], examples: [], pitfalls: [], furtherReading: [] });
+    const [system, user] = seen[0];
+    expect(system.content).toContain("[task:explain]");
+    expect(system.content).toMatch(/Never give URLs/);
+    expect(system.content).toMatch(/Output language: .* in Deutsch/);
+    expect(user.content).toContain("- Homomorphism");
+    expect(user.content).toContain("it is trivial for Isomorphism; Isomorphism has it");
+    expect(user.content).toContain("Level: example-driven");
+  });
+
+  it("rejects an explanation without a summary after one retry", async () => {
+    let calls = 0;
+    const bad: Provider = {
+      id: "bad", label: "Bad", model: "m", configured: true, listModels: async () => [],
+      complete: async () => { calls++; return '{"summary":"","keyPoints":"not a list"}'; },
+    };
+    await expect(tasks.explain(bad, { node: { name: "X" } })).rejects.toThrow(/malformed output/);
+    expect(calls).toBe(2);
   });
 });
 

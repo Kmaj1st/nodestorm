@@ -335,6 +335,15 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
 .warn-box { background: var(--warn-soft); border: 1px solid var(--checking-border); border-radius: 6px; padding: 8px; display: flex; flex-direction: column; gap: 6px; }
 .warn-box p { margin: 0; }
 .warn-box__link { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+/* Explain more */
+.explain__controls { display: flex; align-items: center; gap: 6px; }
+.explain__controls select { font-size: 12px; padding: 2px 4px; }
+.explain { background: var(--accent-soft); border-radius: 6px; padding: 8px 10px; font-size: 13px; }
+.explain summary { cursor: pointer; font-weight: 600; }
+.explain p { margin: 6px 0; }
+.explain h5 { margin: 8px 0 2px; font-size: 12px; color: var(--muted); }
+.explain__summary { font-weight: 500; }
+.explain__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
 .concept--cycle { border-color: var(--checking); }
 .concept__cycle { margin-top: 6px; font-size: 11px; color: var(--checking); }
 .relation--cycle { stroke: var(--checking); stroke-width: 2.5; }
