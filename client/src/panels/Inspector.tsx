@@ -30,6 +30,7 @@ import {
   installDep,
   mix,
   relookup,
+  relookupKey,
   resolveCycle,
 } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
@@ -159,7 +160,8 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           readOnly={viewing}
           // Typing into the field is one undo step.
           onChange={(e) =>
-            mutate((g) => updateNode(g, node.id, { definition: e.target.value }), graphId, { key: `def:${node.id}` })}
+            // Once it's the user's own text, an encyclopedia no longer vouches for it.
+            mutate((g) => updateNode(g, node.id, { definition: e.target.value, ...(node.source?.url ? { source: undefined } : {}) }), graphId, { key: `def:${node.id}` })}
         />
       </label>
       <MathPreview text={node.definition} testId="definition-preview" />
@@ -385,7 +387,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
               className="small-btn"
               disabled={node.definition.trim() === ex.summary.trim()}
               // A user decision, so a normal undo step.
-              onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary }), graphId)}
+              onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary, ...(node.source?.url ? { source: undefined } : {}) }), graphId)}
               data-testid="use-summary"
             >
               <Icon icon={ArrowDown} size={14} />{t("explain.useSummary")}
@@ -603,7 +605,8 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
 /** Where the definition came from (an encyclopedia page, or a page of an imported document); a looked-up one can be redone. */
 function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) {
   const t = useT();
-  const busy = useGraphStore((s) => Object.keys(s.busy).some((k) => k.startsWith("relookup:") && k.endsWith(node.id)));
+  const graphId = useGraphStore((s) => s.activeId);
+  const busy = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
   const src = node.source;
   const lookupOn = useSettings((s) => s.lookup.enabled);
   const canLookup = !viewing && lookupOn;

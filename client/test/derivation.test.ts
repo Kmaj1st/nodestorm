@@ -13,6 +13,7 @@ import {
   removeStep,
   sessionConcepts,
   setCheck,
+  stepsForTutor,
   toMarkdown,
   type StepCheck,
 } from "../src/lib/derivation";
@@ -93,6 +94,17 @@ describe("derivation sessions", () => {
       { name: "Kernel", definition: "Elements sent to e.", source: { title: "Notes", page: 3 } },
       { name: "Homomorphism", definition: "" },
     ]);
+  });
+
+  it("keeps a whole page used as the problem, and long step lists, within what the tutor accepts", () => {
+    const d = newDerivation("p", { statement: "x".repeat(9000) });
+    expect(d.problem.statement.length).toBeLessThanOrEqual(4000);
+    expect(d.problem.statement.endsWith(" …")).toBe(true);
+    let e = d;
+    for (let i = 0; i < 70; i++) e = addStep(e, `step ${i}`).derivation;
+    const sent = stepsForTutor(e.steps);
+    expect(sent).toHaveLength(60);
+    expect(sent[59]).toBe("step 69");
   });
 
   it("names the problem after its statement", () => {

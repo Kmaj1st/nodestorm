@@ -792,6 +792,7 @@ export const zh: Record<MessageKey, string> = {
   "dt.importFailed": "无法导入 {title}：{error}",
   "dt.noProblems": "在 {title} 中没有找到题目。",
   "toast.lookupNothing": "在百科资料中没有找到“{name}”。",
+  "toast.lookupUnavailable": "查找已关闭或处于离线状态，或所有来源最近都拒绝了请求（见 设置 → 定义）。",
   "task.lookup": "正在查找“{name}”…",
   "toast.lookupNoAi": "定义来自百科资料。在设置中配置 AI 后，还可以检查前置知识。",
   "node.source": "来源",

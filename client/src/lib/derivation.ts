@@ -65,9 +65,23 @@ export interface Derivation {
   updatedAt: number;
 }
 
-export function newDerivation(projectId: string, problem: Problem, now = Date.now()): Derivation {
-  return { id: uid("d"), projectId, problem: { ...problem, statement: problem.statement.trim() }, steps: [], hints: [], createdAt: now, updatedAt: now };
+/** Longest problem statement and step the tutor tasks accept (characters), and most earlier steps sent. */
+export const MAX_PROBLEM = 4000;
+export const MAX_STEP = 4000;
+export const MAX_STEPS_SENT = 60;
+
+/** A statement cut to what the tutor accepts (a whole page used as the problem can be longer). */
+export function clampStatement(s: string): string {
+  const t = s.trim();
+  return t.length > MAX_PROBLEM ? `${t.slice(0, MAX_PROBLEM - 2).trimEnd()} …` : t;
 }
+
+export function newDerivation(projectId: string, problem: Problem, now = Date.now()): Derivation {
+  return { id: uid("d"), projectId, problem: { ...problem, statement: clampStatement(problem.statement) }, steps: [], hints: [], createdAt: now, updatedAt: now };
+}
+
+/** The earlier steps as the tutor gets them: the most recent ones, each within the length limit. */
+export const stepsForTutor = (steps: DerivStep[]) => steps.slice(-MAX_STEPS_SENT).map((s) => s.text.slice(0, MAX_STEP));
 
 const touch = (d: Derivation, patch: Partial<Derivation>): Derivation => ({ ...d, ...patch, updatedAt: Date.now() });
 

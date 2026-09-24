@@ -45,10 +45,10 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
     }
   };
   const moreOptions = () => {
-    // Re-ask the AI; clearing the definition keeps the analyze pipeline on the clarify step.
+    // Ask the AI for meanings (not the encyclopedias again, which would give the same list).
     setChoice(null);
     setClarifying(null);
-    void analyzeNode(node.id, clarifying.graphId);
+    void analyzeNode(node.id, clarifying.graphId, undefined, { askAi: true });
   };
   const remove = () => {
     mutate((g) => removeNode(g, node.id), clarifying.graphId);

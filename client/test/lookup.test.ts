@@ -94,6 +94,60 @@ describe("definitions from encyclopedias", () => {
     expect(node(id).definition).toBe("average of a random variable");
   });
 
+  it("asks before taking a near match for a different name, and never adds its name as an alias", async () => {
+    routes = [
+      [/prefixsearch/, () => json({ query: { prefixsearch: [{ title: "Definition:Normal Subgroup" }] } })],
+      [/page=Definition:Normal Subgroup/, () => json({ parse: { title: "Definition:Normal Subgroup", wikitext: "== Definition ==\nInvariant under conjugation." } })],
+    ];
+    const id = add("Normal");
+    await analyzeNode(id);
+    expect(node(id)).toMatchObject({ status: "unclear", definition: "", aliases: [] });
+    expect(node(id).senses?.map((s) => s.name)).toEqual(["Normal Subgroup"]);
+  });
+
+  it("“Ask again” goes to the AI, not back to the same encyclopedia list", async () => {
+    routes = [
+      [/proofwiki/, () => new Response("x", { status: 403, headers: { "content-type": "text/html" } })],
+      [/titles=Expectation&/, () => json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "x" }] } })],
+      [/wbsearchentities/, () => json({ search: [{ id: "Q1", label: "expected value", description: "average" }, { id: "Q2", label: "expectation", description: "belief" }] })],
+      [/wbgetentities/, () => json({ entities: {} })],
+    ];
+    const id = add("Expectation");
+    await analyzeNode(id);
+    expect(node(id).senses?.[0].source?.site).toBe("Wikidata");
+    await analyzeNode(id, undefined, undefined, { askAi: true });
+    // The offline AI's own meanings for "Expectation" (no source).
+    expect(node(id).status).toBe("unclear");
+    expect(node(id).senses?.every((s) => !s.source)).toBe(true);
+  });
+
+  it("an install's hint lets the AI pick among several looked-up meanings instead of asking", async () => {
+    routes = [
+      [/proofwiki/, () => new Response("x", { status: 403, headers: { "content-type": "text/html" } })],
+      [/titles=Expectation&/, () => json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "x" }] } })],
+      [/wbsearchentities/, () => json({ search: [{ id: "Q1", label: "expected value", description: "average" }, { id: "Q2", label: "expectation", description: "belief" }] })],
+      [/wbgetentities/, () => json({ entities: {} })],
+    ];
+    const id = add("Expectation");
+    await analyzeNode(id, undefined, "needed by Variance (probability)");
+    expect(node(id).senses?.some((s) => s.source)).not.toBe(true);
+  });
+
+  it("without AI set up, a chosen looked-up meaning is kept instead of failing", async () => {
+    useSettings.setState({ provider: "siliconflow", configs: { ...useSettings.getState().configs, siliconflow: {} } });
+    routes = [
+      [/proofwiki/, () => new Response("x", { status: 403, headers: { "content-type": "text/html" } })],
+      [/titles=Expectation&/, () => json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "x" }] } })],
+      [/wbsearchentities/, () => json({ search: [{ id: "Q1", label: "expected value", description: "average" }, { id: "Q2", label: "expectation", description: "belief" }] })],
+      [/wbgetentities/, () => json({ entities: {} })],
+    ];
+    const id = add("Expectation");
+    await analyzeNode(id);
+    chooseSense(store().activeId, id, node(id).senses![1]);
+    await vi.waitFor(() => expect(node(store().graphs[store().activeId].nodes[0].id).status).toBe("ok"));
+    expect(store().settingsOpen).toBe(false);
+  });
+
   it("falls back to the AI when nothing is found", async () => {
     const id = add("Homomorphism");
     await analyzeNode(id);

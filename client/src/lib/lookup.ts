@@ -75,13 +75,19 @@ export function lookupReady(): boolean {
  * Meanings of `name` from the enabled encyclopedias (up to `max`), cached per name and language. An empty list
  * means nothing was found (or every site refused); the caller then asks the AI.
  */
-export async function lookupDefinitions(name: string, max: number, signal?: AbortSignal): Promise<LookupSense[]> {
+export async function lookupDefinitions(
+  name: string,
+  max: number,
+  signal?: AbortSignal,
+  /** `fresh`: skip the cache ("Look up again" should see today's page). */
+  opts: { fresh?: boolean } = {},
+): Promise<LookupSense[]> {
   if (!lookupReady()) return [];
   const lang = lookupLanguage(useSettings.getState().language, name);
   const sites = activeSites();
   const key = `${lang}:${sites.join(",")}:${max}:${normalizeName(name)}`;
   const hit = loadCache()[key];
-  if (hit && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return hit.senses;
+  if (hit && !opts.fresh && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return hit.senses;
   const res = await lookupConcept({ name, lang, sites, max }, { signal });
   for (const s of res.blocked) paused[s] = Date.now() + PAUSE_MS;
   // Only a clean answer is cached: a miss caused by a refusing site should be retried later.

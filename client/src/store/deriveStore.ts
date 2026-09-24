@@ -10,6 +10,7 @@ import {
   nextHintNumber,
   numberReferences,
   setCheck,
+  stepsForTutor,
   toStepCheck,
   type Derivation,
   type GraphPlan,
@@ -90,6 +91,8 @@ const graphs = () => useGraphStore.getState();
 
 /** Busy keys (status bar, cancel). */
 export const DERIVE_KEYS = { read: "derive-read", problems: "derive-problems", hint: "derive-hint", check: "derive-check" };
+/** Finding problems runs per sheet, so importing a second sheet doesn't cancel the first one's. */
+export const problemsKey = (docId: string) => `${DERIVE_KEYS.problems}:${docId}`;
 
 // Search index over the reference documents, rebuilt when the set of documents or their text changes.
 let index: { key: string; index: Index } | null = null;
@@ -143,6 +146,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
 
     close() {
       for (const key of Object.values(DERIVE_KEYS)) cancelTask(key);
+      for (const d of get().docs) cancelTask(problemsKey(d.id));
       set({ open: false, reader: null });
     },
 
@@ -212,6 +216,8 @@ export const useDerive = create<DeriveStore>()((set, get) => {
         if (!pages.length) return graphs().setToast(t("dt.emptyDoc", { title }), "error");
         meta.pages = pages.length;
         if (get().available) await db.putDoc(meta, pages).catch(() => set({ available: false }));
+        // Another project was opened meanwhile: the document is saved with its own project, not shown in this one.
+        if (get().projectId !== projectId) return;
         set({ docs: [meta, ...get().docs], pages: { ...get().pages, [meta.id]: pages } });
         const unread = pages.filter((p) => p.via === "none").length;
         graphs().setToast(
@@ -227,6 +233,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
     },
 
     async deleteDoc(id) {
+      cancelTask(problemsKey(id));
       const { [id]: _gone, ...pages } = get().pages;
       set({
         docs: get().docs.filter((d) => d.id !== id),
@@ -271,12 +278,13 @@ export const useDerive = create<DeriveStore>()((set, get) => {
         batches.at(-1)!.push({ page: p.page, text });
         size += text.length;
       }
-      const found = await withBusy(DERIVE_KEYS.problems, t("dt.task.problems", { title: doc.title }), async (signal) => {
+      const found = await withBusy(problemsKey(docId), t("dt.task.problems", { title: doc.title }), async (signal) => {
         const out: SheetProblem[] = [];
         for (const b of batches.filter((b) => b.length)) out.push(...(await api.splitProblems({ pages: b }, signal)).problems);
         return out;
       });
-      if (!found) return;
+      // Deleted (or another project opened) meanwhile: writing it back would bring a deleted sheet back.
+      if (!found || !get().docs.some((d) => d.id === docId)) return;
       const updated = { ...doc, problems: found };
       set({ docs: get().docs.map((d) => (d.id === docId ? updated : d)) });
       if (get().available) db.updateDoc(updated).catch(() => undefined);
@@ -307,7 +315,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
       const { refs, resolve } = await references(d);
       const res = await withBusy(DERIVE_KEYS.hint, t("dt.task.hint"), (signal) =>
         api.tutorHint(
-          { problem: d.problem.statement, steps: d.steps.map((s) => s.text), references: refs, context: context(), nth: nextHintNumber(d) },
+          { problem: d.problem.statement, steps: stepsForTutor(d.steps), references: refs, context: context(), nth: nextHintNumber(d) },
           signal,
         ),
       );
@@ -325,7 +333,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
       set({ checkingId: stepId });
       const res = await withBusy(DERIVE_KEYS.check, t("dt.task.check"), (signal) =>
         api.checkStep(
-          { problem: d.problem.statement, steps: d.steps.slice(0, at).map((s) => s.text), step: step.text, references: refs, context: context() },
+          { problem: d.problem.statement, steps: stepsForTutor(d.steps.slice(0, at)), step: step.text.slice(0, 4000), references: refs, context: context() },
           signal,
         ),
       ).finally(() => get().checkingId === stepId && set({ checkingId: null }));

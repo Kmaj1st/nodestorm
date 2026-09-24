@@ -1,3 +1,4 @@
+import { normalizeName } from "../model";
 import { getJson, type LookupOptions } from "./http";
 import { definitionText, isDisambiguation, listedDefinitions, titleName, transclusions } from "./wikitext";
 
@@ -9,6 +10,11 @@ export interface LookupSense {
   definition: string;
   aliases: string[];
   source: { site: string; title: string; url: string };
+  /**
+   * The page of exactly this name (or a redirect to it). Otherwise a near match (a prefix or fuzzy search hit, or
+   * one of the meanings a disambiguation page lists), which the user should confirm before it becomes the definition.
+   */
+  exact: boolean;
 }
 
 // ---------- ProofWiki ----------
@@ -47,12 +53,13 @@ async function pwDefinition(title: string, opts: LookupOptions): Promise<{ title
   return definition ? { title: page.title, definition } : null;
 }
 
-const pwSense = (title: string, definition: string): LookupSense => ({
+const pwSense = (title: string, definition: string, exact: boolean): LookupSense => ({
   name: titleName(title),
   domain: "ProofWiki",
   definition,
   aliases: [],
   source: { site: "ProofWiki", title, url: pwUrl(title) },
+  exact,
 });
 
 /**
@@ -64,7 +71,7 @@ export async function proofWiki(name: string, max: number, opts: LookupOptions =
   const page = await pwWikitext(title, opts);
   if (page && !isDisambiguation(page.text)) {
     const d = await pwDefinition(page.title, opts);
-    if (d) return [pwSense(d.title, d.definition)];
+    if (d) return [pwSense(d.title, d.definition, true)];
   }
   let candidates = page ? listedDefinitions(page.text) : [];
   if (!candidates.length) {
@@ -78,7 +85,7 @@ export async function proofWiki(name: string, max: number, opts: LookupOptions =
   const out: LookupSense[] = [];
   for (const t of candidates.slice(0, max)) {
     const d = await pwDefinition(t, opts);
-    if (d) out.push(pwSense(d.title, d.definition));
+    if (d) out.push(pwSense(d.title, d.definition, normalizeName(titleName(d.title)) === normalizeName(name)));
   }
   return out;
 }
@@ -177,7 +184,7 @@ async function pages(lang: string, titles: string[], opts: LookupOptions): Promi
 
 const usable = (p: WikiPage | undefined): p is WikiPage => Boolean(p && !p.missing && !p.pageprops && p.extract?.trim());
 
-const wpSense = (lang: string, p: WikiPage, domain: string, aliases: string[] = []): LookupSense => ({
+const wpSense = (lang: string, p: WikiPage, domain: string, exact: boolean, aliases: string[] = []): LookupSense => ({
   name: p.title,
   domain,
   definition: shortExtract(mathFromExtract(p.extract ?? "")),
@@ -187,6 +194,7 @@ const wpSense = (lang: string, p: WikiPage, domain: string, aliases: string[] = 
     title: p.title,
     url: p.fullurl ?? `https://${lang}.wikipedia.org/wiki/${encodeURIComponent(p.title.replace(/ /g, "_"))}`,
   },
+  exact,
 });
 
 /**
@@ -195,7 +203,7 @@ const wpSense = (lang: string, p: WikiPage, domain: string, aliases: string[] = 
  */
 export async function wikipedia(name: string, lang: string, max: number, opts: LookupOptions = {}): Promise<LookupSense[]> {
   const [direct] = await pages(lang, [name], opts);
-  if (usable(direct)) return [wpSense(lang, direct, direct.description ?? "Wikipedia")];
+  if (usable(direct)) return [wpSense(lang, direct, direct.description ?? "Wikipedia", true)];
   const found = await getJson<{ search?: { id: string; label?: string; description?: string; aliases?: string[] }[] }>(
     "Wikidata",
     `https://www.wikidata.org/w/api.php?${new URLSearchParams({
@@ -216,15 +224,19 @@ export async function wikipedia(name: string, lang: string, max: number, opts: L
   const wanted = articles.filter((a): a is string => Boolean(a));
   // One request for all the articles' intros.
   const got = wanted.length ? await pages(lang, wanted, opts) : [];
+  // Wikidata's search is fuzzy: an item is an exact match only when its label or an alias is the name.
+  const key = normalizeName(name);
   return items.map((it, k) => {
+    const exact = [it.label ?? "", ...(it.aliases ?? [])].some((l) => normalizeName(l) === key);
     const page = got.find((p) => p.title === articles[k]);
-    if (usable(page)) return wpSense(lang, page, it.description!, it.aliases ?? []);
+    if (usable(page)) return wpSense(lang, page, it.description!, exact, it.aliases ?? []);
     return {
       name: it.label ?? name,
       domain: it.description!,
       definition: it.description!,
       aliases: it.aliases ?? [],
       source: { site: "Wikidata", title: it.id, url: `https://www.wikidata.org/wiki/${it.id}` },
+      exact,
     };
   });
 }

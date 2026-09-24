@@ -101,6 +101,15 @@ describe("lookupConcept", () => {
     expect(r.senses.map((s) => s.name)).toEqual(["Kernel of Group Homomorphism", "Kernel of Ring Homomorphism"]);
   });
 
+  it("marks prefix-search hits for a different name as near matches", async () => {
+    const { f } = fakeFetch([
+      [/prefixsearch/, () => json({ query: { prefixsearch: [{ title: "Definition:Normal Subgroup" }] } })],
+      [/page=Definition:Normal Subgroup/, () => parse("Definition:Normal Subgroup", "== Definition ==\nA subgroup invariant under conjugation.")],
+    ]);
+    const r = await lookupConcept({ name: "Normal", lang: "en", sites: ["proofwiki"], max: 3 }, { fetch: f });
+    expect(r.senses.map((s) => [s.name, s.exact])).toEqual([["Normal Subgroup", false]]);
+  });
+
   it("follows a transcluded definition", async () => {
     const { f } = fakeFetch([
       [/page=Definition:Group&/, () => parse("Definition:Group", "== Definition ==\n{{:Definition:Group/Definition 1}}")],
@@ -125,6 +134,7 @@ describe("lookupConcept", () => {
         definition: "In abstract algebra, a normal subgroup is a subgroup that is invariant under conjugation by members of the group.",
         aliases: [],
         source: { site: "Wikipedia", title: "Normal subgroup", url: "https://en.wikipedia.org/wiki/Normal_subgroup" },
+        exact: true,
       },
     ]);
   });
@@ -146,6 +156,7 @@ describe("lookupConcept", () => {
       ["expectation", "belief about the future", "Wikidata"],
     ]);
     expect(r.senses[0].definition).toMatch(/^In probability theory/);
+    expect(r.senses.map((s) => s.exact)).toEqual([false, true]); // "expected value" ≠ "Expectation"; "expectation" = it
   });
 
   it("skips ProofWiki for names in other scripts and asks Wikipedia in the chosen language", async () => {

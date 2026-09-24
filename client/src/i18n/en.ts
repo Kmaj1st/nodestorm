@@ -803,6 +803,7 @@ export const en = {
   "dt.importFailed": "Couldn't import {title}: {error}",
   "dt.noProblems": "No problems found on {title}.",
   "toast.lookupNothing": "Nothing found for “{name}” in the encyclopedias.",
+  "toast.lookupUnavailable": "Look-ups are off or offline, or every source refused recently (see Settings → Definitions).",
   "task.lookup": "Looking up “{name}”…",
   "toast.lookupNoAi": "Definitions come from the encyclopedias. Set up AI in Settings to also check prerequisites.",
   "node.source": "Source",

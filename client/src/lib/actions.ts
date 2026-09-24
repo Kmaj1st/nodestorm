@@ -113,6 +113,8 @@ const cycleText = (graphId: string, ids: string[]) =>
 interface AnalyzeOptions {
   /** Part of a batch (install-all): don't open the "what do you mean?" dialog or warn about cycles; the batch reports. */
   quiet?: boolean;
+  /** "Ask again" in "what do you mean?": go to the AI for meanings, even when the concept has a definition. */
+  askAi?: boolean;
 }
 
 /**
@@ -153,7 +155,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   // Encyclopedias first (ProofWiki, then Wikipedia/Wikidata): a real definition with its source beats a generated
   // one. Nothing found, or every site refused, falls through to the AI below.
   let lookedUp = false;
-  if (!node.definition.trim() && lookupReady()) {
+  if (!node.definition.trim() && !opts.askAi && lookupReady()) {
     let cancelled = false;
     const senses = await withBusy(
       key,
@@ -162,23 +164,29 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       { onError: () => {}, onCancel: () => void ((cancelled = true), handlers.onCancel?.()) },
     );
     if (cancelled) return;
-    const found = (senses ?? []).map((s): Sense => ({ name: s.name, domain: s.domain, definition: s.definition, source: s.source }));
-    if (found.length > 1 && clarify.enabled) {
-      set({ status: "unclear", senses: found });
-      if (!find()) return;
-      if (!opts.quiet) store().setClarifying({ graphId, nodeId });
-      return; // continues in chooseSense once the user picks a meaning
-    }
-    if (found.length) {
-      const [s] = found;
+    const all = senses ?? [];
+    const exact = all.filter((s) => s.exact);
+    const toSense = (s: (typeof all)[number]): Sense => ({ name: s.name, domain: s.domain, definition: s.definition, source: s.source });
+    if (exact.length === 1 && all.length === 1) {
+      // The page of exactly this name (or a redirect to it): take it.
+      const [s] = exact;
       const cur = find();
       const alias = s.name.trim() && normalizeName(s.name) !== normalizeName(node.name) ? [s.name.trim()] : [];
       set({ definition: s.definition, source: s.source, aliases: [...new Set([...(cur?.aliases ?? node.aliases), ...alias])] });
       lookedUp = true;
+    } else if (all.length && clarify.enabled && !hint) {
+      // Several meanings, or only near matches (a search hit for a different name): the user picks, or asks the AI.
+      set({ status: "unclear", senses: all.map(toSense) });
+      if (!find()) return;
+      if (!opts.quiet) store().setClarifying({ graphId, nodeId });
+      return; // continues in chooseSense once the user picks a meaning
     }
+    // Otherwise (nothing found; a choice without a dialog; or an install whose hint the AI can use to pick the
+    // meaning) the AI works out the meaning below.
   }
   // Without AI set up, a looked-up definition is still worth keeping: finish here instead of opening Settings.
-  if (lookedUp && !isReady(useSettings.getState())) {
+  const fromEncyclopedia = lookedUp || Boolean(find()?.source?.url && find()?.definition.trim());
+  if (fromEncyclopedia && !isReady(useSettings.getState())) {
     set({ status: "ok" });
     if (!noAiNoticeShown) {
       noAiNoticeShown = true;
@@ -186,7 +194,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     }
     return;
   }
-  if (!lookedUp && !node.definition.trim() && clarify.enabled) {
+  if (!lookedUp && (!node.definition.trim() || opts.askAi) && clarify.enabled) {
     const g = graph(graphId);
     const res = await withBusy(
       key,
@@ -279,6 +287,8 @@ export async function resolveCycle(
 }
 
 /** The user picked (or wrote) a meaning for an ambiguous node. */
+export const relookupKey = (graphId: string, nodeId: string) => `relookup:${graphId}:${nodeId}`;
+
 /**
  * "Look up again": ask the encyclopedias for this concept's definition and replace it (one undo step). Several
  * meanings go to "what do you mean?"; nothing found leaves the concept as it is and says so.
@@ -287,14 +297,15 @@ export async function relookup(nodeId: string, graphId = store().activeId) {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
+  if (!lookupReady()) return store().setToast(t("toast.lookupUnavailable"), "info");
   const clarify = useSettings.getState().clarify;
-  const senses = await withBusy(`relookup:${graphId}:${nodeId}`, t("task.lookup", { name: node.name }), (signal) =>
-    lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal),
+  const senses = await withBusy(relookupKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) =>
+    lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true }),
   );
   if (!senses) return;
   if (!senses.length) return store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
   const found = senses.map((s): Sense => ({ name: s.name, domain: s.domain, definition: s.definition, source: s.source }));
-  if (found.length > 1 && clarify.enabled) {
+  if ((found.length > 1 || !senses[0].exact) && clarify.enabled) {
     // Keep the old name for chooseSense to compare against; the choice replaces definition and source.
     store().mutate((g) => ops.updateNode(g, nodeId, { status: "unclear", senses: found }), graphId);
     store().setClarifying({ graphId, nodeId });

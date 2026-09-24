@@ -38,6 +38,7 @@ export function Workspace() {
   const d = useDerive((s) => s.sessions.find((x) => x.id === s.currentId))!;
   const update = useDerive((s) => s.update);
   const hinting = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.hint]));
+  const checking = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.check]));
   const viewing = useGraphStore((s) => Boolean(s.view));
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
@@ -46,7 +47,8 @@ export function Workspace() {
   const src = d.problem.source;
 
   const add = (check: boolean) => {
-    if (!draft.trim()) return;
+    // One check at a time: a second would cancel the first, leaving that step without a verdict.
+    if (!draft.trim() || (check && checking)) return;
     const r = addStep(d, draft);
     update(r.derivation);
     setDraft("");
@@ -106,6 +108,7 @@ export function Workspace() {
               }
             }}
             rows={3}
+            maxLength={4000}
             placeholder={t("dt.steps.placeholder")}
             aria-label={t("dt.steps.label", { n: d.steps.length + 1 })}
           />
@@ -114,7 +117,7 @@ export function Workspace() {
               <Icon icon={Plus} size={14} />
               {t("dt.steps.add")}
             </button>
-            <button className="primary" onClick={() => add(true)} disabled={!draft.trim() || viewing} title={t("dt.steps.addCheckTitle")}>
+            <button className="primary" onClick={() => add(true)} disabled={!draft.trim() || viewing || checking} title={t("dt.steps.addCheckTitle")}>
               <Icon icon={ListChecks} size={14} />
               {t("dt.steps.addCheck")}
             </button>
@@ -188,7 +191,7 @@ function Step({ step, n }: { step: DerivStep; n: number }) {
               setEditing(null);
             }}
           >
-            <textarea value={editing} onChange={(e) => setEditing(e.target.value)} rows={3} aria-label={t("dt.steps.edit", { n })} autoFocus />
+            <textarea value={editing} onChange={(e) => setEditing(e.target.value)} rows={3} maxLength={4000} aria-label={t("dt.steps.edit", { n })} autoFocus />
             <div className="derive-row">
               <button type="button" className="small-btn" onClick={() => setEditing(null)}>{t("common.cancel")}</button>
               <button type="submit" className="small-btn primary" disabled={!editing.trim()}>{t("common.save")}</button>

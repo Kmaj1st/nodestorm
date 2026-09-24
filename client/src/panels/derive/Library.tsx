@@ -3,7 +3,7 @@ import { useRef, useState } from "react";
 import { useT } from "../../i18n";
 import { derivationTitle, isSolved } from "../../lib/derivation";
 import type { DocMeta } from "../../lib/docDb";
-import { useDerive, DERIVE_KEYS, type DocWithProblems } from "../../store/deriveStore";
+import { problemsKey, useDerive, type DocWithProblems } from "../../store/deriveStore";
 import { useGraphStore } from "../../store/graphStore";
 import { Icon } from "../../ui/Icon";
 import { MathText } from "../MathText";
@@ -157,7 +157,7 @@ function DocRow({ doc }: { doc: DocWithProblems }) {
 /** A problem sheet: its problems (once found), each ready to start. */
 function SheetEntry({ doc }: { doc: DocWithProblems }) {
   const t = useT();
-  const finding = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.problems]));
+  const finding = useGraphStore((s) => Boolean(s.busy[problemsKey(doc.id)]));
   const start = useDerive((s) => s.start);
   return (
     <div className="derive-sheet">
