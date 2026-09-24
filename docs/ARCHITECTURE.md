@@ -99,8 +99,8 @@ classDiagram
   does to `a`. Each is a `DirRel` (`kind`, a short phrase or `"none"`, plus an `explanation`). The canvas draws one
   line with an arrowhead at each end; the arrowhead at `b` opens `aToB`. `graphOps.upsertRelation` keeps this
   invariant when a relation is re-created in the other orientation (it swaps the directions).
-- **Relation origin** (`RelationOrigin`): where it came from. `mix` (Mix ⇄, and the default for old data),
-  `dependency` (created by `graphOps.link` when a prerequisite is linked; drawn dashed), `derive` (Derive ✦ proposal)
+- **Relation origin** (`RelationOrigin`): where it came from. `mix` (Mix, and the default for old data),
+  `dependency` (created by `graphOps.link` when a prerequisite is linked; drawn dashed), `derive` (Derive proposal)
   and `extract` (Extract from text). `upsertRelation` never downgrades a richer origin to `dependency`.
 - **Graph.** A main graph, or a **sandbox** when `parentId` is set (the graph it was forked from, possibly another
   sandbox). Node and relation ids are preserved by `fork` so `merge` can match them.
@@ -244,7 +244,7 @@ sequenceDiagram
 - **`withBusy(key, label, fn, handlers)`** (`client/src/lib/actions.ts`): wraps every AI call as a visible,
   cancellable task. It owns one `AbortController` per busy key (a new run with the same key aborts the old one),
   registers `busy[key]` for the status bar, drops answers that arrive after a cancel, and turns errors into a toast
-  (or the caller's `onError`). `cancelTask(key)` is what the status bar's ✕ and dialogs' Cancel call. Busy keys
+  (or the caller's `onError`). `cancelTask(key)` is what the status bar's cancel (X) button and dialogs' Cancel call. Busy keys
   follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
   `explain:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`.
 - **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
@@ -395,8 +395,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
   `InspectorSheet` (a collapsible bottom sheet under 800px), toast, and the dialogs.
 - `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Derive, Tidy/Find/Focus/View, graph/sandbox
-  selector and fork, Settings, File ▾ (import, exports incl. PNG via lazily imported `html-to-image`, Extract,
-  Quiz, Share, Versions). One row from 1200px up; under 800px the less-used groups fold into ☰.
+  selector and fork, Settings (an AI status chip), File (import, exports incl. PNG via lazily imported `html-to-image`, Extract,
+  Quiz, Share, Versions). One row from 1200px up; under 800px the less-used groups fold into the More tools menu.
 - `client/src/graph/GraphCanvas.tsx`: the React Flow canvas. **Performance notes:**
   - React Flow node and edge objects are kept in local state/cache and **reused by identity** when their concept,
     relation, classes and visibility are unchanged, so an AI status update re-renders only that node; the edges array
@@ -424,6 +424,19 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `<html data-theme>` from the preference or `prefers-color-scheme`, and React Flow gets `colorMode`. Feature CSS lives
   next to its component (`client/src/graph/mastery.css`, `client/src/panels/quiz.css`,
   `client/src/panels/versions.css`, `client/src/panels/onboarding.css`).
+  - **Design tokens** (top of `styles.css`): spacing `--space-1..5` (4/8/12/16/24), radius `--radius-sm/md/lg`
+    (6/8/12), type `--text-xs..xl` (12/13/14/16/20), `--font-sans`, shadows `--shadow-sm/md/lg`, `--focus` /
+    `--focus-ring`, and the colour roles (`--panel`, `--surface`, `--hover`, `--muted`, `--border(-strong)`,
+    `--accent(-soft/-border)`, status colours). Light and dark each set every colour; text roles meet WCAG AA on the
+    backgrounds they're used on (the e2e axe audit checks both themes). New CSS uses tokens, not literal values.
+  - **Buttons**: plain `<button>` is the secondary style (32px); `.primary`, `.danger`, `.icon-btn` (ghost, icon
+    only), `.link`, and `.small-btn` (28px, dense places). Icon-only buttons need an `aria-label` and a `title`.
+  - **Icons**: SVGs from `lucide-react`, always through `<Icon icon={X} />` (`client/src/ui/Icon.tsx`):
+    `aria-hidden`, 16px (14px in dense places), stroke 1.75, `currentColor`. Import each icon by name so the bundle
+    keeps only those used. No emoji or pictographic characters as icons, in components or in i18n strings; arrows in
+    prose ("A → B") and key names in the shortcuts list (⌘ ⇧ ⌥ ⌫ ↩) are typography, not icons.
+  - **Dialogs**: `<Modal title=…>` draws the header (title and a close button named "Close"); put the actions last
+    in a `.form__actions` row, which sticks to the bottom of a long dialog. So don't add a second "Close" button.
 - **Math** (LaTeX via KaTeX): `client/src/lib/math.ts` is the pure delimiter parser (`splitMath`: `$…$`, `$$…$$`,
   `\(…\)`, `\[…\]`, `\$` escapes, a Pandoc-style currency rule; unbalanced delimiters stay text).
   `client/src/panels/MathText.tsx` renders a string with its formulas typeset; text without a formula never loads

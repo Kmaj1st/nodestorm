@@ -7,6 +7,15 @@ Everything below landed on `claude/hopeful-pascal-bc67up` in one day. Most featu
 axe accessibility audit green after each merge. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits
 together.
 
+### UI refresh
+- **No emoji or pictographic symbols** in the interface: icons are SVGs from `lucide-react` (one `Icon` component,
+  decorative and `aria-hidden`), and translated strings no longer carry symbols ("Mix", "Derive", "File").
+- **Design tokens** for spacing, radius, type, shadows and focus; light and dark palettes tuned separately.
+- Consistent buttons (primary, secondary, ghost/icon, danger; 32px and 28px dense), a grouped toolbar with an AI
+  status chip, calmer concept cards with status pills, a sticky inspector header with chips and rows, dialogs with a
+  standard header (title and close button) and a sticky footer, and restyled menus, toasts, status bar, welcome card,
+  tour, quiz, versions, flashcards and walkthrough.
+
 ### The core idea
 - A concept graph: add concepts by name, or describe one and let the AI name it.
 - The AI checks each concept's **prerequisites**. Missing ones **block** it until you install them.

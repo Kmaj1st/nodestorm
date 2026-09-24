@@ -15,7 +15,7 @@ npm install
 npm run web        # UI only: http://localhost:5173
 ```
 
-Click **⚙ Set up AI** in the toolbar (afterwards it shows the chosen model), choose a provider and paste your API key.
+Click **Set up AI** in the toolbar (the status chip at the right) (afterwards it shows the chosen model), choose a provider and paste your API key.
 The model list loads straight from the provider's API; start typing to filter it, then pick a model. To try the app
 without a key, choose **Offline demo**: it has a tiny built-in abstract-algebra knowledge base.
 
@@ -28,7 +28,7 @@ no key needed) or an empty graph.
 
 - **Naming.** If you can only *describe* something, the AI suggests the established names and definitions for it.
   Ambiguous names ("Expectation") get a **what do you mean?** choice of meanings.
-- **Mix ⇄.** Select two concepts and the AI finds how they relate, **separately in each direction**. Each relation line
+- **Mix.** Select two concepts and the AI finds how they relate, **separately in each direction**. Each relation line
   has an arrowhead at both ends: the one at B shows what A does to B, the one at A what B does to A.
 - **Dependencies.** Every new concept is checked for direct prerequisites. Those already in the graph are linked with
   dashed dependency edges; missing ones **block** the concept until you **Install** them, which creates the missing
@@ -45,8 +45,8 @@ no key needed) or an empty graph.
     check added goes). A notice says which link went and why, and Ctrl+Z brings it back. Turn this off in Settings →
     *Dependency cycles* to only get a warning; the inspector's warning also has **Resolve with AI** and per-link
     **Remove this link**.
-- **Derive ✦** proposes new concepts from the selected ones, with their relations.
-- **Extract from text** (**File ▾ → Extract from text…**) takes pasted notes, a book paragraph or a messy list (or a
+- **Derive** proposes new concepts from the selected ones, with their relations.
+- **Extract from text** (**File → Extract from text…**) takes pasted notes, a book paragraph or a messy list (or a
   dropped / loaded `.txt` or `.md` file), up to 12,000 characters, with an optional *focus* hint. The AI lists
   candidate concepts (definition plus a short supporting quote), the relations (both directions) and prerequisites the
   text states. You review them first: candidates already in the graph (by name, plural or alias) are unticked and
@@ -73,7 +73,7 @@ no key needed) or an empty graph.
   **Use summary as definition** copies its summary. Each concept also has a free-text **My notes** field. Both appear
   in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias
   matches).
-- **Quiz me** (**File ▾ → Quiz me…** for the whole graph or the selected concept's learning path, or the inspector's
+- **Quiz me** (**File → Quiz me…** for the whole graph or the selected concept's learning path, or the inspector's
   **Quiz me on this and its prerequisites**). Questions come one concept at a time, prerequisites first. Kinds:
   *recall*, *apply* (use it on an example), *connect* (how it builds on a prerequisite) or *mixed*, which moves from
   recall to the others as you improve. Tick *Multiple choice* for four options instead of free recall with **Show
@@ -84,7 +84,7 @@ no key needed) or an empty graph.
   unclear concepts are skipped and listed with the reason, and a summary ends the quiz. Grades are never undo steps.
   Mastery is kept in JSON exports and imports but left out of share links (it is your own progress, like notes and
   explanations); the share viewer has no quiz.
-- **Walkthrough** (**File ▾ → Walkthrough…**, or the inspector's **Walk through the learning path**): a full-screen,
+- **Walkthrough** (**File → Walkthrough…**, or the inspector's **Walk through the learning path**): a full-screen,
   read-only presentation, one concept per slide in study order (←/→, Space, Home/End); it works in the share viewer too.
 
 ### Organising
@@ -93,15 +93,15 @@ no key needed) or an empty graph.
   left of the toolbar switches, creates, renames, duplicates and deletes them; the graph selector lists only the
   current project's graphs. A new, empty project offers **Load example: Group theory**, built offline; one of its
   concepts is blocked on a missing prerequisite, so you can try **Install** straight away.
-- **Sandboxes.** **Fork sandbox** (🧪+ next to the graph selector) copies the current graph. Derive, mix and install in
+- **Sandboxes.** **Fork sandbox** (the branch icon next to the graph selector) copies the current graph. Derive, mix and install in
   the copy without touching the original, then **Merge back** or **Discard** from the sandbox banner.
 - **Layout and navigation.** New concepts appear in a free spot near what you're looking at (or near the concept they
   relate to) and the view pans to them. **Tidy** (⊞) arranges the graph in layers, prerequisites above their
   dependents. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, selects it and centres on it.
 - **Bigger graphs.**
   - **Focus** (◎, or **F** on the canvas) shows only the selected concept and what is within 1–3 relations of it.
-    Selecting another concept moves the focus; **Esc** or the focus control's ✕ shows everything again.
-  - **View** (👁 ▾) hides relation kinds (dependency links, mixed, derived or extracted relations) or relation labels;
+    Selecting another concept moves the focus; **Esc** or the focus control's close (X) button shows everything again.
+  - **View** (the eye icon) hides relation kinds (dependency links, mixed, derived or extracted relations) or relation labels;
     **To-do only** leaves just blocked, unclear and failed concepts. These choices are remembered in this browser.
     Hidden concepts and relations can't be deleted with the Delete key.
   - Relation labels are left out when zoomed far out, and from 150 concepts only what's on screen is rendered.
@@ -109,7 +109,7 @@ no key needed) or an empty graph.
 - **Versions.** Undo history is in memory only, so each project also keeps restore points. One is saved automatically
   before big changes (**Install all**, adding an **Extract from text** result, merging or discarding a sandbox,
   **Tidy**, restoring a version) and every 10 minutes while you edit, never twice for an unchanged project.
-  **File ▾ → Save snapshot…** saves a named one with an optional label. **File ▾ → Versions…** lists them, newest
+  **File → Save snapshot…** saves a named one with an optional label. **File → Versions…** lists them, newest
   first. **Compare** says what restoring would bring back, remove or change in the main graph; **Preview** opens the
   version read-only; **Restore** replaces the project (main graph and sandboxes) after saving the current state as
   *Before restoring a version*, so a restore can be undone the same way; **Restore as new project** leaves the current
@@ -122,7 +122,7 @@ no key needed) or an empty graph.
 ### Sharing and export
 
 Projects autosave to your browser's localStorage (data from earlier versions becomes the project *My brainstorm*).
-**File ▾** imports and exports:
+**File** imports and exports:
 
 - **JSON (this project)**: the current project, including sandboxes. **Import JSON…** adds a file as a new project and
   never overwrites an existing one. Import repairs files from older or newer versions and hand-edited files instead
@@ -171,11 +171,11 @@ renders the PNGs from them.
 
 ### Interface, languages and accessibility
 
-- **Settings** (⚙) → *Interface*: theme **Auto** (follows the system), **Light** or **Dark**, and the **interface
+- **Settings** (the AI status chip) → *Interface*: theme **Auto** (follows the system), **Light** or **Dark**, and the **interface
   language**, English or 中文 (Simplified Chinese), by default following the browser. This only changes menus,
   buttons and messages; the language the AI writes in is the separate **AI answers in** setting (see below).
 - The toolbar keeps to one row from 1200px up; icon buttons explain themselves in a tooltip. On phones the less-used
-  buttons fold into a **☰** menu and the inspector becomes a collapsible bottom sheet.
+  buttons fold into a **More tools** menu and the inspector becomes a collapsible bottom sheet.
 - Everything works from the keyboard (press **?** for the shortcuts): dialogs trap focus and close with Escape, and
   Tab reaches each relation arrowhead (Enter opens it).
 - The tour (welcome card, or **Show tour again** in the **?** dialog) is a few popovers on the real controls (Add
