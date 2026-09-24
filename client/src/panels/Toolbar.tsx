@@ -4,9 +4,11 @@ import { toPng } from "html-to-image";
 import { useEffect, useRef, useState } from "react";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
+import { projectGraphs } from "../lib/projects";
 import { useTheme, type ThemePref } from "../lib/theme";
-import { activeGraph, canRedo, canUndo, useGraphStore } from "../store/graphStore";
+import { activeGraph, canRedo, canUndo, currentProject, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
+import { ProjectMenu } from "./ProjectMenu";
 
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
   const s = useGraphStore();
@@ -34,13 +36,14 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
     ? `Resolve ${blocked.map((n) => n.name).join(", ")} first (install missing dependencies / choose a meaning)`
     : undefined;
 
-  const sandboxes = Object.values(s.graphs).filter((g) => g.parentId);
-  const main = s.graphs[s.mainId];
+  // The graph selector lists only the current project's graphs: its main graph, then its sandboxes.
+  const [main, ...sandboxes] = projectGraphs(s, s.projects[s.projectId]);
 
   const doImport = async (file: File) => {
     try {
-      const fixes = s.importJson(await file.text());
-      if (fixes.length) s.setToast(`Imported with repairs: ${fixes.join("; ")}.`);
+      const { name, fixes } = s.importJson(await file.text());
+      const repairs = fixes.length ? ` Repairs: ${fixes.join("; ")}.` : "";
+      s.setToast(`Imported as a new project “${name}”. Your other projects are unchanged.${repairs}`);
     } catch (e) {
       s.setToast(`Import failed: ${e instanceof Error ? e.message : e}`);
     }
@@ -49,6 +52,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
       <div className="toolbar__brand">NodeStorm</div>
+      <ProjectMenu />
 
       <div className="toolbar__group toolbar__history">
         <button onClick={() => s.undo()} disabled={!undoable} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
@@ -149,7 +153,7 @@ function download(name: string, content: Blob | string) {
 
 const text = (s: string, type: string) => new Blob([s], { type: `${type};charset=utf-8` });
 
-/** Export dropdown: all graphs as JSON, or the active graph as Markdown notes, Mermaid or a PNG image. */
+/** Export dropdown: the current project as JSON, or the active graph as Markdown notes, Mermaid or a PNG image. */
 function ExportMenu() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -157,6 +161,7 @@ function ExportMenu() {
   const setToast = useGraphStore((st) => st.setToast);
   const exportJson = useGraphStore((st) => st.exportJson);
   const graph = useGraphStore(activeGraph);
+  const project = useGraphStore(currentProject);
 
   useEffect(() => {
     if (!open) return;
@@ -183,9 +188,9 @@ function ExportMenu() {
 
   const items: { label: string; title: string; action: () => void | Promise<void> }[] = [
     {
-      label: "JSON (all graphs)",
-      title: "Everything, including sandboxes. Import it again later.",
-      action: () => download(`nodestorm-${new Date().toISOString().slice(0, 10)}.json`, text(exportJson(), "application/json")),
+      label: "JSON (this project)",
+      title: "This project's graphs, including sandboxes. Importing it later adds it as a new project.",
+      action: () => download(`${exportFileName({ ...graph, name: project.name })}.json`, text(exportJson(), "application/json")),
     },
     {
       label: "Markdown notes",

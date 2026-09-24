@@ -489,6 +489,52 @@ try {
   await page.getByRole("button", { name: /^Cancel:/ }).click();
   await waitBadge("Semigroup", "failed – retry", 3000);
 
+  console.log("Projects");
+  const projectButton = page.getByRole("button", { name: /^Project: / });
+  const projectMenu = async (item) => {
+    await projectButton.click();
+    // Commands are menuitems; projects (other than the current one, marked ✓) are menuitemradios.
+    const role = ["New project", "Rename…", "Duplicate", "Delete…"].includes(item) ? "menuitem" : "menuitemradio";
+    await page.getByRole("menu", { name: "Projects" }).getByRole(role, { name: item, exact: true }).click();
+  };
+  const nodeCount = () => page.locator(".react-flow__node").count();
+  assert((await projectButton.getAttribute("aria-label")) === "Project: My brainstorm", "existing work lives in the first project");
+  const firstCount = await nodeCount();
+  await projectMenu("New project");
+  await page.getByLabel("Project name").press("Enter"); // keep the suggested name
+  await page.locator(".canvas__empty").waitFor();
+  assert((await nodeCount()) === 0 && (await projectButton.getAttribute("aria-label")) === "Project: Untitled project", "a new project starts with an empty canvas");
+  assert((await page.getByLabel("Graph").locator("option").count()) === 1, "the graph selector lists only this project's graphs");
+  await page.getByRole("button", { name: "Load example: Group theory" }).click();
+  await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+  assert((await projectButton.getAttribute("aria-label")) === "Project: Group theory", "the example builds 7 concepts offline and names the project");
+  assert((await node("First Isomorphism Theorem").textContent()).includes("missing: Isomorphism"), "the example has a blocked concept to install");
+  await node("First Isomorphism Theorem").click();
+  await page.getByTestId("install-Isomorphism").click();
+  await waitBadge("First Isomorphism Theorem", "ready");
+  assert((await nodeCount()) === 8, "installing the missing prerequisite unblocks it");
+  await page.screenshot({ path: `${shots}10-example.png` });
+
+  await projectMenu("My brainstorm");
+  await node("Quotient Group").waitFor();
+  assert((await nodeCount()) === firstCount, "switching back shows the first project's concepts");
+  await projectMenu("Rename…");
+  await page.getByLabel("Project name").fill("Algebra notes");
+  await page.getByLabel("Project name").press("Enter");
+  await page.reload();
+  await node("Quotient Group").waitFor();
+  assert((await projectButton.getAttribute("aria-label")) === "Project: Algebra notes", "rename survives reload");
+
+  await projectMenu("Group theory");
+  await node("Kernel").waitFor();
+  page.once("dialog", (d) => d.accept());
+  await projectMenu("Delete…");
+  await node("Quotient Group").waitFor();
+  await projectButton.click();
+  const left = await page.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio").allTextContents();
+  assert(JSON.stringify(left) === JSON.stringify(["✓ Algebra notes"]), "deleting the example project leaves only the first one, now current");
+  await page.keyboard.press("Escape");
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);
