@@ -112,8 +112,8 @@ e2e/      Playwright smoke test (runs against the mock provider)
 ```bash
 npm run typecheck
 npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links
-npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
-npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker, offline start and the update notice
+npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings and an axe (WCAG A/AA) audit
+npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker (all chunks precached), offline start and the update notice
 ```
 
 All of these use the offline demo AI. To check a **real** provider and model end to end, put its key in `server/.env` and run:

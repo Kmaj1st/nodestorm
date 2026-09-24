@@ -46,7 +46,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
 
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
-      <div className="toolbar__brand">NodeStorm</div>
+      <h1 className="toolbar__brand">NodeStorm</h1>
       {viewing ? <span className="toolbar__shared">{t("toolbar.sharedGraph")}</span> : <ProjectMenu />}
 
       {!viewing && (
