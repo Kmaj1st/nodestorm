@@ -267,6 +267,28 @@ export const QuizResponse = z.object({
 });
 export type QuizResponse = z.infer<typeof QuizResponse>;
 
+/** One "from needs to" prerequisite link on a dependency cycle, with the reason it was added. */
+export const CycleLink = z.object({
+  from: NodeBrief,
+  to: NodeBrief,
+  reason: z.string().default(""),
+});
+export type CycleLink = z.infer<typeof CycleLink>;
+
+/** A dependency cycle (A needs B … needs A) to break: the links in order, each "from" needing "to". */
+export const ResolveCycleRequest = z.object({
+  links: z.array(CycleLink).min(2).max(12),
+});
+export type ResolveCycleRequest = z.infer<typeof ResolveCycleRequest>;
+
+export const ResolveCycleResponse = z.object({
+  /** Indexes (into `links`) of the links that are wrong and should be removed; at least one. */
+  remove: z.array(z.number().int().min(0)).min(1),
+  /** One or two sentences on why, shown to the user. */
+  reason: z.string(),
+});
+export type ResolveCycleResponse = z.infer<typeof ResolveCycleResponse>;
+
 /** Longest text "Extract from text" accepts (characters): a few pages, which fits every provider's context. */
 export const EXTRACT_MAX_CHARS = 12_000;
 

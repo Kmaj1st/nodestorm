@@ -47,6 +47,17 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
     aliases: ["ker"],
     deps: [{ name: "Homomorphism", role: "uses", reason: "The kernel is defined for a homomorphism." }],
   },
+  // Two entries that name each other as prerequisites, so the offline demo can produce a dependency cycle.
+  chicken: {
+    definition: "A domesticated bird that hatches from an egg.",
+    aliases: [],
+    deps: [{ name: "Egg", role: "uses", reason: "A chicken hatches from an egg." }],
+  },
+  egg: {
+    definition: "An oval reproductive body laid by a bird, from which a chick hatches after incubation.",
+    aliases: [],
+    deps: [{ name: "Chicken", role: "uses", reason: "Eggs are laid by chickens." }],
+  },
   "first isomorphism theorem": {
     definition: "For a homomorphism $\\varphi: G \\to H$, $G / \\ker\\varphi$ is isomorphic to $\\operatorname{im}\\varphi$.",
     aliases: ["fundamental homomorphism theorem"],
@@ -148,6 +159,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")));
       case "extract":
         return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? []));
+      case "resolveCycle":
+        return JSON.stringify(this.resolveCycle(inp.links ?? []));
       case "quiz":
         return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
       default:
@@ -163,6 +176,22 @@ export class MockProvider implements Provider {
     if (d.includes("identity") && d.includes("send")) return { candidates: [pick("kernel")] };
     const words = desc.split(/\s+/).filter(Boolean).slice(0, 3).join(" ");
     return { candidates: [{ name: title(words || "Unnamed idea"), definition: desc, aliases: [] }] };
+  }
+
+  /**
+   * Offline answer: drop the link whose prerequisite is the "bigger" idea (longer definition, i.e. the less basic
+   * concept) — a stand-in for judgement that's deterministic for tests.
+   */
+  private resolveCycle(links: { from: { name: string; definition?: string }; to: { name: string; definition?: string } }[]) {
+    let worst = 0;
+    links.forEach((l, i) => {
+      if ((l.to.definition ?? "").length > (links[worst].to.definition ?? "").length) worst = i;
+    });
+    const l = links[worst];
+    return {
+      remove: [worst],
+      reason: l ? `"${l.to.name}" builds on "${l.from.name}", not the other way round.` : "No link to remove.",
+    };
   }
 
   private clarify(name: string, count: number) {

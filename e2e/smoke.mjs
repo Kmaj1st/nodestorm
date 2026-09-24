@@ -1460,6 +1460,37 @@ try {
     await viewer.close();
   }
 
+  console.log("Cycle resolution");
+  {
+    // Offline demo in browser mode. Its Chicken and Egg need each other, so adding both closes a cycle.
+    const st = await openSettings();
+    await st.getByText("Directly from this browser").click();
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Chicken");
+    await waitBadge("Chicken", "blocked"); // waiting for Egg
+    await addByName("Egg");
+    await page.locator(".toast").filter({ hasText: "Broke a dependency cycle" }).waitFor();
+    assert(
+      (await page.locator(".toast").textContent()).includes("“Chicken” needs “Egg”"),
+      "a check that closes a cycle resolves it automatically and says which link went, and why",
+    );
+    await node("Egg").click();
+    assert((await page.getByTestId("cycle-warning").count()) === 0, "…so no cycle is left");
+    await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("Control+z");
+    await node("Egg").click();
+    await page.getByTestId("cycle-warning").waitFor();
+    assert(true, "Ctrl+Z brings the removed link (and the cycle) back");
+    await audit("inspector with a dependency cycle warning");
+    await page.getByTestId("resolve-cycle").click();
+    await page.getByTestId("cycle-warning").waitFor({ state: "detached" });
+    assert(true, "“Resolve with AI” in the inspector breaks it again");
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

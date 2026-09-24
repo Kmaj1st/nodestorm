@@ -148,3 +148,32 @@ describe("structured output retry", () => {
     expect(seen[1].at(-1)!.content).toMatch(/invalid/);
   });
 });
+
+describe("resolveCycle task", () => {
+  const links = [
+    { from: { name: "Chicken", definition: "a bird" }, to: { name: "Egg", definition: "an oval body laid by a bird" }, reason: "hatches" },
+    { from: { name: "Egg", definition: "an oval body laid by a bird" }, to: { name: "Chicken", definition: "a bird" }, reason: "laid" },
+  ];
+  const answering = (reply: string): Provider => ({
+    id: "fixed", label: "Fixed", model: "m", configured: true, listModels: async () => [], complete: async () => reply,
+  });
+
+  it("the offline demo names one link and says why", async () => {
+    const res = await tasks.resolveCycle(new MockProvider(), { links });
+    expect(res.remove).toEqual([0]);
+    expect(res.reason).toMatch(/Egg/);
+  });
+
+  it("drops out-of-range and repeated indexes", async () => {
+    const res = await tasks.resolveCycle(answering('{"remove":[1,1,7],"reason":"r"}'), { links });
+    expect(res.remove).toEqual([1]);
+  });
+
+  it("rejects an answer that names no valid link", async () => {
+    await expect(tasks.resolveCycle(answering('{"remove":[9],"reason":"r"}'), { links })).rejects.toThrow(/valid link/);
+  });
+
+  it("needs a real cycle (at least two links)", async () => {
+    await expect(tasks.resolveCycle(new MockProvider(), { links: links.slice(0, 1) })).rejects.toThrow();
+  });
+});

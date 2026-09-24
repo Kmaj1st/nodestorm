@@ -17,6 +17,7 @@ import {
   type ProviderKind,
   type ProvidersResponse,
   type QuizRequest,
+  type ResolveCycleRequest,
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
@@ -110,6 +111,7 @@ export const api = {
   explain: (req: ExplainRequest, signal?: AbortSignal) => run("explain", req, signal),
   extract: (req: ExtractRequest, signal?: AbortSignal) => run("extract", req, signal),
   quiz: (req: Partial<QuizRequest> & Pick<QuizRequest, "node">, signal?: AbortSignal) => run("quiz", req, signal),
+  resolveCycle: (req: ResolveCycleRequest, signal?: AbortSignal) => run("resolveCycle", req, signal),
 
   /** Providers configured on the local server (server mode only). */
   serverProviders: () => serverFetch<ProvidersResponse>("providers"),

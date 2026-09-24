@@ -18,6 +18,7 @@ import { applyExtraction, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { viewport } from "./viewport";
+import * as cycles from "./cycles";
 import * as paths from "./paths";
 import { updateMastery, type Grade } from "./quiz";
 
@@ -176,8 +177,59 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   // A prerequisite that (transitively) needs this node back is almost always a wrong AI answer.
   const cycle = find() ? paths.cycleThrough(graph(graphId), nodeId) : null;
   if (cycle && !opts.quiet) {
-    store().setToast(t("toast.cycle", { chain: cycleText(graphId, cycle) }));
+    if (useSettings.getState().autoResolveCycles) void resolveCycle(graphId, cycle, { newestFrom: nodeId });
+    else store().setToast(t("toast.cycle", { chain: cycleText(graphId, cycle) }));
   }
+}
+
+/**
+ * Break a dependency cycle ([A, B, …, A] as node ids): the AI picks the wrong link(s) from the reasons each link was
+ * added with; without a usable answer, the link `newestFrom`'s check just added goes. Removing is one undo step.
+ * Repeats (a few times at most) while the same concepts are still on a cycle.
+ */
+export async function resolveCycle(
+  graphId: string,
+  cycle: string[],
+  opts: { newestFrom?: string; /** Return the notice instead of showing it (a batch shows one summary). */ silent?: boolean } = {},
+): Promise<string | null> {
+  if (inViewer(graphId)) return null;
+  const ids = [...new Set(cycle)];
+  const removed: string[] = [];
+  const reasons: string[] = [];
+  let current: string[] | null = cycle;
+  for (let round = 0; current && round < 3; round++) {
+    const g = graph(graphId);
+    if (!g) return null;
+    const links = cycles.cycleLinks(g, current);
+    if (links.length < 2) break;
+    const chain = cycleText(graphId, current);
+    const req = {
+      links: links.map((l) => ({ from: toBrief(l.from), to: toBrief(l.to), reason: l.reason })),
+    };
+    let cancelled = false;
+    const res = await withBusy(
+      `cycle:${graphId}:${[...current].sort().join(",")}`,
+      t("task.resolveCycle", { chain }),
+      (signal) => api.resolveCycle(req, signal),
+      // An AI failure (offline, no key, bad answer) falls back to the newest link; a cancel leaves the cycle alone.
+      { onError: () => {}, onCancel: () => void (cancelled = true) },
+    );
+    if (cancelled || !graph(graphId)) return null;
+    let pick = (res?.remove ?? []).map((i) => links[i]).filter(Boolean);
+    let reason = res?.reason ?? "";
+    if (!pick.length) {
+      pick = [links[cycles.fallbackLinkIndex(links, opts.newestFrom)]];
+      reason = t("cycle.fallbackReason");
+    }
+    store().mutate((g) => cycles.removeLinks(g, pick), graphId);
+    removed.push(...pick.map((l) => t("cycle.link", { from: l.from.name, to: l.to.name })));
+    if (reason) reasons.push(reason);
+    current = cycles.remainingCycle(graph(graphId), ids);
+  }
+  if (!removed.length) return null;
+  const notice = t("cycle.resolved", { links: removed.join(", "), reason: reasons.join(" ") });
+  if (!opts.silent) store().setToast(notice, "info");
+  return notice;
 }
 
 /** The user picked (or wrote) a meaning for an ambiguous node. */
@@ -375,13 +427,25 @@ export async function installAllMissing(rootId: string, graphId = store().active
   const g = graph(graphId);
   if (!g) return report;
   const seen = new Set<string>();
+  const found: string[][] = [];
   for (const id of touched) {
     const cycle = paths.cycleThrough(g, id);
     if (!cycle || cycle.some((c) => seen.has(c))) continue;
     cycle.forEach((c) => seen.add(c));
-    report.cycles.push(cycleText(graphId, cycle));
+    found.push(cycle);
   }
-  store().setToast(installSummary(root.name, report, maxDepth), report.failed.length ? "error" : "info");
+  const autoResolve = useSettings.getState().autoResolveCycles && !report.cancelled;
+  // Resolved cycles are reported by resolveCycle's own notice; only unresolved ones go into the summary.
+  if (!autoResolve) report.cycles.push(...found.map((c) => cycleText(graphId, c)));
+  const resolved: string[] = [];
+  if (autoResolve) {
+    for (const cycle of found) {
+      const notice = await resolveCycle(graphId, cycle, { silent: true });
+      if (notice) resolved.push(notice);
+    }
+  }
+  const summary = [installSummary(root.name, report, maxDepth), ...resolved].join(" ");
+  store().setToast(summary, report.failed.length ? "error" : "info");
   return report;
 }
 

@@ -17,6 +17,8 @@ import {
   QuizResponse,
   RelateRequest,
   RelateResponse,
+  ResolveCycleRequest,
+  ResolveCycleResponse,
 } from "../model";
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
@@ -28,6 +30,7 @@ import {
   extractPrompt,
   namePrompt,
   quizPrompt,
+  resolveCyclePrompt,
   relatePrompt,
   withLanguage,
 } from "./prompts";
@@ -235,6 +238,14 @@ export const tasks = {
   quiz: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = QuizRequest.parse(body);
     return cleanQuiz(await runStructured(p, quizPrompt(req), QuizResponse, o), req.multipleChoice);
+  },
+  resolveCycle: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = ResolveCycleRequest.parse(body);
+    const res = await runStructured(p, resolveCyclePrompt(req), ResolveCycleResponse, o);
+    // Out-of-range or repeated numbers are dropped; the caller checks the rest really breaks the cycle.
+    const remove = [...new Set(res.remove.filter((i) => i < req.links.length))];
+    if (!remove.length) throw new ProviderError(`${p.label} didn't name a valid link to remove`);
+    return { remove, reason: res.reason };
   },
 };
 export type TaskName = keyof typeof tasks;

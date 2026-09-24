@@ -687,6 +687,14 @@ export const en = {
   "flash.cardMissing": "{name} (not in the graph yet)",
   "flash.cardPrereqFront": "What does {name} build on?",
   "flash.cardRelationFront": "How does {a} relate to {b}?",
+  // Automatic dependency-cycle resolution
+  "task.resolveCycle": "Resolving the cycle {chain}…",
+  "cycle.link": "“{from}” needs “{to}”",
+  "cycle.resolved": "Broke a dependency cycle by removing {links}. {reason} (Ctrl+Z brings it back.)",
+  "cycle.fallbackReason": "It was the link the latest check added, which closed the cycle.",
+  "cycle.resolveButton": "Resolve with AI",
+  "settings.cycles": "Dependency cycles",
+  "settings.autoResolveCycles": "Resolve cycles automatically (the AI picks the wrong link and removes it)",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

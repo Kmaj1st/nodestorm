@@ -30,6 +30,12 @@ const inputs: Partial<Record<TaskName, unknown>> = {
   deps: { node: thm, existing: [hom] },
   derive: { selected: [hom], context: [hom] },
   explain: { node: hom, level: "intuitive" },
+  resolveCycle: {
+    links: [
+      { from: hom, to: thm, reason: "The theorem is about homomorphisms." },
+      { from: thm, to: hom, reason: "The theorem starts from a homomorphism." },
+    ],
+  },
   extract: {
     text: "A homomorphism between groups preserves the operation. Its kernel is a normal subgroup, and the first isomorphism theorem says G/ker φ is isomorphic to the image.",
     existing: [hom],

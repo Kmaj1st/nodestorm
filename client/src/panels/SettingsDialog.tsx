@@ -36,6 +36,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [rememberKeys, setRememberKeys] = useState(saved.rememberKeys);
   const [clarify, setClarify] = useState(saved.clarify);
   const [installAll, setInstallAll] = useState(saved.installAll);
+  const [autoResolveCycles, setAutoResolveCycles] = useState(saved.autoResolveCycles);
   const [language, setLanguage] = useState(saved.language);
   // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
   const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
@@ -94,7 +95,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setPref(theme);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, rememberKeys, clarify, installAll, language: lang, aiConcurrency,
+      connection, provider, configs, serverModels, rememberKeys, clarify, installAll, autoResolveCycles, language: lang, aiConcurrency,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
@@ -330,6 +331,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             className="num"
           />
           {t("settings.concepts")}
+        </label>
+      </fieldset>
+
+      <fieldset className="choice">
+        <legend>{t("settings.cycles")}</legend>
+        <label className="check">
+          <input type="checkbox" checked={autoResolveCycles} onChange={(e) => setAutoResolveCycles(e.target.checked)} />
+          {t("settings.autoResolveCycles")}
         </label>
       </fieldset>
 

@@ -20,6 +20,8 @@ interface SettingsState {
   clarify: { enabled: boolean; options: number };
   /** Limits for "Install all missing": how many levels of prerequisites to follow, and how many concepts to add. */
   installAll: { maxDepth: number; maxNodes: number };
+  /** When a prerequisite check closes a dependency cycle, let the AI pick the wrong link and remove it. */
+  autoResolveCycles: boolean;
   /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
   language: string;
   /** How many AI calls may run at once; the rest wait in a queue (lib/aiQueue.ts). */
@@ -102,6 +104,7 @@ export const useSettings = create<SettingsStore>()(
       serverModels: {},
       clarify: { enabled: true, options: 3 },
       installAll: { maxDepth: 3, maxNodes: 15 },
+      autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,
 

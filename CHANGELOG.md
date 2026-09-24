@@ -33,6 +33,9 @@ together.
 - `npm run smoke:live` checks a real key and model end to end.
 
 ### Study and thinking tools
+- **Automatic cycle resolution**: when a check closes a dependency cycle, the AI picks the wrong link from the
+  reasons each link was added with, and it is removed as one undoable step (a Settings toggle; "Resolve with AI" in
+  the inspector).
 - **Install all** missing prerequisites, recursively and with limits. **Learning path** in study order, with
   highlight. **Cycle** warnings.
 - **Explain more** at three levels, plus **personal notes**.

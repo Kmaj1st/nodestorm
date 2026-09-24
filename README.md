@@ -40,8 +40,11 @@ no key needed) or an empty graph.
     the whole run. Concepts with ambiguous names are skipped and listed in the summary.
   - **Learning path** (inspector) lists everything a concept builds on, in study order, marking prerequisites still
     missing. **Highlight** shows that chain on the canvas and dims everything else.
-  - **Dependency cycles** (A needs B needs A) usually mean a wrong AI answer. The nodes and edges are flagged and the
-    inspector offers **Remove this link**.
+  - **Dependency cycles** (A needs B needs A) usually mean a wrong AI answer, so they are resolved automatically: the
+    AI reads the reason each link was added with and removes the wrong one (without an AI answer, the link the latest
+    check added goes). A notice says which link went and why, and Ctrl+Z brings it back. Turn this off in Settings →
+    *Dependency cycles* to only get a warning; the inspector's warning also has **Resolve with AI** and per-link
+    **Remove this link**.
 - **Derive ✦** proposes new concepts from the selected ones, with their relations.
 - **Extract from text** (**File ▾ → Extract from text…**) takes pasted notes, a book paragraph or a messy list (or a
   dropped / loaded `.txt` or `.md` file), up to 12,000 characters, with an optional *focus* hint. The AI lists

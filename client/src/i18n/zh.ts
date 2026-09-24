@@ -676,4 +676,12 @@ export const zh: Record<MessageKey, string> = {
   "flash.cardMissing": "{name}（尚未加入图谱）",
   "flash.cardPrereqFront": "{name} 建立在哪些知识之上？",
   "flash.cardRelationFront": "{a} 与 {b} 是什么关系？",
+  // Automatic dependency-cycle resolution
+  "task.resolveCycle": "正在解决循环 {chain}…",
+  "cycle.link": "“{from}”依赖“{to}”",
+  "cycle.resolved": "已移除 {links}，打破了依赖循环。{reason}（按 Ctrl+Z 可恢复。）",
+  "cycle.fallbackReason": "这是最近一次检查新增的链接，正是它形成了循环。",
+  "cycle.resolveButton": "用 AI 解决",
+  "settings.cycles": "依赖循环",
+  "settings.autoResolveCycles": "自动解决循环（由 AI 找出错误的链接并移除）",
 };

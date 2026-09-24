@@ -10,10 +10,11 @@ import type {
   QuizRequest,
   QuizStyle,
   RelateRequest,
+  ResolveCycleRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -212,6 +213,30 @@ Schema: {"question":string,"answer":string,"hints":string[],"choices":string[],"
     input(
       req,
       [`Concept:\n${brief(req.node)}${req.node.notes ? `\nLearner's notes: ${req.node.notes}` : ""}`, prereqs, `Style: ${style}`].join("\n\n"),
+    ),
+  ];
+}
+
+export function resolveCyclePrompt(req: ResolveCycleRequest): ChatMessage[] {
+  const n = req.links.length;
+  const list = req.links
+    .map((l, i) => `${i}. "${l.from.name}" needs "${l.to.name}"${l.reason ? ` — given reason: ${l.reason}` : ""}`)
+    .join("\n");
+  return [
+    sys(
+      "resolveCycle",
+      `Prerequisite links in a concept graph form a cycle, which can't be right: a concept can't (even indirectly) be a
+prerequisite of itself. Decide which link(s) are wrong — usually the prerequisite really goes the other way, or the
+"prerequisite" is only related, not needed. Remove as few links as possible (usually exactly one), but the cycle must
+be broken. Keep links that reflect how the subject is normally taught and built up.
+"remove": the numbers (0-${n - 1}) of the links to remove. "reason": one or two sentences for the learner explaining why.
+Schema: {"remove":number[],"reason":string}`,
+    ),
+    input(
+      req,
+      `Concepts:\n${[...new Map(req.links.flatMap((l) => [l.from, l.to]).map((c) => [c.name, c])).values()]
+        .map(brief)
+        .join("\n")}\n\nLinks on the cycle:\n${list}`,
     ),
   ];
 }

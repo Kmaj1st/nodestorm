@@ -141,6 +141,7 @@ textarea { resize: vertical; width: 100%; }
 .app--viewing .inspector .deps__missing button,
 .app--viewing .inspector .error-box button,
 .app--viewing .inspector .warn-box__link button,
+.app--viewing .inspector [data-testid="resolve-cycle"],
 .app--viewing .inspector .explain__controls,
 .app--viewing .canvas__example { display: none; }
 .app--viewing .concept__badge { pointer-events: none; }

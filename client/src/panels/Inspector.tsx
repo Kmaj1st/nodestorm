@@ -1,7 +1,16 @@
 import type { ConceptNode, ExplainLevel, Graph, RelationOrigin } from "@nodestorm/shared";
 import { useEffect, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
-import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
+import {
+  analyzeNode,
+  explainKey,
+  explainNode,
+  installAllKey,
+  installAllMissing,
+  installDep,
+  mix,
+  resolveCycle,
+} from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
@@ -396,6 +405,9 @@ function CycleWarning({ node, graph }: { node: ConceptNode; graph: Graph }) {
   return (
     <div className="warn-box" data-testid="cycle-warning">
       <p className="small">{rich("cycle.warning", { chain: cycle.map(name).join(" → ") })}</p>
+      <button className="small-btn" onClick={() => void resolveCycle(graph.id, cycle)} data-testid="resolve-cycle">
+        {t("cycle.resolveButton")}
+      </button>
       <ul className="links">
         {links.map(([from, to]) => (
           <li key={`${from}>${to}`} className="warn-box__link">

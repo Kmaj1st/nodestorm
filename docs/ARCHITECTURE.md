@@ -303,6 +303,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | File | What |
 |---|---|
 | `graphOps.ts` | Node/relation CRUD: `addNode` (dedupes by name/alias, places at `findFreeSpot`, then `satisfyMissing`), `applyDeps`, `link`, `satisfyMissing` ("installing" = adding a node whose name matches someone's missing dep), `upsertRelation`, `renameNode`, `updateRelation`, `removeNode`, `removeRelation`, `removeDependency`, `applySense`, `redirectNode`, `installPosition`, `setPositions`, `fork`, `merge`. |
+| `cycles.ts` | A cycle's links with their stored reasons (`cycleLinks`), `removeLinks`, `remainingCycle`, `fallbackLinkIndex`. |
 | `paths.ts` | Over `dependsOn`: `prerequisiteClosure`, `learningPath` (topological study order incl. missing deps), `findCycles` (Tarjan SCC), `cycleInfo`, `cycleThrough`. |
 | `layout.ts` | `layeredLayout` for Tidy: rows by dependency depth, prerequisites on top. |
 | `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts`, `showsEverything`. |
@@ -333,7 +334,9 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
    `ops.applySense` (may merge into an existing concept) → `analyzeNode` again. Unambiguous → store the definition.
 4. `api.deps` with the other concepts as context → background `ops.applyDeps`: prerequisites that match an existing
    concept (`matchesExisting` or by name) are `link`ed (`dependsOn` + a `dependency` relation); the rest become
-   `missingDeps` and the node is `blocked`. Then `paths.cycleThrough` warns about a cycle.
+   `missingDeps` and the node is `blocked`. If `paths.cycleThrough` finds a cycle, `resolveCycle` (actions.ts) asks the
+   `resolveCycle` AI task which link is wrong (links and their reasons from `client/src/lib/cycles.ts`), falls back to
+   the link the check just added, and removes it as one undo step (setting `autoResolveCycles`; otherwise a warning).
 5. **Install** (Inspector) → `installDep(dependentId, name)` → `placeDep` adds the concept at `installPosition` with a
    hint ("Needed by X (role): reason") so its clarify rarely needs the user → `analyzeNode` on it.
 6. **Install all** → `installAllMissing(rootId)`: `autoSnapshot("installAll")`, then breadth-first over levels: place
