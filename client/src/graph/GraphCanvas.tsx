@@ -11,7 +11,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
 import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
-import { registerViewport } from "../lib/viewport";
+import { registerViewport, viewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
@@ -24,6 +24,10 @@ export function GraphCanvas() {
   const mutate = useGraphStore((s) => s.mutate);
   const setSelection = useGraphStore((s) => s.setSelection);
   const setInspect = useGraphStore((s) => s.setInspect);
+  const loadExample = useCallback(() => {
+    useGraphStore.getState().loadExample();
+    viewport.fit();
+  }, []);
 
   // React Flow keeps measurement/selection state on its node objects, so we hold a local copy
   // and re-sync the concept data from the store whenever the graph changes.
@@ -170,7 +174,15 @@ export function GraphCanvas() {
       </ReactFlow>
       {graph.nodes.length === 0 && (
         <div className="canvas__empty">
-          Add a concept to start. Describe it if you don't know its name — the AI will find one.
+          <div>
+            Add a concept to start. Describe it if you don't know its name — the AI will find one.
+            <div className="canvas__example">
+              {/* Built offline from static data (lib/examples.ts): no AI call, works without a key. */}
+              <button onClick={loadExample} title="A small ready-made graph, with one concept blocked on a missing prerequisite">
+                Load example: Group theory
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

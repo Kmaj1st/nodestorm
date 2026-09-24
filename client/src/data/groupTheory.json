@@ -1,0 +1,70 @@
+{
+  "name": "Group theory",
+  "concepts": [
+    {
+      "name": "Group",
+      "definition": "A set with an associative binary operation, an identity element, and inverses.",
+      "aliases": []
+    },
+    {
+      "name": "Subgroup",
+      "definition": "A subset of a group that is itself a group under the same operation.",
+      "aliases": [],
+      "dependsOn": [{ "name": "Group", "role": "uses", "reason": "A subgroup is a subset of a group closed under its operation." }]
+    },
+    {
+      "name": "Normal subgroup",
+      "definition": "A subgroup N of G with gNg⁻¹ = N for every g in G.",
+      "aliases": [],
+      "dependsOn": [{ "name": "Subgroup", "role": "uses", "reason": "A normal subgroup is a subgroup invariant under conjugation." }]
+    },
+    {
+      "name": "Homomorphism",
+      "definition": "A map φ: G → H between groups with φ(ab) = φ(a)φ(b).",
+      "aliases": ["group homomorphism"],
+      "dependsOn": [{ "name": "Group", "role": "uses", "reason": "A homomorphism maps one group to another, preserving the operation." }]
+    },
+    {
+      "name": "Kernel",
+      "definition": "The set of elements a homomorphism sends to the identity: ker φ = { g ∈ G : φ(g) = e }.",
+      "aliases": ["ker"],
+      "dependsOn": [{ "name": "Homomorphism", "role": "uses", "reason": "The kernel is defined for a homomorphism." }]
+    },
+    {
+      "name": "Quotient group",
+      "definition": "The group G/N of cosets of a normal subgroup N, with (aN)(bN) = abN.",
+      "aliases": ["factor group"],
+      "dependsOn": [
+        { "name": "Group", "role": "uses", "reason": "G/N is built from a group G." },
+        { "name": "Normal subgroup", "role": "uses", "reason": "Cosets only multiply consistently when N is normal." }
+      ]
+    },
+    {
+      "name": "First Isomorphism Theorem",
+      "definition": "For a homomorphism φ: G → H, G / ker φ is isomorphic to im φ.",
+      "aliases": ["fundamental homomorphism theorem"],
+      "dependsOn": [
+        { "name": "Homomorphism", "role": "uses", "reason": "The theorem starts from a homomorphism φ: G → H." },
+        { "name": "Kernel", "role": "uses", "reason": "It divides G by the kernel of φ." },
+        { "name": "Quotient group", "role": "uses", "reason": "G / ker φ is a quotient group." }
+      ],
+      "missing": [
+        { "name": "Isomorphism", "role": "derives", "reason": "Its conclusion is an isomorphism G/ker φ ≅ im φ." }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "a": "Kernel",
+      "b": "Normal subgroup",
+      "aToB": { "kind": "is always a", "explanation": "The kernel of any homomorphism is a normal subgroup of its domain." },
+      "bToA": { "kind": "arises as", "explanation": "Every normal subgroup N is the kernel of the projection G → G/N." }
+    },
+    {
+      "a": "Quotient group",
+      "b": "Homomorphism",
+      "aToB": { "kind": "comes with", "explanation": "G/N comes with the canonical projection g ↦ gN, a surjective homomorphism." },
+      "bToA": { "kind": "produces", "explanation": "Up to isomorphism, the image of a homomorphism is a quotient of its domain." }
+    }
+  ]
+}

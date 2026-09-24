@@ -15,8 +15,10 @@ New concepts appear in a free spot near what you're looking at (or near the conc
 
 Everything the AI suggests can be fixed by hand: rename a concept (the old name stays as an alias) or edit a relation's text in the inspector, and press **Delete** to remove the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
 
-Graphs autosave to your browser's localStorage. **Export ▾** saves them in several forms:
-- **JSON (all graphs)**: everything, including sandboxes. Load it again with **Import**.
+**Projects.** Keep several independent brainstorms. Each project has its own main graph and sandboxes. The project menu at the left of the toolbar switches between projects and can create, rename, duplicate or delete them. The graph selector lists only the current project's graphs. A new, empty project offers **Load example: Group theory**, a small ready-made graph that is built offline (no AI call or key needed). One of its concepts is blocked on a missing prerequisite, so you can try **Install** straight away.
+
+Projects autosave to your browser's localStorage. Data saved by earlier versions becomes the project *My brainstorm*. **Export ▾** saves your work in several forms:
+- **JSON (this project)**: the current project, including sandboxes. **Import** adds such a file as a new project and never overwrites an existing one.
 - **Markdown notes**: the current graph as study notes. Concepts come in study order (prerequisites first), with aliases, definitions and prerequisites, and every relation is written out in both directions.
 - **Mermaid diagram**: flowchart text for GitHub, Notion, etc. It is copied to the clipboard and also downloaded.
 - **PNG image**: a picture of the whole current graph.
@@ -86,7 +88,7 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 ```
 

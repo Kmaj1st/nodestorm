@@ -53,6 +53,16 @@ textarea { resize: vertical; width: 100%; }
   position: absolute; inset: 0; display: grid; place-items: center; pointer-events: none;
   color: var(--muted); font-size: 15px; padding: 24px; text-align: center;
 }
+.canvas__example { margin-top: 12px; }
+.canvas__example button { pointer-events: auto; }
+
+/* Project switcher */
+.project-button { font-weight: 600; max-width: 240px; display: flex; gap: 6px; align-items: center; }
+.project-button__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.project-name-input { width: 200px; font-weight: 600; }
+.menu__list--left { left: 0; right: auto; max-height: 60vh; overflow-y: auto; }
+.menu__list button.menu__item--current { font-weight: 600; }
+.menu__sep { border: none; border-top: 1px solid var(--border); margin: 4px 0; width: 100%; }
 
 .inspector {
   width: 340px; flex-shrink: 0; overflow-y: auto; padding: 16px; background: var(--panel);
