@@ -27,6 +27,9 @@ export interface OpenAICompatibleConfig {
 // Endpoints like OpenAI's list every model; hide the ones that can't do chat.
 const NON_CHAT = /embed|whisper|tts|dall-e|image|audio|moderation|rerank|transcribe|realtime|speech|vision-preview|search-/i;
 
+/** Endpoint+model pairs that rejected `response_format: json_object` (providers are rebuilt per call in the browser). */
+const noJsonMode = new Set<string>();
+
 /** Generic client for any OpenAI-compatible /chat/completions endpoint. */
 export class OpenAICompatibleProvider implements Provider {
   id: string;
@@ -85,21 +88,41 @@ export class OpenAICompatibleProvider implements Provider {
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
     if (!this.model) throw new ProviderError(`${this.label}: no model selected`, 400);
-    const body = JSON.stringify({
-      model: this.model,
-      messages,
-      temperature: 0.3,
-      max_tokens: opts.maxTokens ?? 2048,
-      ...(opts.json ? { response_format: { type: "json_object" } } : {}),
-    });
-    const data = (await this.request(
-      "/chat/completions",
-      { method: "POST", body },
-      { signal: opts.signal, timeoutMs: opts.timeoutMs ?? this.timeoutMs },
-    )) as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
-    const content = data.choices?.[0]?.message?.content;
-    if (typeof content !== "string") throw new ProviderError(`${this.label}: empty response`);
-    const tokens = data.usage?.total_tokens;
+    const send = (jsonMode: boolean) =>
+      this.request(
+        "/chat/completions",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            model: this.model,
+            messages,
+            temperature: 0.3,
+            // Reasoning models spend part of this on thinking before they answer.
+            max_tokens: opts.maxTokens ?? 4096,
+            ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
+          }),
+        },
+        { signal: opts.signal, timeoutMs: opts.timeoutMs ?? this.timeoutMs },
+      );
+    let data: unknown;
+    const modelKey = `${this.baseURL} ${this.model}`;
+    const jsonMode = Boolean(opts.json) && !noJsonMode.has(modelKey);
+    try {
+      data = await send(jsonMode);
+    } catch (e) {
+      // Some models reject JSON mode outright; the prompts already ask for JSON, so retry without it (and remember).
+      if (!jsonMode || !(e instanceof ProviderError) || !/HTTP 400/.test(e.message) || !/response_format|json/i.test(e.message)) {
+        throw e;
+      }
+      noJsonMode.add(modelKey);
+      data = await send(false);
+    }
+    const reply = data as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
+    const content = reply.choices?.[0]?.message?.content;
+    if (typeof content !== "string" || !content.trim()) {
+      throw new ProviderError(`${this.label}: empty response (a reasoning model may have used up max_tokens while thinking)`);
+    }
+    const tokens = reply.usage?.total_tokens;
     if (typeof tokens === "number" && tokens > 0) opts.onUsage?.(tokens);
     return content;
   }

@@ -112,3 +112,35 @@ describe("timeouts and cancellation", () => {
     expect(calls).toBe(1);
   });
 });
+
+describe("reasoning models and JSON mode", () => {
+  it("extracts the answer after a <think> block that contains braces", async () => {
+    const { extractJson } = await import("../src/ai/tasks");
+    expect(extractJson('<think>maybe {x} or {"y": 1 …</think>\n{"prerequisites": []}')).toEqual({ prerequisites: [] });
+    expect(extractJson('Plan: use {a, b}. Answer: {"ok": true}')).toEqual({ ok: true });
+    expect(extractJson('reasoning without the opening tag</think>{"ok": 1}')).toEqual({ ok: 1 });
+  });
+
+  it("retries without response_format when a model rejects JSON mode, and remembers it", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    stubFetch((_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      bodies.push(body);
+      if (body.response_format) return json({ message: "response_format json_object is not supported for this model" }, 400);
+      return json({ choices: [{ message: { content: '{"ok":true}' } }] });
+    });
+    const p = () => createProvider("siliconflow", { apiKey: "k", model: "deepseek-ai/DeepSeek-R1-test" });
+    expect(await p().complete([{ role: "user", content: "hi" }], { json: true })).toBe('{"ok":true}');
+    expect(bodies.map((b) => Boolean(b.response_format))).toEqual([true, false]);
+    // A new provider instance (as in browser mode) goes straight to the fallback.
+    await p().complete([{ role: "user", content: "hi" }], { json: true });
+    expect(bodies.map((b) => Boolean(b.response_format))).toEqual([true, false, false]);
+  });
+
+  it("an empty answer explains the likely cause", async () => {
+    stubFetch(() => json({ choices: [{ message: { content: "" } }] }));
+    await expect(createProvider("siliconflow", { apiKey: "k" }).complete([{ role: "user", content: "hi" }])).rejects.toThrow(
+      /max_tokens/,
+    );
+  });
+});

@@ -16,13 +16,32 @@ import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
 import { clarifyPrompt, depsPrompt, derivePrompt, explainPrompt, namePrompt, relatePrompt, withLanguage } from "./prompts";
 
-/** Pull the first JSON object out of a model reply (tolerates code fences and stray prose). */
+/**
+ * Pull the JSON object out of a model reply. Tolerates code fences, stray prose and the <think>…</think> block
+ * reasoning models (e.g. DeepSeek-R1, Qwen3) may put before the answer; tries each "{" until one parses.
+ */
 export function extractJson(text: string): unknown {
-  const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
-  const body = fenced ? fenced[1] : text;
-  const start = body.indexOf("{");
-  if (start < 0) throw new Error("no JSON object in reply");
-  // Walk forward to the matching closing brace, respecting strings.
+  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*<\/think>/i, "");
+  const fenced = answer.match(/```(?:json)?\s*([\s\S]*?)```/i);
+  const body = fenced ? fenced[1] : answer;
+  let lastError: unknown = new Error("no JSON object in reply");
+  for (let start = body.indexOf("{"); start >= 0; start = body.indexOf("{", start + 1)) {
+    const end = matchingBrace(body, start);
+    if (end < 0) {
+      lastError = new Error("unterminated JSON object in reply");
+      continue;
+    }
+    try {
+      return JSON.parse(body.slice(start, end + 1));
+    } catch (e) {
+      lastError = e; // e.g. braces in prose before the real answer
+    }
+  }
+  throw lastError;
+}
+
+/** Index of the "}" closing the "{" at `start`, respecting strings; -1 when it never closes. */
+function matchingBrace(body: string, start: number): number {
   let depth = 0;
   let inStr = false;
   let esc = false;
@@ -36,9 +55,9 @@ export function extractJson(text: string): unknown {
     }
     if (c === '"') inStr = true;
     else if (c === "{") depth++;
-    else if (c === "}" && --depth === 0) return JSON.parse(body.slice(start, i + 1));
+    else if (c === "}" && --depth === 0) return i;
   }
-  throw new Error("unterminated JSON object in reply");
+  return -1;
 }
 
 async function runStructured<S extends z.ZodTypeAny>(
