@@ -17,6 +17,12 @@ function headerLanguage(req: express.Request): string | undefined {
   }
 }
 
+/** The browser's timeout setting (ms), clamped to the range Settings allows; ignored when missing or invalid. */
+export function parseTimeout(raw: string | undefined): number | undefined {
+  const ms = Number(raw);
+  return raw && Number.isFinite(ms) ? Math.min(600_000, Math.max(10_000, Math.round(ms))) : undefined;
+}
+
 export function createApp(registry: Registry) {
   const app = express();
   app.use(express.json({ limit: "1mb" }));
@@ -38,7 +44,7 @@ export function createApp(registry: Registry) {
   for (const name of Object.keys(tasks) as TaskName[]) {
     app.post(`/api/${name}`, async (req, res) => {
       try {
-        const provider = registry.get(req.header("x-ai-provider"), req.header("x-ai-model"));
+        const provider = registry.get(req.header("x-ai-provider"), req.header("x-ai-model"), parseTimeout(req.header("x-ai-timeout")));
         // Stop the upstream AI call if the browser gives up (cancel, timeout, closed tab).
         const ctrl = new AbortController();
         res.on("close", () => !res.writableFinished && ctrl.abort());

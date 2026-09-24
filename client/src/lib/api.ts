@@ -81,6 +81,7 @@ async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortS
       headers: {
         "content-type": "application/json",
         "x-ai-provider": s.provider,
+        "x-ai-timeout": String(timeoutMs),
         ...(model ? { "x-ai-model": model } : {}),
         // Header values must be ASCII; the server decodes this.
         ...(language ? { "x-ai-language": encodeURIComponent(language) } : {}),
@@ -88,8 +89,9 @@ async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortS
       body: JSON.stringify(req),
     },
     signal,
-    // The server enforces its own deadline too; give it a moment to report that before we give up.
-    timeoutMs + 5_000,
+    // The server applies this timeout to each AI attempt and may retry once on malformed output;
+    // give it room for both plus a moment to report before we give up.
+    2 * timeoutMs + 5_000,
   );
 }
 
