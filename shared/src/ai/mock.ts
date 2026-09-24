@@ -13,6 +13,25 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
     aliases: [],
     deps: [],
   },
+  // A three-level chain (quotient group → normal subgroup → subgroup → group) for recursive installs.
+  subgroup: {
+    definition: "A subset of a group that is itself a group under the same operation.",
+    aliases: [],
+    deps: [{ name: "Group", role: "uses", reason: "A subgroup is a subset of a group closed under its operation." }],
+  },
+  "normal subgroup": {
+    definition: "A subgroup N of G with gNg⁻¹ = N for every g in G.",
+    aliases: [],
+    deps: [{ name: "Subgroup", role: "uses", reason: "A normal subgroup is a subgroup invariant under conjugation." }],
+  },
+  "quotient group": {
+    definition: "The group G/N of cosets of a normal subgroup N, with (aN)(bN) = abN.",
+    aliases: ["factor group"],
+    deps: [
+      { name: "Group", role: "uses", reason: "G/N is built from a group G." },
+      { name: "Normal subgroup", role: "uses", reason: "Cosets only multiply consistently when N is normal." },
+    ],
+  },
   homomorphism: {
     definition: "A map between algebraic structures that preserves the operations, e.g. φ(ab) = φ(a)φ(b) for groups.",
     aliases: ["group homomorphism"],

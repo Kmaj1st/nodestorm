@@ -13,6 +13,7 @@ import { api, NeedsSetupError } from "./api";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { viewport } from "./viewport";
+import * as paths from "./paths";
 
 /**
  * Async flows that combine AI calls with graph mutations. Each binds to the graph it started in.
@@ -54,9 +55,13 @@ async function withBusy<T>(
   controllers.get(key)?.abort(); // a newer run of the same task supersedes the old one
   const ctrl = new AbortController();
   controllers.set(key, ctrl);
+  store().setBusy(key, null); // restart the clock if this superseded an older run
   store().setBusy(key, label);
   try {
-    return await fn(ctrl.signal);
+    const res = await fn(ctrl.signal);
+    // An answer that arrives after the user cancelled is dropped, like one that never came.
+    if (ctrl.signal.aborted) throw new CancelledError();
+    return res;
   } catch (e) {
     if (e instanceof CancelledError || ctrl.signal.aborted) handlers.onCancel?.();
     else if (handlers.onError) handlers.onError(e);
@@ -72,11 +77,19 @@ async function withBusy<T>(
 
 const analyzeKey = (graphId: string, nodeId: string) => `analyze:${graphId}:${nodeId}`;
 
+const cycleText = (graphId: string, ids: string[]) =>
+  ids.map((id) => graph(graphId)?.nodes.find((n) => n.id === id)?.name ?? "?").join(" → ");
+
+interface AnalyzeOptions {
+  /** Part of a batch (install-all): don't open the "what do you mean?" dialog or warn about cycles; the batch reports. */
+  quiet?: boolean;
+}
+
 /**
  * Work out a node: if it has no definition, ask the AI what the name means (and let the user pick when
  * it is ambiguous); then check its prerequisites. Also used for "Retry" and "Re-check".
  */
-export async function analyzeNode(nodeId: string, graphId = store().activeId, hint?: string) {
+export async function analyzeNode(nodeId: string, graphId = store().activeId, hint?: string, opts: AnalyzeOptions = {}) {
   const find = () => graph(graphId)?.nodes.find((n) => n.id === nodeId);
   const node = find();
   if (!node) return;
@@ -112,7 +125,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     if (res.ambiguous) {
       set({ status: "unclear", senses: res.senses });
       if (!find()) return;
-      store().setClarifying({ graphId, nodeId });
+      if (!opts.quiet) store().setClarifying({ graphId, nodeId });
       return; // continues in chooseSense once the user picks a meaning
     }
     if (res.senses[0]?.definition) set({ definition: res.senses[0].definition });
@@ -128,7 +141,13 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       api.deps({ node: toBrief(current), existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief) }, signal),
     handlers,
   );
-  if (res) bg((g) => ops.applyDeps(g, nodeId, res.prerequisites));
+  if (!res) return;
+  bg((g) => ops.applyDeps(g, nodeId, res.prerequisites));
+  // A prerequisite that (transitively) needs this node back is almost always a wrong AI answer.
+  const cycle = find() ? paths.cycleThrough(graph(graphId), nodeId) : null;
+  if (cycle && !opts.quiet) {
+    store().setToast(`Dependency cycle: ${cycleText(graphId, cycle)}. One of these links is probably wrong — see the inspector.`);
+  }
 }
 
 /** The user picked (or wrote) a meaning for an ambiguous node. */
@@ -186,22 +205,167 @@ export function addCandidate(c: NameCandidate) {
   return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases });
 }
 
+/**
+ * Create a missing dependency near its dependent, which satisfies (and links) it. Doesn't analyze the new node.
+ * `index` spreads siblings apart; it defaults to the dependency's position in the dependent's missing list.
+ */
+function placeDep(graphId: string, dependentId: string, depName: string, index?: number) {
+  const dependent = graph(graphId).nodes.find((n) => n.id === dependentId);
+  const dep = dependent?.missingDeps.find((d) => d.name === depName);
+  const at = index ?? (dependent && dep ? dependent.missingDeps.indexOf(dep) : 0);
+  // The dependent tells the AI which meaning is meant, so installs rarely need a "what do you mean?".
+  const hint = dependent && dep ? `Needed by "${dependent.name}" (${dep.role}): ${dep.reason}` : undefined;
+  let id = "";
+  let existed = false;
+  store().mutate((g) => {
+    const r = ops.addNode(g, { name: depName, position: ops.installPosition(g, dependentId, at) });
+    id = r.id;
+    existed = r.existed;
+    // If the concept already existed under this name, addNode didn't run satisfyMissing for it.
+    return existed ? ops.satisfyMissing(r.graph, id) : r.graph;
+  }, graphId);
+  return { id, existed, hint };
+}
+
 /** "Install" a missing dependency: create it near the dependent node, which satisfies the dependency. */
 export function installDep(dependentId: string, depName: string) {
   const graphId = store().activeId;
-  const g = graph(graphId);
-  const dependent = g.nodes.find((n) => n.id === dependentId);
-  const dep = dependent?.missingDeps.find((d) => d.name === depName);
-  const index = dependent?.missingDeps.indexOf(dep!) ?? 0;
-  // The dependent tells the AI which meaning is meant, so installs rarely need a "what do you mean?".
-  const hint = dependent && dep ? `Needed by "${dependent.name}" (${dep.role}): ${dep.reason}` : undefined;
-  const id = addConcept({ name: depName, position: ops.installPosition(g, dependentId, index) }, graphId, hint);
-  // If the concept already existed under this name, addNode didn't run satisfyMissing for it.
-  // Folded into the add's undo step when there was one.
-  const history = g.nodes.some((n) => n.id === id) ? "step" : "merge";
-  store().mutate((g) => ops.satisfyMissing(g, id), graphId, { history });
+  const r = placeDep(graphId, dependentId, depName);
+  if (r.existed) store().setToast(`"${depName}" is already in the graph`);
+  else {
+    viewport.reveal(r.id);
+    void analyzeNode(r.id, graphId, r.hint);
+  }
   store().setInspect({ kind: "node", id: dependentId });
-  return id;
+  return r.id;
+}
+
+export interface InstallReport {
+  /** Names of the concepts added, in install order. */
+  installed: string[];
+  /** Deepest level of prerequisites installed (1 = the node's own missing dependencies). */
+  depth: number;
+  /** Installed concepts whose meaning is ambiguous: not followed further until the user picks one. */
+  unclear: string[];
+  /** Installed concepts whose check failed or was cancelled. */
+  failed: string[];
+  /** Missing prerequisites left alone because a limit was reached. */
+  leftOver: string[];
+  limit: "depth" | "nodes" | null;
+  /** Dependency cycles now involving the run's concepts, as "A → B → A". */
+  cycles: string[];
+  cancelled: boolean;
+}
+
+export const installAllKey = (graphId: string, nodeId: string) => `installAll:${graphId}:${nodeId}`;
+
+/**
+ * Install every missing dependency of a node, then theirs, breadth-first, until nothing is missing or the
+ * depth / node limits from Settings are reached. One cancellable status-bar task covers the whole run, and
+ * cancelling it also cancels the checks in flight. Ambiguous (unclear) concepts are skipped and reported.
+ */
+export async function installAllMissing(rootId: string, graphId = store().activeId): Promise<InstallReport | undefined> {
+  const find = (id: string) => graph(graphId)?.nodes.find((n) => n.id === id);
+  const root = find(rootId);
+  if (!root) return;
+  const { maxDepth, maxNodes } = useSettings.getState().installAll;
+  const report: InstallReport = {
+    installed: [], depth: 0, unclear: [], failed: [], leftOver: [], limit: null, cycles: [], cancelled: false,
+  };
+  const key = installAllKey(graphId, rootId);
+  const label = () =>
+    `Installing prerequisites of ${root.name}: ${report.installed.length} added, level ${Math.max(report.depth, 1)}/${maxDepth}…`;
+  const touched = new Set([rootId]);
+  const inflight = new Set<string>();
+
+  await withBusy(
+    key,
+    label(),
+    async (signal) => {
+      signal.addEventListener("abort", () => inflight.forEach(cancelTask));
+      let frontier = [rootId];
+      for (let depth = 1; frontier.length; depth++) {
+        const wanted = frontier.flatMap((id) => (find(id)?.missingDeps ?? []).map((d) => ({ dependentId: id, name: d.name })));
+        if (!wanted.length) break;
+        if (depth > maxDepth) {
+          report.limit = "depth";
+          report.leftOver = [...new Set(wanted.map((w) => w.name))];
+          break;
+        }
+        report.depth = depth;
+        const added: { id: string; hint?: string }[] = [];
+        const perDependent = new Map<string, number>();
+        for (const w of wanted) {
+          // An earlier install may already have satisfied this one (same name needed twice).
+          if (!find(w.dependentId)?.missingDeps.some((d) => d.name === w.name)) continue;
+          if (report.installed.length >= maxNodes) {
+            report.limit = "nodes";
+            if (!report.leftOver.includes(w.name)) report.leftOver.push(w.name);
+            continue;
+          }
+          const index = perDependent.get(w.dependentId) ?? 0;
+          perDependent.set(w.dependentId, index + 1);
+          const r = placeDep(graphId, w.dependentId, w.name, index);
+          if (r.existed) continue;
+          report.installed.push(w.name);
+          touched.add(r.id);
+          added.push(r);
+        }
+        store().setBusy(key, label());
+        // Siblings are checked in parallel; the next level starts once they're all done.
+        await Promise.all(
+          added.map(async (a) => {
+            const k = analyzeKey(graphId, a.id);
+            inflight.add(k);
+            try {
+              await analyzeNode(a.id, graphId, a.hint, { quiet: true });
+            } finally {
+              inflight.delete(k);
+            }
+          }),
+        );
+        if (signal.aborted) throw new CancelledError();
+        frontier = [];
+        for (const a of added) {
+          const n = find(a.id);
+          if (n?.status === "unclear") report.unclear.push(n.name);
+          else if (n?.status === "error") report.failed.push(n.name);
+          else if (n) frontier.push(n.id);
+        }
+      }
+    },
+    { onCancel: () => void (report.cancelled = true) },
+  );
+
+  const g = graph(graphId);
+  if (!g) return report;
+  const seen = new Set<string>();
+  for (const id of touched) {
+    const cycle = paths.cycleThrough(g, id);
+    if (!cycle || cycle.some((c) => seen.has(c))) continue;
+    cycle.forEach((c) => seen.add(c));
+    report.cycles.push(cycleText(graphId, cycle));
+  }
+  store().setToast(installSummary(root.name, report, maxDepth));
+  return report;
+}
+
+function installSummary(name: string, r: InstallReport, maxDepth: number): string {
+  const n = r.installed.length;
+  const s = (k: number) => (k === 1 ? "" : "s");
+  const parts = [
+    r.cancelled
+      ? `Install-all cancelled after ${n} concept${s(n)}.`
+      : n
+        ? `Installed ${n} prerequisite${s(n)} of ${name} (${r.depth} level${s(r.depth)}).`
+        : `Nothing new to install for ${name}.`,
+  ];
+  if (r.unclear.length) parts.push(`Pick a meaning for: ${r.unclear.join(", ")}.`);
+  if (r.failed.length) parts.push(`Check failed for: ${r.failed.join(", ")} (retry on the node).`);
+  if (r.limit === "depth") parts.push(`Stopped at depth ${maxDepth}; still missing: ${r.leftOver.join(", ")}.`);
+  if (r.limit === "nodes") parts.push(`Stopped at the ${n}-concept limit; not installed: ${r.leftOver.join(", ")}.`);
+  if (r.cycles.length) parts.push(`Dependency cycle: ${r.cycles.join("; ")}.`);
+  return parts.join(" ");
 }
 
 export async function mix(aId: string, bId: string) {

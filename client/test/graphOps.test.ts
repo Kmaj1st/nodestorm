@@ -47,6 +47,33 @@ describe("dependencies", () => {
     expect(r.graph).toBe(g);
   });
 
+  it("removing one direction of a two-way dependency keeps the edge for the other direction", () => {
+    const { g, homId, thmId } = theoremScenario();
+    const cyc = ops.applyDeps(g, homId, [{ name: "First Isomorphism Theorem", role: "uses", reason: "wrong", matchesExisting: null }]);
+    expect(node(cyc, "Homomorphism").dependsOn).toEqual([thmId]);
+    expect(cyc.relations).toHaveLength(1); // both directions share one edge
+
+    // Drop the direction the edge describes (theorem → homomorphism): the edge flips to describe the rest.
+    const a = ops.removeDependency(cyc, thmId, homId);
+    expect(node(a, "First Isomorphism Theorem").dependsOn).toEqual([]);
+    expect(a.relations).toHaveLength(1);
+    expect(a.relations[0]).toMatchObject({ a: homId, b: thmId, origin: "dependency" });
+
+    // Drop the other direction: the edge stays as it was.
+    const b = ops.removeDependency(cyc, homId, thmId);
+    expect(node(b, "Homomorphism").dependsOn).toEqual([]);
+    expect(b.relations).toEqual(cyc.relations);
+  });
+
+  it("installed nodes are placed clear of existing ones", () => {
+    const { g, thmId } = theoremScenario();
+    const first = ops.installPosition(g, thmId, 0);
+    const g2 = ops.addNode(g, { name: "Isomorphism", position: first }).graph;
+    const second = ops.installPosition(g2, thmId, 0);
+    expect(second.y).toBe(first.y);
+    expect(second.x - first.x).toBeGreaterThanOrEqual(240);
+  });
+
   it("removing a node cleans up relations and dependsOn", () => {
     const { g, homId } = theoremScenario();
     const out = ops.removeNode(g, homId);

@@ -1,8 +1,10 @@
 import type { ConceptNode, Graph } from "@nodestorm/shared";
 import { useEffect, useState } from "react";
-import { analyzeNode, installDep, mix } from "../lib/actions";
-import { removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { analyzeNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
+import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+import { useSettings } from "../store/settingsStore";
 
 /**
  * A text field edited locally and saved on blur or Enter (Shift+Enter for a newline when multiline);
@@ -62,7 +64,8 @@ export function Inspector() {
       <h3>How to use</h3>
       <ol className="help">
         <li><b>Add</b> a concept by name, or describe it and let the AI name it.</li>
-        <li>The AI checks each concept's <b>prerequisites</b>. Missing ones block the concept until you <b>install</b> them.</li>
+        <li>The AI checks each concept's <b>prerequisites</b>. Missing ones block the concept until you <b>install</b> them — or <b>Install all</b> to follow the whole chain.</li>
+        <li>A concept's <b>learning path</b> lists everything it builds on in study order.</li>
         <li>Select two concepts (Shift/Ctrl-click) and press <b>Mix</b> to find how they relate — in both directions.</li>
         <li>Click an <b>arrowhead</b> on a relation to read what that side does to the other.</li>
         <li><b>Fork sandbox</b> to derive new ideas in a copy; merge back or discard later.</li>
@@ -125,8 +128,13 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </div>
       )}
 
+      <CycleWarning node={node} graph={graph} />
+
       <section>
-        <h4>Missing dependencies</h4>
+        <div className="section-head">
+          <h4>Missing dependencies</h4>
+          {node.missingDeps.length > 0 && <InstallAll key={node.id} node={node} graphId={graphId} />}
+        </div>
         {node.status === "checking" && <p className="muted small">Checking prerequisites…</p>}
         {node.status === "ok" && <p className="muted small">None — this concept is ready.</p>}
         <ul className="deps">
@@ -161,6 +169,8 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         )}
       </section>
 
+      <LearningPath node={node} graph={graph} />
+
       <section>
         <h4>Relations</h4>
         <ul className="links">
@@ -190,6 +200,116 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </button>
       </div>
     </aside>
+  );
+}
+
+/** "Install all…" with a confirm popover listing what gets installed first. */
+function InstallAll({ node, graphId }: { node: ConceptNode; graphId: string }) {
+  const [open, setOpen] = useState(false);
+  const running = useGraphStore((s) => Boolean(s.busy[installAllKey(graphId, node.id)]));
+  const { maxDepth, maxNodes } = useSettings((s) => s.installAll);
+  return (
+    <div className="popover-anchor">
+      <button className="small-btn" onClick={() => setOpen(!open)} disabled={running} aria-expanded={open} data-testid="install-all">
+        {running ? "Installing…" : "Install all…"}
+      </button>
+      {open && !running && (
+        <div className="popover" role="dialog" aria-label="Install all missing">
+          <p className="small">Install these, then their own missing prerequisites:</p>
+          <ul className="popover__list">
+            {node.missingDeps.map((d) => <li key={d.name}>{d.name}</li>)}
+          </ul>
+          <p className="muted small">
+            Up to {maxDepth} level{maxDepth === 1 ? "" : "s"} deep and {maxNodes} new concepts (change in Settings).
+          </p>
+          <div className="form__actions">
+            <button onClick={() => setOpen(false)}>Cancel</button>
+            <button
+              className="primary"
+              onClick={() => {
+                setOpen(false);
+                void installAllMissing(node.id, graphId);
+              }}
+              data-testid="install-all-confirm"
+            >
+              Install
+            </button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Warns when this node sits on a dependency cycle and offers to cut one of its links. */
+function CycleWarning({ node, graph }: { node: ConceptNode; graph: Graph }) {
+  const mutate = useGraphStore((s) => s.mutate);
+  const cycle = cycleThrough(graph, node.id);
+  if (!cycle) return null;
+  const name = (id: string) => graph.nodes.find((n) => n.id === id)?.name ?? "?";
+  const links = cycle.slice(0, -1).map((from, i) => [from, cycle[i + 1]] as const);
+  return (
+    <div className="warn-box" data-testid="cycle-warning">
+      <p className="small">
+        <b>⚠ Dependency cycle:</b> {cycle.map(name).join(" → ")}. A concept can't be its own prerequisite, so one of
+        these links is probably a wrong AI answer.
+      </p>
+      <ul className="links">
+        {links.map(([from, to]) => (
+          <li key={`${from}>${to}`} className="warn-box__link">
+            <span className="small">{name(from)} needs {name(to)}</span>
+            <button
+              className="link small"
+              onClick={() => mutate((g) => removeDependency(g, from, to), graph.id)}
+              data-testid={`remove-link-${name(from)}-${name(to)}`}
+            >
+              Remove this link
+            </button>
+          </li>
+        ))}
+      </ul>
+    </div>
+  );
+}
+
+/** All transitive prerequisites in study order, with a toggle to highlight the chain on the canvas. */
+function LearningPath({ node, graph }: { node: ConceptNode; graph: Graph }) {
+  const setInspect = useGraphStore((s) => s.setInspect);
+  const highlight = useGraphStore((s) => s.highlight);
+  const setHighlight = useGraphStore((s) => s.setHighlight);
+  const { steps, cyclic } = learningPath(graph, node.id);
+  const on = highlight?.graphId === graph.id && highlight.nodeId === node.id;
+  if (steps.length <= 1) return null; // no prerequisites at all
+  return (
+    <section>
+      <div className="section-head">
+        <h4>Learning path</h4>
+        <button
+          className={`small-btn${on ? " small-btn--on" : ""}`}
+          aria-pressed={on}
+          onClick={() => setHighlight(on ? null : { graphId: graph.id, nodeId: node.id })}
+          data-testid="highlight-path"
+        >
+          Highlight
+        </button>
+      </div>
+      <ol className="path" data-testid="learning-path">
+        {steps.map((s) =>
+          s.kind === "missing" ? (
+            <li key={`missing:${s.name}`} className="path__step path__step--missing">
+              {s.name} <span className="path__tag">missing</span>
+            </li>
+          ) : s.id === node.id ? (
+            <li key={s.id} className="path__step path__step--target">{s.name}</li>
+          ) : (
+            <li key={s.id} className="path__step">
+              <button className="link" onClick={() => setInspect({ kind: "node", id: s.id })}>{s.name}</button>
+            </li>
+          ),
+        )}
+      </ol>
+      {cyclic && <p className="warn small">The prerequisites contain a cycle, so this order is only approximate.</p>}
+    </section>
   );
 }
 

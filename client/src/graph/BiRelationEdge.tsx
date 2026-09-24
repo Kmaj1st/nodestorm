@@ -3,7 +3,8 @@ import { EdgeLabelRenderer, useInternalNode, type Edge, type EdgeProps, type Int
 import { memo } from "react";
 import { useGraphStore } from "../store/graphStore";
 
-export type RelationFlowEdge = Edge<{ relation: Relation }, "bi">;
+/** `cycle`: this is a dependency link on a dependency cycle (drawn as a warning). */
+export type RelationFlowEdge = Edge<{ relation: Relation; cycle?: boolean }, "bi">;
 
 type Pt = { x: number; y: number };
 
@@ -68,7 +69,7 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
 
   return (
     <>
-      <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}`} />
+      <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${data.cycle ? " relation--cycle" : ""}`} />
       <Arrow tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} testId={`arrow-${rel.id}-aToB`} />
       <Arrow tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} testId={`arrow-${rel.id}-bToA`} />
       <EdgeLabelRenderer>

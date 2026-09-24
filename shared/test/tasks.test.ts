@@ -32,6 +32,18 @@ describe("tasks with mock provider", () => {
     expect(byName.Isomorphism).toMatchObject({ role: "derives", matchesExisting: null });
   });
 
+  it("has a multi-level prerequisite chain for recursive installs", async () => {
+    const chain: string[] = [];
+    for (let name = "Quotient group"; ; ) {
+      chain.push(name);
+      const r = await tasks.deps(mock, { node: { name }, existing: [] });
+      const next = r.prerequisites.find((p) => p.name !== "Group")?.name ?? r.prerequisites[0]?.name;
+      if (!next) break;
+      name = next;
+    }
+    expect(chain).toEqual(["Quotient group", "Normal subgroup", "Subgroup", "Group"]);
+  });
+
   it("relates in both directions", async () => {
     const r = await tasks.relate(mock, { a: { name: "First Isomorphism Theorem" }, b: { name: "Homomorphism" } });
     expect(r.aToB.kind).toBe("uses definition of");

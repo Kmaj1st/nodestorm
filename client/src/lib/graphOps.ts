@@ -225,6 +225,26 @@ export function removeRelation(g: Graph, relationId: string): Graph {
   };
 }
 
+/**
+ * Drop one direction of a dependency ("dependent no longer needs prereq"), e.g. to break a cycle.
+ * The dependency edge goes too, unless it still carries the reverse dependency or a mixed/derived relation.
+ */
+export function removeDependency(g: Graph, dependentId: string, prereqId: string): Graph {
+  const nodes = g.nodes.map((n) => (n.id === dependentId ? { ...n, dependsOn: n.dependsOn.filter((d) => d !== prereqId) } : n));
+  const rel = findRelation(g, dependentId, prereqId);
+  const out = { ...g, nodes };
+  if (!rel || rel.origin !== "dependency") return out;
+  const reverse = nodes.find((n) => n.id === prereqId)?.dependsOn.includes(dependentId);
+  if (!reverse) return { ...out, relations: g.relations.filter((r) => r.id !== rel.id) };
+  if (rel.a === prereqId) return out; // the edge already describes the remaining direction
+  // The shared edge described the removed direction; re-describe it for the one that's left.
+  const prereq = nodes.find((n) => n.id === prereqId)!;
+  const dependent = nodes.find((n) => n.id === dependentId)!;
+  const d = depRelation(prereq, dependent, "uses", `${prereq.name} builds on ${dependent.name}.`);
+  const flipped: Relation = { ...rel, a: prereqId, b: dependentId, aToB: d.aToB, bToA: d.bToA };
+  return { ...out, relations: g.relations.map((r) => (r.id === rel.id ? flipped : r)) };
+}
+
 /** Point everything that referenced `fromId` at `toId` instead, then drop `fromId`. */
 export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
   const swap = (id: string) => (id === fromId ? toId : id);
@@ -272,7 +292,12 @@ export function applySense(
 export function installPosition(g: Graph, dependentId: string, index: number) {
   const d = g.nodes.find((n) => n.id === dependentId);
   const base = d?.position ?? defaultPosition(g);
-  return { x: base.x + (index - 0.5) * 300, y: base.y - 240 };
+  const spot = { x: base.x + (index - 0.5) * 300, y: base.y - 240 };
+  // Slide sideways past nodes already there (recursive installs stack whole chains up).
+  const taken = (p: { x: number; y: number }) =>
+    g.nodes.some((n) => Math.abs(n.position.x - p.x) < 240 && Math.abs(n.position.y - p.y) < 160);
+  for (let i = 0; i < 20 && taken(spot); i++) spot.x += 260;
+  return spot;
 }
 
 // ---------- Hand edits ----------
