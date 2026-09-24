@@ -730,6 +730,8 @@ try {
   await page.keyboard.press("Enter");
   await waitCounts("7/11");
   assert(deleteReachesApp, "Delete doesn't remove a selected concept the to-do view hid");
+  // Find focuses on the next frame, once the revealed node is rendered.
+  await page.waitForFunction(() => document.querySelector('[aria-label="Rename concept"]')?.value === "Group");
   assert(
     (await node("Group").isVisible()) && (await page.getByLabel("Rename concept").inputValue()) === "Group",
     "Find reveals a concept the to-do view was hiding",
