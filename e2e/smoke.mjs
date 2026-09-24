@@ -46,6 +46,12 @@ try {
     await page.getByLabel("Concept name").fill(name);
     await page.getByRole("button", { name: "Add", exact: true }).click();
   };
+  // Is the node fully inside the visible canvas? (waits out the pan animation first)
+  const inView = async (name) => {
+    await page.waitForTimeout(600);
+    const [n, c] = await Promise.all([node(name).boundingBox(), page.locator(".react-flow").boundingBox()]);
+    return n && c && n.x >= c.x && n.y >= c.y && n.x + n.width <= c.x + c.width && n.y + n.height <= c.y + c.height;
+  };
 
   console.log("AI setup");
   assert((await page.getByRole("button", { name: "AI settings" }).textContent()).includes("Set up AI"), "toolbar asks to set up AI on first visit");
@@ -113,6 +119,7 @@ try {
   await page.waitForFunction(() => document.querySelector('[data-testid="node-Isomorphism"]')?.className.includes("concept--ok"));
   assert(true, "installed Isomorphism had its own deps checked (Homomorphism already present)");
   assert((await page.locator(".react-flow__edge").count()) === 3, "3 dependency edges drawn");
+  assert(await inView("Isomorphism"), "installed node placed in view");
   await page.screenshot({ path: `${shots}2-installed.png` });
 
   console.log("Click both arrowheads of a relation");
@@ -143,6 +150,7 @@ try {
   await page.getByRole("button", { name: "Close" }).click();
   await node("Kernel").waitFor();
   assert(true, "derived 'Kernel' inside the sandbox");
+  assert(await inView("Kernel"), "accepted proposal placed in view");
   await page.screenshot({ path: `${shots}4-sandbox.png` });
   await page.getByLabel("Graph").selectOption({ label: "Main graph" });
   await page.waitForTimeout(300);
@@ -181,6 +189,26 @@ try {
       [name, text],
       { timeout },
     );
+
+  console.log("Layout");
+  await page.getByRole("button", { name: "Tidy" }).click();
+  await page.waitForTimeout(700);
+  const top = async (name) => (await node(name).boundingBox()).y;
+  assert(await top("Homomorphism") < await top("Isomorphism"), "Tidy puts Homomorphism above Isomorphism");
+  assert(await top("Isomorphism") < await top("First Isomorphism Theorem"), "…and Isomorphism above First Isomorphism Theorem");
+  const saved = await page.evaluate(() => localStorage.getItem("nodestorm") ?? "");
+  const savedGraphs = JSON.parse(saved).state.graphs;
+  assert(Object.values(savedGraphs).some((g) => g.nodes.some((n) => n.name === "Homomorphism" && n.position.y === 0)), "tidied positions are saved");
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Control+k");
+  const find = page.getByRole("dialog", { name: "Find concept" });
+  await find.getByRole("combobox").fill("frst iso");
+  assert((await find.getByRole("option").first().textContent()).includes("First Isomorphism Theorem"), "Ctrl+K fuzzy-finds a concept");
+  await page.keyboard.press("Enter");
+  await page.waitForFunction(() => document.querySelector('[data-testid="node-First Isomorphism Theorem"]')?.className.includes("concept--selected"));
+  assert((await find.count()) === 0 && (await page.getByTestId("node-panel").textContent()).includes("First Isomorphism Theorem"), "Enter selects it and opens it in the inspector");
+  assert(await inView("First Isomorphism Theorem"), "view centred on the found concept");
+  await page.screenshot({ path: `${shots}5b-tidy.png` });
 
   console.log("Ambiguous names");
   {

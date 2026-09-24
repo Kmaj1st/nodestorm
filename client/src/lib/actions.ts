@@ -3,6 +3,8 @@ import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import * as ops from "./graphOps";
+import { layeredLayout } from "./layout";
+import { viewport } from "./viewport";
 
 /** Async flows that combine AI calls with graph mutations. Each binds to the graph it started in. */
 
@@ -134,8 +136,11 @@ export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, 
 export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, hint?: string): string {
   let id = "";
   let existed = false;
+  // Without a preferred spot, new concepts go where the user is looking (addNode then avoids overlaps).
+  const c = input.position ? undefined : viewport.center();
+  const position = input.position ?? (c && { x: c.x - ops.NODE_SIZE.w / 2, y: c.y - ops.NODE_SIZE.h / 2 });
   store().mutate((g) => {
-    const r = ops.addNode(g, input);
+    const r = ops.addNode(g, { ...input, position });
     id = r.id;
     existed = r.existed;
     return r.graph;
@@ -146,7 +151,14 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
     void analyzeNode(id, graphId, hint);
   }
   store().setInspect({ kind: "node", id });
+  if (graphId === store().activeId) viewport.reveal(id);
   return id;
+}
+
+/** "Tidy": lay the active graph out in layers, prerequisites above their dependents. */
+export function tidy() {
+  store().mutate((g) => ops.setPositions(g, layeredLayout(g)));
+  viewport.fit();
 }
 
 export function suggestNames(description: string) {
@@ -205,10 +217,8 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const anchors = g.nodes.filter((n) => anchorIds.includes(n.id));
   const cx = anchors.reduce((s, n) => s + n.position.x, 0) / Math.max(anchors.length, 1);
   const cy = Math.max(...anchors.map((n) => n.position.y), 0);
-  const id = addConcept(
-    { name: p.name, definition: p.definition, aliases: p.aliases, position: { x: cx + (Math.random() - 0.5) * 120, y: cy + 200 } },
-    graphId,
-  );
+  // Preferred spot: below the anchors; addNode shifts it to the nearest free place.
+  const id = addConcept({ name: p.name, definition: p.definition, aliases: p.aliases, position: { x: cx, y: cy + 200 } }, graphId);
   store().mutate((g) => {
     let out = g;
     for (const l of p.links) {

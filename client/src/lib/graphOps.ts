@@ -124,7 +124,8 @@ export function addNode(g: Graph, input: NewNodeInput): { graph: Graph; id: stri
     definition: input.definition?.trim() ?? "",
     aliases: input.aliases ?? [],
     status: "checking",
-    position: input.position ?? defaultPosition(g),
+    // The requested position is only a preference: the node goes to the nearest spot that overlaps nothing.
+    position: findFreeSpot(g.nodes.map((n) => n.position), input.position ?? defaultPosition(g)),
     dependsOn: [],
     missingDeps: [],
   };
@@ -135,6 +136,41 @@ export function addNode(g: Graph, input: NewNodeInput): { graph: Graph; id: stri
 export function defaultPosition(g: Graph) {
   const i = g.nodes.length;
   return { x: 80 + (i % 3) * 360, y: 80 + Math.floor(i / 3) * 240 };
+}
+
+type XY = { x: number; y: number };
+
+/** Approximate on-canvas footprint of a concept node (positions are its top-left corner). */
+export const NODE_SIZE = { w: 220, h: 110 };
+const GAP = 40;
+
+/**
+ * The free spot (top-left) closest to `target` where a node overlaps none of `occupied` (other nodes' top-left
+ * corners). Candidates are tried on rings of growing radius around the target, so the result is (roughly) the nearest.
+ */
+export function findFreeSpot(occupied: XY[], target: XY, size = NODE_SIZE): XY {
+  const w = size.w + GAP;
+  const h = size.h + GAP;
+  const free = (p: XY) => occupied.every((o) => Math.abs(o.x - p.x) >= w || Math.abs(o.y - p.y) >= h);
+  const step = { x: w / 2, y: h / 2 };
+  for (let r = 0; r <= 40; r++) {
+    const ring: XY[] = [];
+    for (let i = -r; i <= r; i++) {
+      for (let j = -r; j <= r; j++) {
+        if (Math.max(Math.abs(i), Math.abs(j)) !== r) continue;
+        ring.push({ x: target.x + i * step.x, y: target.y + j * step.y });
+      }
+    }
+    ring.sort((a, b) => Math.hypot(a.x - target.x, a.y - target.y) - Math.hypot(b.x - target.x, b.y - target.y));
+    const hit = ring.find(free);
+    if (hit) return hit;
+  }
+  return target; // absurdly crowded: give up and overlap rather than loop forever
+}
+
+/** Move several nodes at once (e.g. after an auto-layout). Unknown ids are ignored. */
+export function setPositions(g: Graph, positions: Map<string, XY>): Graph {
+  return { ...g, nodes: g.nodes.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)) };
 }
 
 /** Apply the AI's prerequisite list to a node: link what exists, record what is missing. */

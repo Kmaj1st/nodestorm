@@ -1,10 +1,10 @@
 import { providerMeta } from "@nodestorm/shared";
 import { useRef } from "react";
-import { mix } from "../lib/actions";
+import { mix, tidy } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 
-export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () => void }) {
+export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
   const s = useGraphStore();
   const graph = useGraphStore(activeGraph);
   const settings = useSettings();
@@ -59,6 +59,15 @@ export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () =
         </button>
         <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? "Propose new concepts from the selection"}>
           Derive ✦
+        </button>
+      </div>
+
+      <div className="toolbar__group">
+        <button onClick={tidy} disabled={graph.nodes.length < 2} title="Arrange in layers: prerequisites above what depends on them">
+          Tidy
+        </button>
+        <button onClick={onFind} disabled={!graph.nodes.length} title="Find a concept (Ctrl+K)" aria-label="Find concept">
+          🔍
         </button>
       </div>
 

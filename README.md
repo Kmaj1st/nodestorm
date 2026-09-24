@@ -8,6 +8,8 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
   *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem uses homomorphisms and derives an isomorphism, so it shows as blocked with *Isomorphism* missing. Install it and the theorem becomes ready.
 - **Sandbox mode.** **Fork sandbox** makes a copy of the current graph. You can derive (**Derive ✦**), mix and install in the copy without touching the original. When you're done, **Merge back** or **Discard**.
 
+New concepts appear in a free spot near what you're looking at (or near the concept they relate to), and the view pans to them. **Tidy** arranges the graph in layers, with prerequisites above the concepts that depend on them. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, then selects it and centres the view on it.
+
 Graphs autosave to your browser's localStorage. **Export** and **Import** move them in and out as JSON.
 
 ## Setup
@@ -67,6 +69,6 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, dependency/install/sandbox logic
+npm test        # vitest: AI task parsing/validation, model discovery, dependency/install/sandbox logic, layout
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 ```

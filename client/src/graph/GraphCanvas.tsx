@@ -4,11 +4,13 @@ import {
   Controls,
   MiniMap,
   ReactFlow,
+  useReactFlow,
   type NodeChange,
   type OnSelectionChangeParams,
 } from "@xyflow/react";
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { updateNode } from "../lib/graphOps";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { NODE_SIZE, updateNode } from "../lib/graphOps";
+import { registerViewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
@@ -41,6 +43,52 @@ export function GraphCanvas() {
     });
   }, [graph]);
 
+  // Let the action layer place new nodes in view and pan/zoom to them (see lib/viewport.ts).
+  const rf = useReactFlow<ConceptFlowNode, RelationFlowEdge>();
+  const wrapper = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const box = (id: string) => {
+      const c = activeGraph(useGraphStore.getState()).nodes.find((n) => n.id === id);
+      if (!c) return null;
+      const m = rf.getInternalNode(id)?.measured;
+      return { x: c.position.x, y: c.position.y, w: m?.width ?? NODE_SIZE.w, h: m?.height ?? NODE_SIZE.h };
+    };
+    const centreOn = (b: { x: number; y: number; w: number; h: number }, zoom: number) =>
+      void rf.setCenter(b.x + b.w / 2, b.y + b.h / 2, { zoom, duration: 400 });
+    registerViewport({
+      center() {
+        const r = wrapper.current?.getBoundingClientRect();
+        if (!r) return { x: 0, y: 0 };
+        return rf.screenToFlowPosition({ x: r.left + r.width / 2, y: r.top + r.height / 2 });
+      },
+      reveal(id) {
+        // Wait a frame so the new node is rendered and measured.
+        requestAnimationFrame(() => {
+          const b = box(id);
+          const r = wrapper.current?.getBoundingClientRect();
+          if (!b || !r) return;
+          const { x, y, zoom } = rf.getViewport();
+          const left = -x / zoom;
+          const top = -y / zoom;
+          const inView = b.x >= left && b.y >= top && b.x + b.w <= left + r.width / zoom && b.y + b.h <= top + r.height / zoom;
+          if (!inView) centreOn(b, zoom);
+        });
+      },
+      focus(id) {
+        setNodes((ns) => ns.map((n) => ({ ...n, selected: n.id === id })));
+        setSelection([id]);
+        setInspect({ kind: "node", id });
+        const b = box(id);
+        if (b) centreOn(b, Math.max(rf.getZoom(), 0.8));
+      },
+      fit() {
+        // After a layout the nodes move in the next render; fit once they have.
+        requestAnimationFrame(() => void rf.fitView({ duration: 400, maxZoom: 1.2 }));
+      },
+    });
+    return () => registerViewport(null);
+  }, [rf, setSelection, setInspect]);
+
   const edges = useMemo<RelationFlowEdge[]>(
     () => graph.relations.map((r) => ({ id: r.id, source: r.a, target: r.b, type: "bi" as const, data: { relation: r } })),
     [graph.relations],
@@ -70,7 +118,7 @@ export function GraphCanvas() {
   );
 
   return (
-    <div className={`canvas${graph.parentId ? " canvas--sandbox" : ""}`}>
+    <div ref={wrapper} className={`canvas${graph.parentId ? " canvas--sandbox" : ""}`}>
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
         nodes={nodes}
