@@ -810,8 +810,11 @@ try {
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
-      JSON.stringify(["Import JSON…", "Extract from text…", "Quiz me…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
-    "File ▾ holds import, Extract from text, Quiz me, every export format and the share link",
+      JSON.stringify([
+        "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…",
+        "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…",
+      ]),
+    "File ▾ holds import, Extract from text, Quiz me, Versions, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -1187,6 +1190,81 @@ try {
     assert((await quizSummary.textContent()).includes("2 concepts weren't asked."), "finishing early says how many weren't asked");
     await page.keyboard.press("Escape");
     await quizDialog.waitFor({ state: "detached" });
+  }
+
+  console.log("Versions");
+  {
+    // Still the offline demo provider in browser mode (Quiz section). A fresh project with the example graph.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.getByRole("button", { name: "Load example: Group theory" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+    const fileItem = async (name) => {
+      await page.getByRole("button", { name: "File ▾" }).click();
+      await page.getByRole("menuitem", { name, exact: true }).click();
+    };
+    const versions = page.getByRole("dialog", { name: "Versions" });
+    const entries = () => versions.getByTestId("version").locator(".versions__title").allTextContents();
+
+    await fileItem("Save snapshot…");
+    await versions.waitFor();
+    const labelField = versions.getByLabel("Snapshot label (optional)");
+    assert(await labelField.evaluate((el) => el === document.activeElement), "Save snapshot… opens Versions with the label field focused");
+    await labelField.fill("Before cleanup");
+    await versions.getByTestId("versions-save").click();
+    await versions.getByText("Saved “Before cleanup”.").waitFor();
+    assert(JSON.stringify(await entries()) === JSON.stringify(["Before cleanup"]), "a named snapshot is listed");
+    assert((await versions.getByTestId("version").first().textContent()).includes("7 concepts"), "…with its concept count");
+    await audit("Versions dialog");
+    await versions.getByRole("button", { name: "Close" }).click();
+
+    await node("Group").click();
+    await page.keyboard.press("Delete");
+    await node("Group").waitFor({ state: "detached" });
+    await fileItem("Versions…");
+    await versions.getByTestId("version").first().getByRole("button", { name: "Compare" }).click();
+    const diff = versions.getByTestId("version-diff");
+    await diff.waitFor();
+    assert((await diff.textContent()).includes("Brings back 1 concept: Group"), "Compare says restoring brings back the deleted concept");
+    await versions.getByTestId("version").first().getByRole("button", { name: "Restore", exact: true }).click();
+    await versions.waitFor({ state: "detached" });
+    await node("Group").waitFor();
+    assert(await node("Group").isVisible(), "Restore brings the deleted concept back");
+    assert((await page.locator(".toast").textContent()).includes("Restored “Before cleanup”"), "…and says so");
+    await page.locator(".toast").click();
+    await fileItem("Versions…");
+    await versions.getByTestId("version").first().waitFor();
+    assert((await entries())[0] === "Before restoring a version", "the state before the restore is kept as a version");
+    await versions.getByRole("button", { name: "Close" }).click();
+
+    await node("First Isomorphism Theorem").click();
+    await page.getByTestId("install-all").click();
+    await page.getByRole("dialog", { name: "Install all missing" }).getByTestId("install-all-confirm").click();
+    await waitBadge("First Isomorphism Theorem", "ready");
+    await fileItem("Versions…");
+    await versions.getByTestId("version").first().waitFor();
+    assert((await entries())[0] === "Before Install all", "an automatic snapshot is taken before Install all");
+    assert((await versions.getByTestId("version").first().textContent()).includes("7 concepts"), "…of the graph before the run");
+    await versions.getByRole("button", { name: "Close" }).click();
+
+    await page.reload();
+    await node("Group").waitFor();
+    await fileItem("Versions…");
+    await versions.getByTestId("version").first().waitFor();
+    const after = await entries();
+    assert(
+      JSON.stringify(after) === JSON.stringify(["Before Install all", "Before restoring a version", "Before cleanup"]),
+      `the list is kept after a reload: ${after.join(" | ")}`,
+    );
+    await versions.getByTestId("version").last().getByRole("button", { name: "Preview" }).click();
+    await page.getByTestId("viewer-banner").waitFor();
+    assert((await page.getByTestId("viewer-banner").textContent()).includes("Previewing an earlier version"), "Preview opens the version read-only");
+    await page.getByRole("button", { name: "File ▾" }).click();
+    assert(!(await page.getByRole("menuitem", { name: "Versions…" }).count()), "Versions is hidden in the read-only viewer");
+    await page.keyboard.press("Escape");
+    await page.getByTestId("viewer-banner").getByRole("button", { name: "Close" }).click();
+    await page.getByTestId("viewer-banner").waitFor({ state: "detached" });
+    assert(await node("Isomorphism").isVisible(), "closing the preview returns to the current project");
   }
 
   console.log("\nE2E passed");

@@ -11,6 +11,7 @@ import {
 } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
+import { autoSnapshot } from "../store/snapshotStore";
 import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import { applyExtraction, type ExtractReview } from "./extract";
@@ -219,6 +220,7 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
 
 /** "Tidy": lay the active graph out in layers, prerequisites above their dependents. */
 export function tidy() {
+  autoSnapshot("tidy"); // moves every concept at once
   store().mutate((g) => ops.setPositions(g, layeredLayout(g)));
   viewport.fit();
 }
@@ -299,6 +301,8 @@ export async function installAllMissing(rootId: string, graphId = store().active
   const find = (id: string) => graph(graphId)?.nodes.find((n) => n.id === id);
   const root = find(rootId);
   if (!root) return;
+  // A restore point: the run may add many concepts, and AI results that arrive later are no undo steps.
+  if (root.missingDeps.length) autoSnapshot("installAll", graphId);
   const { maxDepth, maxNodes } = useSettings.getState().installAll;
   const report: InstallReport = {
     installed: [], depth: 0, unclear: [], failed: [], leftOver: [], limit: null, cycles: [], cancelled: false,
@@ -496,6 +500,7 @@ export function extractFromText(text: string, focus?: string) {
  */
 export function insertExtraction(review: ExtractReview, graphId = store().activeId) {
   let added: string[] = [];
+  autoSnapshot("extract", graphId);
   const before = graph(graphId)?.relations.length ?? 0;
   store().mutate((g) => {
     const r = applyExtraction(g, review, viewport.center());

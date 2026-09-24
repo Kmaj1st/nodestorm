@@ -1,0 +1,11 @@
+/* "Versions" dialog (panels/VersionsDialog.tsx) */
+.versions { width: min(640px, calc(100vw - 32px)); }
+.versions__notice:empty { display: none; }
+.versions__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.versions__item { border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; display: flex; flex-direction: column; gap: 4px; }
+.versions__head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.versions__title { font-weight: 600; overflow-wrap: anywhere; }
+.versions__title--named { color: var(--accent); }
+.versions__actions { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 2px; }
+.versions__diff { margin: 2px 0 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px; }
+p.versions__diff { padding-left: 0; }

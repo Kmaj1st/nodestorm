@@ -4,11 +4,13 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { registerServiceWorker } from "./lib/pwa";
 import { initTheme } from "./lib/theme";
+import { startAutoSnapshots } from "./store/snapshotStore";
 import { preloadDialogs } from "./panels/lazy";
 import "./styles.css";
 
 initTheme(); // before the first render, so a dark page never flashes white
 registerServiceWorker(); // production builds only: offline app shell + update notice
+startAutoSnapshots(); // version snapshots in IndexedDB: loads the list, then snapshots periodically while editing
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>

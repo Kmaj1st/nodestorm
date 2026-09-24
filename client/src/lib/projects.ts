@@ -174,6 +174,25 @@ export function importProject(ws: Workspace, imported: Graph[], name?: string): 
 }
 
 /**
+ * Replace a project's graphs (main first) with other versions of them, e.g. a restored snapshot, and open its main
+ * graph. The graphs keep their ids unless another project uses one of them (then all get fresh ids, see cloneGraphs).
+ */
+export function replaceProjectGraphs(ws: Workspace, projectId: string, incoming: Graph[]): Workspace {
+  const p = ws.projects[projectId];
+  if (!p || !incoming.length) return ws;
+  const gone = new Set(projectGraphs(ws, p).map((g) => g.id));
+  const rest = Object.fromEntries(Object.entries(ws.graphs).filter(([id]) => !gone.has(id)));
+  const graphs = incoming.some((g) => rest[g.id]) ? cloneGraphs(incoming).graphs : incoming;
+  const main = graphs[0];
+  return {
+    graphs: { ...rest, ...Object.fromEntries(graphs.map((g) => [g.id, g])) },
+    projects: { ...ws.projects, [projectId]: { ...p, mainId: main.id } },
+    projectId,
+    activeId: main.id,
+  };
+}
+
+/**
  * Make sure the workspace is consistent: every graph belongs to a project (root graphs without one get their
  * own), and the current project and active graph exist and match. Never drops a graph.
  */

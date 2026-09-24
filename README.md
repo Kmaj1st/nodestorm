@@ -40,6 +40,8 @@ Projects autosave to your browser's localStorage. Data saved by earlier versions
 
 **Share link…** (in **File ▾**) packs the current graph into a link, without its sandboxes. No account or server is involved: the graph is compressed into the part of the URL after `#`, which browsers never send to a server, so it works on the static GitHub Pages site too. The dialog shows the link's length. Some chat apps and mail clients cut off links longer than about 8,000 characters, so for big graphs send the JSON export instead. Opening a link shows the graph **read-only**: a banner says *Viewing a shared graph*, editing and AI controls are hidden, and export still works. **Save a copy** adds it as a new project (your existing projects are never overwritten), and **Close** goes back to your own work. Damaged or oversized links show an error and open the normal app.
 
+**Versions.** Undo history is in memory only, so each project also keeps restore points. NodeStorm saves one automatically before big changes (**Install all**, adding an **Extract from text** result, merging or discarding a sandbox, **Tidy**, restoring a version) and every 10 minutes while you edit, but never twice for an unchanged project. **File ▾ → Save snapshot…** saves a named one with an optional label. **File ▾ → Versions…** lists them, newest first, with the reason or label and the counts. **Compare** says what restoring would bring back, remove or change in the main graph, and **Preview** opens the version read-only. **Restore** replaces the project (main graph and sandboxes) with it, after saving the current state as *Before restoring a version*, so a restore can be undone the same way. **Restore as new project** leaves the current one alone. Mastery from quizzes is kept when you restore. The last 20 automatic versions of each project are kept, and named ones until you delete them. Old automatic ones are also dropped to keep all versions under about 20 MB. Versions live in the browser's IndexedDB, not in localStorage with the projects, and are read back through the same repair as imports, so versions saved by older releases still open. Where IndexedDB is blocked (some private windows) the dialog says so and everything else works as before. The read-only viewer has no Versions.
+
 **Import** repairs files from older or newer versions and hand-edited files instead of rejecting them. It fills in missing fields and drops relations or prerequisite links that point to concepts that aren't in the file. A notice lists what was fixed.
 
 ## Setup
@@ -120,7 +122,7 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling, version snapshots
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings and an axe (WCAG A/AA) audit
 npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker (all chunks precached), offline start, a failed chunk load and the update notice
 ```
