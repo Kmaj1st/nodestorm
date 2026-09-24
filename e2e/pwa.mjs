@@ -53,7 +53,7 @@ try {
   const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(base);
-  const addButton = page.getByRole("button", { name: "+ Add concept" });
+  const addButton = page.getByRole("button", { name: "Add concept", exact: true });
   await addButton.waitFor();
 
   console.log("Manifest");
@@ -114,7 +114,7 @@ try {
   assert(true, "a formula is typeset offline, with KaTeX's fonts from the cache");
   const second = await context.newPage();
   await second.goto(`${base}?from=home-screen`);
-  await second.getByRole("button", { name: "+ Add concept" }).waitFor({ timeout: 10000 });
+  await second.getByRole("button", { name: "Add concept", exact: true }).waitFor({ timeout: 10000 });
   assert(true, "a new window of the app opens offline too");
   await page.screenshot({ path: `${shots}pwa-offline.png` });
   await second.close();
@@ -145,18 +145,18 @@ try {
     let fail = true;
     await p.route(/FindDialog-.*\.js$/, (route) => (fail ? route.abort() : route.continue()));
     await p.goto(base);
-    await p.getByRole("button", { name: "+ Add concept" }).waitFor();
+    await p.getByRole("button", { name: "Add concept", exact: true }).waitFor();
     await p.waitForTimeout(3500); // let the idle-time preload try (and fail) first
     await p.keyboard.press("Control+k");
     const alert = p.getByRole("alert").filter({ hasText: "couldn't be loaded" });
     await alert.waitFor();
     assert(
-      (await p.getByRole("button", { name: "+ Add concept" }).isVisible()) && !errors.length,
+      (await p.getByRole("button", { name: "Add concept", exact: true }).isVisible()) && !errors.length,
       "a dialog whose chunk fails to load shows an error instead of blanking the app",
     );
     fail = false;
     await Promise.all([p.waitForEvent("load"), alert.getByRole("button", { name: "Reload" }).click()]);
-    await p.getByRole("button", { name: "+ Add concept" }).waitFor();
+    await p.getByRole("button", { name: "Add concept", exact: true }).waitFor();
     await p.keyboard.press("Control+k");
     await p.getByRole("dialog", { name: "Find concept" }).waitFor();
     assert(true, "Reload fetches it again once the network is back");

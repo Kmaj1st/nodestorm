@@ -90,8 +90,8 @@ describe("tour steps", () => {
     expect(ids(env(desktop, ["relation"]))).toEqual(["add", "arrow", "mix", "fork", "file", "settings"]);
   });
 
-  it("points at ☰ instead of the folded buttons on phones", () => {
-    // ≤800px: Fork, File and Settings are hidden in the ☰ menu, which is shown instead.
+  it("points at the More tools menu button instead of the folded buttons on phones", () => {
+    // ≤800px: Fork, File and Settings are hidden in the More tools menu, which is shown instead.
     expect(ids(env(["add", "mix", "more"], ["blocked", "relation"]))).toEqual(["add", "install", "arrow", "mix", "more"]);
   });
 

@@ -1,7 +1,9 @@
+import { Check, ChevronsUpDown, Copy, FilePlus, Pencil, Trash2 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "../i18n";
 import { projectList } from "../lib/projects";
 import { currentProject, useGraphStore } from "../store/graphStore";
+import { Icon } from "../ui/Icon";
 
 /**
  * Project switcher at the left of the toolbar: shows the current project's name and opens a menu to switch
@@ -61,14 +63,15 @@ export function ProjectMenu() {
   return (
     <div className="menu" ref={ref}>
       <button
-        className="project-button"
+        className="project-button menu-button"
         aria-haspopup="menu"
         aria-expanded={open}
         aria-label={t("project.label", { name: project.name })}
         title={t("project.title")}
         onClick={() => setOpen(!open)}
       >
-        <span className="project-button__name">{project.name}</span> ▾
+        <span className="project-button__name">{project.name}</span>
+        <Icon icon={ChevronsUpDown} size={14} className="menu-button__chevron" />
       </button>
       {open && (
         <div className="menu__list menu__list--left" role="menu" aria-label={t("project.menu")}>
@@ -80,15 +83,20 @@ export function ProjectMenu() {
               className={p.id === project.id ? "menu__item--current" : undefined}
               onClick={act(() => s.switchProject(p.id))}
             >
-              {p.id === project.id ? "✓ " : ""}{p.name}
+              <span className="menu__check">{p.id === project.id && <Icon icon={Check} size={14} />}</span>
+              <span className="menu__label">{p.name}</span>
             </button>
           ))}
           <hr className="menu__sep" />
           {/* A new project starts with its name selected for editing. */}
-          <button role="menuitem" onClick={act(() => { s.newProject(); setRenaming(true); })}>{t("project.new")}</button>
-          <button role="menuitem" onClick={act(() => setRenaming(true))}>{t("project.rename")}</button>
+          <button role="menuitem" onClick={act(() => { s.newProject(); setRenaming(true); })}>
+            <Icon icon={FilePlus} size={14} />{t("project.new")}
+          </button>
+          <button role="menuitem" onClick={act(() => setRenaming(true))}>
+            <Icon icon={Pencil} size={14} />{t("project.rename")}
+          </button>
           <button role="menuitem" title={t("project.duplicateTitle")} onClick={act(() => s.duplicateProject(project.id))}>
-            {t("project.duplicate")}
+            <Icon icon={Copy} size={14} />{t("project.duplicate")}
           </button>
           <button
             role="menuitem"
@@ -97,7 +105,7 @@ export function ProjectMenu() {
               if (confirm(t("project.deleteConfirm", { name: project.name }))) s.deleteProject(project.id);
             })}
           >
-            {t("project.delete")}
+            <Icon icon={Trash2} size={14} />{t("project.delete")}
           </button>
         </div>
       )}

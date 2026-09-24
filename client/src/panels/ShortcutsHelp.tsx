@@ -1,8 +1,10 @@
 import { ControlButton } from "@xyflow/react";
+import { Keyboard } from "lucide-react";
 import { useEffect } from "react";
 import { create } from "zustand";
 import { useT } from "../i18n";
 import { ShortcutsDialog } from "./lazy";
+import { Icon } from "../ui/Icon";
 
 const useHelp = create<{ open: boolean }>()(() => ({ open: false }));
 const setOpen = (open: boolean) => useHelp.setState({ open });
@@ -24,12 +26,12 @@ export function ShortcutsHelp() {
   return open ? <ShortcutsDialog onClose={() => setOpen(false)} /> : null;
 }
 
-/** "?" among the canvas zoom controls. */
+/** The keyboard-shortcuts button among the canvas zoom controls ("?" opens it too). */
 export function ShortcutsButton() {
   const t = useT();
   return (
     <ControlButton onClick={() => setOpen(true)} title={t("shortcuts.button")} aria-label={t("shortcuts.button")} className="shortcuts-button">
-      ?
+      <Icon icon={Keyboard} size={14} />
     </ControlButton>
   );
 }

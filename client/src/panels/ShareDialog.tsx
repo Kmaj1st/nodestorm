@@ -1,5 +1,7 @@
 import type { Graph } from "@nodestorm/shared";
+import { Check, Copy, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
 import { rich, useT } from "../i18n";
 import { encodeShare, LONG_LINK, shareUrl } from "../lib/share";
@@ -34,8 +36,7 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
   };
 
   return createPortal(
-    <Modal label={t("share.dialog")} onClose={onClose}>
-      <h3>{t("share.dialog")}</h3>
+    <Modal label={t("share.dialog")} title={t("share.dialog")} onClose={onClose}>
       <p className="muted small">{rich("share.intro", { n: graph.nodes.length })}</p>
       {error && <p className="error small" role="alert">{t("share.failed", { error })}</p>}
       {!link && !error && <p className="muted">{t("share.packing")}</p>}
@@ -50,17 +51,20 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
               data-testid="share-link"
               onFocus={(e) => e.target.select()}
             />
-            <button className="primary" onClick={copy}>{t(copied ? "share.copied" : "share.copy")}</button>
+            <button className="primary" onClick={copy}>
+              <Icon icon={copied ? Check : Copy} size={14} />
+              {t(copied ? "share.copied" : "share.copy")}
+            </button>
           </div>
           <p className="muted small" data-testid="share-size">{t("share.chars", { n: link.length.toLocaleString() })}</p>
           {link.length > LONG_LINK && (
-            <p className="warn-box small" role="status">{t("share.long")}</p>
+            <p className="warn-box warn-box__head small" role="status">
+              <Icon icon={TriangleAlert} size={16} className="warn-box__icon" />
+              <span>{t("share.long")}</span>
+            </p>
           )}
         </>
       )}
-      <div className="form__actions">
-        <button onClick={onClose}>{t("common.close")}</button>
-      </div>
     </Modal>,
     document.body,
   );

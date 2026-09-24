@@ -1,4 +1,5 @@
 import { ReactFlowProvider } from "@xyflow/react";
+import { ChevronDown, ChevronUp, CircleAlert, Eye, FlaskConical, History, Info, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
 import { rich, t, useT } from "./i18n";
@@ -18,6 +19,7 @@ import { UpdateNotice } from "./panels/UpdateNotice";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 import { autoSnapshot } from "./store/snapshotStore";
 import { toggleFocus, useView, visibleNow } from "./store/viewStore";
+import { Icon } from "./ui/Icon";
 
 export function App() {
   useT(); // re-render the shell (banners, toasts) when the interface language changes
@@ -123,8 +125,11 @@ export function App() {
             role={toastKind === "error" ? "alert" : "status"}
             onClick={() => setToast(null)}
           >
-            <span>{toast}</span>
-            <button className="toast__close" aria-label={t("common.dismiss")}>✕</button>
+            <Icon icon={toastKind === "error" ? CircleAlert : Info} className="toast__icon" />
+            <span className="toast__text">{toast}</span>
+            <button className="toast__close icon-btn" aria-label={t("common.dismiss")} title={t("common.dismiss")}>
+              <Icon icon={X} size={14} />
+            </button>
           </div>
         )}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
@@ -184,13 +189,16 @@ function ViewerBanner() {
     clearShareHash();
   };
   return (
-    <div className="viewer-banner" data-testid="viewer-banner" role="status">
-      <span>
-        {view?.kind === "snapshot"
-          ? rich("viewer.snapshotBanner", { name: view.name })
-          : view?.name ? rich("viewer.bannerNamed", { name: view.name }) : t("viewer.banner")}
+    <div className="viewer-banner banner" data-testid="viewer-banner" role="status">
+      <span className="banner__text">
+        <Icon icon={view?.kind === "snapshot" ? History : Eye} className="banner__icon" />
+        <span>
+          {view?.kind === "snapshot"
+            ? rich("viewer.snapshotBanner", { name: view.name })
+            : view?.name ? rich("viewer.bannerNamed", { name: view.name }) : t("viewer.banner")}
+        </span>
       </span>
-      <span className="viewer-banner__actions">
+      <span className="banner__actions">
         <button className="primary" onClick={saveCopy}>{t("viewer.saveCopy")}</button>
         <button onClick={close} title={t("viewer.closeTitle")}>{t("common.close")}</button>
       </span>
@@ -205,9 +213,12 @@ function SandboxBanner() {
   const mergeSandbox = useGraphStore((s) => s.mergeSandbox);
   const discardSandbox = useGraphStore((s) => s.discardSandbox);
   return (
-    <div className="sandbox-banner" data-testid="sandbox-banner">
-      <span>{rich("sandbox.banner", { name: graph.name })}</span>
-      <span className="sandbox-banner__actions">
+    <div className="sandbox-banner banner" data-testid="sandbox-banner">
+      <span className="banner__text">
+        <Icon icon={FlaskConical} className="banner__icon" />
+        <span>{rich("sandbox.banner", { name: graph.name })}</span>
+      </span>
+      <span className="banner__actions">
         {/* Neither can be undone, so each leaves a restore point in Versions first. */}
         <button onClick={() => { autoSnapshot("merge"); mergeSandbox(graph.id); }} title={t("sandbox.mergeTitle")}>
           {t("sandbox.merge")}
@@ -244,6 +255,7 @@ function InspectorSheet() {
   return (
     <div className={`sheet${open ? "" : " sheet--closed"}`}>
       <button className="sheet__toggle" aria-expanded={open} aria-controls="inspector-sheet" onClick={() => setOpen(!open)}>
+        <Icon icon={open ? ChevronDown : ChevronUp} />
         {t(open ? "sheet.hide" : "sheet.show")}
       </button>
       <div className="sheet__content" id="inspector-sheet">

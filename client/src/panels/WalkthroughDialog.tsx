@@ -1,4 +1,6 @@
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LocateFixed, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { useT } from "../i18n";
 import { viewport } from "../lib/viewport";
 import { buildWalkthrough } from "../lib/walkthrough";
@@ -62,7 +64,9 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
             {t("walk.progress", { i: i + 1, n: count })}
           </span>
         )}
-        <button className="walk__close" onClick={onClose} aria-label={t("common.close")}>✕</button>
+        <button className="walk__close icon-btn" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+          <Icon icon={X} />
+        </button>
       </header>
 
       {!slide ? (
@@ -137,13 +141,13 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
       )}
 
       <footer className="walk__nav">
-        <button onClick={() => go(0)} disabled={i === 0}>{t("walk.first")}</button>
-        <button onClick={() => go(i - 1)} disabled={i === 0} data-testid="walk-prev">← {t("walk.prev")}</button>
-        {slide && <button onClick={() => showOnCanvas(slide.id)} data-testid="walk-show">{t("walk.show")}</button>}
+        <button onClick={() => go(0)} disabled={i === 0}><Icon icon={ChevronsLeft} />{t("walk.first")}</button>
+        <button onClick={() => go(i - 1)} disabled={i === 0} data-testid="walk-prev"><Icon icon={ChevronLeft} />{t("walk.prev")}</button>
+        {slide && <button onClick={() => showOnCanvas(slide.id)} data-testid="walk-show"><Icon icon={LocateFixed} />{t("walk.show")}</button>}
         <button className="primary" onClick={() => go(i + 1)} disabled={i >= count - 1} data-testid="walk-next">
-          {t("walk.next")} →
+          {t("walk.next")}<Icon icon={ChevronRight} />
         </button>
-        <button onClick={() => go(count - 1)} disabled={i >= count - 1}>{t("walk.last")}</button>
+        <button onClick={() => go(count - 1)} disabled={i >= count - 1}>{t("walk.last")}<Icon icon={ChevronsRight} /></button>
       </footer>
       <p className="walk__keys muted small">{t("walk.keys")}</p>
     </Modal>

@@ -56,8 +56,7 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
   };
 
   return (
-    <Modal label={t("sense.dialog")} onClose={close}>
-      <h3>{t("sense.title", { name: node.name })}</h3>
+    <Modal label={t("sense.dialog")} title={t("sense.title", { name: node.name })} onClose={close}>
       <p className="muted small">{t("sense.intro")}</p>
       <div className="senses" role="radiogroup">
         {senses.map((s, i) => (

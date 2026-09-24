@@ -1,4 +1,5 @@
 import type { QuizResponse, QuizStyle } from "@nodestorm/shared";
+import { Check, CircleDashed, Eye, Lightbulb, RotateCcw, X, type LucideIcon } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { cancelTask, gradeConcept, quizKey, quizQuestion } from "../lib/actions";
@@ -6,6 +7,7 @@ import * as quiz from "../lib/quiz";
 import { useGraphStore } from "../store/graphStore";
 import { MathText } from "./MathText";
 import { Modal } from "./Modal";
+import { Icon } from "../ui/Icon";
 import "./quiz.css";
 
 const STYLES: { value: quiz.StylePref; label: MessageKey }[] = [
@@ -21,6 +23,7 @@ const GRADE_LABEL: Record<quiz.Grade | "skipped", MessageKey> = {
   didnt: "quiz.didnt",
   skipped: "quiz.skippedOne",
 };
+const GRADE_ICON: Record<quiz.Grade, LucideIcon> = { knew: Check, partly: CircleDashed, didnt: X };
 const SKIP_REASON: Record<quiz.SkipReason, MessageKey> = {
   blocked: "quiz.skipBlocked",
   unclear: "quiz.skipUnclear",
@@ -206,7 +209,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
         {notAsked > 0 && <p className="muted small">{t("quiz.notAsked", { n: notAsked })}</p>}
         <SkippedList skipped={session.skipped} />
         <div className="form__actions">
-          <button onClick={restart}>{t("quiz.again")}</button>
+          <button onClick={restart}><Icon icon={RotateCcw} size={14} />{t("quiz.again")}</button>
           <button className="primary" onClick={onClose} autoFocus>{t("common.close")}</button>
         </div>
       </div>
@@ -264,11 +267,14 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
           <div className="quiz__row">
             {card.hints < q.hints.length && (
               <button onClick={() => setCard({ ...card, hints: card.hints + 1 })}>
+                <Icon icon={Lightbulb} size={14} />
                 {t("quiz.hint", { n: q.hints.length - card.hints })}
               </button>
             )}
             {!q.choices && (
-              <button className="primary" onClick={() => setCard({ ...card, revealed: true })}>{t("quiz.showAnswer")}</button>
+              <button className="primary" onClick={() => setCard({ ...card, revealed: true })}>
+                <Icon icon={Eye} size={14} />{t("quiz.showAnswer")}
+              </button>
             )}
           </div>
         )}
@@ -284,6 +290,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
               <span className="small muted" aria-hidden="true">{t("quiz.gradeLabel")}</span>
               {quiz.GRADES.map((g) => (
                 <button key={g} className={`quiz__gradeBtn quiz__gradeBtn--${g}`} onClick={() => record(g)}>
+                  <Icon icon={GRADE_ICON[g]} size={14} />
                   {t(GRADE_LABEL[g])}
                 </button>
               ))}
@@ -299,8 +306,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
   }
 
   return (
-    <Modal label={title} onClose={onClose} className="quiz">
-      <h3>{title}</h3>
+    <Modal label={title} title={title} onClose={onClose} className="quiz">
       {body}
     </Modal>
   );

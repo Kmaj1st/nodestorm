@@ -1,7 +1,9 @@
+import { X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { cancelTask } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
+import { Icon } from "../ui/Icon";
 
 /** Running AI tasks with elapsed time and a cancel button each. */
 export function StatusBar() {
@@ -27,8 +29,8 @@ export function StatusBar() {
             {queued ? <span className="status__queued">{t("status.queued")}</span> : <span className="spinner" aria-hidden />}
             <span>{task.label}</span>
             {!queued && secs >= 2 && <span className="status__time">{t("status.seconds", { n: secs })}</span>}
-            <button className="status__cancel" onClick={() => cancelTask(key)} aria-label={t("status.cancel", { label: task.label })}>
-              ✕
+            <button className="status__cancel" onClick={() => cancelTask(key)} aria-label={t("status.cancel", { label: task.label })} title={t("common.cancel")}>
+              <Icon icon={X} size={14} />
             </button>
           </div>
         );

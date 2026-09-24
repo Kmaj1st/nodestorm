@@ -1,3 +1,4 @@
+import { Search } from "lucide-react";
 import { useMemo, useState, type KeyboardEvent } from "react";
 import { useT } from "../i18n";
 import { noteMatch, searchNodes } from "../lib/fuzzy";
@@ -5,6 +6,7 @@ import { viewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { useView, visibleNow } from "../store/viewStore";
 import { Modal } from "./Modal";
+import { Icon } from "../ui/Icon";
 
 /** A one-line excerpt of `text` around [at, at+len), with ellipses where it was cut. */
 function snippet(text: string, at: number, len: number, around = 24): string {
@@ -46,6 +48,8 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal label={t("find.dialog")} onClose={onClose} className="palette" top>
+      <div className="palette__field">
+      <Icon icon={Search} className="palette__icon" />
       <input
         autoFocus
         value={query}
@@ -57,6 +61,7 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
         aria-expanded={hits.length > 0}
         aria-controls="palette-results"
       />
+      </div>
       {hits.length > 0 ? (
         <ul className="palette__results" id="palette-results" role="listbox">
           {hits.map((n, i) => {

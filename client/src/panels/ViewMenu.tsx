@@ -1,9 +1,11 @@
 import type { RelationOrigin } from "@nodestorm/shared";
+import { ChevronDown, Eye, Focus } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { isFiltered } from "../lib/view";
 import { useGraphStore } from "../store/graphStore";
 import { focusTarget, toggleFocus, useView } from "../store/viewStore";
+import { Icon } from "../ui/Icon";
 
 const KINDS: { origin: RelationOrigin; label: MessageKey; title: MessageKey }[] = [
   { origin: "dependency", label: "view.dependency", title: "view.dependencyTitle" },
@@ -27,7 +29,7 @@ export function FocusButton() {
       title={t(on ? "focus.titleOn" : target ? "focus.titleOff" : "focus.titleNone")}
       aria-label={t("focus.button")}
     >
-      ◎
+      <Icon icon={Focus} />
     </button>
   );
 }
@@ -59,11 +61,14 @@ export function ViewMenu() {
         aria-haspopup="dialog"
         aria-expanded={open}
         onClick={() => setOpen(!open)}
-        className={`icon-btn${filtered ? " small-btn--on" : ""}`}
+        className={`icon-btn view-button${filtered ? " small-btn--on" : ""}`}
         title={t(filtered ? "view.titleFiltered" : "view.title")}
         aria-label={t(filtered ? "view.buttonFiltered" : "view.button")}
       >
-        👁{filtered ? " •" : ""} ▾
+        <Icon icon={Eye} />
+        {/* A dot while a filter hides part of the graph (the name says so too). */}
+        {filtered && <span className="view-button__dot" data-testid="view-filtered" aria-hidden="true" />}
+        <Icon icon={ChevronDown} size={12} />
       </button>
       {open && (
         <div className="menu__list view-menu" role="dialog" aria-label={t("view.button")}>

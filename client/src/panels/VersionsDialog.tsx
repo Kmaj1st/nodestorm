@@ -1,5 +1,7 @@
 import type { Graph } from "@nodestorm/shared";
+import { Bookmark, History, Save } from "lucide-react";
 import { useEffect, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
 import { t as tr, useLocale, useT, type MessageKey } from "../i18n";
 import { diffSummary, isSame, MAX_AUTO, type AutoReason, type SnapshotMeta } from "../lib/snapshots";
@@ -97,8 +99,7 @@ export function VersionsDialog({ onClose, focusSave }: { onClose: () => void; fo
   });
 
   return createPortal(
-    <Modal label={t("versions.dialog")} onClose={onClose} className="versions">
-      <h3>{t("versions.dialog")}</h3>
+    <Modal label={t("versions.dialog")} title={t("versions.dialog")} onClose={onClose} className="versions">
       <p className="muted small">{t("versions.intro", { name: project.name, n: MAX_AUTO })}</p>
       {available === false ? (
         <p className="warn-box small" role="status" data-testid="versions-unavailable">{t("versions.unavailable")}</p>
@@ -113,6 +114,7 @@ export function VersionsDialog({ onClose, focusSave }: { onClose: () => void; fo
             autoFocus={focusSave}
           />
           <button type="submit" className="primary" disabled={working || !available} data-testid="versions-save">
+            <Icon icon={Save} size={14} />
             {t("versions.save")}
           </button>
         </form>
@@ -127,6 +129,7 @@ export function VersionsDialog({ onClose, focusSave }: { onClose: () => void; fo
           {metas.map((m) => (
             <li key={m.id} className="versions__item" data-testid="version">
               <div className="versions__head">
+                <Icon icon={m.kind === "named" ? Bookmark : History} size={14} className="versions__icon" />
                 <span className={`versions__title${m.kind === "named" ? " versions__title--named" : ""}`}>{title(m)}</span>
                 <time className="muted small" dateTime={new Date(m.createdAt).toISOString()}>{when(m)}</time>
               </div>
@@ -166,9 +169,6 @@ export function VersionsDialog({ onClose, focusSave }: { onClose: () => void; fo
           ))}
         </ul>
       )}
-      <div className="form__actions">
-        <button onClick={onClose}>{t("common.close")}</button>
-      </div>
     </Modal>,
     document.body,
   );

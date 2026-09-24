@@ -1,5 +1,7 @@
 import type { Graph } from "@nodestorm/shared";
+import { Download } from "lucide-react";
 import { useMemo, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import { buildCards, CARD_KINDS, flashcardsFileName, toAnki, toCsv, type CardKind } from "../lib/flashcards";
@@ -70,8 +72,7 @@ export function FlashcardsDialog({ graph, project, rootId, onClose }: {
   };
 
   return createPortal(
-    <Modal label={t("flash.dialog")} onClose={onClose} className="flash">
-      <h3>{t("flash.dialog")}</h3>
+    <Modal label={t("flash.dialog")} title={t("flash.dialog")} onClose={onClose} className="flash">
       <form className="form" onSubmit={(e) => { e.preventDefault(); if (cards.length) download(); }}>
         <p className="muted small">{t("flash.intro")}</p>
         <fieldset className="choice">
@@ -140,8 +141,8 @@ export function FlashcardsDialog({ graph, project, rootId, onClose }: {
 
         {saved && <p className="muted small" role="status">{saved}</p>}
         <div className="form__actions">
-          <button type="button" onClick={onClose}>{t("common.close")}</button>
           <button type="submit" className="primary" disabled={!cards.length} data-testid="flash-download">
+            <Icon icon={Download} size={14} />
             {t("flash.download")}
           </button>
         </div>

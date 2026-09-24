@@ -1,4 +1,6 @@
+import { Compass } from "lucide-react";
 import { Fragment, useMemo } from "react";
+import { Icon } from "../ui/Icon";
 import { t as translate, useT } from "../i18n";
 import { comboLabel, currentIsMac, SHORTCUTS, type Combo } from "../lib/shortcuts";
 import { isViewing, useGraphStore } from "../store/graphStore";
@@ -15,8 +17,7 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const mac = useMemo(currentIsMac, []);
   const viewing = useGraphStore(isViewing);
   return (
-    <Modal label={t("shortcuts.title")} onClose={onClose} className="shortcuts">
-      <h3>{t("shortcuts.title")}</h3>
+    <Modal label={t("shortcuts.title")} title={t("shortcuts.title")} onClose={onClose} className="shortcuts">
       {SHORTCUTS.map((group) => (
         <section key={group.title} className="shortcuts__group">
           <h4>{t(group.title)}</h4>
@@ -37,11 +38,12 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
           </dl>
         </section>
       ))}
-      <div className="form__actions">
-        {/* The tour is for your own graphs; in the share viewer it would only start later, unprompted. */}
-        {!viewing && <button onClick={() => { onClose(); startTour(); }}>{t("tour.showAgain")}</button>}
-        <button onClick={onClose}>{t("common.close")}</button>
-      </div>
+      {/* The tour is for your own graphs; in the share viewer it would only start later, unprompted. */}
+      {!viewing && (
+        <div className="form__actions">
+          <button onClick={() => { onClose(); startTour(); }}><Icon icon={Compass} size={14} />{t("tour.showAgain")}</button>
+        </div>
+      )}
     </Modal>
   );
 }

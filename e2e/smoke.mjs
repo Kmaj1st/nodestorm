@@ -54,7 +54,7 @@ try {
 
   const node = (name) => page.getByTestId(`node-${name}`);
   const addByName = async (name) => {
-    await page.getByRole("button", { name: "+ Add concept" }).click();
+    await page.getByRole("button", { name: "Add concept", exact: true }).click();
     await page.getByLabel("Concept name").fill(name);
     await page.getByRole("button", { name: "Add", exact: true }).click();
   };
@@ -67,7 +67,7 @@ try {
 
   console.log("AI setup");
   assert((await page.getByRole("button", { name: "Settings", exact: true }).textContent()).includes("Set up AI"), "toolbar asks to set up AI on first visit");
-  await page.getByRole("button", { name: "+ Add concept" }).click();
+  await page.getByRole("button", { name: "Add concept", exact: true }).click();
   await page.getByRole("button", { name: "Describe it" }).click();
   await page.getByLabel("Concept description").fill("a map between groups that preserves the operation");
   await page.getByRole("button", { name: "Find a name" }).click();
@@ -105,7 +105,7 @@ try {
   await settings.getByRole("button", { name: "Save", exact: true }).click();
 
   console.log("Naming from a description");
-  await page.getByRole("button", { name: "+ Add concept" }).click();
+  await page.getByRole("button", { name: "Add concept", exact: true }).click();
   await page.getByRole("button", { name: "Describe it" }).click();
   await page.getByLabel("Concept description").fill("a map between groups that preserves the operation");
   await page.getByRole("button", { name: "Find a name" }).click();
@@ -192,7 +192,7 @@ try {
 
   console.log("Export");
   const exportAs = async (label) => {
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
     return { name: dl.suggestedFilename(), data: readFileSync(await dl.path()) };
   };
@@ -229,7 +229,7 @@ try {
   await node("Homomorphism").waitFor({ state: "detached" });
   await undoBtn.click();
   await node("Homomorphism").waitFor();
-  assert(!(await page.getByRole("button", { name: "Redo", exact: true }).isDisabled()), "redo and the ↶ button work too");
+  assert(!(await page.getByRole("button", { name: "Redo", exact: true }).isDisabled()), "redo and the Undo button work too");
 
   await node("Kernel").click();
   const rename = page.getByLabel("Rename concept");
@@ -447,7 +447,7 @@ try {
     assert(isDark(await bodyBg()) && remembered, "dark theme is remembered after reload");
   }
 
-  const addBtn = page.getByRole("button", { name: "+ Add concept" });
+  const addBtn = page.getByRole("button", { name: "Add concept", exact: true });
   await addBtn.click();
   const addDialog = page.getByRole("dialog", { name: "Add concept" });
   await addDialog.waitFor();
@@ -467,7 +467,7 @@ try {
   await page.waitForTimeout(300);
   const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   assert(await noHScroll(), "no horizontal scroll at 390px");
-  const fileMenu = page.getByRole("button", { name: "File ▾" });
+  const fileMenu = page.getByRole("button", { name: "File", exact: true });
   assert(!(await fileMenu.isVisible()), "less-used toolbar controls fold into a menu");
   await page.getByRole("button", { name: "More tools" }).click();
   assert((await fileMenu.isVisible()) && (await noHScroll()), "the menu opens them, still without horizontal scroll");
@@ -556,7 +556,11 @@ try {
   await node("Quotient Group").waitFor();
   await projectButton.click();
   const left = await page.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio").allTextContents();
-  assert(JSON.stringify(left) === JSON.stringify(["✓ Algebra notes"]), "deleting the example project leaves only the first one, now current");
+  const current = await page.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio", { checked: true }).allTextContents();
+  assert(
+    JSON.stringify(left) === JSON.stringify(["Algebra notes"]) && JSON.stringify(current) === JSON.stringify(["Algebra notes"]),
+    "deleting the example project leaves only the first one, now current",
+  );
   await page.keyboard.press("Escape");
 
   console.log("Explain & notes");
@@ -624,7 +628,7 @@ try {
   console.log("Share link");
   await page.setViewportSize({ width: 1400, height: 900 });
   const sharedCount = await nodeCount();
-  await page.getByRole("button", { name: "File ▾" }).click();
+  await page.getByRole("button", { name: "File", exact: true }).click();
   await page.getByRole("menuitem", { name: "Share link…" }).click();
   const link = await page.getByTestId("share-link").inputValue();
   assert(link.includes("#share=1.") && /[\d,]+ characters/.test(await page.getByTestId("share-size").textContent()), "Share link… shows the link and its length");
@@ -637,7 +641,7 @@ try {
     await viewer.locator(".toast").waitFor();
     assert(
       (await viewer.locator(".toast").textContent()).includes("Couldn't open the shared link") &&
-        (await viewer.getByRole("button", { name: "+ Add concept" }).isVisible()),
+        (await viewer.getByRole("button", { name: "Add concept", exact: true }).isVisible()),
       "a corrupt link shows an error and the normal app",
     );
     await viewer.goto(link); // only the hash changes: opened via hashchange
@@ -645,7 +649,7 @@ try {
     assert((await viewer.getByTestId("viewer-banner").textContent()).includes("Viewing a shared graph"), "opening the link shows the viewer banner");
     await viewer.waitForFunction((n) => document.querySelectorAll(".react-flow__node").length === n, sharedCount);
     assert(true, `the shared graph has the same ${sharedCount} concepts`);
-    assert((await viewer.getByRole("button", { name: "+ Add concept" }).count()) === 0 && !(await viewer.getByRole("button", { name: /^Project: / }).count()), "editing controls and the project menu are hidden");
+    assert((await viewer.getByRole("button", { name: "Add concept", exact: true }).count()) === 0 && !(await viewer.getByRole("button", { name: /^Project: / }).count()), "editing controls and the project menu are hidden");
     await viewer.getByTestId("node-Quotient Group").click();
     await viewer.getByTestId("node-panel").waitFor();
     assert(
@@ -659,7 +663,7 @@ try {
       "notes and Explain more can't be used in the viewer",
     );
     await viewer.screenshot({ path: `${shots}11-shared-viewer.png` });
-    await viewer.getByRole("button", { name: "File ▾" }).click();
+    await viewer.getByRole("button", { name: "File", exact: true }).click();
     await viewer.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
     const viewerCards = viewer.getByRole("dialog", { name: "Flashcards" });
     assert(/^[1-9]\d* cards$/.test(await viewerCards.getByTestId("flash-count").textContent()), "flashcards can be exported from a shared graph");
@@ -671,10 +675,14 @@ try {
       (await viewerProject.getAttribute("aria-label")) === "Project: Algebra notes 2" && (await viewer.locator(".react-flow__node").count()) === sharedCount,
       "Save a copy adds a new project with those concepts",
     );
-    assert(!new URL(viewer.url()).hash && (await viewer.getByRole("button", { name: "+ Add concept" }).isEnabled()), "the link is cleared from the address bar and the copy is editable");
+    assert(!new URL(viewer.url()).hash && (await viewer.getByRole("button", { name: "Add concept", exact: true }).isEnabled()), "the link is cleared from the address bar and the copy is editable");
     await viewerProject.click();
     const all = await viewer.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio").allTextContents();
-    assert(JSON.stringify(all) === JSON.stringify(["Algebra notes", "✓ Algebra notes 2"]), "the original project is still there");
+    const checked = await viewer.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio", { checked: true }).allTextContents();
+    assert(
+      JSON.stringify(all) === JSON.stringify(["Algebra notes", "Algebra notes 2"]) && JSON.stringify(checked) === JSON.stringify(["Algebra notes 2"]),
+      "the original project is still there (the copy is current)",
+    );
     await viewer.close();
   }
 
@@ -713,7 +721,7 @@ try {
   await waitCounts("4/4");
   await page.getByRole("button", { name: "Leave focus mode" }).click();
   await waitCounts("7/11");
-  assert(true, "the toolbar button and the ✕ of the focus control do the same");
+  assert(true, "the toolbar button and the close (X) button of the focus control do the same");
 
   const viewMenu = async () => {
     if (!(await page.getByRole("dialog", { name: "View" }).isVisible())) await page.getByRole("button", { name: /^View/ }).click();
@@ -722,7 +730,10 @@ try {
   await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).uncheck();
   await waitCounts("7/2");
   assert((await page.locator(".relation--dependency").count()) === 0, "the View filter hides dependency links (concepts stay)");
-  assert((await page.getByRole("button", { name: /^View/ }).textContent()).includes("•"), "the View button shows that a filter is on");
+  assert(
+    (await page.getByRole("button", { name: "View (filters on)" }).getByTestId("view-filtered").count()) === 1,
+    "the View button shows that a filter is on (a dot, and its name says so)",
+  );
   await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).check();
   await page.keyboard.press("Escape"); // the popover would cover Group
   // Group is selected and ready: the to-do view hides it, and then Delete must not remove it.
@@ -785,7 +796,7 @@ try {
     await context.setOffline(true);
     await page.getByTestId("offline-banner").waitFor();
     assert((await page.getByTestId("offline-banner").textContent()).includes("Offline — AI features paused"), "going offline shows the offline banner");
-    await page.getByRole("button", { name: "+ Add concept" }).click();
+    await page.getByRole("button", { name: "Add concept", exact: true }).click();
     await page.getByRole("button", { name: "Describe it" }).click();
     await page.getByLabel("Concept description").fill("a subgroup closed under conjugation");
     const started = Date.now();
@@ -813,7 +824,7 @@ try {
   assert(await oneRow(), "…also in a sandbox, whose Merge back and Discard sit in the sandbox banner");
   await page.setViewportSize({ width: 1400, height: 900 });
   await toolbar.screenshot({ path: `${shots}14-toolbar-en.png` });
-  await page.getByRole("button", { name: "File ▾" }).click();
+  await page.getByRole("button", { name: "File", exact: true }).click();
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
@@ -821,7 +832,7 @@ try {
         "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…", "Walkthrough…",
         "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
-    "File ▾ holds import, Extract from text, Quiz me, Versions, every export format and the share link",
+    "File holds import, Extract from text, Quiz me, Versions, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -830,7 +841,7 @@ try {
     await st.getByLabel("Interface language", { exact: true }).selectOption("zh");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
-  const addZh = page.getByRole("button", { name: "+ 添加概念" });
+  const addZh = page.getByRole("button", { name: "添加概念", exact: true });
   await addZh.waitFor();
   assert(
     (await page.evaluate(() => document.documentElement.lang)) === "zh-CN" &&
@@ -854,7 +865,7 @@ try {
   const settingsZh = page.getByRole("dialog", { name: "设置" });
   await settingsZh.getByLabel("界面语言", { exact: true }).selectOption("en");
   await settingsZh.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("button", { name: "+ Add concept" }).waitFor();
+  await page.getByRole("button", { name: "Add concept", exact: true }).waitFor();
   assert((await page.evaluate(() => document.documentElement.lang)) === "en", "and back to English");
 
   console.log("Extract from text");
@@ -870,7 +881,7 @@ try {
   await addByName("Group");
   await addByName("Homomorphism");
   await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 2);
-  await page.getByRole("button", { name: "File ▾" }).click();
+  await page.getByRole("button", { name: "File", exact: true }).click();
   await page.getByRole("menuitem", { name: "Extract from text…" }).click();
   const extract = page.getByRole("dialog", { name: "Extract from text" });
   const extractText = extract.getByLabel("Text", { exact: true });
@@ -933,7 +944,7 @@ try {
     assert(
       (await welcome.getByRole("heading", { name: "Welcome to NodeStorm" }).isVisible()) &&
         (await welcome.getByRole("button").allTextContents()).join("|") ===
-          "Take the 1-minute tour|Load the Group theory example|Start empty|⚙ Settings",
+          "Take the 1-minute tour|Load the Group theory example|Start empty|Settings",
       "a first visit shows the welcome card: tour, example, start empty, and where to add an AI key",
     );
     await p.screenshot({ path: `${shots}17-welcome.png` });
@@ -1001,7 +1012,7 @@ try {
     await p.locator(".canvas__empty").waitFor();
     assert(
       (await p.getByTestId("welcome").count()) === 0 &&
-        (await p.getByRole("button", { name: "+ Add concept" }).evaluate((b) => b === document.activeElement)),
+        (await p.getByRole("button", { name: "Add concept", exact: true }).evaluate((b) => b === document.activeElement)),
       "Start empty closes the card and focuses Add concept",
     );
     await p.reload();
@@ -1010,7 +1021,7 @@ try {
     await ctx.close();
   }
   {
-    // 中文 on a phone: the card is in Chinese, and the tour points at ☰ instead of the folded buttons.
+    // 中文 on a phone: the card is in Chinese, and the tour points at the More tools button instead of the folded buttons.
     const { ctx, p } = await firstVisit("zh", { width: 390, height: 844 });
     const welcome = p.getByTestId("welcome");
     await welcome.waitFor();
@@ -1031,7 +1042,7 @@ try {
       titles.push(await tour.locator("h3").textContent());
       if (i < 5) await tour.getByRole("button", { name: "下一步" }).click();
     }
-    assert(titles.at(-1) === "更多工具" && titles[1] === "安装缺少的前置知识", "on a phone the tour has 5 steps, ending at ☰ (Fork, File and Settings are folded away)");
+    assert(titles.at(-1) === "更多工具" && titles[1] === "安装缺少的前置知识", "on a phone the tour has 5 steps, ending at More tools (Fork, File and Settings are folded away)");
     await p.screenshot({ path: `${shots}17-tour-zh-mobile.png` });
     await tour.getByRole("button", { name: "跳过导览" }).click();
     await tour.waitFor({ state: "detached" });
@@ -1093,7 +1104,7 @@ try {
   // Back to English for the sections after this one (their selectors are English).
   await settingsZh.getByRole("combobox", { name: "界面语言", exact: true }).selectOption("en");
   await settingsZh.getByRole("button", { name: "保存", exact: true }).click();
-  await page.getByRole("button", { name: "+ Add concept" }).waitFor();
+  await page.getByRole("button", { name: "Add concept", exact: true }).waitFor();
 
   console.log("Quiz");
   {
@@ -1110,7 +1121,7 @@ try {
     await addByName(name);
     await waitBadge(name, "ready");
   }
-  await page.getByRole("button", { name: "File ▾" }).click();
+  await page.getByRole("button", { name: "File", exact: true }).click();
   assert(await page.getByRole("menuitem", { name: "Quiz me…" }).isVisible(), "File has a Quiz me… entry");
   await page.keyboard.press("Escape");
   await node("Normal Subgroup").click();
@@ -1177,7 +1188,7 @@ try {
   );
   {
     // A second quiz over the whole graph starts on the weak spot: Group is known well, so Subgroup needn't wait for it.
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     await page.getByRole("menuitem", { name: "Quiz me…" }).click();
     await quizDialog.waitFor();
     await quizDialog.getByRole("radio", { name: /^The whole graph/ }).check();
@@ -1207,7 +1218,7 @@ try {
     await page.getByRole("button", { name: "Load example: Group theory" }).click();
     await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
     const fileItem = async (name) => {
-      await page.getByRole("button", { name: "File ▾" }).click();
+      await page.getByRole("button", { name: "File", exact: true }).click();
       await page.getByRole("menuitem", { name, exact: true }).click();
     };
     const versions = page.getByRole("dialog", { name: "Versions" });
@@ -1266,7 +1277,7 @@ try {
     await versions.getByTestId("version").last().getByRole("button", { name: "Preview" }).click();
     await page.getByTestId("viewer-banner").waitFor();
     assert((await page.getByTestId("viewer-banner").textContent()).includes("Previewing an earlier version"), "Preview opens the version read-only");
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     assert(!(await page.getByRole("menuitem", { name: "Versions…" }).count()), "Versions is hidden in the read-only viewer");
     await page.keyboard.press("Escape");
     await page.getByTestId("viewer-banner").getByRole("button", { name: "Close" }).click();
@@ -1293,7 +1304,7 @@ try {
   console.log("Flashcards");
   {
     // The Group theory example from the Versions section: export it as Anki cards, then as CSV.
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     await page.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
     const cards = page.getByRole("dialog", { name: "Flashcards" });
     await cards.waitFor();
@@ -1427,12 +1438,12 @@ try {
     assert(await opener.evaluate((el) => el === document.activeElement), "Escape closes it and focus returns to the button");
 
     await setTheme("dark");
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     await page.getByRole("menuitem", { name: "Walkthrough…" }).click();
     const whole = page.getByRole("dialog", { name: "Walkthrough" });
     await whole.waitFor();
     await audit("walkthrough slide (dark)");
-    assert((await whole.getByTestId("walk-progress").textContent()) === "1 / 3", "File ▾ Walkthrough… covers the whole graph");
+    assert((await whole.getByTestId("walk-progress").textContent()) === "1 / 3", "File → Walkthrough… covers the whole graph");
     await whole.getByTestId("walk-show").click();
     await whole.waitFor({ state: "detached" });
     const shown = await page
@@ -1443,7 +1454,7 @@ try {
     await setTheme("light");
 
     // Presenting a shared graph: the read-only viewer has the walkthrough too.
-    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("button", { name: "File", exact: true }).click();
     await page.getByRole("menuitem", { name: "Share link…" }).click();
     const link = await page.getByTestId("share-link").inputValue();
     await page.keyboard.press("Escape");

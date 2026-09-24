@@ -8,7 +8,9 @@ import {
   type ProviderKind,
   type ProvidersResponse,
 } from "@nodestorm/shared";
+import { Check, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref } from "../i18n";
 import { api } from "../lib/api";
 import { useTheme, type ThemePref } from "../lib/theme";
@@ -108,8 +110,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     models.status !== "ok" ? [] : modelKnown ? models.models : models.models.filter((m) => `${m.id} ${m.label ?? ""}`.toLowerCase().includes(q));
 
   return (
-    <Modal label={t("settings.title")} onClose={onClose} className="settings">
-      <h3>{t("settings.title")}</h3>
+    <Modal label={t("settings.title")} title={t("settings.title")} onClose={onClose} className="settings">
 
       {/* Interface first: it is about this app, not the AI (whose answer language is under "AI answers"). */}
       <fieldset className="choice">
@@ -199,7 +200,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                   spellCheck={false}
                   aria-label={t("settings.apiKey")}
                 />
-                <button type="button" onClick={() => setShowKey(!showKey)}>{t(showKey ? "settings.hide" : "settings.show")}</button>
+                <button type="button" onClick={() => setShowKey(!showKey)}>
+                  <Icon icon={showKey ? EyeOff : Eye} size={14} />
+                  {t(showKey ? "settings.hide" : "settings.show")}
+                </button>
               </div>
             </label>
           )}
@@ -239,6 +243,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             spellCheck={false}
           />
           <button type="button" onClick={discover} disabled={!canDiscover || models.status === "loading"}>
+            {models.status === "loading" ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={RefreshCw} size={14} />}
             {t(models.status === "loading" ? "settings.loading" : "settings.refresh")}
           </button>
         </div>
@@ -246,7 +251,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           {models.status === "ok" && models.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </datalist>
         {models.status === "error" && <span className="error small" data-testid="models-error">{models.message}</span>}
-        {models.status === "ok" && <span className="ok small" data-testid="models-ok">{t("settings.connected")}</span>}
+        {models.status === "ok" && (
+          <span className="ok small status-line" data-testid="models-ok"><Icon icon={Check} size={14} />{t("settings.connected")}</span>
+        )}
         {!modelKnown && shown.length === 0 && <span className="warn small">{t("settings.unknownModel")}</span>}
         {!canDiscover && connection === "browser" && <span className="muted small">{t("settings.enterKey")}</span>}
       </label>

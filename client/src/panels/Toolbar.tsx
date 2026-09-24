@@ -1,5 +1,31 @@
 import { providerMeta } from "@nodestorm/shared";
 import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
+import {
+  ChevronDown,
+  FileJson,
+  FileText,
+  GitBranchPlus,
+  GraduationCap,
+  History,
+  Image,
+  Layers,
+  LayoutGrid,
+  Link,
+  Menu,
+  Plus,
+  Presentation,
+  Redo2,
+  Save,
+  ScanText,
+  Search,
+  Settings,
+  Shuffle,
+  Sparkles,
+  Undo2,
+  Upload,
+  Workflow,
+  type LucideIcon,
+} from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
@@ -12,6 +38,7 @@ import { isReady, useSettings } from "../store/settingsStore";
 import { ExtractDialog, FlashcardsDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, ViewMenu } from "./ViewMenu";
+import { Icon } from "../ui/Icon";
 
 /**
  * One row at ≥1200px: project · history · primary actions (Add, Mix, Derive) · canvas tools as icon buttons
@@ -57,22 +84,28 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
 
       {!viewing && (
         <div className="toolbar__group toolbar__history">
-          <button onClick={() => s.undo()} disabled={!undoable} title={t("toolbar.undoTitle")} aria-label={t("toolbar.undo")}>↶</button>
-          <button onClick={() => s.redo()} disabled={!redoable} title={t("toolbar.redoTitle")} aria-label={t("toolbar.redo")}>↷</button>
+          <button className="icon-btn" onClick={() => s.undo()} disabled={!undoable} title={t("toolbar.undoTitle")} aria-label={t("toolbar.undo")}>
+            <Icon icon={Undo2} />
+          </button>
+          <button className="icon-btn" onClick={() => s.redo()} disabled={!redoable} title={t("toolbar.redoTitle")} aria-label={t("toolbar.redo")}>
+            <Icon icon={Redo2} />
+          </button>
         </div>
       )}
 
-      {!viewing && <div className="toolbar__group">
-        <button className="primary" onClick={onAdd} data-tour="add">{t("toolbar.add")}</button>
+      {!viewing && <div className="toolbar__group toolbar__actions">
+        <button className="primary" onClick={onAdd} data-tour="add"><Icon icon={Plus} />{t("toolbar.add")}</button>
         <button
           data-tour="mix" // data-tour: what the guided tour points at (panels/Onboarding.tsx)
           onClick={() => mix(selected[0].id, selected[1].id)}
           disabled={!canMix}
           title={blockReason ?? (selected.length !== 2 ? t("toolbar.mixSelectTwo") : t("toolbar.mixTitle"))}
         >
+          {busyMix ? <span className="spinner" aria-hidden="true" /> : <Icon icon={Shuffle} />}
           {busyMix ? t("toolbar.mixing") : t("toolbar.mix")}
         </button>
         <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? t("toolbar.deriveTitle")}>
+          <Icon icon={Sparkles} />
           {t("toolbar.derive")}
         </button>
       </div>}
@@ -81,36 +114,39 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
       <div className="toolbar__group toolbar__tools" role="group" aria-label={t("toolbar.tools")}>
         {!viewing && (
           <button className="icon-btn" onClick={tidy} disabled={graph.nodes.length < 2} title={t("toolbar.tidyTitle")} aria-label={t("toolbar.tidy")}>
-            ⊞
+            <Icon icon={LayoutGrid} />
           </button>
         )}
         <button className="icon-btn" onClick={onFind} disabled={!graph.nodes.length} title={t("toolbar.findTitle")} aria-label={t("toolbar.find")}>
-          🔍
+          <Icon icon={Search} />
         </button>
         <FocusButton />
         <ViewMenu />
       </div>
 
       <button
-        className="toolbar__menu"
+        className="toolbar__menu icon-btn"
+        title={t("toolbar.more")}
         aria-label={t("toolbar.more")}
         aria-expanded={moreOpen}
         aria-controls="toolbar-more"
         onClick={() => setMoreOpen(!moreOpen)}
       >
-        ☰
+        <Icon icon={Menu} />
       </button>
 
       <div className="toolbar__more" id="toolbar-more">
-        {!viewing && <div className="toolbar__group" role="group" aria-label={t("toolbar.sandbox")}>
+        {!viewing && <div className="toolbar__group toolbar__sandbox" role="group" aria-label={t("toolbar.sandbox")}>
           <select className="graph-select" value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label={t("toolbar.graph")}>
             <option value={main.id}>{t("toolbar.mainGraph")}</option>
-            {sandboxes.map((g) => (
-              <option key={g.id} value={g.id}>🧪 {g.name}</option>
-            ))}
+            {sandboxes.length > 0 && (
+              <optgroup label={t("toolbar.sandbox")}>
+                {sandboxes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
+              </optgroup>
+            )}
           </select>
           <button className="icon-btn" onClick={s.forkActive} data-tour="fork" title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
-            🧪+
+            <Icon icon={GitBranchPlus} />
           </button>
         </div>}
 
@@ -124,7 +160,15 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
             title={`${ready && !viewing ? `${meta.label} · ${model}\n` : ""}${t("toolbar.settingsTitle")}`}
             aria-label={t("toolbar.settings")}
           >
-            ⚙{viewing ? null : ready ? <> {model.split("/").pop()}</> : <> {t("toolbar.setUpAi")}</>}
+            {viewing ? (
+              <Icon icon={Settings} />
+            ) : (
+              // A status chip: a dot (green once a provider is set up, amber before) and the model, or "Set up AI".
+              <>
+                <span className={`status-dot status-dot--${ready ? "ok" : "warn"}`} aria-hidden="true" />
+                <span className="ai-button__label">{ready ? model.split("/").pop() : t("toolbar.setUpAi")}</span>
+              </>
+            )}
           </button>
           <FileMenu />
         </div>
@@ -150,10 +194,10 @@ function selectedId() {
 }
 
 /** A menu entry: `head` starts a labelled section of the menu. */
-type Item = { label: MessageKey; title: MessageKey; head?: MessageKey; action: () => void | Promise<void> };
+type Item = { label: MessageKey; title: MessageKey; icon: LucideIcon; head?: MessageKey; action: () => void | Promise<void> };
 
 /**
- * "File ▾": import a project from JSON, or concepts from a text (Extract from text); save and restore versions of the
+ * "File": import a project from JSON, or concepts from a text (Extract from text); save and restore versions of the
  * project (Versions); export the current project as JSON, or the active graph as Markdown notes, Mermaid, a PNG
  * image or flashcards; and share the graph as a link. In the read-only viewer only export and share remain.
  */
@@ -215,28 +259,31 @@ function FileMenu() {
     ...(view
       ? []
       : ([
-          { label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() },
-          { label: "file.extract", title: "file.extractTitle", action: () => setExtracting(true) },
-          { label: "file.quiz", title: "file.quizTitle", action: () => useQuiz.getState().openQuiz() },
-          { label: "file.snapshot", title: "file.snapshotTitle", action: () => setVersions("save") },
-          { label: "file.versions", title: "file.versionsTitle", action: () => setVersions("list") },
+          { label: "file.import", title: "file.importTitle", icon: Upload, action: () => fileRef.current?.click() },
+          { label: "file.extract", title: "file.extractTitle", icon: ScanText, action: () => setExtracting(true) },
+          { label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
+          { label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
+          { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
         ] satisfies Item[])),
     // Read-only, so the share viewer has it too: presenting a shared graph is a main use.
-    { label: "file.walkthrough", title: "file.walkthroughTitle", action: () => useWalkthrough.getState().openWalkthrough() },
+    { label: "file.walkthrough", title: "file.walkthroughTitle", icon: Presentation, action: () => useWalkthrough.getState().openWalkthrough() },
     {
       head: "file.exportHead",
       label: view ? "file.jsonGraph" : "file.jsonProject",
       title: view ? "file.jsonGraphTitle" : "file.jsonProjectTitle",
+      icon: FileJson,
       action: () => download(`${exportFileName({ ...graph, name: projectName })}.json`, text(exportJson(), "application/json")),
     },
     {
       label: "file.markdown",
       title: "file.markdownTitle",
+      icon: FileText,
       action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
     },
     {
       label: "file.mermaid",
       title: "file.mermaidTitle",
+      icon: Workflow,
       action: async () => {
         const src = toMermaid(graph);
         download(`${base}.mmd`, text(src, "text/plain"));
@@ -247,6 +294,7 @@ function FileMenu() {
     {
       label: "file.png",
       title: "file.pngTitle",
+      icon: Image,
       action: async () => {
         const nodes = getNodes();
         const viewportEl = document.querySelector<HTMLElement>(".react-flow__viewport");
@@ -266,13 +314,16 @@ function FileMenu() {
         download(`${base}.png`, url);
       },
     },
-    { label: "flash.menu", title: "flash.menuTitle", action: () => setFlashcards({ rootId: selectedId() }) },
-    { head: "file.share", label: "file.share", title: "file.shareTitle", action: () => setSharing(true) },
+    { label: "flash.menu", title: "flash.menuTitle", icon: Layers, action: () => setFlashcards({ rootId: selectedId() }) },
+    { head: "file.share", label: "file.share", title: "file.shareTitle", icon: Link, action: () => setSharing(true) },
   ];
 
   return (
     <div className="menu" ref={ref}>
-      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">{t("file.menu")}</button>
+      <button className="menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">
+        {t("file.menu")}
+        <Icon icon={ChevronDown} size={14} className="menu-button__chevron" />
+      </button>
       {open && (
         <div className="menu__list" role="menu" aria-label={t("file.menuLabel")}>
           {items.map((it, i) => (
@@ -280,7 +331,10 @@ function FileMenu() {
               {/* A heading for the export formats; a plain separator before Share. */}
               {it.head && i > 0 && <hr className="menu__sep" />}
               {it.head && it.head !== it.label && <div className="menu__head" role="presentation">{t(it.head)}</div>}
-              <button role="menuitem" title={t(it.title)} onClick={run(it.action)}>{t(it.label)}</button>
+              <button role="menuitem" title={t(it.title)} onClick={run(it.action)}>
+                <Icon icon={it.icon} size={14} />
+                {t(it.label)}
+              </button>
             </div>
           ))}
         </div>

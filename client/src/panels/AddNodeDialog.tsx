@@ -30,7 +30,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal label={t("add.title")} onClose={onClose}>
+    <Modal label={t("add.title")} title={t("add.title")} onClose={onClose}>
       <div className="tabs">
         <button className={mode === "name" ? "tab tab--on" : "tab"} aria-pressed={mode === "name"} onClick={() => setMode("name")}>
           {t("add.byName")}

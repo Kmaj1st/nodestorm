@@ -15,6 +15,7 @@
     "fflate": "^0.8.3",
     "html-to-image": "1.11.11",
     "katex": "^0.16.47",
+    "lucide-react": "^1.48.0",
     "react": "^19.1.0",
     "react-dom": "^19.1.0",
     "zod": "^4.1.0",

@@ -1,3 +1,4 @@
+import { Compass, FilePlus, Network } from "lucide-react";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { rich, t as tr, useT, type MessageKey } from "../i18n";
@@ -14,6 +15,7 @@ import {
 import { viewport } from "../lib/viewport";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useOnboarding } from "../store/onboardingStore";
+import { Icon } from "../ui/Icon";
 import { isReady, useSettings } from "../store/settingsStore";
 import "./onboarding.css";
 
@@ -70,15 +72,15 @@ function WelcomeCard() {
         <h2 id={titleId}>{t("welcome.title")}</h2>
         <p>{t("welcome.intro")}</p>
         <div className="welcome__choices">
-          <button className="primary" onClick={startTour}>{t("welcome.tour")}</button>
-          <button onClick={example} title={t("canvas.exampleTitle")}>{t("welcome.example")}</button>
-          <button onClick={empty}>{t("welcome.empty")}</button>
+          <button className="primary" onClick={startTour}><Icon icon={Compass} />{t("welcome.tour")}</button>
+          <button onClick={example} title={t("canvas.exampleTitle")}><Icon icon={Network} />{t("welcome.example")}</button>
+          <button onClick={empty}><Icon icon={FilePlus} />{t("welcome.empty")}</button>
         </div>
         {!aiReady && (
           <p className="welcome__note muted small">
             {rich("welcome.aiNote", {
               settings: (
-                <button className="link" onClick={() => useGraphStore.getState().setSettingsOpen(true)}>
+                <button className="link" onClick={() => useGraphStore.getState().setSettingsOpen(true)} aria-label={t("welcome.settingsAria")}>
                   {t("welcome.settings")}
                 </button>
               ),

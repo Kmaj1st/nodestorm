@@ -63,10 +63,10 @@ describe("interface language", () => {
 
   it("switches t() to the chosen language, and back", () => {
     useLocale.getState().setPref("zh");
-    expect(t("toolbar.add")).toBe("+ 添加概念");
+    expect(t("toolbar.add")).toBe("添加概念");
     expect(t("project.label", { name: "代数" })).toBe("项目：代数");
     useLocale.getState().setPref("en");
-    expect(t("toolbar.add")).toBe("+ Add concept");
+    expect(t("toolbar.add")).toBe("Add concept");
     expect(useLocale.getState().pref).toBe("en");
   });
 });

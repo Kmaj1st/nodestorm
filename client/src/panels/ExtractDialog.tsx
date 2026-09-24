@@ -1,5 +1,7 @@
 import { EXTRACT_MAX_CHARS } from "@nodestorm/shared";
+import { ArrowLeft, FileUp, Plus, ScanText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { Icon } from "../ui/Icon";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { cancelTask, extractFromText, insertExtraction } from "../lib/actions";
 import { buildReview, duplicateOf, linkUsable, newItems, type ExtractItem, type ExtractReview } from "../lib/extract";
@@ -58,8 +60,7 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal label={t("extract.title")} onClose={onClose} className="extract">
-      <h3>{t("extract.title")}</h3>
+    <Modal label={t("extract.title")} title={t("extract.title")} onClose={onClose} className="extract">
       {!review ? (
         <form className="form" onSubmit={run}>
           <p className="muted small">{t("extract.intro")}</p>
@@ -86,7 +87,9 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
             <span className={tooLong ? "error" : "muted"}>
               {tooLong ? t("extract.tooLong", { max: EXTRACT_MAX_CHARS }) : t("extract.count", { n: text.length, max: EXTRACT_MAX_CHARS })}
             </span>
-            <button type="button" className="link" onClick={() => fileRef.current?.click()}>{t("extract.loadFile")}</button>
+            <button type="button" className="link link--icon" onClick={() => fileRef.current?.click()}>
+              <Icon icon={FileUp} size={14} />{t("extract.loadFile")}
+            </button>
           </div>
           {fileError && <p className="error small">{fileError}</p>}
           <input
@@ -104,6 +107,7 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
             <button type="button" onClick={onClose}>{t("common.cancel")}</button>
             {busy && <button type="button" className="link" onClick={() => cancelTask("extract")}>{t("add.stop")}</button>}
             <button type="submit" className="primary" disabled={!text.trim() || tooLong || busy}>
+              {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={ScanText} size={14} />}
               {busy ? t("extract.extracting") : t("extract.run")}
             </button>
           </div>
@@ -162,9 +166,10 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
             </>
           )}
           <div className="form__actions">
-            <button onClick={() => setReview(null)}>{t("extract.back")}</button>
+            <button className="form__lead" onClick={() => setReview(null)}><Icon icon={ArrowLeft} size={14} />{t("extract.back")}</button>
             <button onClick={onClose}>{t("common.cancel")}</button>
             <button className="primary" disabled={!adding && !linking} onClick={add}>
+              <Icon icon={Plus} size={14} />
               {t("extract.add", { n: adding, links: linking })}
             </button>
           </div>

@@ -9,6 +9,7 @@ import {
   type OnSelectionChangeParams,
   type Viewport,
 } from "@xyflow/react";
+import { Focus, Network, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rich, useT } from "../i18n";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
@@ -19,6 +20,7 @@ import { registerViewport, viewport } from "../lib/viewport";
 import { ShortcutsButton } from "../panels/ShortcutsHelp";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { activeFocus, useView } from "../store/viewStore";
+import { Icon } from "../ui/Icon";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
 
@@ -255,6 +257,7 @@ export function GraphCanvas() {
       </ReactFlow>
       {focus && (
         <div className="focus-bar" role="group" aria-label={t("focus.bar")} data-testid="focus-bar">
+          <Icon icon={Focus} size={14} className="focus-bar__icon" />
           <span className="focus-bar__label">{rich("focus.label", { name: focusName })}</span>
           <select
             value={focus.hops}
@@ -267,15 +270,16 @@ export function GraphCanvas() {
               <option key={h} value={h}>{t("focus.hops", { n: h })}</option>
             ))}
           </select>
-          <button className="focus-bar__close" onClick={() => setFocus(null)} title={t("focus.close")} aria-label={t("focus.leave")}>
-            ✕
+          <button className="focus-bar__close icon-btn" onClick={() => setFocus(null)} title={t("focus.close")} aria-label={t("focus.leave")}>
+            <Icon icon={X} size={14} />
           </button>
         </div>
       )}
       {graph.nodes.length === 0 && (
         <div className="canvas__empty">
-          <div>
-            {t("canvas.empty")}
+          <div className="canvas__emptyCard">
+            <span className="canvas__emptyIcon"><Icon icon={Network} size={20} /></span>
+            <p>{t("canvas.empty")}</p>
             <div className="canvas__example">
               {/* Built offline from static data (lib/examples.ts): no AI call, works without a key. */}
               <button onClick={loadExample} title={t("canvas.exampleTitle")}>

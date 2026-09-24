@@ -1,4 +1,18 @@
 import type { ConceptNode, ExplainLevel, Graph, RelationOrigin } from "@nodestorm/shared";
+import {
+  ArrowDown,
+  ArrowLeftRight,
+  ArrowRight,
+  ChevronRight,
+  GraduationCap,
+  Highlighter,
+  Presentation,
+  RefreshCw,
+  Sparkles,
+  Trash2,
+  TriangleAlert,
+  Wand2,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
@@ -18,16 +32,20 @@ import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
 import { useWalkthrough } from "../store/walkthroughStore";
+import { StatusMark } from "../graph/ConceptNode";
+import { Icon } from "../ui/Icon";
 import { MathText } from "./MathText";
 
 /**
  * A text field edited locally and saved on blur or Enter (Shift+Enter for a newline when multiline);
  * Escape reverts. `save` returns an error message to reject the value, which is shown under the field.
+ * `grow`: a one-line field that wraps and grows with its text instead of scrolling sideways (concept names).
  */
-function DraftField({ value, save, multiline, className, label, testId }: {
+function DraftField({ value, save, multiline, grow, className, label, testId }: {
   value: string;
   save: (v: string) => string | undefined;
   multiline?: boolean;
+  grow?: boolean;
   className?: string;
   label: string;
   testId?: string;
@@ -57,7 +75,7 @@ function DraftField({ value, save, multiline, className, label, testId }: {
   };
   return (
     <span className="draft">
-      {multiline ? <textarea rows={3} {...props} /> : <input {...props} />}
+      {multiline || grow ? <textarea rows={grow ? 1 : 3} {...props} /> : <input {...props} />}
       {error && <span className="error small" role="alert">{error}</span>}
     </span>
   );
@@ -101,21 +119,27 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
 
   return (
     <aside className="inspector" data-testid="node-panel">
+      <header className="inspector__header">
       <div className="inspector__title">
         <DraftField
           key={node.id}
           value={node.name}
           label={t("node.rename")}
           className="title-input"
+          grow
           save={(v) => {
             const r = renameNode(graph, node.id, v);
             if (!r.error) mutate((g) => renameNode(g, node.id, v).graph);
             return r.error;
           }}
         />
-        <span className={`concept__badge concept__badge--${node.status}`}>{t(STATUS_LABEL[node.status])}</span>
+        <span className={`concept__badge concept__badge--${node.status}`}>
+          <StatusMark status={node.status} />
+          {t(STATUS_LABEL[node.status])}
+        </span>
       </div>
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
+      </header>
 
       <label className="field">
         {t("node.definition")}
@@ -134,7 +158,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       {node.status === "error" && (
         <div className="error-box">
           <p className="error small">{node.error}</p>
-          <button onClick={() => analyzeNode(node.id)}>{t("node.retry")}</button>
+          <button onClick={() => analyzeNode(node.id)}><Icon icon={RefreshCw} size={14} />{t("node.retry")}</button>
         </div>
       )}
       {node.status === "unclear" && (
@@ -173,14 +197,14 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       <section>
         <h4>{t("node.dependsOn")}</h4>
         {deps.length === 0 ? <p className="muted small">{t("node.nothingYet")}</p> : (
-          <ul className="links">
+          <ul className="links links--chips">
             {deps.map((d) => <li key={d.id}><button className="link" onClick={() => setInspect({ kind: "node", id: d.id })}>{d.name}</button></li>)}
           </ul>
         )}
         {dependents.length > 0 && (
           <>
             <h4>{t("node.neededBy")}</h4>
-            <ul className="links">
+            <ul className="links links--chips">
               {dependents.map((d) => <li key={d.id}><button className="link" onClick={() => setInspect({ kind: "node", id: d.id })}>{d.name}</button></li>)}
             </ul>
           </>
@@ -191,14 +215,16 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
 
       <section>
         <h4>{t("node.relations")}</h4>
-        <ul className="links">
+        <ul className="links links--rows">
           {graph.relations.filter((r) => r.a === node.id || r.b === node.id).map((r) => {
             const other = byId(r.a === node.id ? r.b : r.a);
             const dir = r.a === node.id ? "aToB" : "bToA";
             return (
               <li key={r.id}>
-                <button className="link" onClick={() => setInspect({ kind: "edge", relationId: r.id, dir })}>
-                  {r[dir].kind} → {other?.name}
+                <button className="link rel-link" onClick={() => setInspect({ kind: "edge", relationId: r.id, dir })}>
+                  <span className="rel-link__kind">{r[dir].kind}</span>
+                  <Icon icon={ArrowRight} size={14} className="rel-link__arrow" />
+                  <span className="rel-link__to">{other?.name}</span>
                 </button>
               </li>
             );
@@ -222,16 +248,20 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         />
       </label>
 
-      <div className="form__actions">
-        {!viewing && <button onClick={() => useQuiz.getState().openQuiz(node.id)} data-testid="quiz-node">{t("quiz.fromNode")}</button>}
+      <div className="form__actions inspector__footer">
+        {!viewing && (
+          <button onClick={() => useQuiz.getState().openQuiz(node.id)} data-testid="quiz-node">
+            <Icon icon={GraduationCap} size={14} />{t("quiz.fromNode")}
+          </button>
+        )}
         <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
-          {t("node.recheck")}
+          <Icon icon={RefreshCw} size={14} />{t("node.recheck")}
         </button>
         <button
           className="danger"
           onClick={() => { mutate((g) => removeNode(g, node.id)); setInspect(null); }}
         >
-          {t("common.delete")}
+          <Icon icon={Trash2} size={14} />{t("common.delete")}
         </button>
       </div>
     </aside>
@@ -280,6 +310,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
             disabled={running}
             data-testid="explain-button"
           >
+            {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Sparkles} size={14} />}
             {t(running ? "explain.running" : ex ? "explain.regenerate" : "explain.run")}
           </button>
         </div>
@@ -288,6 +319,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
       {ex && (
         <details className="explain" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
           <summary>
+            <Icon icon={ChevronRight} size={14} className="explain__chevron" />
             {t("explain.heading", { level: levelLabel(ex.level) })}{" "}
             <span className="muted small">· {new Date(ex.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
           </summary>
@@ -333,7 +365,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
               onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary }), graphId)}
               data-testid="use-summary"
             >
-              {t("explain.useSummary")}
+              <Icon icon={ArrowDown} size={14} />{t("explain.useSummary")}
             </button>
           </div>
         </details>
@@ -404,9 +436,12 @@ function CycleWarning({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const links = cycle.slice(0, -1).map((from, i) => [from, cycle[i + 1]] as const);
   return (
     <div className="warn-box" data-testid="cycle-warning">
-      <p className="small">{rich("cycle.warning", { chain: cycle.map(name).join(" → ") })}</p>
+      <p className="small warn-box__head">
+        <Icon icon={TriangleAlert} size={16} className="warn-box__icon" />
+        <span>{rich("cycle.warning", { chain: cycle.map(name).join(" → ") })}</span>
+      </p>
       <button className="small-btn" onClick={() => void resolveCycle(graph.id, cycle)} data-testid="resolve-cycle">
-        {t("cycle.resolveButton")}
+        <Icon icon={Wand2} size={14} />{t("cycle.resolveButton")}
       </button>
       <ul className="links">
         {links.map(([from, to]) => (
@@ -445,12 +480,12 @@ function LearningPath({ node, graph }: { node: ConceptNode; graph: Graph }) {
           onClick={() => setHighlight(on ? null : { graphId: graph.id, nodeId: node.id })}
           data-testid="highlight-path"
         >
-          {t("path.highlight")}
+          <Icon icon={Highlighter} size={14} />{t("path.highlight")}
         </button>
       </div>
       {/* Read-only, so it stays available in the share viewer (unlike the actions at the bottom). */}
       <button className="small-btn path__walk" onClick={() => useWalkthrough.getState().openWalkthrough(node.id)} data-testid="walk-node">
-        {t("walk.fromNode")}
+        <Icon icon={Presentation} size={14} />{t("walk.fromNode")}
       </button>
       <ol className="path" data-testid="learning-path">
         {steps.map((s) =>
@@ -493,10 +528,11 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
 
   return (
     <aside className="inspector" data-testid="relation-panel">
-      <div className="muted small">{t(ORIGIN_LABEL[rel.origin])}</div>
+      <div className="inspector__eyebrow">{t(ORIGIN_LABEL[rel.origin])}</div>
       <h3 className="rel-title">
         <span>{from?.name}</span>
         <span className="rel-kind">
+          <Icon icon={ArrowDown} size={14} className="rel-kind__arrow" />
           <DraftField
             key={`${relationId}:${dir}`}
             value={d.kind}
@@ -522,15 +558,19 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
       <MathPreview text={d.explanation} testId="relation-preview" />
       <div className="dir-switch">
         <button onClick={() => setInspect({ kind: "edge", relationId, dir: other })}>
+          <Icon icon={ArrowLeftRight} size={14} />
           {t("rel.switch", { to: to?.name ?? "?", from: from?.name ?? "?" })}
         </button>
       </div>
       <div className="form__actions">
         {a && b && (
-          <button onClick={() => mix(a.id, b.id)} disabled={busy}>{t(busy ? "rel.analyzing" : "rel.reanalyze")}</button>
+          <button onClick={() => mix(a.id, b.id)} disabled={busy}>
+            {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={RefreshCw} size={14} />}
+            {t(busy ? "rel.analyzing" : "rel.reanalyze")}
+          </button>
         )}
         <button className="danger" onClick={() => { mutate((g) => removeRelation(g, relationId)); setInspect(null); }}>
-          {t("rel.delete")}
+          <Icon icon={Trash2} size={14} />{t("rel.delete")}
         </button>
       </div>
     </aside>

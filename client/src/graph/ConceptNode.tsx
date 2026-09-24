@@ -1,10 +1,12 @@
 import type { ConceptNode as CN } from "@nodestorm/shared";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
+import { CircleDashed, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
+import { Icon } from "../ui/Icon";
 import { MasteryDot } from "./MasteryDot";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
@@ -52,25 +54,34 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
             title={c.error}
             aria-label={t(c.status === "error" ? "badge.retryAria" : "badge.chooseAria", { name: c.name })}
           >
+            <StatusMark status={c.status} />
             {t(badge[c.status])}
+            {c.status === "error" && <Icon icon={RotateCcw} size={12} />}
           </button>
         ) : (
-          <span className={`concept__badge concept__badge--${c.status}`}>{t(badge[c.status])}</span>
+          <span className={`concept__badge concept__badge--${c.status}`}><StatusMark status={c.status} />{t(badge[c.status])}</span>
         )}
       </div>
       {c.definition && <div className="concept__def"><MathText text={c.definition} inline /></div>}
       {c.missingDeps.length > 0 && (
         <div className="concept__missing">
-          {t("badge.missing", { names: c.missingDeps.map((d) => d.name).join(", ") })}
+          <Icon icon={CircleDashed} size={12} />
+          <span>{t("badge.missing", { names: c.missingDeps.map((d) => d.name).join(", ") })}</span>
         </div>
       )}
       {data.inCycle && (
         <div className="concept__cycle" title={t("badge.cycleTitle")}>
-          {t("badge.cycle")}
+          <Icon icon={TriangleAlert} size={12} />
+          <span>{t("badge.cycle")}</span>
         </div>
       )}
     </div>
   );
+}
+
+/** The dot at the start of a status pill; a small spinner while the AI is checking. Decoration only. */
+export function StatusMark({ status }: { status: CN["status"] }) {
+  return status === "checking" ? <span className="spinner spinner--xs" aria-hidden="true" /> : <span className="pill__dot" aria-hidden="true" />;
 }
 
 export const ConceptNode = memo(ConceptNodeView);
