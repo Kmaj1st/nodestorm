@@ -1,8 +1,11 @@
 import {
   DEFAULT_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,
+  isTransientStatus,
+  parseRetryAfter,
   ProviderError,
   withDeadline,
+  withRetries,
   type ChatMessage,
   type CompleteOptions,
   type ModelInfo,
@@ -50,26 +53,34 @@ export class OpenAICompatibleProvider implements Provider {
 
   private async request(path: string, init: RequestInit, opts: RequestOptions & { timeoutMs: number }) {
     if (!this.apiKey) throw new ProviderError(`${this.label}: API key is not set`, 503);
-    // The deadline covers the whole exchange, including reading the body.
-    return withDeadline(this.label, opts, async (signal) => {
-      let res: Response;
-      try {
-        res = await fetch(`${this.baseURL}${path}`, {
-          ...init,
-          signal,
-          headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}`, ...init.headers },
-        });
-      } catch (e) {
-        if (signal.aborted) throw e;
-        throw new ProviderError(`${this.label}: could not reach ${this.baseURL} (${e instanceof Error ? e.message : e})`);
-      }
-      if (!res.ok) {
-        const body = await res.text().catch(() => "");
-        const status = res.status === 401 || res.status === 403 ? 401 : res.status === 429 ? 429 : 502;
-        throw new ProviderError(`${this.label} HTTP ${res.status}: ${body.slice(0, 300)}`, status);
-      }
-      return res.json();
-    });
+    // The deadline covers the whole exchange, including reading the body and any retries.
+    const deadlineAt = Date.now() + opts.timeoutMs;
+    return withDeadline(this.label, opts, (signal) =>
+      withRetries(this.label, signal, deadlineAt, () => this.once(path, init, signal)),
+    );
+  }
+
+  /** One HTTP exchange. Rate limits, 5xx and network failures come back marked as retryable. */
+  private async once(path: string, init: RequestInit, signal: AbortSignal): Promise<unknown> {
+    let res: Response;
+    try {
+      res = await fetch(`${this.baseURL}${path}`, {
+        ...init,
+        signal,
+        headers: { "content-type": "application/json", authorization: `Bearer ${this.apiKey}`, ...init.headers },
+      });
+    } catch (e) {
+      if (signal.aborted) throw e;
+      const msg = `${this.label}: could not reach ${this.baseURL} (${e instanceof Error ? e.message : e})`;
+      throw new ProviderError(msg, 502, {});
+    }
+    if (!res.ok) {
+      const body = await res.text().catch(() => "");
+      const status = res.status === 401 || res.status === 403 ? 401 : res.status === 429 ? 429 : 502;
+      const retry = isTransientStatus(res.status) ? { afterMs: parseRetryAfter(res.headers.get("retry-after")) } : undefined;
+      throw new ProviderError(`${this.label} HTTP ${res.status}: ${body.slice(0, 300)}`, status, retry);
+    }
+    return res.json();
   }
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
@@ -85,9 +96,11 @@ export class OpenAICompatibleProvider implements Provider {
       "/chat/completions",
       { method: "POST", body },
       { signal: opts.signal, timeoutMs: opts.timeoutMs ?? this.timeoutMs },
-    )) as { choices?: { message?: { content?: string } }[] };
+    )) as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
     const content = data.choices?.[0]?.message?.content;
     if (typeof content !== "string") throw new ProviderError(`${this.label}: empty response`);
+    const tokens = data.usage?.total_tokens;
+    if (typeof tokens === "number" && tokens > 0) opts.onUsage?.(tokens);
     return content;
   }
 

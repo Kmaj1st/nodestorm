@@ -2,8 +2,11 @@ import Anthropic from "@anthropic-ai/sdk";
 import {
   DEFAULT_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,
+  isTransientStatus,
+  parseRetryAfter,
   ProviderError,
   withDeadline,
+  withRetries,
   type ChatMessage,
   type CompleteOptions,
   type ModelInfo,
@@ -35,8 +38,8 @@ export class AnthropicProvider implements Provider {
     this.client = cfg.apiKey
       ? new Anthropic({
           apiKey: cfg.apiKey,
-          // withDeadline enforces the overall deadline; don't let SDK retries stretch it.
-          maxRetries: 1,
+          // Retries go through withRetries, which keeps them inside the overall deadline.
+          maxRetries: 0,
           // The key is the user's own, entered into their own browser; nothing is shared with other users.
           dangerouslyAllowBrowser: true,
         })
@@ -59,9 +62,17 @@ export class AnthropicProvider implements Provider {
       throw new ProviderError("Anthropic: this key can't use that model", 401);
     if (err instanceof Anthropic.NotFoundError)
       throw new ProviderError(`Anthropic: model "${this.model}" not found`, 400);
-    if (err instanceof Anthropic.RateLimitError) throw new ProviderError("Anthropic: rate limited", 429);
-    if (err instanceof Anthropic.APIConnectionError) throw new ProviderError("Anthropic: could not reach the API");
-    if (err instanceof Anthropic.APIError) throw new ProviderError(`Anthropic API error ${err.status}: ${err.message}`);
+    if (err instanceof Anthropic.APIUserAbortError) throw err;
+    // Rate limits, overload/5xx and network failures are marked retryable; withRetries decides whether to wait.
+    const retryAfter = () => ({
+      afterMs: parseRetryAfter(err instanceof Anthropic.APIError ? err.headers?.get("retry-after") : null),
+    });
+    if (err instanceof Anthropic.RateLimitError) throw new ProviderError("Anthropic: rate limited", 429, retryAfter());
+    if (err instanceof Anthropic.APIConnectionError) throw new ProviderError("Anthropic: could not reach the API", 502, {});
+    if (err instanceof Anthropic.APIError) {
+      const retry = err.status !== undefined && isTransientStatus(err.status) ? retryAfter() : undefined;
+      throw new ProviderError(`Anthropic API error ${err.status}: ${err.message}`, 502, retry);
+    }
     throw err;
   }
 
@@ -71,7 +82,7 @@ export class AnthropicProvider implements Provider {
       .filter((m) => m.role === "system")
       .map((m) => m.content)
       .join("\n\n");
-    const convo: Anthropic.Beta.BetaMessageParam[] = messages
+    const initial: Anthropic.Beta.BetaMessageParam[] = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({
         role: m.role as "user" | "assistant",
@@ -81,7 +92,9 @@ export class AnthropicProvider implements Provider {
       opts.search && this.webSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }] : [];
 
     const timeoutMs = opts.timeoutMs ?? this.timeoutMs;
-    return withDeadline(this.label, { signal: opts.signal, timeoutMs }, async (signal) => {
+    const deadlineAt = Date.now() + timeoutMs;
+    const attempt = async (signal: AbortSignal) => {
+      const convo = [...initial];
       try {
         // Server tools may return pause_turn; resume by sending the partial turn back.
         for (let i = 0; i < 4; i++) {
@@ -96,8 +109,10 @@ export class AnthropicProvider implements Provider {
               fallbacks: "default",
               ...(tools.length ? { tools } : {}),
             },
-            { signal, timeout: timeoutMs },
+            { signal, timeout: Math.max(1, deadlineAt - Date.now()) },
           );
+          const used = (res.usage?.input_tokens ?? 0) + (res.usage?.output_tokens ?? 0);
+          if (used > 0) opts.onUsage?.(used);
           if (res.stop_reason === "pause_turn") {
             convo.push({ role: "assistant", content: res.content });
             continue;
@@ -114,7 +129,10 @@ export class AnthropicProvider implements Provider {
       } catch (err) {
         this.wrap(err);
       }
-    });
+    };
+    return withDeadline(this.label, { signal: opts.signal, timeoutMs }, (signal) =>
+      withRetries(this.label, signal, deadlineAt, () => attempt(signal)),
+    );
   }
 
   async listModels(opts: RequestOptions = {}): Promise<ModelInfo[]> {

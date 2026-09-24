@@ -1,5 +1,5 @@
 import type { ClarifyRequest, DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "../model";
-import type { ChatMessage } from "./provider";
+import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive";
 
@@ -24,6 +24,26 @@ function sys(kind: TaskKind, instructions: string): ChatMessage {
 
 function input(payload: unknown, text: string): ChatMessage {
   return { role: "user", content: `${text}\n\nINPUT:\n${JSON.stringify(payload)}` };
+}
+
+/**
+ * System-prompt paragraph that sets the language of the answer's text. "auto" follows the input; anything else is
+ * a language name. JSON keys, enum values and references to existing concepts must stay as they are.
+ */
+export function languageInstruction(language: string | undefined): string {
+  const lang = normalizeLanguage(language);
+  if (!lang) return "";
+  const target =
+    lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons) in ${target}.
+Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "to"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+}
+
+/** Add the output-language paragraph to the system message of a task prompt. */
+export function withLanguage(messages: ChatMessage[], language: string | undefined): ChatMessage[] {
+  const extra = languageInstruction(language);
+  if (!extra) return messages;
+  return messages.map((m, i) => (i === 0 && m.role === "system" ? { ...m, content: `${m.content}\n\n${extra}` } : m));
 }
 
 export function namePrompt(req: NameRequest): ChatMessage[] {
