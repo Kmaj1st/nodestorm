@@ -94,6 +94,10 @@ button:disabled { opacity: 0.5; cursor: not-allowed; }
 button.primary { background: var(--accent); border-color: var(--accent); color: var(--on-accent); }
 button.danger { color: var(--blocked); }
 button.link { border: none; background: none; padding: 0; color: var(--accent); text-align: left; }
+/* Stacked links (inspector lists, learning path) get a 24px target (WCAG 2.5.8); inline ones stay text-sized. */
+li > button.link { min-height: 24px; }
+/* React Flow's attribution link is tiny text; pad it to a 24px target without changing how it looks. */
+.react-flow__attribution a { display: inline-block; padding: 6px 2px; }
 input, textarea, select {
   border: 1px solid var(--border); border-radius: 6px; padding: 6px 8px; background: var(--panel); color: var(--text);
 }
@@ -108,7 +112,7 @@ textarea { resize: vertical; width: 100%; }
   display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px;
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
-.toolbar__brand { font-weight: 700; letter-spacing: 0.02em; color: var(--accent); }
+.toolbar__brand { margin: 0; font-size: inherit; font-weight: 700; letter-spacing: 0.02em; color: var(--accent); }
 .toolbar__group { display: flex; gap: 6px; align-items: center; }
 .toolbar__right { margin-left: auto; }
 /* A slightly smaller toolbar type keeps every group on one row from 1200px up. */
@@ -200,7 +204,8 @@ textarea { resize: vertical; width: 100%; }
 }
 .concept--ok { border-color: var(--ok-border); }
 .concept--blocked { border-color: var(--blocked); border-style: dashed; background: var(--blocked-soft); }
-.concept--blocked .concept__def { opacity: 0.6; }
+/* Italic rather than faded: a faded definition fell below 4.5:1 contrast on the blocked tint. */
+.concept--blocked .concept__def { font-style: italic; }
 .concept--checking { border-color: var(--checking-border); }
 .concept--error { border-color: var(--checking); }
 .concept--selected { box-shadow: 0 0 0 3px var(--accent); }
@@ -242,6 +247,8 @@ textarea { resize: vertical; width: 100%; }
   max-height: calc(100vh - 64px); max-height: calc(100dvh - 32px); overflow-y: auto; color: var(--text); display: flex; flex-direction: column; gap: 12px;
 }
 .modal__body h3 { margin: 0; }
+/* While a dialog's chunk loads (panels/lazy.tsx): usually only a frame, from the service worker's cache. */
+.modal__loading { background: var(--panel); color: var(--text); border-radius: 8px; padding: 8px 14px; }
 .tabs { display: flex; gap: 4px; }
 .tab { border-radius: 6px; }
 .tab--on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }

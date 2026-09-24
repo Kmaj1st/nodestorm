@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client";
 import { App } from "./App";
 import { registerServiceWorker } from "./lib/pwa";
 import { initTheme } from "./lib/theme";
+import { preloadDialogs } from "./panels/lazy";
 import "./styles.css";
 
 initTheme(); // before the first render, so a dark page never flashes white
@@ -14,3 +15,4 @@ createRoot(document.getElementById("root")!).render(
     <App />
   </StrictMode>,
 );
+preloadDialogs(); // after the first paint, when the browser is idle

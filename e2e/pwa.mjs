@@ -2,7 +2,7 @@
 // manifest and the service worker, then opens the app offline (server stopped) and tries the update notice.
 // Usage: npm run e2e:pwa   (builds first; or `node e2e/pwa.mjs` after `npm run build`)
 import { spawn } from "node:child_process";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const PORT = Number(process.env.E2E_WEB_PORT || 4273);
@@ -76,6 +76,10 @@ try {
   assert(sw.keys.length === 1 && sw.keys[0].startsWith("nodestorm-shell-"), "one versioned cache");
   assert(sw.cached.includes(`${base}index.html`) && sw.cached.some((u) => /\/assets\/index-.*\.js$/.test(u)), "the app shell (index.html, scripts) is precached");
   assert(!sw.cached.some((u) => u.includes("/api/") || !u.startsWith(base)), "nothing but same-origin build files is cached");
+  // Dialogs, the Anthropic SDK and the PNG exporter are lazily loaded chunks: they must be precached as well.
+  const assets = readdirSync(`${dist}assets`).filter((f) => !f.endsWith(".map"));
+  const missing = assets.filter((f) => !sw.cached.includes(`${base}assets/${f}`));
+  assert(assets.length > 3 && !missing.length, `every chunk of the build is precached, lazy ones included (${assets.length} files)${missing.length ? `; missing: ${missing}` : ""}`);
 
   console.log("Offline");
   stopServer();
@@ -85,6 +89,15 @@ try {
   await addButton.waitFor({ timeout: 10000 });
   assert(true, "with the server stopped and the network off, a reload still opens the app");
   assert(await page.getByTestId("offline-banner").isVisible(), "…and it shows the offline banner");
+  // Straight after the reload, before the idle-time preload could have fetched them.
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await settings.waitFor({ timeout: 10000 });
+  await settings.getByRole("button", { name: "Cancel" }).click();
+  await page.keyboard.press("?");
+  await page.getByRole("dialog", { name: "Keyboard shortcuts" }).waitFor({ timeout: 10000 });
+  await page.keyboard.press("Escape");
+  assert(true, "lazily loaded dialogs (Settings, Keyboard shortcuts) open offline");
   const second = await context.newPage();
   await second.goto(`${base}?from=home-screen`);
   await second.getByRole("button", { name: "+ Add concept" }).waitFor({ timeout: 10000 });

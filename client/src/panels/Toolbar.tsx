@@ -1,6 +1,5 @@
 import { providerMeta } from "@nodestorm/shared";
 import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
-import { toPng } from "html-to-image";
 import { useEffect, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
@@ -8,9 +7,8 @@ import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
+import { ExtractDialog, ShareDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
-import { ExtractDialog } from "./ExtractDialog";
-import { ShareDialog } from "./ShareDialog";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 
 /**
@@ -48,7 +46,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
 
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
-      <div className="toolbar__brand">NodeStorm</div>
+      <h1 className="toolbar__brand">NodeStorm</h1>
       {viewing ? <span className="toolbar__shared">{t("toolbar.sharedGraph")}</span> : <ProjectMenu />}
 
       {!viewing && (
@@ -236,6 +234,7 @@ function FileMenu() {
         const width = Math.min(4096, Math.ceil(bounds.width) + 160);
         const height = Math.min(4096, Math.ceil(bounds.height) + 160);
         const vp = getViewportForBounds(bounds, width, height, 0.2, 1, 0.05);
+        const { toPng } = await import("html-to-image"); // only needed here, so a chunk of its own
         const url = await toPng(viewportEl, {
           backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#fff",
           width,

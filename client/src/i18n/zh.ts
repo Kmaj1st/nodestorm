@@ -13,6 +13,7 @@ export const zh: Record<MessageKey, string> = {
   "common.delete": "删除",
   "common.install": "安装",
   "common.dismiss": "关闭提示",
+  "common.loading": "加载中…",
 
   // 工具栏
   "toolbar.sharedGraph": "分享的图谱",

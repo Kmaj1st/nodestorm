@@ -2,6 +2,7 @@
 // Usage: npm run e2e   (screenshots land in e2e/screenshots/)
 import { spawn } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { AxeBuilder } from "@axe-core/playwright";
 import { chromium } from "playwright";
 
 const SERVER_PORT = Number(process.env.E2E_SERVER_PORT || 8799);
@@ -1029,6 +1030,57 @@ try {
     assert((await onboardingState(p))?.tour === "skipped" && (await welcome.count()) === 0 && (await tour.count()) === 0, "Skip ends the tour and is remembered");
     await ctx.close();
   }
+
+  console.log("Accessibility audit");
+  // axe-core with the WCAG 2.0/2.1/2.2 A and AA rules, on the main screens in both themes and in 中文. Nothing is
+  // excluded at the moment. axe's "needs review" results (e.g. contrast of text on React Flow's transformed canvas,
+  // which it can't measure) aren't failures.
+  const audit = async (what) => {
+    await page.waitForTimeout(300); // let transitions and lazily loaded dialogs settle
+    const { violations } = await new AxeBuilder({ page }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+    const report = violations.flatMap((v) => v.nodes.map((n) => `\n    ${v.id} (${v.impact}) at ${n.target.join(" ")}: ${n.failureSummary}`));
+    assert(!violations.length, `axe finds no WCAG A/AA violations: ${what}${report.join("")}`);
+  };
+  const setTheme = async (theme) => {
+    const st = await openSettings();
+    await st.getByLabel("Theme", { exact: true }).selectOption(theme);
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  };
+  await setTheme("light");
+  await projectMenu("New project");
+  await page.getByLabel("Project name").press("Enter");
+  await page.getByRole("button", { name: "Load example: Group theory" }).click();
+  await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+  await node("First Isomorphism Theorem").click(); // blocked, with a learning path in the inspector
+  await audit("main screen with a graph and a concept open in the inspector");
+  {
+    const st = await openSettings();
+    await audit("Settings dialog");
+    await st.getByRole("button", { name: "Cancel" }).click();
+  }
+  await addByName("Expectation");
+  await what.waitFor();
+  await audit("“What do you mean?” dialog");
+  await what.getByRole("button", { name: "Later" }).click();
+  const firstArrow = page.locator('[data-testid^="arrow-"]').first();
+  await firstArrow.click({ force: true });
+  await page.getByTestId("relation-panel").waitFor();
+  await audit("inspector with a relation open");
+  await setTheme("dark");
+  await audit("dark theme, relation open");
+  await node("Group").click();
+  await audit("dark theme, concept open");
+  {
+    const st = await openSettings();
+    await st.getByLabel("Theme", { exact: true }).selectOption("light");
+    await st.getByLabel("Interface language", { exact: true }).selectOption("zh");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await addZh.waitFor();
+  await audit("中文 interface");
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  await audit("中文 Settings dialog");
+  await settingsZh.getByRole("button", { name: "取消", exact: true }).click();
 
   console.log("\nE2E passed");
 } catch (e) {

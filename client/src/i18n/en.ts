@@ -14,6 +14,7 @@ export const en = {
   "common.delete": "Delete",
   "common.install": "Install",
   "common.dismiss": "Dismiss",
+  "common.loading": "Loading…",
 
   // Toolbar
   "toolbar.sharedGraph": "Shared graph",
