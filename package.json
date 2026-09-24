@@ -1,0 +1,24 @@
+{
+  "name": "nodestorm",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "shared",
+    "server",
+    "client"
+  ],
+  "scripts": {
+    "dev": "concurrently -n server,client -c blue,green \"npm run dev -w server\" \"npm run dev -w client\"",
+    "dev:mock": "concurrently -n server,client -c blue,green \"npm run dev:mock -w server\" \"npm run dev -w client\"",
+    "build": "npm run build -w client",
+    "typecheck": "npm run typecheck -w shared && npm run typecheck -w server && npm run typecheck -w client",
+    "test": "vitest run",
+    "e2e": "node e2e/smoke.mjs"
+  },
+  "devDependencies": {
+    "concurrently": "^9.2.0",
+    "playwright": "^1.56.1",
+    "typescript": "^5.9.0",
+    "vitest": "^3.2.0"
+  }
+}
