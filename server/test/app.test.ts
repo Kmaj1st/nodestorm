@@ -1,5 +1,5 @@
 import type { AddressInfo } from "node:net";
-import type { ChatMessage, Provider } from "@nodestorm/shared";
+import { EXTRACT_MAX_CHARS, MockProvider, type ChatMessage, type Provider } from "@nodestorm/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp, parseTimeout } from "../src/app";
 import type { Registry } from "../src/providers/registry";
@@ -97,5 +97,33 @@ describe("server: x-ai-timeout", () => {
     });
     server.close();
     expect(seen).toBe(45_000);
+  });
+});
+
+describe("server: extract", () => {
+  const registry = { get: () => new MockProvider(), info: () => ({ default: "mock", providers: [] }) } as unknown as Registry;
+  let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let base = "";
+  beforeAll(async () => {
+    server = createApp(registry).listen(0);
+    await new Promise((r) => server.once("listening", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => server.close());
+  const extract = (body: unknown) =>
+    fetch(`${base}/api/extract`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("is exposed through the tasks map", async () => {
+    const res = await extract({ text: "The kernel of a homomorphism is a normal subgroup.", existing: [{ name: "Homomorphism" }] });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.concepts.map((c: { name: string }) => c.name)).toEqual(["Kernel", "Homomorphism", "Normal Subgroup", "Subgroup"]);
+    expect(data.prerequisites).toContainEqual(expect.objectContaining({ dependent: "Kernel", prerequisite: "Homomorphism" }));
+  });
+
+  it("rejects a text over the length cap with a 400", async () => {
+    const res = await extract({ text: "x".repeat(EXTRACT_MAX_CHARS + 1) });
+    expect(res.status).toBe(400);
+    expect(JSON.stringify(await res.json())).toMatch(/too long/);
   });
 });

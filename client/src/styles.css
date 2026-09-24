@@ -222,6 +222,7 @@ textarea { resize: vertical; width: 100%; }
 .relation { stroke: var(--edge); stroke-width: 2; fill: none; }
 .relation--dependency { stroke-dasharray: 6 4; }
 .relation--derive { stroke: var(--sandbox); }
+.relation--extract { stroke-dasharray: 1 5; stroke-linecap: round; stroke-width: 2.5; }
 .arrow { cursor: pointer; pointer-events: all; }
 .arrow__hit { fill: transparent; }
 .arrow__head { fill: var(--edge); transition: fill 0.1s; }
@@ -253,6 +254,21 @@ textarea { resize: vertical; width: 100%; }
   display: flex; gap: 12px; justify-content: space-between; align-items: center;
   border: 1px solid var(--border); border-radius: 8px; padding: 10px;
 }
+
+/* Extract from text */
+.extract { width: min(680px, calc(100vw - 32px)); }
+.extract textarea { resize: vertical; min-height: 140px; }
+.extract__meta { display: flex; justify-content: space-between; gap: 8px; margin-top: -4px; }
+.extract__head { margin: 4px 0 0; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+.extract__list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.extract__item { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px; padding: 8px 10px; }
+.extract__item > input[type="checkbox"] { margin-top: 8px; }
+.extract__item--dup { background: var(--bg); }
+.extract__body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.extract__name { font-weight: 600; }
+.extract__dup { color: var(--sandbox); }
+.extract__quote { margin: 0; padding-left: 8px; border-left: 3px solid var(--border); color: var(--muted); font-style: italic; }
+.extract__link .check { align-items: flex-start; }
 
 .status {
   position: fixed; bottom: 12px; left: 12px; background: var(--status-bg); color: var(--status-text);

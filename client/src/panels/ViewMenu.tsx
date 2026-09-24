@@ -9,6 +9,7 @@ const KINDS: { origin: RelationOrigin; label: MessageKey; title: MessageKey }[] 
   { origin: "dependency", label: "view.dependency", title: "view.dependencyTitle" },
   { origin: "mix", label: "view.mix", title: "view.mixTitle" },
   { origin: "derive", label: "view.derive", title: "view.deriveTitle" },
+  { origin: "extract", label: "view.extract", title: "view.extractTitle" },
 ];
 
 /** Toolbar "Focus" toggle: show only the selected concept and its neighbourhood (F on the canvas, Esc leaves). */

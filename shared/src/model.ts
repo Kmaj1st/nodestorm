@@ -67,7 +67,8 @@ export const DirRel = z.object({
 });
 export type DirRel = z.infer<typeof DirRel>;
 
-export const RelationOrigin = z.enum(["mix", "dependency", "derive"]);
+/** Where a relation came from: Mix ⇄, a dependency check, a Derive ✦ proposal, or Extract from text. */
+export const RelationOrigin = z.enum(["mix", "dependency", "derive", "extract"]);
 export type RelationOrigin = z.infer<typeof RelationOrigin>;
 
 export const Relation = z.object({
@@ -225,6 +226,56 @@ export type ExplainRequest = z.infer<typeof ExplainRequest>;
 
 export const ExplainResponse = Explanation;
 export type ExplainResponse = Explanation;
+
+/** Longest text "Extract from text" accepts (characters): a few pages, which fits every provider's context. */
+export const EXTRACT_MAX_CHARS = 12_000;
+
+export const ExtractRequest = z.object({
+  text: z
+    .string()
+    .trim()
+    .min(1, "Paste some text to extract concepts from.")
+    .max(EXTRACT_MAX_CHARS, `The text is too long: at most ${EXTRACT_MAX_CHARS} characters per extraction.`),
+  /** The graph's concepts, so the model reuses their exact names. */
+  existing: z.array(NodeBrief).default([]),
+  /** Optional hint on what to pick out, e.g. "only the theorems". */
+  focus: z.string().max(500).optional(),
+});
+export type ExtractRequest = z.infer<typeof ExtractRequest>;
+
+export const ExtractedConcept = z.object({
+  name: z.string().trim().min(1),
+  definition: z.string().default(""),
+  aliases: z.array(z.string()).default([]),
+  /** A short excerpt of the text that supports the concept. */
+  quote: z.string().nullish(),
+});
+export type ExtractedConcept = z.infer<typeof ExtractedConcept>;
+
+/** A relation the text states, by concept name (an extracted concept or one already in the graph). */
+export const ExtractedRelation = z.object({
+  from: z.string(),
+  to: z.string(),
+  aToB: DirRel,
+  bToA: DirRel,
+});
+export type ExtractedRelation = z.infer<typeof ExtractedRelation>;
+
+/** "`dependent` needs `prerequisite`", where the text says so. */
+export const ExtractedPrerequisite = z.object({
+  dependent: z.string(),
+  prerequisite: z.string(),
+  role: DepRole,
+  reason: z.string().default(""),
+});
+export type ExtractedPrerequisite = z.infer<typeof ExtractedPrerequisite>;
+
+export const ExtractResponse = z.object({
+  concepts: z.array(ExtractedConcept),
+  relations: z.array(ExtractedRelation).default([]),
+  prerequisites: z.array(ExtractedPrerequisite).default([]),
+});
+export type ExtractResponse = z.infer<typeof ExtractResponse>;
 
 export interface ProviderInfo {
   id: string;

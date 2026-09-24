@@ -7,6 +7,10 @@ import {
   DeriveResponse,
   ExplainRequest,
   ExplainResponse,
+  ExtractRequest,
+  ExtractResponse,
+  findByName,
+  normalizeName,
   NameRequest,
   NameResponse,
   RelateRequest,
@@ -14,7 +18,16 @@ import {
 } from "../model";
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
-import { clarifyPrompt, depsPrompt, derivePrompt, explainPrompt, namePrompt, relatePrompt, withLanguage } from "./prompts";
+import {
+  clarifyPrompt,
+  depsPrompt,
+  derivePrompt,
+  explainPrompt,
+  extractPrompt,
+  namePrompt,
+  relatePrompt,
+  withLanguage,
+} from "./prompts";
 
 /** Pull the first JSON object out of a model reply (tolerates code fences and stray prose). */
 export function extractJson(text: string): unknown {
@@ -64,6 +77,30 @@ async function runStructured<S extends z.ZodTypeAny>(
   throw new ProviderError(`${provider.label} returned malformed output: ${lastErr}`);
 }
 
+const MAX_EXTRACTED = 40;
+const MAX_QUOTE = 300;
+
+/**
+ * Tidy an extraction: one entry per concept name (case/plural-insensitive, first wins), quotes kept short, and only
+ * relations and prerequisites whose two ends are different known concepts (extracted or already in the graph).
+ */
+export function cleanExtraction(res: ExtractResponse, existing: { name: string; aliases?: string[] }[] = []): ExtractResponse {
+  const concepts: ExtractResponse["concepts"] = [];
+  for (const c of res.concepts) {
+    if (concepts.length >= MAX_EXTRACTED) break;
+    if (!normalizeName(c.name) || findByName(concepts, c.name)) continue;
+    const quote = c.quote?.trim();
+    concepts.push({ ...c, quote: quote ? (quote.length > MAX_QUOTE ? `${quote.slice(0, MAX_QUOTE - 1)}…` : quote) : undefined });
+  }
+  const known = (name: string) => Boolean(findByName(concepts, name) ?? findByName(existing, name));
+  const pair = (a: string, b: string) => known(a) && known(b) && normalizeName(a) !== normalizeName(b);
+  return {
+    concepts,
+    relations: res.relations.filter((r) => pair(r.from, r.to)),
+    prerequisites: res.prerequisites.filter((p) => pair(p.dependent, p.prerequisite)),
+  };
+}
+
 export const tasks = {
   name: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, namePrompt(NameRequest.parse(body)), NameResponse, { ...o, search: true }),
@@ -82,5 +119,9 @@ export const tasks = {
     runStructured(p, derivePrompt(DeriveRequest.parse(body)), DeriveResponse, o),
   explain: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, explainPrompt(ExplainRequest.parse(body)), ExplainResponse, o),
+  extract: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = ExtractRequest.parse(body);
+    return cleanExtraction(await runStructured(p, extractPrompt(req), ExtractResponse, o), req.existing);
+  },
 };
 export type TaskName = keyof typeof tasks;

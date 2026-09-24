@@ -146,6 +146,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.derive(inp.selected ?? []));
       case "explain":
         return JSON.stringify(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")));
+      case "extract":
+        return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? []));
       default:
         return "{}";
     }
@@ -236,6 +238,75 @@ export class MockProvider implements Provider {
       pitfalls: [],
       furtherReading: [{ title: `An introductory text on ${node.name}`, hint: "Look for its definition and a first example." }],
     };
+  }
+
+  /**
+   * Knowledge-base concepts named in the text (by name or alias, plural allowed), plus terms the text marks as new
+   * by quoting or bolding them. Relations and prerequisites come from the KB's dependencies between concepts found in
+   * the text or already in the graph; a marked term is related to the first KB concept of its sentence.
+   */
+  private extract(text: string, existing: { name: string; aliases?: string[] }[]) {
+    const sentences = text.split(/(?<=[.!?。！？])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+    const sentenceOf = (i: number) => {
+      let at = 0;
+      for (const s of sentences) {
+        at = text.indexOf(s, at);
+        if (i >= at && i < at + s.length) return s;
+        at += s.length;
+      }
+      return text.trim();
+    };
+    const quoteAt = (i: number) => {
+      const s = sentenceOf(i);
+      return s.length > 200 ? `${s.slice(0, 199)}…` : s;
+    };
+    const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    const found: { key: string; at: number; re: RegExp }[] = [];
+    for (const [key, v] of Object.entries(KB)) {
+      const re = new RegExp(`\\b(?:${[key, ...v.aliases].map(escape).join("|")})s?\\b`, "i");
+      const at = text.search(re);
+      if (at >= 0) found.push({ key, at, re });
+    }
+    found.sort((a, b) => a.at - b.at);
+    // Where a concept is already in the graph, answer with the graph's exact name (as the prompt asks).
+    const display = (key: string) => {
+      const e = existing.find((x) => kbGet(x.name)?.key === key || (x.aliases ?? []).some((a) => kbGet(a)?.key === key));
+      return e?.name ?? title(key);
+    };
+    const concepts: { name: string; definition: string; aliases: string[]; quote: string }[] = found.map((f) => ({
+      name: display(f.key),
+      definition: KB[f.key].definition,
+      aliases: KB[f.key].aliases,
+      quote: quoteAt(f.at),
+    }));
+    const relations: { from: string; to: string; aToB: { kind: string; explanation: string }; bToA: { kind: string; explanation: string } }[] = [];
+    for (const m of text.matchAll(/["“]([^"”\n]{2,60})["”]|\*\*([^*\n]{2,60})\*\*/g)) {
+      const term = (m[1] ?? m[2]).trim();
+      if (kbGet(term) || concepts.some((c) => normalizeName(c.name) === normalizeName(term))) continue;
+      const quote = quoteAt(m.index ?? 0);
+      concepts.push({ name: title(term), definition: quote, aliases: [], quote });
+      const sentence = sentenceOf(m.index ?? 0).replace(m[0], "");
+      const near = found.find((f) => f.re.test(sentence));
+      if (near) {
+        relations.push({
+          from: title(term),
+          to: display(near.key),
+          aToB: { kind: "is introduced with", explanation: `The text introduces ${title(term)} alongside ${display(near.key)}.` },
+          bToA: { kind: "is context for", explanation: `${display(near.key)} is the setting in which the text introduces ${title(term)}.` },
+        });
+      }
+    }
+    // KB dependencies between concepts in the text, or from one in the text to one already in the graph.
+    const inGraph = Object.keys(KB).filter((k) => existing.some((e) => kbGet(e.name)?.key === k));
+    const prerequisites: { dependent: string; prerequisite: string; role: Dep["role"]; reason: string }[] = [];
+    for (const f of found) {
+      for (const d of KB[f.key].deps) {
+        const dk = kbGet(d.name)!.key;
+        if (!found.some((x) => x.key === dk) && !inGraph.includes(dk)) continue;
+        prerequisites.push({ dependent: display(f.key), prerequisite: display(dk), role: d.role, reason: d.reason });
+      }
+    }
+    return { concepts, relations, prerequisites };
   }
 
   private derive(selected: { name: string }[]) {

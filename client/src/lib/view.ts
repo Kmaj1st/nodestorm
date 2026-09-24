@@ -20,7 +20,7 @@ export interface ViewPrefs {
 }
 
 export const DEFAULT_VIEW: ViewPrefs = {
-  origins: { dependency: true, mix: true, derive: true },
+  origins: { dependency: true, mix: true, derive: true, extract: true },
   edgeLabels: true,
   todoOnly: false,
   hops: 1,

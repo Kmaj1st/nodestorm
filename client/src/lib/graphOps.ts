@@ -81,8 +81,8 @@ function withStatus(n: ConceptNode): ConceptNode {
   return { ...n, status: n.missingDeps.length ? "blocked" : "ok" };
 }
 
-/** Link `dependent` to `prereq`: record dependsOn and add a dependency relation. */
-function link(g: Graph, dependentId: string, prereqId: string, role: DepRole, reason: string): Graph {
+/** Link `dependent` to `prereq`: record dependsOn and add a dependency relation (kept if one exists already). */
+export function link(g: Graph, dependentId: string, prereqId: string, role: DepRole, reason: string): Graph {
   const dependent = g.nodes.find((n) => n.id === dependentId)!;
   const prereq = g.nodes.find((n) => n.id === prereqId)!;
   const nodes = g.nodes.map((n) =>

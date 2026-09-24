@@ -9,6 +9,7 @@ import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ProjectMenu } from "./ProjectMenu";
+import { ExtractDialog } from "./ExtractDialog";
 import { ShareDialog } from "./ShareDialog";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 
@@ -140,7 +141,7 @@ const text = (s: string, type: string) => new Blob([s], { type: `${type};charset
 type Item = { label: MessageKey; title: MessageKey; head?: MessageKey; action: () => void | Promise<void> };
 
 /**
- * "File ▾": import a project from JSON; export the current project as JSON, or the active graph as Markdown notes,
+ * "File ▾": import a project from JSON, or concepts from a text (Extract from text); export the current project as JSON, or the active graph as Markdown notes,
  * Mermaid or a PNG image; and share the graph as a link. In the read-only viewer only export and share remain.
  */
 function FileMenu() {
@@ -158,6 +159,7 @@ function FileMenu() {
   // Name of what's on screen: the shared graph's in the viewer, else the current project's.
   const projectName = view?.name ?? project.name;
   const [sharing, setSharing] = useState(false);
+  const [extracting, setExtracting] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -193,7 +195,12 @@ function FileMenu() {
   };
 
   const items: Item[] = [
-    ...(view ? [] : [{ label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() } satisfies Item]),
+    ...(view
+      ? []
+      : ([
+          { label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() },
+          { label: "file.extract", title: "file.extractTitle", action: () => setExtracting(true) },
+        ] satisfies Item[])),
     {
       head: "file.exportHead",
       label: view ? "file.jsonGraph" : "file.jsonProject",
@@ -261,6 +268,7 @@ function FileMenu() {
         hidden
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
       />
+      {extracting && !view && <ExtractDialog onClose={() => setExtracting(false)} />}
       {sharing && (
         <ShareDialog
           graph={graph}

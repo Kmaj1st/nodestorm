@@ -12,6 +12,7 @@ import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
+import { applyExtraction, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { viewport } from "./viewport";
@@ -434,6 +435,34 @@ export function derive(selectedIds: string[], goal?: string) {
   return withBusy("derive", t("task.derive"), (signal) =>
     api.derive({ selected: selected.map(toBrief), context: g.nodes.map(toBrief), goal }, signal).then((r) => r.proposals),
   );
+}
+
+/** "Extract from text": ask the AI for candidate concepts and relations in a pasted text (see ExtractDialog). */
+export function extractFromText(text: string, focus?: string) {
+  const g = graph(store().activeId);
+  return withBusy("extract", t("task.extract"), (signal) =>
+    api.extract({ text, existing: g.nodes.map(toBrief), focus: focus?.trim() || undefined }, signal),
+  );
+}
+
+/**
+ * Add the accepted part of an extraction as ONE undo step, near the middle of the view, then check the new
+ * concepts' prerequisites. Those checks go through the AI queue (Settings → parallel AI calls) and run quietly:
+ * a concept with several meanings waits as "unclear" instead of opening a dialog per concept.
+ */
+export function insertExtraction(review: ExtractReview, graphId = store().activeId) {
+  let added: string[] = [];
+  const before = graph(graphId)?.relations.length ?? 0;
+  store().mutate((g) => {
+    const r = applyExtraction(g, review, viewport.center());
+    added = r.added;
+    return r.graph;
+  }, graphId);
+  const links = (graph(graphId)?.relations.length ?? 0) - before;
+  for (const id of added) void analyzeNode(id, graphId, undefined, { quiet: true });
+  store().setToast(t("extract.done", { n: added.length, links }), "info");
+  if (added.length && graphId === store().activeId) viewport.reveal(added[0]);
+  return added;
 }
 
 export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
