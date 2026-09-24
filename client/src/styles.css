@@ -419,3 +419,8 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
 
 /* Informational notices (copied, imported, install summary) use the neutral status colours, not error red. */
 .toast--info { background: var(--status-bg); color: var(--status-text); }
+
+/* The minimap covers part of the graph on mid-size screens; show it only where there's room. */
+@media (max-width: 1200px) {
+  .react-flow__minimap { display: none; }
+}

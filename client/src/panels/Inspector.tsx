@@ -101,7 +101,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             return r.error;
           }}
         />
-        <span className={`concept__badge concept__badge--${node.status}`}>{node.status}</span>
+        <span className={`concept__badge concept__badge--${node.status}`}>{STATUS_LABEL[node.status]}</span>
       </div>
       {node.aliases.length > 0 && <div className="muted small">also: {node.aliases.join(", ")}</div>}
 
@@ -134,22 +134,6 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       )}
 
       <CycleWarning node={node} graph={graph} />
-
-      <ExplainSection key={node.id} node={node} graphId={graphId} />
-
-      <label className="field">
-        My notes
-        <textarea
-          rows={3}
-          value={node.notes ?? ""}
-          placeholder="Your own notes: questions, examples, where you read about it…"
-          data-testid="notes"
-          readOnly={viewing}
-          // Typing into the field is one undo step; an emptied field removes the notes.
-          onChange={(e) =>
-            mutate((g) => updateNode(g, node.id, { notes: e.target.value || undefined }), graphId, { key: `notes:${node.id}` })}
-        />
-      </label>
 
       <section>
         <div className="section-head">
@@ -209,6 +193,22 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </ul>
       </section>
 
+      <ExplainSection key={node.id} node={node} graphId={graphId} />
+
+      <label className="field">
+        My notes
+        <textarea
+          rows={3}
+          value={node.notes ?? ""}
+          placeholder="Your own notes: questions, examples, where you read about it…"
+          data-testid="notes"
+          readOnly={viewing}
+          // Typing into the field is one undo step; an emptied field removes the notes.
+          onChange={(e) =>
+            mutate((g) => updateNode(g, node.id, { notes: e.target.value || undefined }), graphId, { key: `notes:${node.id}` })}
+        />
+      </label>
+
       <div className="form__actions">
         <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
           Re-check dependencies
@@ -223,6 +223,15 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
     </aside>
   );
 }
+
+// Same wording as the badges on the canvas.
+const STATUS_LABEL: Record<ConceptNode["status"], string> = {
+  ok: "ready",
+  blocked: "blocked",
+  checking: "checking…",
+  unclear: "unclear",
+  error: "failed",
+};
 
 const LEVELS: { value: ExplainLevel; label: string }[] = [
   { value: "intuitive", label: "Intuitive" },
