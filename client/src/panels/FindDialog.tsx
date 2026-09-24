@@ -2,6 +2,7 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { searchNodes } from "../lib/fuzzy";
 import { viewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+import { Modal } from "./Modal";
 
 /** Command-palette style "find concept" (Ctrl/Cmd+K): fuzzy search over names and aliases. */
 export function FindDialog({ onClose }: { onClose: () => void }) {
@@ -22,50 +23,46 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
     } else if (e.key === "Enter" && hits[active]) {
       e.preventDefault();
       pick(hits[active].id);
-    } else if (e.key === "Escape") {
-      onClose();
     }
   };
 
   return (
-    <div className="modal modal--top" onClick={onClose}>
-      <div className="modal__body palette" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Find concept">
-        <input
-          autoFocus
-          value={query}
-          onChange={(e) => { setQuery(e.target.value); setActive(0); }}
-          onKeyDown={onKey}
-          placeholder="Find a concept by name or alias…"
-          aria-label="Find concept"
-          role="combobox"
-          aria-expanded={hits.length > 0}
-          aria-controls="palette-results"
-        />
-        {hits.length > 0 ? (
-          <ul className="palette__results" id="palette-results" role="listbox">
-            {hits.map((n, i) => {
-              const alias = query && !n.name.toLowerCase().includes(query.trim().toLowerCase())
-                ? n.aliases.find((a) => a.toLowerCase().includes(query.trim().toLowerCase()))
-                : undefined;
-              return (
-                <li
-                  key={n.id}
-                  role="option"
-                  aria-selected={i === active}
-                  className={`palette__item${i === active ? " palette__item--on" : ""}`}
-                  onMouseEnter={() => setActive(i)}
-                  onClick={() => pick(n.id)}
-                >
-                  <span>{n.name}</span>
-                  {alias && <span className="muted small">also: {alias}</span>}
-                </li>
-              );
-            })}
-          </ul>
-        ) : (
-          <p className="muted small">{graph.nodes.length ? "No matching concept." : "This graph is empty."}</p>
-        )}
-      </div>
-    </div>
+    <Modal label="Find concept" onClose={onClose} className="palette" top>
+      <input
+        autoFocus
+        value={query}
+        onChange={(e) => { setQuery(e.target.value); setActive(0); }}
+        onKeyDown={onKey}
+        placeholder="Find a concept by name or alias…"
+        aria-label="Find concept"
+        role="combobox"
+        aria-expanded={hits.length > 0}
+        aria-controls="palette-results"
+      />
+      {hits.length > 0 ? (
+        <ul className="palette__results" id="palette-results" role="listbox">
+          {hits.map((n, i) => {
+            const alias = query && !n.name.toLowerCase().includes(query.trim().toLowerCase())
+              ? n.aliases.find((a) => a.toLowerCase().includes(query.trim().toLowerCase()))
+              : undefined;
+            return (
+              <li
+                key={n.id}
+                role="option"
+                aria-selected={i === active}
+                className={`palette__item${i === active ? " palette__item--on" : ""}`}
+                onMouseEnter={() => setActive(i)}
+                onClick={() => pick(n.id)}
+              >
+                <span>{n.name}</span>
+                {alias && <span className="muted small">also: {alias}</span>}
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        <p className="muted small">{graph.nodes.length ? "No matching concept." : "This graph is empty."}</p>
+      )}
+    </Modal>
   );
 }

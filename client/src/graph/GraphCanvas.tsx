@@ -11,6 +11,7 @@ import {
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
 import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
+import { useTheme } from "../lib/theme";
 import { registerViewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
@@ -24,6 +25,7 @@ export function GraphCanvas() {
   const mutate = useGraphStore((s) => s.mutate);
   const setSelection = useGraphStore((s) => s.setSelection);
   const setInspect = useGraphStore((s) => s.setInspect);
+  const theme = useTheme((s) => s.theme);
 
   // React Flow keeps measurement/selection state on its node objects, so we hold a local copy
   // and re-sync the concept data from the store whenever the graph changes.
@@ -149,6 +151,7 @@ export function GraphCanvas() {
     <div ref={wrapper} className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}`}>
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
+        colorMode={theme}
         nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
@@ -166,7 +169,7 @@ export function GraphCanvas() {
       >
         <Background gap={24} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable />
+        <MiniMap pannable zoomable ariaLabel="Overview map" />
       </ReactFlow>
       {graph.nodes.length === 0 && (
         <div className="canvas__empty">

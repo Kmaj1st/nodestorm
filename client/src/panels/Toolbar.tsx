@@ -4,6 +4,7 @@ import { toPng } from "html-to-image";
 import { useEffect, useRef, useState } from "react";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
+import { useTheme, type ThemePref } from "../lib/theme";
 import { activeGraph, canRedo, canUndo, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 
@@ -14,6 +15,9 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   const redoable = useGraphStore(canRedo);
   const settings = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
+  const theme = useTheme();
+  // On small screens the less-used groups fold away behind a menu button (see .toolbar__more in styles.css).
+  const [moreOpen, setMoreOpen] = useState(false);
   const ready = isReady(settings);
   const meta = providerMeta(settings.provider);
   const model =
@@ -43,7 +47,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   };
 
   return (
-    <header className="toolbar">
+    <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
       <div className="toolbar__brand">NodeStorm</div>
 
       <div className="toolbar__group toolbar__history">
@@ -74,40 +78,62 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         </button>
       </div>
 
-      <div className="toolbar__group">
-        <select value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label="Graph">
-          <option value={main.id}>Main graph</option>
-          {sandboxes.map((g) => (
-            <option key={g.id} value={g.id}>🧪 {g.name}</option>
-          ))}
-        </select>
-        <button onClick={s.forkActive} title="Copy the current graph into a sandbox">Fork sandbox</button>
-        {graph.parentId && (
-          <>
-            <button onClick={() => s.mergeSandbox(graph.id)} title="Merge this sandbox into the graph it was forked from">Merge back</button>
-            <button className="danger" onClick={() => confirm(`Discard ${graph.name}?`) && s.discardSandbox(graph.id)}>Discard</button>
-          </>
-        )}
-      </div>
+      <button
+        className="toolbar__menu"
+        aria-label="More tools"
+        aria-expanded={moreOpen}
+        aria-controls="toolbar-more"
+        onClick={() => setMoreOpen(!moreOpen)}
+      >
+        ☰
+      </button>
 
-      <div className="toolbar__group toolbar__right">
-        <button
-          className={ready ? "ai-button" : "ai-button ai-button--warn"}
-          onClick={() => s.setSettingsOpen(true)}
-          title="AI settings"
-          aria-label="AI settings"
-        >
-          ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
-        </button>
-        <ExportMenu />
-        <button onClick={() => fileRef.current?.click()}>Import</button>
-        <input
-          ref={fileRef}
-          type="file"
-          accept="application/json"
-          hidden
-          onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
-        />
+      <div className="toolbar__more" id="toolbar-more">
+        <div className="toolbar__group">
+          <select value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label="Graph">
+            <option value={main.id}>Main graph</option>
+            {sandboxes.map((g) => (
+              <option key={g.id} value={g.id}>🧪 {g.name}</option>
+            ))}
+          </select>
+          <button onClick={s.forkActive} title="Copy the current graph into a sandbox">Fork sandbox</button>
+          {graph.parentId && (
+            <>
+              <button onClick={() => s.mergeSandbox(graph.id)} title="Merge this sandbox into the graph it was forked from">Merge back</button>
+              <button className="danger" onClick={() => confirm(`Discard ${graph.name}?`) && s.discardSandbox(graph.id)}>Discard</button>
+            </>
+          )}
+        </div>
+
+        <div className="toolbar__group toolbar__right">
+          <button
+            className={ready ? "ai-button" : "ai-button ai-button--warn"}
+            onClick={() => s.setSettingsOpen(true)}
+            title="AI settings"
+            aria-label="AI settings"
+          >
+            ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
+          </button>
+          <ExportMenu />
+          <button onClick={() => fileRef.current?.click()}>Import</button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="application/json"
+            hidden
+            onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
+          />
+          <select
+            value={theme.pref}
+            onChange={(e) => theme.setPref(e.target.value as ThemePref)}
+            aria-label="Theme"
+            title="Colour theme (Auto follows your system)"
+          >
+            <option value="auto">◐ Auto</option>
+            <option value="light">☀ Light</option>
+            <option value="dark">☾ Dark</option>
+          </select>
+        </div>
       </div>
     </header>
   );

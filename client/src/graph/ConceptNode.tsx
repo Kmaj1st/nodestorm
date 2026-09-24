@@ -43,6 +43,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
               action();
             }}
             title={c.error}
+            aria-label={c.status === "error" ? `Retry checking ${c.name}` : `Choose what you mean by ${c.name}`}
           >
             {badge[c.status]}
           </button>

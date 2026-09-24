@@ -27,9 +27,12 @@ function borderPoint(n: InternalNode, toward: Pt, pad = 4): Pt {
 
 const HEAD = 14;
 
-/** Arrowhead with its tip at `tip`, pointing along angle `ang`. Wide invisible hit area for easy clicking. */
-function Arrow({ tip, ang, active, kind, onClick, testId }: {
-  tip: Pt; ang: number; active: boolean; kind: string; onClick: () => void; testId: string;
+/**
+ * Arrowhead with its tip at `tip`, pointing along angle `ang`. Wide invisible hit area for easy clicking.
+ * It is also a keyboard button (Tab to it, Enter/Space opens that direction in the inspector).
+ */
+function Arrow({ tip, ang, active, kind, onClick, testId, label }: {
+  tip: Pt; ang: number; active: boolean; kind: string; onClick: () => void; testId: string; label: string;
 }) {
   const back = { x: tip.x - Math.cos(ang) * HEAD, y: tip.y - Math.sin(ang) * HEAD };
   const nx = -Math.sin(ang) * (HEAD / 2);
@@ -37,7 +40,21 @@ function Arrow({ tip, ang, active, kind, onClick, testId }: {
   const pts = `${tip.x},${tip.y} ${back.x + nx},${back.y + ny} ${back.x - nx},${back.y - ny}`;
   const none = kind === "none";
   return (
-    <g className={`arrow${active ? " arrow--active" : ""}${none ? " arrow--none" : ""}`} onClick={(e) => { e.stopPropagation(); onClick(); }} data-testid={testId}>
+    <g
+      className={`arrow${active ? " arrow--active" : ""}${none ? " arrow--none" : ""}`}
+      onClick={(e) => { e.stopPropagation(); onClick(); }}
+      onKeyDown={(e) => {
+        if (e.key !== "Enter" && e.key !== " ") return;
+        e.preventDefault();
+        e.stopPropagation();
+        onClick();
+      }}
+      role="button"
+      tabIndex={0}
+      aria-label={label}
+      aria-pressed={active}
+      data-testid={testId}
+    >
       <circle cx={tip.x - Math.cos(ang) * 8} cy={tip.y - Math.sin(ang) * 8} r={16} className="arrow__hit" />
       <polygon points={pts} className="arrow__head" />
     </g>
@@ -51,6 +68,8 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
   const setInspect = useGraphStore((st) => st.setInspect);
   if (!s || !t || !data) return null;
   const rel = data.relation;
+  const nameOf = (n: InternalNode) => (n.data as { concept?: { name: string } }).concept?.name ?? "?";
+  const [aName, bName] = [nameOf(s), nameOf(t)];
 
   const p1 = borderPoint(s, center(t)); // end at A
   const p2 = borderPoint(t, center(s)); // end at B
@@ -70,8 +89,14 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
   return (
     <>
       <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${data.cycle ? " relation--cycle" : ""}`} />
-      <Arrow tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} testId={`arrow-${rel.id}-aToB`} />
-      <Arrow tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} testId={`arrow-${rel.id}-bToA`} />
+      <Arrow
+        tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")}
+        testId={`arrow-${rel.id}-aToB`} label={`What ${aName} does to ${bName}: ${rel.aToB.kind}`}
+      />
+      <Arrow
+        tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")}
+        testId={`arrow-${rel.id}-bToA`} label={`What ${bName} does to ${aName}: ${rel.bToA.kind}`}
+      />
       <EdgeLabelRenderer>
         {[
           { dir: "aToB" as const, at: nearB, kind: rel.aToB.kind },
@@ -84,6 +109,7 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
               style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
               onClick={() => open(dir)}
               title={dir === "aToB" ? "What A does to B" : "What B does to A"}
+              tabIndex={-1} // the arrowheads are the keyboard stops; these just repeat them for the mouse
             >
               {kind}
             </button>

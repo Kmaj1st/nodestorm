@@ -404,6 +404,50 @@ try {
   assert((await page.getByTestId("cycle-warning").count()) === 0 && (await page.locator(".concept--cycle, .relation--cycle").count()) === 0, "'remove this link' breaks the cycle");
   assert((await page.getByTestId("node-panel").textContent()).includes("Needed by"), "the correct direction (Quotient Group needs Group) is kept");
 
+  console.log("Theme & a11y");
+  const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const isDark = (css) => css.match(/\d+/g).slice(0, 3).map(Number).reduce((a, b) => a + b) / 3 < 64;
+  assert(!isDark(await bodyBg()), "light theme by default (the browser prefers light)");
+  await page.getByLabel("Theme").selectOption("dark");
+  assert(isDark(await bodyBg()), "switching to Dark darkens the page background");
+  await page.screenshot({ path: `${shots}9-dark.png` });
+  await page.reload();
+  await node("Group").waitFor();
+  assert(isDark(await bodyBg()) && (await page.getByLabel("Theme").inputValue()) === "dark", "dark theme is remembered after reload");
+
+  const addBtn = page.getByRole("button", { name: "+ Add concept" });
+  await addBtn.click();
+  const addDialog = page.getByRole("dialog", { name: "Add concept" });
+  await addDialog.waitFor();
+  assert((await addDialog.getAttribute("aria-modal")) === "true", "dialogs are aria-modal");
+  for (let i = 0; i < 7; i++) await page.keyboard.press("Tab");
+  assert(await addDialog.evaluate((el) => el.contains(document.activeElement)), "Tab keeps focus inside the dialog");
+  await page.keyboard.press("Escape");
+  await addDialog.waitFor({ state: "detached" });
+  assert(await addBtn.evaluate((el) => el === document.activeElement), "Escape closes Add concept and focus returns to its button");
+
+  await page.locator('[data-testid^="arrow-"]').first().focus();
+  await page.keyboard.press("Enter");
+  await page.getByTestId("relation-panel").waitFor();
+  assert(true, "an arrowhead opens its relation from the keyboard");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.waitForTimeout(300);
+  const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+  assert(await noHScroll(), "no horizontal scroll at 390px");
+  assert(!(await page.getByLabel("Theme").isVisible()), "less-used toolbar controls fold into a menu");
+  await page.getByRole("button", { name: "More tools" }).click();
+  assert((await page.getByLabel("Theme").isVisible()) && (await noHScroll()), "the menu opens them, still without horizontal scroll");
+  await page.screenshot({ path: `${shots}9-mobile.png` });
+  await page.getByRole("button", { name: "Hide details" }).click();
+  assert((await page.getByTestId("relation-panel").isHidden()), "the inspector bottom sheet collapses");
+  await page.getByRole("button", { name: "Show details" }).click();
+  await addBtn.click();
+  const box = await addDialog.boundingBox();
+  assert(box.x >= 0 && box.x + box.width <= 390 && (await noHScroll()), "Add concept dialog fits the phone screen");
+  await page.screenshot({ path: `${shots}9-mobile-dialog.png` });
+  await page.keyboard.press("Escape");
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);
