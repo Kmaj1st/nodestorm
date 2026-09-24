@@ -21,6 +21,7 @@ import {
   Search,
   Settings,
   Shuffle,
+  Sigma,
   Sparkles,
   Undo2,
   Upload,
@@ -31,6 +32,7 @@ import { useEffect, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
+import { toLatex } from "../lib/latex";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useDerive } from "../store/deriveStore";
@@ -283,6 +285,12 @@ function FileMenu() {
       title: "file.markdownTitle",
       icon: FileText,
       action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
+    },
+    {
+      label: "file.latex",
+      title: "file.latexTitle",
+      icon: Sigma,
+      action: () => download(`${base}.tex`, text(toLatex(graph, { title: graph.parentId ? `${projectName}: ${graph.name}` : projectName }), "application/x-tex")),
     },
     {
       label: "file.mermaid",

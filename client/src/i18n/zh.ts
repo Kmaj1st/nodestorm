@@ -79,6 +79,8 @@ export const zh: Record<MessageKey, string> = {
   "file.jsonGraphTitle": "这个分享的图谱。以后导入时会作为新项目添加。",
   "file.markdown": "Markdown 笔记",
   "file.markdownTitle": "这张图谱的学习笔记：概念按学习顺序排列，包含前置知识以及每条关系的双向说明",
+  "file.latex": "LaTeX 文档（.tex）",
+  "file.latexTitle": "可直接编译的 LaTeX 文章：每个概念按学习顺序写成定义、定理、引理……，并交叉引用它用到的概念",
   "file.mermaid": "Mermaid 图",
   "file.mermaidTitle": "Mermaid 流程图文本（可用于 GitHub、Notion 等）：复制到剪贴板并下载",
   "file.png": "PNG 图片",

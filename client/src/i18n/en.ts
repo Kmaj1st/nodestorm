@@ -80,6 +80,8 @@ export const en = {
   "file.jsonGraphTitle": "The shared graph. Importing it later adds it as a new project.",
   "file.markdown": "Markdown notes",
   "file.markdownTitle": "Study notes for this graph: concepts in study order, prerequisites and both directions of every relation",
+  "file.latex": "LaTeX document (.tex)",
+  "file.latexTitle": "A compilable LaTeX article: each concept as a definition, theorem, lemma… in study order, with cross-references to what it uses",
   "file.mermaid": "Mermaid diagram",
   "file.mermaidTitle": "Flowchart text for Mermaid (GitHub, Notion, …): copied to the clipboard and downloaded",
   "file.png": "PNG image",

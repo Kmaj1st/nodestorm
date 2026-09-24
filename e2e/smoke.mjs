@@ -830,7 +830,7 @@ try {
     JSON.stringify(fileItems) ===
       JSON.stringify([
         "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Save snapshot…", "Versions…", "Walkthrough…",
-        "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
+        "JSON (this project)", "Markdown notes", "LaTeX document (.tex)", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File holds import, Extract from text, Quiz me, Derive together, Versions, every export format and the share link",
   );
@@ -1651,6 +1651,47 @@ try {
     await view.getByRole("checkbox", { name: "Theorem", exact: true }).check();
     await node("Lagrange's theorem").waitFor();
     await page.keyboard.press("Escape");
+  }
+
+  console.log("Theorem anatomy");
+  {
+    await node("Subgroup").click();
+    assert((await page.getByTestId("anatomy").count()) === 0, "a definition has no theorem anatomy");
+    await node("Lagrange's theorem").click();
+    await page.getByTestId("anatomy-button").click();
+    const conclusion = page.getByTestId("anatomy-conclusion");
+    await conclusion.waitFor();
+    assert((await page.getByTestId("anatomy-hypotheses").locator("li").count()) === 2, "a theorem is taken apart into its hypotheses…");
+    assert((await conclusion.locator(".katex").count()) > 0, "…and a conclusion with its formulas typeset");
+    const section = page.getByTestId("anatomy");
+    assert(
+      (await section.textContent()).includes("Why needed:") && (await section.textContent()).includes("Non-examples"),
+      "each hypothesis says why it is needed; examples and non-examples follow",
+    );
+    assert((await page.getByTestId("anatomy-button").textContent()).includes("Regenerate"), "the button offers to regenerate it");
+    await page.locator(".inspector").screenshot({ path: `${shots}30-anatomy.png` });
+    await audit("theorem anatomy in the inspector");
+    await setTheme("dark");
+    await audit("theorem anatomy in the inspector, dark theme");
+    await setTheme("light");
+    await page.reload();
+    await node("Lagrange's theorem").click();
+    await page.getByTestId("anatomy-conclusion").waitFor();
+    assert(true, "the anatomy is kept on the concept across a reload");
+  }
+
+  console.log("LaTeX export");
+  {
+    const tex = await exportAs("LaTeX document (.tex)");
+    const src = tex.data.toString("utf8");
+    assert(tex.name.endsWith(".tex") && src.includes("\\documentclass{amsart}") && src.trimEnd().endsWith("\\end{document}"), "File exports a LaTeX document");
+    assert(
+      src.indexOf("\\begin{definition}[{Subgroup}]\\label{c:subgroup}") >= 0 &&
+        src.indexOf("\\label{c:subgroup}") < src.indexOf("\\begin{theorem}[{Lagrange's theorem}]"),
+      "each concept is an environment of its kind, prerequisites first",
+    );
+    assert(src.includes("\\emph{Uses:} Definition~\\ref{c:subgroup} (Subgroup)."), "a theorem refers to the definition it uses");
+    assert(src.includes("\\begin{proof}[Proof idea]") && src.includes("$|H|$ divides $|G|$"), "the anatomy's proof idea is a proof sketch, formulas kept");
   }
 
   console.log("\nE2E passed");
