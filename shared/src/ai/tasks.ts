@@ -35,6 +35,8 @@ import {
   CheckStepResponse,
   MathlibRequest,
   MathlibResponse,
+  RefereeRequest,
+  RefereeResponse,
   type SheetProblem,
   type TutorConcept,
 } from "../model";
@@ -57,6 +59,7 @@ import {
   tutorHintPrompt,
   checkStepPrompt,
   mathlibPrompt,
+  refereeReportPrompt,
   relatePrompt,
   withLanguage,
 } from "./prompts";
@@ -306,6 +309,10 @@ export const tasks = {
       solved: res.solved && res.verdict === "ok",
     };
   },
+  refereeReport: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = RefereeRequest.parse(body);
+    return cleanReferee(await runStructured(p, refereeReportPrompt(req), RefereeResponse, o), req.steps.length);
+  },
   absurdChain: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = AbsurdChainRequest.parse(body);
     // A broken chain counts as malformed output, so the model is asked once more, told what was wrong.
@@ -326,6 +333,23 @@ export const tasks = {
 export type TaskName = keyof typeof tasks;
 
 const MAX_TUTOR_CONCEPTS = 5;
+
+const SEVERITY_ORDER = ["fatal", "major", "minor", "pedantic"] as const;
+
+/**
+ * A referee report as the UI shows it: at most 8 points, most serious first, each once; a step number that doesn't
+ * exist is dropped (the point is about the whole derivation then). Nothing to accept without any steps.
+ */
+export function cleanReferee(res: RefereeResponse, steps: number): RefereeResponse {
+  const seen = new Set<string>();
+  const points = res.points
+    .map((pt) => ({ ...pt, comment: pt.comment.trim(), step: pt.step && pt.step <= steps ? pt.step : undefined }))
+    .filter((pt) => pt.comment && !seen.has(pt.comment) && seen.add(pt.comment))
+    .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
+    .slice(0, 8);
+  const verdict = steps === 0 && res.verdict === "accept" ? "reject" : res.verdict;
+  return { verdict, summary: res.summary.trim(), points, grudgingPraise: res.grudgingPraise.trim() };
+}
 
 /** Citation numbers that name a reference that was given, each once, in order. */
 export function validCites(cites: number[], refs: { n: number }[]): number[] {

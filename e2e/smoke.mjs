@@ -1975,6 +1975,95 @@ try {
     assert(true, "the whole import is one undo step");
   }
 
+  console.log("Parody voices & Reviewer 2");
+  {
+    // Still the offline demo in browser mode; a fresh project with one concept.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Homomorphism");
+    await waitBadge("Homomorphism", "ready");
+    await node("Homomorphism").click();
+    const inspector = page.locator(".inspector");
+    const explain = page.getByTestId("explain");
+    await explain.getByLabel("Explanation level").selectOption("rigorous");
+    await explain.getByLabel("Narrator").selectOption("noir-detective");
+    assert(
+      await inspector.evaluate((el) => el.scrollWidth <= el.clientWidth),
+      "the level and narrator selects fit the inspector's width",
+    );
+    await explain.getByTestId("explain-button").click();
+    const tag = explain.getByTestId("explain-voice-tag");
+    await tag.waitFor();
+    const text = await explain.textContent();
+    assert(
+      (await tag.textContent()) === "Noir detective" && text.includes("Rigorous explanation") && text.includes("The rain hadn't stopped"),
+      "Explain more tells a rigorous explanation in the chosen narrator's voice, and says which",
+    );
+    assert(
+      (await explain.getByTestId("explanation-summary").textContent()).includes("preserves the operations") &&
+        (await explain.locator(".explain__list .katex").count()) > 0,
+      "…while the summary stays a plain definition and the formulas are still typeset",
+    );
+    await audit("inspector with a voiced explanation");
+    await inspector.screenshot({ path: `${shots}32-explain-voice.png` });
+    await setTheme("dark");
+    await audit("inspector with a voiced explanation, dark theme");
+    await setTheme("light");
+    await page.reload();
+    await node("Homomorphism").click();
+    await explain.getByTestId("explain-voice-tag").waitFor();
+    assert((await explain.getByLabel("Narrator").inputValue()) === "noir-detective", "the voice is kept with the explanation across a reload");
+
+    // Reviewer 2 on a derivation with a gap.
+    await inspector.getByTestId("derive-node").click();
+    const panel = page.getByTestId("derive-panel");
+    await panel.getByTestId("dt-problem").waitFor();
+    await panel.getByLabel("Step 1").fill("The kernel is closed under conjugation.");
+    await panel.getByRole("button", { name: "Add step", exact: true }).click();
+    await panel.getByTestId("dt-referee").click();
+    const report = panel.getByTestId("dt-referee-report");
+    await report.waitFor();
+    const reportText = await report.textContent();
+    assert(
+      reportText.includes("Referee report") && reportText.includes("Major revisions") && reportText.includes("Grudging praise"),
+      "Reviewer 2 writes a referee report with a verdict and grudging praise",
+    );
+    assert(
+      (await report.locator(".derive-referee__point").first().textContent()).startsWith("MajorStep 1"),
+      "…whose points name the step and how serious they are, most serious first",
+    );
+    await audit("Derive together with a referee report");
+    await panel.screenshot({ path: `${shots}33-referee.png` });
+    await setTheme("dark");
+    await audit("Derive together with a referee report, dark theme");
+    await panel.screenshot({ path: `${shots}34-referee-dark.png` });
+    await setTheme("light");
+    await panel.getByLabel("Step 2").fill("So it is normal.");
+    await panel.getByRole("button", { name: "Add step", exact: true }).click();
+    await report.getByText("Your steps have changed since this report.").waitFor();
+    assert(true, "a report says when the steps changed after it");
+    await report.locator("summary").click();
+    assert(await report.locator(".derive-referee__summary").isHidden(), "the report collapses");
+    await panel.getByRole("button", { name: "Close" }).click();
+    await panel.waitFor({ state: "detached" });
+
+    // Surprise me: with one concept in the graph, it is one of the ends.
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    const dlg = page.getByRole("dialog", { name: "Absurd chain" });
+    await dlg.waitFor();
+    await dlg.getByLabel("From", { exact: true }).fill("");
+    await dlg.getByLabel("To", { exact: true }).fill("");
+    await dlg.getByTestId("absurd-surprise").click();
+    await dlg.getByTestId("absurd-result").waitFor();
+    const from = await dlg.getByLabel("From", { exact: true }).inputValue();
+    const to = await dlg.getByLabel("To", { exact: true }).inputValue();
+    assert(from === "Homomorphism" && to && to !== from, `Surprise me picks the graph's concept and a fun end (${from} → ${to}) and builds the chain`);
+    await audit("Absurd chain dialog after Surprise me");
+    await dlg.getByRole("button", { name: "Close" }).click();
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

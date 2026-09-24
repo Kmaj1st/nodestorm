@@ -1,8 +1,8 @@
 import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle } from "@nodestorm/shared";
-import { ArrowLeftRight, ArrowRight, Copy, Dices, FlaskConical, ShieldCheck } from "lucide-react";
+import { ArrowLeftRight, ArrowRight, Copy, Dices, FlaskConical, ShieldCheck, Shuffle } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
-import { ABSURD_LENGTHS, ABSURD_STYLES, chainToText, intermediates, type AbsurdLength } from "../lib/absurd";
+import { ABSURD_LENGTHS, ABSURD_STYLES, chainToText, intermediates, surprisePair, type AbsurdLength } from "../lib/absurd";
 import { absurdChain, absurdKey, addAbsurdChainToSandbox, cancelTask } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
@@ -33,20 +33,29 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
   // Closing the dialog cancels a chain that is still being built.
   useEffect(() => () => cancelTask(absurdKey), []);
 
-  const ends = `${normalizeName(from)}\u0000${normalizeName(to)}`;
+  const endsKey = (a: string, b: string) => `${normalizeName(a)}\u0000${normalizeName(b)}`;
+  const ends = endsKey(from, to);
   const named = Boolean(normalizeName(from) && normalizeName(to));
   // The same concept at both ends, also when one end is typed as the other's alias.
   const resolve = (x: string) => findByName(graph.nodes, x)?.id ?? `name:${normalizeName(x)}`;
   const same = named && resolve(from) === resolve(to);
   const again = Boolean(res && rolled?.ends === ends);
 
-  const run = async () => {
-    const avoid = again ? rolled!.avoid : [];
-    const out = await absurdChain(from, to, style, ABSURD_LENGTHS[length], avoid);
+  const run = async (a = from, b = to) => {
+    const avoid = again && endsKey(a, b) === ends ? rolled!.avoid : [];
+    const out = await absurdChain(a, b, style, ABSURD_LENGTHS[length], avoid);
     if (!out) return;
     setRes(out);
-    setRolled({ ends, avoid: [...new Set([...avoid, ...intermediates(out)])] });
+    setRolled({ ends: endsKey(a, b), avoid: [...new Set([...avoid, ...intermediates(out)])] });
     requestAnimationFrame(() => resultRef.current?.focus());
+  };
+
+  // Two random ends (from the graph, or fun ones for a nearly empty graph), built straight away.
+  const surprise = () => {
+    const [a, b] = surprisePair(graph.nodes.map((n) => n.name), [from, to]);
+    setFrom(a);
+    setTo(b);
+    void run(a, b);
   };
 
   const copy = async () => {
@@ -91,6 +100,12 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
             {t("absurd.to")}
             <input value={to} onChange={(e) => setTo(e.target.value)} list={listId} placeholder={t("absurd.toPlaceholder")} />
           </label>
+        </div>
+        <div className="absurd__surprise">
+          <button type="button" className="small-btn" onClick={surprise} disabled={busy} title={t("absurd.surpriseTitle")} data-testid="absurd-surprise">
+            <Icon icon={Shuffle} size={14} />
+            {t("absurd.surprise")}
+          </button>
         </div>
         <datalist id={listId}>
           {graph.nodes.map((n) => <option key={n.id} value={n.name} />)}

@@ -122,7 +122,8 @@ function anatomyMd(an: NodeAnatomy): string[] {
 
 /** A stored "Explain more" answer as a sub-section of its concept. */
 function explanationMd(ex: NodeExplanation): string[] {
-  const out = [`#### Explanation (${ex.level})`, "", mdEscape(ex.summary), ""];
+  const voice = ex.voice && ex.voice !== "plain" ? `, ${ex.voice.replace(/-/g, " ")} voice` : "";
+  const out = [`#### Explanation (${ex.level}${voice})`, "", mdEscape(ex.summary), ""];
   if (ex.intuition.trim()) out.push(`*Intuition:* ${mdEscape(ex.intuition)}`, "");
   const list = (heading: string, items: string[]) => {
     if (items.length) out.push(`**${heading}:**`, "", ...items.map((i) => `- ${i}`), "");

@@ -1,10 +1,11 @@
-import { isTheoremLike, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, type Graph, type RelationOrigin } from "@nodestorm/shared";
+import { isTheoremLike, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
   ArrowRight,
   BookOpen,
   ChevronRight,
+  Drama,
   ExternalLink,
   GraduationCap,
   PenLine,
@@ -329,7 +330,14 @@ const LEVELS: { value: ExplainLevel; label: MessageKey }[] = [
   { value: "example-driven", label: "explain.exampleDriven" },
 ];
 
-/** "Explain more": a longer AI explanation at a chosen level, kept on the node until regenerated. */
+/** Narrators for "Explain more", in the enum's order ("plain", the default, first). Labels are `explain.voice.<value>`. */
+const VOICES: readonly ExplainVoice[] = ExplainVoice.options;
+const voiceLabel = (v: ExplainVoice) => `explain.voice.${v}` as MessageKey;
+
+/**
+ * "Explain more": a longer AI explanation at a chosen level, optionally told by a parody narrator (the content stays
+ * the same), kept on the node until regenerated.
+ */
 function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string }) {
   const t = useT();
   const lang = useLang();
@@ -337,6 +345,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
   const running = useGraphStore((s) => Boolean(s.busy[explainKey(graphId, node.id)]));
   const ex = node.explanation;
   const [level, setLevel] = useState<ExplainLevel>(ex?.level ?? "intuitive");
+  const [voice, setVoice] = useState<ExplainVoice>(ex?.voice ?? "plain");
   const [open, setOpen] = useState(true);
   const levelLabel = (l: ExplainLevel) => {
     const key = LEVELS.find((x) => x.value === l)?.label;
@@ -347,12 +356,9 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
       <div className="section-head">
         <h4>{t("explain.title")}</h4>
         <div className="explain__controls">
-          <select aria-label={t("explain.level")} value={level} onChange={(e) => setLevel(e.target.value as ExplainLevel)}>
-            {LEVELS.map((l) => <option key={l.value} value={l.value}>{t(l.label)}</option>)}
-          </select>
           <button
             className="small-btn"
-            onClick={() => void explainNode(node.id, level, graphId)}
+            onClick={() => void explainNode(node.id, level, graphId, voice)}
             disabled={running}
             data-testid="explain-button"
           >
@@ -361,12 +367,26 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
           </button>
         </div>
       </div>
+      <div className="explain__controls explain__options">
+        <select aria-label={t("explain.level")} value={level} onChange={(e) => setLevel(e.target.value as ExplainLevel)}>
+          {LEVELS.map((l) => <option key={l.value} value={l.value}>{t(l.label)}</option>)}
+        </select>
+        <select aria-label={t("explain.voice")} title={t("explain.voiceTitle")} value={voice} onChange={(e) => setVoice(e.target.value as ExplainVoice)} data-testid="explain-voice">
+          {VOICES.map((v) => <option key={v} value={v}>{t(voiceLabel(v))}</option>)}
+        </select>
+      </div>
       {!ex && !running && <p className="muted small">{t("explain.empty")}</p>}
       {ex && (
         <details className="explain" open={open} onToggle={(e) => setOpen(e.currentTarget.open)}>
           <summary>
             <Icon icon={ChevronRight} size={14} className="explain__chevron" />
             {t("explain.heading", { level: levelLabel(ex.level) })}{" "}
+            {ex.voice && ex.voice !== "plain" && (
+              <span className="explain__voice" data-testid="explain-voice-tag">
+                <Icon icon={Drama} size={12} />
+                {t(voiceLabel(ex.voice))}
+              </span>
+            )}
             <span className="muted small">· {new Date(ex.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
           </summary>
           <p className="explain__summary" data-testid="explanation-summary"><MathText text={ex.summary} /></p>

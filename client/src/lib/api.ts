@@ -25,6 +25,7 @@ import {
   type TutorHintRequest,
   type CheckStepRequest,
   type MathlibRequest,
+  type RefereeRequest,
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
@@ -134,6 +135,8 @@ export const api = {
   mathlib: (req: Partial<MathlibRequest> & Pick<MathlibRequest, "node">, signal?: AbortSignal) => run("mathlib", req, signal),
   checkStep: (req: Partial<CheckStepRequest> & Pick<CheckStepRequest, "problem" | "step">, signal?: AbortSignal) =>
     run("checkStep", req, signal),
+  refereeReport: (req: Partial<RefereeRequest> & Pick<RefereeRequest, "problem">, signal?: AbortSignal) =>
+    run("refereeReport", req, signal),
   absurdChain: (req: Partial<AbsurdChainRequest> & Pick<AbsurdChainRequest, "from" | "to">, signal?: AbortSignal) =>
     run("absurdChain", req, signal),
 

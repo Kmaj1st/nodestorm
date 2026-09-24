@@ -233,6 +233,60 @@ const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string 
 ];
 const WRITTEN = "Written language";
 
+/**
+ * "Explain more" voices for the demo: fixed wrappers around the plain explanation, so the content (and every formula)
+ * is exactly the plain one. The summary is never voiced: it may become the definition.
+ */
+/** "It sends…" → "it sends…" after a lead-in; names ("First Isomorphism…") and formulas stay as they are. */
+const decap = (x: string) => (/^[A-Z][a-z]/.test(x) && !/^[A-Z][a-z]+ [A-Z]/.test(x) ? x[0].toLowerCase() + x.slice(1) : x);
+
+interface VoiceWrap {
+  open: (name: string) => string;
+  point: (text: string, i: number) => string;
+  example: (body: string) => string;
+  pitfall: (text: string) => string;
+}
+const EXPLAIN_VOICE: Record<string, VoiceWrap> = {
+  "nature-documentary": {
+    open: (n) => `Here, in the quiet undergrowth of mathematics, we find the ${n}. Let us observe it without disturbing it.`,
+    point: (x, i) => (i === 0 ? `Observe closely: ${x}` : `Remarkably, ${decap(x)}`),
+    example: (b) => `A specimen in the wild: ${b}`,
+    pitfall: (x) => `Young learners often stumble here. ${x}`,
+  },
+  "sports-commentator": {
+    open: (n) => `And we are live! ${n} takes the field, and the crowd is on its feet!`,
+    point: (x, i) => (i === 0 ? `What a play: ${x}` : `Let's see that again in slow motion: ${x}`),
+    example: (b) => `Instant replay: ${b}`,
+    pitfall: (x) => `Oh, and that's a foul! ${x}`,
+  },
+  "noir-detective": {
+    open: (n) => `The rain hadn't stopped for three days when the case of the ${n} landed on my desk.`,
+    point: (x, i) => (i === 0 ? `First clue: ${x}` : `Another clue. ${x}`),
+    example: (b) => `I'd seen one like it before. ${b}`,
+    pitfall: (x) => `That's where the rookies get burned. ${x}`,
+  },
+  "medieval-scholar": {
+    open: (n) => `Herein beginneth a humble treatise upon the ${n}, set down by an unworthy scholar.`,
+    point: (x, i) => (i === 0 ? `Firstly, be it known: ${x}` : `Moreover, it is written: ${x}`),
+    example: (b) => `As the ancients showed: ${b}`,
+    pitfall: (x) => `Beware, gentle reader, the error of the unlearned. ${x}`,
+  },
+  infomercial: {
+    open: (n) => `Tired of concepts that don't deliver? Introducing the ${n}!`,
+    point: (x, i) => (i === 0 ? `It's that easy: ${x}` : `But wait, there's more! ${x}`),
+    example: (b) => `Satisfied customers report: ${b}`,
+    pitfall: (x) => `Warning, read the fine print: ${x}`,
+  },
+  shakespearean: {
+    open: (n) => `Hark! What concept through yonder textbook breaks? It is the ${n}.`,
+    point: (x, i) => (i === 0 ? `Mark this well: ${x}` : `And more, good friend: ${x}`),
+    example: (b) => `Behold, an instance: ${b}`,
+    pitfall: (x) => `Alas, many a scholar hath erred thus. ${x}`,
+  },
+};
+
+type RefSeverity = "fatal" | "major" | "minor" | "pedantic";
+
 type Quip = (a: string, b: string) => string;
 const ABSURD_VOICE: Record<string, { title: Quip; moral: string; quips: Quip[] }> = {
   deadpan: {
@@ -290,6 +344,23 @@ function kbGet(name: string) {
   return entry && { key: entry[0], ...entry[1] };
 }
 
+/** The plain demo explanation in one of the parody voices (content untouched; "plain" or unknown: as is). */
+function voiced<T extends { intuition: string; keyPoints: string[]; examples: { title: string; body: string }[]; pitfalls: string[] }>(
+  ex: T,
+  name: string,
+  voice: unknown,
+): T {
+  const w = typeof voice === "string" ? EXPLAIN_VOICE[voice] : undefined;
+  if (!w) return ex;
+  return {
+    ...ex,
+    intuition: `${w.open(name)} ${ex.intuition}`,
+    keyPoints: ex.keyPoints.map(w.point),
+    examples: ex.examples.map((x) => ({ ...x, body: w.example(x.body) })),
+    pitfalls: ex.pitfalls.map(w.pitfall),
+  };
+}
+
 function title(s: string) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -332,7 +403,9 @@ export class MockProvider implements Provider {
       case "derive":
         return JSON.stringify(this.derive(inp.selected ?? []));
       case "explain":
-        return JSON.stringify(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")));
+        return JSON.stringify(
+          voiced(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")), inp.node?.name ?? "", inp.voice),
+        );
       case "extract":
         return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? []));
       case "resolveCycle":
@@ -349,6 +422,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.tutorHint(inp));
       case "checkStep":
         return JSON.stringify(this.checkStep(inp));
+      case "refereeReport":
+        return JSON.stringify(this.referee(inp));
       case "absurdChain":
         return JSON.stringify(this.absurdChain(inp));
       case "anatomy":
@@ -491,6 +566,58 @@ export class MockProvider implements Provider {
       concepts,
       solved: false,
     };
+  }
+
+  /**
+   * "Reviewer 2" for the demo: each step gets the tutor's earlier verdict or, without one, the demo's own check
+   * (see checkStep), and the report follows from those verdicts: an error is fatal, a gap major, an unclear step
+   * minor, and a correct step gets a pedantic remark about its presentation. Never says how to fix anything.
+   */
+  private referee(inp: { problem: string; steps?: string[]; checks?: { step: number; verdict: string; comment?: string; solved?: boolean }[] }) {
+    const steps = inp.steps ?? [];
+    if (!steps.length) {
+      return {
+        verdict: "reject",
+        summary: "The manuscript under review consists of a problem statement and a great deal of white space. I have read it twice, in case I missed something.",
+        points: [{ step: null, severity: "fatal", comment: "There are no steps. A derivation, as I have repeatedly pointed out in my own work, needs at least one." }],
+        grudgingPraise: "The author has, admittedly, chosen a problem worth solving.",
+      };
+    }
+    const verdicts = steps.map((text, i) => {
+      const earlier = inp.checks?.find((c) => c.step === i + 1);
+      if (earlier) return { verdict: earlier.verdict, missing: [] as string[], solved: Boolean(earlier.solved) };
+      const c = this.checkStep({ problem: inp.problem, step: text });
+      return { verdict: c.verdict, missing: c.missing, solved: c.solved };
+    });
+    const points: { step: number | null; severity: RefSeverity; comment: string }[] = [];
+    verdicts.forEach((v, i) => {
+      const n = i + 1;
+      if (v.verdict === "error") {
+        points.push({ step: n, severity: "fatal", comment: `Step ${n} does not follow from what precedes it. The author states it with a confidence the argument does not share.` });
+      } else if (v.verdict === "gap") {
+        const what = v.missing[0] ? `a property of ${v.missing[0]}` : "a fact";
+        points.push({ step: n, severity: "major", comment: `Step ${n} relies on ${what} that is used but never stated. I am not a mind reader, whatever my colleagues say.` });
+      } else if (v.verdict === "unclear") {
+        points.push({ step: n, severity: "minor", comment: `I cannot tell what step ${n} claims. Is it a statement, a question, or a cry for help? Please write it as a statement.` });
+      } else {
+        points.push({ step: n, severity: "pedantic", comment: `Step ${n} is correct, which I mention only because the reason is given in words where a displayed equation would have been more dignified.` });
+      }
+    });
+    const has = (v: string) => verdicts.some((x) => x.verdict === v);
+    const solved = verdicts.at(-1)?.solved === true && !has("error") && !has("gap");
+    if (!solved && !has("error")) {
+      points.push({ step: null, severity: "major", comment: "The derivation stops before the claim is established. The conclusion is, I assume, left as an exercise for the referee." });
+    }
+    const verdict = has("error") ? "reject" : !solved ? "major revisions" : has("unclear") ? "minor revisions" : "accept";
+    const ok = verdicts.findIndex((v) => v.verdict === "ok");
+    const summary =
+      verdict === "reject"
+        ? `The author submits ${steps.length === 1 ? "a single step" : `${steps.length} steps`}, at least one of which does not follow. I have seen bolder claims, but not recently.`
+        : verdict === "accept"
+          ? "Against my every instinct, I find the derivation complete and correct. I have checked it three times, out of spite."
+          : `The author submits ${steps.length === 1 ? "a single step" : `${steps.length} steps`} toward the claim. The direction is promising; the arrival is not yet documented.`;
+    const praise = ok >= 0 ? `Step ${ok + 1} is, I concede through gritted teeth, correct.` : "The author has shown the courage to submit, which is more than some of my co-referees.";
+    return { verdict, summary, points: points.slice(0, 8), grudgingPraise: praise };
   }
 
   private name(desc: string) {

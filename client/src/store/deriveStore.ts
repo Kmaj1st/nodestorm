@@ -6,11 +6,14 @@ import { api } from "../lib/api";
 import {
   addHint,
   applyGraphPlan,
+  checksForReferee,
   newDerivation,
   nextHintNumber,
   numberReferences,
   setCheck,
+  setReferee,
   stepsForTutor,
+  stepsKey,
   toStepCheck,
   type Derivation,
   type GraphPlan,
@@ -82,6 +85,8 @@ interface Actions {
   setRefDocs(ids: string[] | null): void;
   hint(): Promise<void>;
   check(stepId: string): Promise<void>;
+  /** "Reviewer 2": a pedantic but accurate referee report on the steps so far, kept on the session. */
+  referee(): Promise<void>;
   addToGraph(plan: GraphPlan): string[];
 }
 
@@ -90,7 +95,7 @@ export type DeriveStore = State & Actions;
 const graphs = () => useGraphStore.getState();
 
 /** Busy keys (status bar, cancel). */
-export const DERIVE_KEYS = { read: "derive-read", problems: "derive-problems", hint: "derive-hint", check: "derive-check" };
+export const DERIVE_KEYS = { read: "derive-read", problems: "derive-problems", hint: "derive-hint", check: "derive-check", referee: "derive-referee" };
 /** Finding problems runs per sheet, so importing a second sheet doesn't cancel the first one's. */
 export const problemsKey = (docId: string) => `${DERIVE_KEYS.problems}:${docId}`;
 
@@ -341,6 +346,23 @@ export const useDerive = create<DeriveStore>()((set, get) => {
       // The step may have been edited or removed while the check ran: then the answer is about old text.
       if (!res || !now || now.steps.find((s) => s.id === stepId)?.text !== step.text) return;
       save(setCheck(now, stepId, toStepCheck(res, resolve)));
+    },
+
+    async referee() {
+      const d = current();
+      if (!d || inViewer(graphs().activeId)) return;
+      const key = stepsKey(d.steps);
+      const { refs } = await references(d);
+      const res = await withBusy(DERIVE_KEYS.referee, t("dt.task.referee"), (signal) =>
+        api.refereeReport(
+          { problem: d.problem.statement, steps: stepsForTutor(d.steps), checks: checksForReferee(d.steps), references: refs, context: context() },
+          signal,
+        ),
+      );
+      const now = get().sessions.find((s) => s.id === d.id);
+      // Saved with the steps it read: if they changed meanwhile, the card says the report is outdated.
+      if (!res || !now) return;
+      save(setReferee(now, res, key));
     },
 
     addToGraph(plan) {

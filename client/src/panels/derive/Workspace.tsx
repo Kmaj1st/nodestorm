@@ -1,6 +1,7 @@
-import type { StepVerdict } from "@nodestorm/shared";
+import type { RefereeSeverity, RefereeVerdict, StepVerdict } from "@nodestorm/shared";
 import {
   BookOpen,
+  ChevronRight,
   CircleAlert,
   CircleCheck,
   CircleHelp,
@@ -11,12 +12,24 @@ import {
   Network,
   Pencil,
   Plus,
+  ShieldCheck,
+  Stamp,
   Trash2,
   type LucideIcon,
 } from "lucide-react";
 import { lazy, Suspense, useMemo, useState } from "react";
 import { useT, type MessageKey } from "../../i18n";
-import { addStep, editStep, isSolved, nextHintNumber, removeStep, type Citation, type DerivStep } from "../../lib/derivation";
+import {
+  addStep,
+  editStep,
+  isSolved,
+  nextHintNumber,
+  refereeOutdated,
+  removeStep,
+  type Citation,
+  type Derivation,
+  type DerivStep,
+} from "../../lib/derivation";
 import { toMarkdown } from "../../lib/derivation";
 import { DERIVE_KEYS, useDerive } from "../../store/deriveStore";
 import { useGraphStore } from "../../store/graphStore";
@@ -32,6 +45,19 @@ const VERDICT: Record<StepVerdict, { label: MessageKey; icon: LucideIcon }> = {
   unclear: { label: "dt.verdict.unclear", icon: CircleHelp },
 };
 
+const REFEREE_VERDICT: Record<RefereeVerdict, { label: MessageKey; tone: string }> = {
+  accept: { label: "dt.referee.verdict.accept", tone: "ok" },
+  "minor revisions": { label: "dt.referee.verdict.minor", tone: "gap" },
+  "major revisions": { label: "dt.referee.verdict.major", tone: "gap" },
+  reject: { label: "dt.referee.verdict.reject", tone: "error" },
+};
+const SEVERITY_LABEL: Record<RefereeSeverity, MessageKey> = {
+  fatal: "dt.referee.severity.fatal",
+  major: "dt.referee.severity.major",
+  minor: "dt.referee.severity.minor",
+  pedantic: "dt.referee.severity.pedantic",
+};
+
 /** The current derivation: the problem, the learner's steps with the tutor's checks, hints, and the way out to the graph. */
 export function Workspace() {
   const t = useT();
@@ -39,6 +65,7 @@ export function Workspace() {
   const update = useDerive((s) => s.update);
   const hinting = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.hint]));
   const checking = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.check]));
+  const refereeing = useGraphStore((s) => Boolean(s.busy[DERIVE_KEYS.referee]));
   const viewing = useGraphStore((s) => Boolean(s.view));
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
@@ -90,7 +117,20 @@ export function Workspace() {
       )}
 
       <section aria-labelledby="dt-steps">
-        <h3 id="dt-steps" className="derive-section__title">{t("dt.steps.title")}</h3>
+        <div className="derive-section__head">
+          <h3 id="dt-steps" className="derive-section__title">{t("dt.steps.title")}</h3>
+          {/* Reviews the steps below, so it sits on their heading; the rows under them are full. */}
+          <button
+            className="small-btn"
+            onClick={() => void useDerive.getState().referee()}
+            disabled={refereeing || viewing}
+            title={t("dt.referee.runTitle")}
+            data-testid="dt-referee"
+          >
+            {refereeing ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Stamp} size={14} />}
+            {t("dt.referee.run")}
+          </button>
+        </div>
         {!d.steps.length && <p className="muted small">{t("dt.steps.empty")}</p>}
         <ol className="derive-steps">
           {d.steps.map((s, i) => (
@@ -146,6 +186,8 @@ export function Workspace() {
           </ul>
         </section>
       )}
+
+      {d.referee && <RefereeCard d={d} />}
 
       <References />
 
@@ -238,6 +280,52 @@ function Step({ step, n }: { step: DerivStep; n: number }) {
         </div>
       )}
     </li>
+  );
+}
+
+/** The latest "Reviewer 2" report: verdict, the funny summary, the points (by step) and the grudging praise. */
+function RefereeCard({ d }: { d: Derivation }) {
+  const t = useT();
+  const [open, setOpen] = useState(true);
+  const r = d.referee!;
+  const v = REFEREE_VERDICT[r.verdict];
+  return (
+    <section aria-labelledby="dt-referee">
+      <details className="derive-referee" open={open} onToggle={(e) => setOpen(e.currentTarget.open)} data-testid="dt-referee-report">
+        <summary>
+          <Icon icon={ChevronRight} size={14} className="derive-referee__chevron" />
+          <h3 id="dt-referee" className="derive-section__title">{t("dt.referee.title")}</h3>
+          <span className={`derive-verdict derive-verdict--${v.tone}`}>{t(v.label)}</span>
+        </summary>
+        {refereeOutdated(d) && <p className="small derive-referee__outdated">{t("dt.referee.outdated")}</p>}
+        <p className="derive-referee__summary"><MathText text={r.summary} /></p>
+        {r.points.length > 0 ? (
+          <ol className="derive-referee__points">
+            {r.points.map((p, i) => (
+              <li key={i} className={`derive-referee__point derive-referee__point--${p.severity}`}>
+                <span className="derive-referee__meta">
+                  <span className={`derive-severity derive-severity--${p.severity}`}>{t(SEVERITY_LABEL[p.severity])}</span>
+                  <span className="muted">{p.step ? t("dt.referee.step", { n: p.step }) : t("dt.referee.general")}</span>
+                </span>
+                <MathText text={p.comment} />
+              </li>
+            ))}
+          </ol>
+        ) : (
+          <p className="muted small">{t("dt.referee.none")}</p>
+        )}
+        {r.grudgingPraise && (
+          <p className="derive-referee__praise">
+            <span className="derive-referee__label">{t("dt.referee.praise")}</span>
+            <MathText text={r.grudgingPraise} />
+          </p>
+        )}
+        <p className="muted small derive-referee__note">
+          <Icon icon={ShieldCheck} size={14} />
+          {t("dt.referee.note")}
+        </p>
+      </details>
+    </section>
   );
 }
 

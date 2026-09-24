@@ -7,6 +7,8 @@ import type {
   DeriveRequest,
   ExplainLevel,
   ExplainRequest,
+  ExplainVoice,
+  RefereeRequest,
   ExtractRequest,
   NameRequest,
   NodeBrief,
@@ -24,7 +26,7 @@ import type {
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -63,8 +65,8 @@ export function languageInstruction(language: string | undefined): string {
   if (!lang) return "";
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
-  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes, hypotheses, conclusions and proof ideas) in ${target}.
-Keep the JSON keys, the "role" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes, hypotheses, conclusions and proof ideas, referee summaries, comments and praise) in ${target}.
+Keep the JSON keys, the "role" values, the referee "verdict" and "severity" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
 /** Add the output-language paragraph to the system message of a task prompt. */
@@ -158,6 +160,26 @@ const LEVEL_GUIDE: Record<ExplainLevel, string> = {
     "Teach through examples: several concrete, worked examples (including a non-example), then the general pattern they share.",
 };
 
+/** How each parody narrator talks. "plain" adds nothing to the prompt. */
+export const VOICE_GUIDE: Record<Exclude<ExplainVoice, "plain">, string> = {
+  "nature-documentary":
+    "a hushed nature-documentary narrator observing the concept in its natural habitat, as if it were a rare animal",
+  "sports-commentator": "an excitable live sports commentator calling the play-by-play, with replays and big moments",
+  "noir-detective": "a hard-boiled 1940s noir detective narrating a case in the first person, rain on the window",
+  "medieval-scholar": "a learned medieval scholar writing a solemn treatise, with archaic phrasing and humble asides",
+  infomercial: 'an overexcited late-night infomercial host ("But wait, there\'s more!") selling the concept',
+  shakespearean: "a Shakespearean player, in early modern English with the occasional flourish of verse",
+};
+
+/** The narration paragraph of a voiced explanation: the style may change, the mathematics may not. */
+export function voiceInstruction(voice: ExplainVoice): string {
+  if (voice === "plain") return "";
+  return `VOICE (parody): narrate as ${VOICE_GUIDE[voice]}. The voice changes ONLY the style of the telling, never the content.
+THE MATHEMATICS STAYS CORRECT: every definition, statement, example and pitfall must be exactly as true, precise and complete as in a plain explanation at the chosen level; no invented facts, names, dates or results, and no joke may contradict or blur a statement. Keep the chosen level (a rigorous explanation stays rigorous). Formulas are still written as LaTeX between $…$ and are never paraphrased away.
+"summary" stays a sober, plain definition in the usual register (the learner may use it as the concept's definition); put the voice in "intuition", "keyPoints", "examples" and "pitfalls". Sources in "furtherReading" keep their real titles. Keep it kind: nothing offensive, no mocking of people, nothing political or about tragedies.
+`;
+}
+
 export function explainPrompt(req: ExplainRequest): ChatMessage[] {
   const prereqs = req.prerequisites.length
     ? `Its prerequisites in the graph (the reader knows these):\n${req.prerequisites.map(brief).join("\n")}`
@@ -176,9 +198,14 @@ Build on the prerequisites and relations given, and refer to those concepts by t
 "keyPoints": 3-6 facts worth remembering. "examples": 1-4 examples, each with a short "title" and a "body" of 1-4 sentences.
 "pitfalls": 1-4 common misconceptions or mistakes.
 "furtherReading": 1-4 sources described in words: "title" names the kind of source or a well-known text (e.g. "Any undergraduate abstract algebra textbook, chapter on homomorphisms"), "hint" says what to look for there. Never give URLs, DOIs or page numbers, and don't invent titles you are unsure exist.
-Schema: {"summary":string,"intuition":string,"keyPoints":string[],"examples":[{"title":string,"body":string}],"pitfalls":string[],"furtherReading":[{"title":string,"hint":string}]}`,
+${voiceInstruction(req.voice)}Schema: {"summary":string,"intuition":string,"keyPoints":string[],"examples":[{"title":string,"body":string}],"pitfalls":string[],"furtherReading":[{"title":string,"hint":string}]}`,
     ),
-    input(req, [`Concept to explain:\n${brief(req.node)}`, prereqs, rels, `Level: ${req.level}`].filter(Boolean).join("\n\n")),
+    input(
+      req,
+      [`Concept to explain:\n${brief(req.node)}`, prereqs, rels, `Level: ${req.level}`, req.voice !== "plain" ? `Voice: ${req.voice}` : ""]
+        .filter(Boolean)
+        .join("\n\n"),
+    ),
   ];
 }
 
@@ -325,8 +352,11 @@ function stepsBlock(steps: string[]): string {
   return steps.length ? `The learner's steps so far:\n${steps.map((s, i) => `Step ${i + 1}: ${s}`).join("\n")}` : "The learner hasn't written any steps yet.";
 }
 
+/** The rule every Derive together task shares: the learner does the work. */
+export const NO_SOLUTION = "Never write out the next step, the final answer or a full proof, even when asked.";
+
 const TUTOR = `You are a patient tutor in a "derive together" session. The learner works a problem out themselves;
-you never do it for them. Never write out the next step, the final answer or a full proof, even when asked. Base what
+you never do it for them. ${NO_SOLUTION} Base what
 you say on the reference passages when they are relevant, citing them as [n] in the text and listing their numbers in
 "cites"; use only numbers that were given. Use the names of concepts already in the graph when you refer to them.
 "concepts": the definitions and theorems your answer relies on (name plus a one-sentence definition), so the learner
@@ -377,6 +407,37 @@ Schema: {"verdict":"ok"|"gap"|"error"|"unclear","comment":string,"missing":strin
         referencesBlock(req.references),
         contextBlock(req.context),
       ].join("\n\n"),
+    ),
+  ];
+}
+
+/** The tutor's earlier verdicts, so the referee can build on them. */
+function checksBlock(checks: RefereeRequest["checks"]): string {
+  if (!checks.length) return "";
+  return `Earlier tutor checks (verify them yourself):\n${checks
+    .map((c) => `Step ${c.step}: ${c.verdict}${c.solved ? ", completes the solution" : ""}${c.comment ? ` (${c.comment})` : ""}`)
+    .join("\n")}`;
+}
+
+export function refereeReportPrompt(req: RefereeRequest): ChatMessage[] {
+  return [
+    sys(
+      "refereeReport",
+      `Parody mode: you are "Reviewer 2", the infamously pedantic, over-the-top anonymous referee, and the learner's derivation so far is the manuscript under review. Write a referee report on it.
+THE TECHNICAL POINTS ARE REAL. Every point must be accurate and about the learner's actual text: a genuine gap, an unjustified or wrong step, a missing hypothesis or case, a quantifier or notation problem, an undefined symbol. Never invent an error in a correct step: for a correct step you may nitpick its presentation (as "pedantic") or grudgingly admit that it is correct. Only refer to steps that exist.
+THE COMEDY IS IN THE TONE: weary sighs, "the author appears to believe", requests to cite your own (unnamed) work, excessive formality. Keep it kind: mock the prose, never the person; nothing offensive.
+THE LEARNER DOES THE WORK. ${NO_SOLUTION} Say what is wrong or missing and where, not how to fix it: never supply the missing argument, the next step or the answer.
+"verdict": "accept" only when the derivation completely and correctly solves the problem; "minor revisions" when it is correct but has presentation or small justification issues; "major revisions" when it has real gaps or is unfinished; "reject" when an error breaks it, or there are no steps.
+"summary": two or three sentences, the report's funny opening paragraph (still accurate about the state of the derivation).
+"points": at most 8, most serious first. "step": the step number it is about (1-based), or null for the derivation as a whole. "severity": "fatal" (an error that breaks the argument), "major" (a real gap), "minor" (a small omission or unclear notation), "pedantic" (true but petty). "comment": one to three sentences, in character but technically accurate.
+"grudgingPraise": one sentence admitting something the learner genuinely did right (with nothing right yet, the courage to submit).
+Schema: {"verdict":"accept"|"minor revisions"|"major revisions"|"reject","summary":string,"points":[{"step":number|null,"severity":"fatal"|"major"|"minor"|"pedantic","comment":string}],"grudgingPraise":string}`,
+    ),
+    input(
+      req,
+      [`Problem: ${req.problem}`, stepsBlock(req.steps), checksBlock(req.checks), referencesBlock(req.references), contextBlock(req.context)]
+        .filter(Boolean)
+        .join("\n\n"),
     ),
   ];
 }

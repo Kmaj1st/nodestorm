@@ -7,6 +7,7 @@ import {
   toBrief,
   type DerivedProposal,
   type ExplainLevel,
+  type ExplainVoice,
   type Graph,
   type NameCandidate,
   type QuizStyle,
@@ -609,7 +610,7 @@ export const explainKey = (graphId: string, nodeId: string) => `explain:${graphI
  * "Explain more": ask the AI for a longer explanation of a concept at the chosen level, given its prerequisites and
  * relations. The answer is stored on the node as a background change (like other AI results, not an undo step).
  */
-export async function explainNode(nodeId: string, level: ExplainLevel, graphId = store().activeId) {
+export async function explainNode(nodeId: string, level: ExplainLevel, graphId = store().activeId, voice: ExplainVoice = "plain") {
   if (inViewer(graphId)) return;
   const g = graph(graphId);
   const node = g?.nodes.find((n) => n.id === nodeId);
@@ -623,11 +624,11 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
   });
   const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
   const res = await withBusy(explainKey(graphId, nodeId), t("task.explain", { name: node.name }), (signal) =>
-    api.explain({ node: toBrief(node), prerequisites, relations, level }, signal),
+    api.explain({ node: toBrief(node), prerequisites, relations, level, voice }, signal),
   );
   if (!res) return;
   store().mutate(
-    (g) => ops.updateNode(g, nodeId, { explanation: { ...res, level, createdAt: Date.now() } }),
+    (g) => ops.updateNode(g, nodeId, { explanation: { ...res, level, ...(voice !== "plain" ? { voice } : {}), createdAt: Date.now() } }),
     graphId,
     { history: "background" },
   );

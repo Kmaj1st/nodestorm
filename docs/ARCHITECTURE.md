@@ -87,7 +87,7 @@ classDiagram
 - **ConceptNode.** `name`, `definition`, `aliases` (a rename keeps the old name as an alias). `dependsOn` holds the ids
   of prerequisites that are in the graph; `missingDeps` holds prerequisites the AI named that aren't (each with a
   `role`: `uses`, `derives` or `assumes`, and a `reason`). Optional personal data: `explanation` (the latest
-  "Explain more" answer with its level and time), `anatomy` (the latest "Theorem anatomy", `NodeAnatomy`), `notes`
+  "Explain more" answer with its level, its narrator `voice` if not plain, and time), `anatomy` (the latest "Theorem anatomy", `NodeAnatomy`), `notes`
   (free text) and `mastery` (quiz score, review count, last review time).
 - **Concept kind** (`ConceptKind`, optional `kind`): `definition`, `theorem`, `lemma`, `proposition`, `corollary`,
   `axiom`, `conjecture`, `example`, `notation`, `other`. Graph content (unlike the personal data above, it travels in
@@ -123,8 +123,9 @@ classDiagram
   version snapshots all use it, and all are read back through `client/src/lib/importRepair.ts`.
 - **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
   `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
-  `QuizRequest/Response`, `AbsurdChainRequest/Response` (with `AbsurdStyle` and `AbsurdHop`), `AnatomyRequest/Response`
-  (and the Derive together, Mathlib and cycle tasks). Requests carry `NodeBrief`s (`name`, `definition`, `aliases`),
+  `QuizRequest/Response`, `AbsurdChainRequest/Response` (with `AbsurdStyle` and `AbsurdHop`), `AnatomyRequest/Response`,
+  `RefereeRequest/Response` (and the other Derive together, Mathlib and cycle tasks). `ExplainRequest.voice` is an
+  `ExplainVoice` (default `plain`). Requests carry `NodeBrief`s (`name`, `definition`, `aliases`),
   built with `toBrief`; `name`, `clarify`, `deps`, `derive` and `extract` answers carry a `kind` (`deps`: of the
   analysed concept).
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
@@ -193,7 +194,7 @@ never races a write.
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
   `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `anatomy`, `extract`, `quiz`, `resolveCycle`, `absurdChain`,
-  `mathlib`, and for Derive together `readPage`, `splitProblems`, `tutorHint` and `checkStep`. Each parses the request with its zod
+  `mathlib`, and for Derive together `readPage`, `splitProblems`, `tutorHint`, `checkStep` and `refereeReport`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
   2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
@@ -218,7 +219,8 @@ makes it exist everywhere.
 
 **Absurd chain** (parody mode). `absurdChain` gets two `NodeBrief` ends, a `style` (`deadpan`, `conspiracy`, `epic`,
 `bureaucratic`, `academic-overkill`), a hop range (1-7, default 3-5), the graph's concepts as context and an `avoid`
-list (intermediate concepts of earlier rolls, so "Roll again" takes another route). The answer is a `title`, a
+list (intermediate concepts of earlier rolls, so "Roll again" takes another route). The dialog's **Surprise me** fills
+both ends with `surprisePair` and builds at once. The answer is a `title`, a
 `chain` of hops `{from, to, kind, fact, quip}`, a `moral` and a sober `plausibility` note. The prompt insists that
 every `fact` is true, standard knowledge and that the comedy stays in `quip`, `title` and `moral`, and that nothing is
 unkind. `cleanAbsurdChain` (its `check`) gives the ends the requested names (matching by name or alias), cuts the
@@ -227,6 +229,16 @@ elsewhere, has a gap between hops, never arrives or has more than 10 links; a br
 more before the error reaches the user. The mock answers from `BRIDGES` in `mock.ts`: true facts linking its algebra
 KB to *Fourier transform*, *Heat equation*, *Maillard reaction*, *Toast* and a few more (shortest route by BFS, avoiding
 `avoid` when it can), an unknown end joining through *Written language*, and per-style templates for the narration.
+
+**Explain voices** (parody narrators). `ExplainVoice` is `plain` (the default) or `nature-documentary`,
+`sports-commentator`, `noir-detective`, `medieval-scholar`, `infomercial`, `shakespearean`. `voiceInstruction`
+(`prompts.ts`, one line per voice in `VOICE_GUIDE`) adds a paragraph to the `explain` prompt, in the same spirit as
+the Absurd chain: the voice changes only the telling; every statement stays exactly as correct, precise and at the
+chosen level as a plain answer, formulas stay `$…$`, and `summary` stays a sober definition (it can become the
+concept's definition). `plain` adds nothing, so plain prompts are unchanged. The answer schema is the same;
+`explainNode(id, level, graphId, voice)` stores `voice` on `NodeExplanation` (optional, so old data parses; omitted
+for plain), and import repair resets an unknown voice to plain instead of dropping the explanation. The mock wraps its
+plain answer in fixed per-voice phrases (`EXPLAIN_VOICE` / `voiced` in `mock.ts`), so the content is identical.
 
 **Images.** `ChatMessage.content` is a string or `ContentPart[]` (text and base64 images; `textOf` reads the text).
 Only `readPage` sends an image: `openaiCompatible.ts` turns it into an `image_url` data URL and `anthropic.ts` into an
@@ -239,6 +251,17 @@ and the graph's concepts. The shared system text (`TUTOR` in `prompts.ts`) forbi
 answer. Hints get stronger with `nth`. Post-processing drops citation numbers that weren't given (`validCites`),
 dedupes concepts, and counts `solved` only for an `ok` step. `splitProblems` runs `cleanProblems` (dedupe; pages
 outside the sheet become null).
+
+**Reviewer 2** (`refereeReport`). Gets the tutor input plus the earlier step checks (`checks`: step number, verdict,
+comment, solved) and answers with a `verdict` (`accept`, `minor revisions`, `major revisions`, `reject`, parsed
+case- and separator-insensitively), a funny `summary`, `points` (`step?`, `severity` `fatal|major|minor|pedantic`
+(unknown ones become `minor`), `comment`) and `grudgingPraise`. The prompt keeps the Absurd chain's split: the
+technical points must be real (never an invented error in a correct step), the comedy is only in the tone, nothing
+unkind; and it shares `NO_SOLUTION` with `TUTOR`, so it never writes the fix, the next step or the answer.
+`cleanReferee` drops step numbers that don't exist, dedupes, sorts by severity, keeps 8 points, and never accepts a
+derivation with no steps. The mock derives the report from each step's earlier check, or from its own `checkStep`
+heuristic when there is none (error → fatal, gap → major, unclear → minor, correct → a pedantic remark; unfinished
+→ major revisions).
 
 ### Encyclopedia lookups (`shared/src/lookup/`, `client/src/lib/lookup.ts`)
 
@@ -333,7 +356,8 @@ sequenceDiagram
   (or the caller's `onError`). `cancelTask(key)` is what the status bar's cancel (X) button and dialogs' Cancel call. Busy keys
   follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
   `explain:<graphId>:<nodeId>`, `anatomy:<graphId>:<nodeId>`, `mathlib:<graphId>:<nodeId>`, `relookup:<graphId>:<nodeId>`,
-  `quiz:<graphId>`, `name`, `derive`, `extract`, `absurd`.
+  `quiz:<graphId>`, `name`, `derive`, `extract`, `absurd`, and Derive together's `derive-hint`, `derive-check`,
+  `derive-referee` (`DERIVE_KEYS`).
 - **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
   an info toast) if so. Only calls for that graph are refused; work on the user's own graphs continues.
 - **Token usage**: browser-mode providers call `onUsage`, which adds to `client/src/store/usageStore.ts` (shown in
@@ -381,7 +405,8 @@ Selectors: `activeGraph`, `isViewing`, `currentProject`, `canUndo`, `canRedo`.
   and sessions (loaded from `docDb` per project; reloaded on project switch), and its actions: `importFile` (pdf.js
   text, then scanned pages through `readPage` one at a time), `findProblems` (`splitProblems` in batches of about 11,000
   characters), `hint` / `check` (BM25 retrieval over the reference documents, then the tutor task; a check whose step
-  was edited meanwhile is dropped), and `addToGraph`.
+  was edited meanwhile is dropped), `referee` (Reviewer 2: the same retrieval, the steps and `checksForReferee`; the
+  report is saved on the session as `referee` with the `stepsKey` of the steps it read), and `addToGraph`.
 - `client/src/store/absurdStore.ts`: whether the Absurd chain dialog is open and its starting ends (`openAbsurd` takes
   them from the selection: two selected concepts, else the one selected or inspected).
 - `client/src/store/onboardingStore.ts`: welcome card and tour state.
@@ -403,8 +428,9 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts` (relation origins, concept kinds via `kindFilterOf` / `KIND_FILTERS` with "none" for untyped, to-do, focus), `showsEverything`. |
 | `kinds.ts` | Concept kinds: `KINDS`, `KIND_LABEL` (message keys), `KIND_NAME` (English, for exports), `KIND_TONE` (colour family of the `.kind-tag--<tone>` classes). |
 | `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
-| `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`. |
-| `absurd.ts` | Absurd chain: `chainConcepts`, `intermediates`, `chainToText` (clipboard), `sandboxName`, `hopExplanation`, and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
+| `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`; Reviewer 2: `stepsKey` (a hash of the steps' text), `checksForReferee`, `setReferee`, `refereeOutdated` (the card says so; the Markdown copy leaves an outdated report out). |
+| `absurd.ts` | Absurd chain: `chainConcepts`, `intermediates`, `chainToText` (clipboard), `sandboxName`, `hopExplanation`, `surprisePair` ("Surprise me": two different random concepts of the graph, else its one concept and
+`FUN_ENDS`; avoids the pair on screen), and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
 | `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. |
 | `texImport.ts` | LaTeX import, no AI. `theoremEnvs` reads the `\newtheorem` declarations. `parseTexResults` finds each theorem-like environment with its kind, title, labels and refs (statement plus the following proof), and the terms a definition defines. `texToText` turns prose into text: maths is kept, display maths becomes `$$…$$`, and refs become names. `texReview` builds an `ExtractReview` (unique names, `\ref` links, optional unticked mention links) for `ExtractDialog`'s `initial` prop. |
@@ -608,8 +634,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
   中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes), walkthrough, cycle
   resolution, Derive together, encyclopedia definitions, Lean / Mathlib, absurd chain (free-form and from the
-  selection, roll again, copy, add to a sandbox, axe in both themes), concept kinds, theorem anatomy, LaTeX export and
-  the notation glossary. The run is **pinned
+  selection, roll again, copy, add to a sandbox, axe in both themes), concept kinds, theorem anatomy, LaTeX export,
+  the notation glossary, and parody voices & Reviewer 2 (a voiced explanation that fits the inspector and survives a
+  reload, a referee report and its outdated note, Surprise me; axe in both themes). The run is **pinned
   to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
@@ -738,6 +765,10 @@ and server-binding items are real problems worth fixing.
     blank, and CJK PDFs without embedded fonts may give wrong text.
   - The pdf.js worker (~1.3 MB) is precached by the service worker like every chunk. It ends in `.mjs`, which a static
     host must serve as JavaScript.
+- **Parody voices and Reviewer 2**: like the Absurd chain, correctness rests on the prompt; a model may still let a
+  joke blur a statement or invent a nitpick. The UI labels both as parody and the referee card says to check each
+  point. The referee report is per derivation and not re-run automatically when steps change (the card says it is
+  outdated). The fun ends of *Surprise me* are English names, whatever the interface language.
 - **Absurd chain**: the facts are only as true as the model makes them (the prompt insists, the UI says to check, and
   nothing reaches the graph except through a sandbox). Its relations have origin `mix`, so after a merge they can't be
   told apart or filtered separately; a dedicated origin would follow "Add a relation origin" above.
