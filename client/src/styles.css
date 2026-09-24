@@ -401,6 +401,35 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
 .view-menu { min-width: 240px; padding: 8px 10px; gap: 6px; }
 .view-menu__head { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
 
+/* Offline banner, "new version" notice (installed app, lib/pwa.ts) and the keyboard shortcuts dialog */
+.offline-banner {
+  background: var(--warn-soft); color: var(--checking); padding: 4px 12px; font-size: 13px;
+  border-bottom: 1px solid var(--checking-border);
+}
+.update-notice {
+  position: fixed; bottom: 12px; right: 12px; z-index: 20; display: flex; gap: 8px; align-items: center;
+  padding: 6px 6px 6px 12px; background: var(--panel); border: 1px solid var(--accent); border-radius: 8px;
+  box-shadow: 0 6px 20px var(--shadow); font-size: 13px;
+}
+.update-notice button { padding: 2px 10px; }
+.shortcuts-button { font-weight: 700; font-size: 13px; }
+.shortcuts__group h4 {
+  margin: 4px 0 6px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em;
+}
+/* The same key column width in every group, so the descriptions line up. */
+.shortcuts__group dl { display: grid; grid-template-columns: 13.5rem 1fr; gap: 6px 16px; margin: 0; }
+.shortcuts__group dt { white-space: nowrap; }
+.shortcuts__group dd { margin: 0; font-size: 13px; }
+kbd {
+  font: 12px ui-monospace, SFMono-Regular, Menlo, monospace; padding: 1px 6px; border-radius: 4px;
+  border: 1px solid var(--border); border-bottom-width: 2px; background: var(--bg); color: var(--text);
+}
+@media (max-width: 800px) {
+  .shortcuts__group dl { grid-template-columns: 1fr; gap: 2px; }
+  .shortcuts__group dd { margin-bottom: 6px; }
+  .shortcuts__group dt { white-space: normal; }
+}
+
 /* React Flow: match its canvas, controls and minimap to our tokens (colorMode handles the rest). */
 .react-flow {
   --xy-background-color: var(--bg);

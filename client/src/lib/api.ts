@@ -23,6 +23,7 @@ import { isViewing, useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, useSettings } from "../store/settingsStore";
 import { addUsage } from "../store/usageStore";
 import { createLimiter } from "./aiQueue";
+import { isOnline, offlineBlocks, OfflineError } from "./online";
 
 /** Thrown when an AI call can't run until the user fills in Settings. */
 export class NeedsSetupError extends Error {}
@@ -60,6 +61,8 @@ const queue = createLimiter(() => useSettings.getState().aiConcurrency ?? DEFAUL
 function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
   // The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
   if (isViewing(useGraphStore.getState())) return Promise.reject(new Error(t("api.viewer")));
+  // Offline: fail now instead of after the request timeout (the offline demo provider still works).
+  if (offlineBlocks(useSettings.getState().provider, isOnline())) return Promise.reject(new OfflineError());
   return queue.run(() => runNow(name, req, signal), {
     signal,
     onState: (state) => useGraphStore.getState().setBusyState(signal, state),

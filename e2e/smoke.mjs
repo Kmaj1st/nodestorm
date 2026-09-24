@@ -719,6 +719,53 @@ try {
   await page.keyboard.press("Escape");
   await page.locator(".edge-label").first().waitFor();
 
+  console.log("Shortcuts & offline");
+  const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("?");
+  await help.waitFor();
+  const helpText = await help.textContent();
+  assert(helpText.includes("Undo") && helpText.includes("Ctrl+Z") && helpText.includes("Ctrl+K"), "? opens the shortcuts dialog, listing Undo");
+  await page.keyboard.press("Escape");
+  await help.waitFor({ state: "detached" });
+  await page.getByRole("button", { name: "Keyboard shortcuts (?)" }).click();
+  await help.waitFor();
+  await page.screenshot({ path: `${shots}12-shortcuts.png` });
+  await help.getByRole("button", { name: "Close" }).click();
+  await help.waitFor({ state: "detached" });
+  assert(true, "the ? button among the canvas controls opens it too");
+
+  {
+    // A provider that needs the network, in browser mode (the key reuses the faked SiliconFlow from the start).
+    const st = await openSettings();
+    await st.getByText("Directly from this browser").click();
+    await st.getByLabel("Provider", { exact: true }).selectOption("siliconflow");
+    const key = st.getByLabel("API key", { exact: true });
+    if (!(await key.inputValue())) await key.fill("sk-good");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+    await st.waitFor({ state: "detached" });
+
+    await context.setOffline(true);
+    await page.getByTestId("offline-banner").waitFor();
+    assert((await page.getByTestId("offline-banner").textContent()).includes("Offline — AI features paused"), "going offline shows the offline banner");
+    await page.getByRole("button", { name: "+ Add concept" }).click();
+    await page.getByRole("button", { name: "Describe it" }).click();
+    await page.getByLabel("Concept description").fill("a subgroup closed under conjugation");
+    const started = Date.now();
+    await page.getByRole("button", { name: "Find a name" }).click();
+    await page.locator(".toast").filter({ hasText: "You're offline" }).waitFor({ timeout: 3000 });
+    assert(Date.now() - started < 3000, `an AI action fails fast with the offline message (${Date.now() - started} ms)`);
+    await page.screenshot({ path: `${shots}13-offline.png` });
+    await page.getByRole("dialog", { name: "Add concept" }).getByRole("button", { name: "Cancel" }).click();
+
+    await context.setOffline(false);
+    await page.getByTestId("offline-banner").waitFor({ state: "detached" });
+    assert(true, "back online hides the banner");
+    const st2 = await openSettings();
+    await st2.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st2.getByRole("button", { name: "Save", exact: true }).click();
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

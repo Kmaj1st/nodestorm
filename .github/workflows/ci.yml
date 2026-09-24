@@ -33,6 +33,9 @@ jobs:
       # Starts the server with the offline mock AI plus Vite, then drives the UI in Chromium.
       - run: npm run e2e
 
+      # Builds the static site and checks the installable app: manifest, service worker, offline start, update notice.
+      - run: npm run e2e:pwa
+
       - name: Upload e2e screenshots
         if: failure()
         uses: actions/upload-artifact@v4

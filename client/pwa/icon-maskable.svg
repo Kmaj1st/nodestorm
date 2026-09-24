@@ -1,0 +1,10 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <rect width="512" height="512" fill="#4f46e5"/>
+  <!-- The artwork of public/icon.svg, shrunk into the maskable safe zone (a centred circle of 80% diameter). -->
+  <g transform="translate(38.4 38.4) scale(0.85)">
+    <path d="M160 176H352L256 352Z" fill="none" stroke="#c7d2fe" stroke-width="24" stroke-linejoin="round"/>
+    <circle cx="160" cy="176" r="56" fill="#fff"/>
+    <circle cx="352" cy="176" r="56" fill="#fff"/>
+    <circle cx="256" cy="352" r="56" fill="#fbbf24"/>
+  </g>
+</svg>

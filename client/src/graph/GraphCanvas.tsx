@@ -16,6 +16,7 @@ import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
 import { useTheme } from "../lib/theme";
 import { MAX_HOPS, showsEverything, visibleParts } from "../lib/view";
 import { registerViewport, viewport } from "../lib/viewport";
+import { ShortcutsButton } from "../panels/ShortcutsHelp";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { activeFocus, useView } from "../store/viewStore";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
@@ -249,7 +250,7 @@ export function GraphCanvas() {
         onlyRenderVisibleElements={graph.nodes.length >= LARGE_GRAPH}
       >
         <Background gap={24} />
-        <Controls showInteractive={false} />
+        <Controls showInteractive={false}><ShortcutsButton /></Controls>
         <MiniMap pannable zoomable ariaLabel={t("canvas.map")} />
       </ReactFlow>
       {focus && (
