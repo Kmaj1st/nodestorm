@@ -4,8 +4,8 @@ import { spawn } from "node:child_process";
 import { mkdirSync } from "node:fs";
 import { chromium } from "playwright";
 
-const SERVER_PORT = 8799;
-const WEB_PORT = 5199;
+const SERVER_PORT = Number(process.env.E2E_SERVER_PORT || 8799);
+const WEB_PORT = Number(process.env.E2E_WEB_PORT || 5199);
 const shots = new URL("./screenshots/", import.meta.url).pathname;
 mkdirSync(shots, { recursive: true });
 
