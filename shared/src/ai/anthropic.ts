@@ -1,4 +1,4 @@
-import Anthropic from "@anthropic-ai/sdk";
+import type Anthropic from "@anthropic-ai/sdk";
 import {
   DEFAULT_TIMEOUT_MS,
   DISCOVERY_TIMEOUT_MS,
@@ -22,12 +22,31 @@ export interface AnthropicConfig {
   timeoutMs?: number;
 }
 
+type Sdk = typeof Anthropic;
+let sdk: Promise<Sdk> | null = null;
+
+/**
+ * The SDK is imported on first use: in the browser it is a chunk of its own (the app's biggest dependency by far)
+ * that only loads when someone actually talks to Claude. A failed load (e.g. offline) is tried again next time.
+ */
+function loadSdk(): Promise<Sdk> {
+  sdk ??= import("@anthropic-ai/sdk").then(
+    (m) => m.default,
+    (err) => {
+      sdk = null;
+      throw new ProviderError(`Anthropic: could not load the SDK (${err instanceof Error ? err.message : err})`, 502);
+    },
+  );
+  return sdk;
+}
+
 /** Claude adapter. Works in Node and, with the user's own key, directly from the browser. */
 export class AnthropicProvider implements Provider {
   id = "anthropic";
   label = "Anthropic Claude";
   model: string;
-  private client: Anthropic | null;
+  private apiKey: string | undefined;
+  private client: Anthropic | null = null;
   private webSearch: boolean;
   private timeoutMs: number;
 
@@ -35,27 +54,28 @@ export class AnthropicProvider implements Provider {
     this.model = cfg.model;
     this.webSearch = Boolean(cfg.webSearch);
     this.timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-    this.client = cfg.apiKey
-      ? new Anthropic({
-          apiKey: cfg.apiKey,
-          // Retries go through withRetries, which keeps them inside the overall deadline.
-          maxRetries: 0,
-          // The key is the user's own, entered into their own browser; nothing is shared with other users.
-          dangerouslyAllowBrowser: true,
-        })
-      : null;
+    this.apiKey = cfg.apiKey || undefined;
   }
 
   get configured() {
-    return this.client !== null;
+    return this.apiKey !== undefined;
   }
 
-  private get api() {
-    if (!this.client) throw new ProviderError("Anthropic: API key is not set", 503);
-    return this.client;
+  /** The SDK and a client for this key, created on the first request. */
+  private async api(): Promise<{ client: Anthropic; Anthropic: Sdk }> {
+    if (!this.apiKey) throw new ProviderError("Anthropic: API key is not set", 503);
+    const Anthropic = await loadSdk();
+    this.client ??= new Anthropic({
+      apiKey: this.apiKey,
+      // Retries go through withRetries, which keeps them inside the overall deadline.
+      maxRetries: 0,
+      // The key is the user's own, entered into their own browser; nothing is shared with other users.
+      dangerouslyAllowBrowser: true,
+    });
+    return { client: this.client, Anthropic };
   }
 
-  private wrap(err: unknown): never {
+  private wrap(err: unknown, Anthropic: Sdk): never {
     if (err instanceof ProviderError) throw err;
     if (err instanceof Anthropic.AuthenticationError) throw new ProviderError("Anthropic: invalid API key", 401);
     if (err instanceof Anthropic.PermissionDeniedError)
@@ -77,7 +97,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
-    const client = this.api;
+    const { client, Anthropic } = await this.api();
     const system = messages
       .filter((m) => m.role === "system")
       .map((m) => m.content)
@@ -127,7 +147,7 @@ export class AnthropicProvider implements Provider {
         }
         throw new ProviderError("Anthropic: too many pause_turn continuations");
       } catch (err) {
-        this.wrap(err);
+        this.wrap(err, Anthropic);
       }
     };
     return withDeadline(this.label, { signal: opts.signal, timeoutMs }, (signal) =>
@@ -136,7 +156,7 @@ export class AnthropicProvider implements Provider {
   }
 
   async listModels(opts: RequestOptions = {}): Promise<ModelInfo[]> {
-    const client = this.api;
+    const { client, Anthropic } = await this.api();
     const timeoutMs = opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS;
     return withDeadline(this.label, { signal: opts.signal, timeoutMs }, async (signal) => {
       try {
@@ -145,7 +165,7 @@ export class AnthropicProvider implements Provider {
           out.push({ id: m.id, label: m.display_name });
         return out;
       } catch (err) {
-        this.wrap(err);
+        this.wrap(err, Anthropic);
       }
     });
   }

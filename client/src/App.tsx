@@ -4,13 +4,10 @@ import { GraphCanvas } from "./graph/GraphCanvas";
 import { rich, t, useT } from "./i18n";
 import { removeNode, removeRelation } from "./lib/graphOps";
 import { decodeShare, shareToken } from "./lib/share";
-import { AddNodeDialog } from "./panels/AddNodeDialog";
-import { DeriveDialog } from "./panels/DeriveDialog";
-import { FindDialog } from "./panels/FindDialog";
 import { Inspector } from "./panels/Inspector";
+// Dialogs load on demand (their own chunks), see panels/lazy.tsx.
+import { AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
 import { OfflineBanner } from "./panels/OfflineBanner";
-import { SenseDialog } from "./panels/SenseDialog";
-import { SettingsDialog } from "./panels/SettingsDialog";
 import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
