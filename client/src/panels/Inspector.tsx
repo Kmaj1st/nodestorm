@@ -1,4 +1,4 @@
-import type { ConceptNode, ExplainLevel, Graph, RelationOrigin } from "@nodestorm/shared";
+import { loogleSearchUrl, mathlibDocUrl, type ConceptNode, type ExplainLevel, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -11,6 +11,7 @@ import {
   Highlighter,
   Presentation,
   RefreshCw,
+  Search,
   Sparkles,
   Trash2,
   TriangleAlert,
@@ -22,6 +23,8 @@ import {
   analyzeNode,
   explainKey,
   explainNode,
+  findInMathlib,
+  mathlibKey,
   installAllKey,
   installAllMissing,
   installDep,
@@ -240,6 +243,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       </section>
 
       <ExplainSection key={node.id} node={node} graphId={graphId} />
+      <FormalSection node={node} graphId={graphId} viewing={viewing} />
 
       <label className="field">
         {t("node.notes")}
@@ -625,5 +629,55 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * "Lean / Mathlib": the declarations in Lean's Mathlib that formalise this concept. The AI suggests names and each
+ * is checked with Loogle, so only real declarations are listed, with their type and a link to the Mathlib docs.
+ */
+function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId: string; viewing: boolean }) {
+  const t = useT();
+  const running = useGraphStore((s) => Boolean(s.busy[mathlibKey(graphId, node.id)]));
+  const f = node.formal;
+  if (viewing && !f?.decls.length) return null;
+  return (
+    <section data-testid="formal">
+      <div className="section-head">
+        <h4>{t("formal.title")}</h4>
+        {!viewing && (
+          <button className="small-btn" onClick={() => void findInMathlib(node.id, graphId)} disabled={running} data-testid="formal-button">
+            {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Search} size={14} />}
+            {t(running ? "formal.running" : f ? "formal.again" : "formal.run")}
+          </button>
+        )}
+      </div>
+      {!f && !running && <p className="muted small">{t("formal.empty")}</p>}
+      {f && (
+        <>
+          {f.decls.length > 0 && (
+            <ul className="formal-list">
+              {f.decls.map((d) => (
+                <li key={d.name} className="formal-decl">
+                  <a href={mathlibDocUrl(d)} target="_blank" rel="noopener noreferrer" className="formal-decl__name">
+                    <code>{d.name}</code>
+                    <Icon icon={ExternalLink} size={12} />
+                  </a>
+                  {d.why && <span className="muted small"> {d.why}</span>}
+                  <pre className="formal-decl__type">{d.name} :{d.type.startsWith(" ") ? "" : " "}{d.type}</pre>
+                  {d.doc && <p className="small formal-decl__doc">{d.doc}</p>}
+                </li>
+              ))}
+            </ul>
+          )}
+          <p className="muted small">
+            {f.unverified.length > 0 && <>{t("formal.unverified", { names: f.unverified.join(", ") })} </>}
+            <a href={loogleSearchUrl(`"${node.name}"`)} target="_blank" rel="noopener noreferrer">
+              {t("formal.searchYourself")}
+            </a>
+          </p>
+        </>
+      )}
+    </section>
   );
 }

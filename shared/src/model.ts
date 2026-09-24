@@ -70,6 +70,8 @@ export const ConceptNode = z.object({
   notes: z.string().optional(),
   /** Quiz progress. Personal study data, so share links leave it out (see packGraph in client/src/lib/share.ts). */
   mastery: Mastery.optional(),
+  /** Its counterparts in Lean's Mathlib, each checked to exist (see "Find in Mathlib"). */
+  formal: z.lazy(() => NodeFormal).optional(),
   /** Where the concept came from: an imported document and page (see "Derive together"). */
   source: z.lazy(() => SourceRef).optional(),
 });
@@ -125,6 +127,25 @@ export const SourceRef = z.object({
   url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
+
+/** A Lean 4 declaration a concept corresponds to, verified to exist in Mathlib. */
+export const FormalDecl = z.object({
+  name: z.string().max(300),
+  type: z.string().max(4000),
+  module: z.string().max(300),
+  doc: z.string().max(4000).optional(),
+  /** Why the AI thinks it matches. */
+  why: z.string().max(500).optional(),
+});
+export type FormalDecl = z.infer<typeof FormalDecl>;
+
+export const NodeFormal = z.object({
+  decls: z.array(FormalDecl).max(12),
+  /** Names the AI suggested that Mathlib doesn't have (so the user sees what was checked). */
+  unverified: z.array(z.string().max(300)).max(12).default([]),
+  checkedAt: z.number(),
+});
+export type NodeFormal = z.infer<typeof NodeFormal>;
 
 // ---------- AI task I/O ----------
 
@@ -408,6 +429,22 @@ export const AbsurdChainResponse = z.object({
   plausibility: z.string().trim().default(""),
 });
 export type AbsurdChainResponse = z.infer<typeof AbsurdChainResponse>;
+
+/** Lean 4 Mathlib names that may formalise a concept; the client checks each with Loogle before showing it. */
+export const MathlibRequest = z.object({
+  node: NodeBrief,
+  context: z.array(NodeBrief).max(80).default([]),
+});
+export type MathlibRequest = z.infer<typeof MathlibRequest>;
+
+export const MathlibCandidate = z.object({
+  name: z.string().trim().min(1).max(300),
+  why: z.string().default(""),
+});
+export type MathlibCandidate = z.infer<typeof MathlibCandidate>;
+
+export const MathlibResponse = z.object({ candidates: z.array(MathlibCandidate).default([]) });
+export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
 // ---------- Derive together ----------
 

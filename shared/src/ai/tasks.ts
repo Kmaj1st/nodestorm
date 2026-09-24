@@ -31,10 +31,13 @@ import {
   TutorHintResponse,
   CheckStepRequest,
   CheckStepResponse,
+  MathlibRequest,
+  MathlibResponse,
   type SheetProblem,
   type TutorConcept,
 } from "../model";
 import type { z } from "zod";
+import { isLeanName } from "../lookup/loogle";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
 import {
   absurdChainPrompt,
@@ -50,6 +53,7 @@ import {
   splitProblemsPrompt,
   tutorHintPrompt,
   checkStepPrompt,
+  mathlibPrompt,
   relatePrompt,
   withLanguage,
 } from "./prompts";
@@ -299,6 +303,17 @@ export const tasks = {
     const req = AbsurdChainRequest.parse(body);
     // A broken chain counts as malformed output, so the model is asked once more, told what was wrong.
     return runStructured(p, absurdChainPrompt(req), AbsurdChainResponse, o, (res) => cleanAbsurdChain(res, req));
+  },
+  mathlib: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = MathlibRequest.parse(body);
+    const res = await runStructured(p, mathlibPrompt(req), MathlibResponse, o);
+    // Plausible Lean names only, each once, at most 6: every one costs a check.
+    const seen = new Set<string>();
+    const candidates = res.candidates
+      .map((c) => ({ name: c.name.trim().replace(/^`|`$/g, ""), why: c.why.trim() }))
+      .filter((c) => isLeanName(c.name) && !seen.has(c.name) && seen.add(c.name))
+      .slice(0, 6);
+    return { candidates };
   },
 };
 export type TaskName = keyof typeof tasks;

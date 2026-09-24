@@ -1,6 +1,21 @@
 import { normalizeName } from "../model";
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 
+/** The offline demo's Mathlib names for its concepts (real Mathlib declarations), plus one that doesn't exist. */
+const MATHLIB: Record<string, { name: string; why: string }[]> = {
+  group: [{ name: "Group", why: "the class of groups" }],
+  subgroup: [{ name: "Subgroup", why: "subgroups as a structure" }],
+  "normal subgroup": [{ name: "Subgroup.Normal", why: "the normality predicate" }],
+  homomorphism: [{ name: "MonoidHom", why: "group homomorphisms (bundled monoid homomorphisms)" }],
+  kernel: [
+    { name: "MonoidHom.ker", why: "the kernel as a subgroup" },
+    { name: "MonoidHom.normal_ker", why: "the kernel is normal" },
+    { name: "MonoidHom.kernelSubgroupOfDoom", why: "a made-up name, to show it gets dropped" },
+  ],
+  isomorphism: [{ name: "MulEquiv", why: "group isomorphisms" }],
+  "first isomorphism theorem": [{ name: "QuotientGroup.quotientKerEquivRange", why: "G / ker φ ≃ range φ" }],
+};
+
 /** What the offline demo "reads" on any scanned page. */
 const SCANNED_PAGE =
   "4. Let $\\varphi: G \\to H$ be a group homomorphism. Show that $\\ker\\varphi$ is a normal subgroup of $G$.";
@@ -242,6 +257,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.resolveCycle(inp.links ?? []));
       case "quiz":
         return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
+      case "mathlib":
+        return JSON.stringify({ candidates: MATHLIB[normalizeName(String(inp.node?.name ?? ""))] ?? [] });
       case "readPage":
         return JSON.stringify({ text: SCANNED_PAGE });
       case "splitProblems":

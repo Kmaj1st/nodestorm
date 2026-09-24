@@ -87,6 +87,12 @@ no key needed) or an empty graph.
   apps; NodeStorm then skips it for 10 minutes and uses Wikipedia. `npm run smoke:lookup` checks the sites from your
   machine.
 
+- **Lean / Mathlib** (inspector: **Find in Mathlib**): the Lean 4 declarations in Mathlib that formalise a concept.
+  - The AI suggests names, and each one is checked against Mathlib with Loogle.
+  - Only declarations that really exist are listed, each with its type, docstring and a link to the Mathlib docs.
+  - Names that don't exist are shown as dropped. Formal-science work can go straight from an idea to its formal
+    statement.
+
 ### Study tools
 
 - **Explain more.** In the inspector pick a level (*intuitive*, *rigorous* or *example-driven*). The AI writes a

@@ -50,7 +50,7 @@ try {
   await waitFor(base);
   browser = await chromium.launch();
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
-  await context.route(/proofwiki\.org|wikipedia\.org|wikidata\.org/, (r) => r.abort()); // no real encyclopedia lookups
+  await context.route(/proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org/, (r) => r.abort()); // no real encyclopedia lookups
   const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(base);
@@ -140,7 +140,7 @@ try {
   {
     // A first visit before anything is precached (no service worker), with the Find dialog's chunk failing.
     const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" });
-    await ctx.route(/proofwiki\.org|wikipedia\.org|wikidata\.org/, (r) => r.abort());
+    await ctx.route(/proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org/, (r) => r.abort());
     const p = await ctx.newPage();
     const errors = [];
     p.on("pageerror", (e) => errors.push(e.message));

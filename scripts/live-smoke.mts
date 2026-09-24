@@ -43,6 +43,7 @@ const inputs: Partial<Record<TaskName, unknown>> = {
     existing: [hom],
   },
   quiz: { node: thm, prerequisites: [hom], style: "connect", multipleChoice: true },
+  mathlib: { node: { name: "Kernel", definition: "The elements a group homomorphism sends to the identity.", aliases: [] }, context: [hom] },
   splitProblems: {
     pages: [
       { page: 1, text: "Sheet 3\n1. Show that the kernel of a group homomorphism is a normal subgroup.\n2. (a) Show that the image is a subgroup. (b) Give an example where it is not normal." },

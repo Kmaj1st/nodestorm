@@ -41,7 +41,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
   // Never ask the real encyclopedias: every concept's definition then comes from the offline demo AI, as the
   // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead.
-  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org/;
+  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org/;
   const blockLookups = (ctx) => ctx.route(LOOKUP_SITES, (r) => r.abort());
   await blockLookups(context);
   // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
@@ -1781,6 +1781,44 @@ try {
     await page.screenshot({ path: `${shots}31-absurd-chain-dark.png` });
     await dlg.getByRole("button", { name: "Close" }).click();
     await setTheme("light");
+  }
+
+  console.log("Lean / Mathlib");
+  {
+    // Loogle answers with fixtures: it knows two of the offline demo's three names for "Kernel".
+    const known = {
+      "MonoidHom.ker": { type: " {G : Type u_1} [Group G] {M : Type u_6} [MulOneClass M] (f : G →* M) : Subgroup G", doc: "The multiplicative kernel of a monoid homomorphism is the subgroup of elements `x : G` such that `f x = 1`" },
+      "MonoidHom.normal_ker": { type: " {G : Type u_1} [Group G] {M : Type u_6} [MulOneClass M] (f : G →* M) : f.ker.Normal", doc: null },
+    };
+    await context.unrouteAll();
+    await context.route(LOOKUP_SITES, (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== "loogle.lean-lang.org") return route.abort();
+      const q = url.searchParams.get("q");
+      const k = known[q];
+      const body = k ? { count: 1, hits: [{ name: q, type: k.type, module: "Mathlib.Algebra.Group.Subgroup.Ker", doc: k.doc }] } : { error: `unknown identifier '${q}'` };
+      return route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
+    });
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Kernel");
+    await waitBadge("Kernel", "blocked");
+    await node("Kernel").click();
+    const formal = page.getByTestId("formal");
+    await formal.getByTestId("formal-button").click();
+    await formal.locator(".formal-decl").first().waitFor();
+    const names = await formal.locator(".formal-decl__name").allTextContents();
+    assert(JSON.stringify(names) === JSON.stringify(["MonoidHom.ker", "MonoidHom.normal_ker"]), "Find in Mathlib lists only declarations Loogle confirms");
+    assert((await formal.textContent()).includes("Not in Mathlib (dropped): MonoidHom.kernelSubgroupOfDoom"), "…and says which suggestions were dropped");
+    assert(
+      (await formal.getByRole("link", { name: "MonoidHom.ker" }).getAttribute("href")) ===
+        "https://leanprover-community.github.io/mathlib4_docs/Mathlib/Algebra/Group/Subgroup/Ker.html#MonoidHom.ker",
+      "each links to the Mathlib documentation",
+    );
+    await audit("inspector with Mathlib declarations");
+    await context.unrouteAll();
+    await blockLookups(context);
   }
 
   console.log("\nE2E passed");

@@ -859,6 +859,16 @@ export const en = {
   "absurd.note": "Added by the absurd chain “{title}”.",
   "absurd.hint": "Part of a chain of facts: {fact}",
   "absurd.defaultKind": "leads to",
+  "task.mathlib": "Finding “{name}” in Mathlib…",
+  "formal.title": "Lean / Mathlib",
+  "formal.run": "Find in Mathlib",
+  "formal.again": "Search again",
+  "formal.running": "Checking…",
+  "formal.empty": "Find the declarations in Lean's Mathlib that formalise this concept. The AI suggests names and each is checked against Mathlib, so only real ones are listed.",
+  "formal.none": "No Mathlib declaration found for “{name}”.",
+  "formal.unverified": "Not in Mathlib (dropped): {names}.",
+  "formal.searchYourself": "Search Loogle yourself",
+  "repair.droppedFormal": "dropped Mathlib results that weren't valid",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

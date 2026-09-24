@@ -251,6 +251,14 @@ These are plain `fetch` calls to public APIs, not an AI task. They work the same
   - `test-setup.ts` makes those hosts fail in vitest.
   - The e2e routes abort them, except the "Definitions from encyclopedias" section, which serves fixtures.
 
+### Lean / Mathlib (`shared/src/lookup/loogle.ts`, `findInMathlib` in `actions.ts`)
+
+- **Suggest:** the `mathlib` AI task suggests up to 6 fully qualified Lean 4 names. The task filters them with `isLeanName` and removes duplicates.
+- **Verify:** `loogleDeclaration(name)` asks `loogle.lean-lang.org/json?q=<name>`, which has open CORS. An exact name comes back as the first hit; an unknown one is an error, which gives `null`.
+- **Store:** verified declarations (name, type, module, doc, why) and the dropped names go into `node.formal`. It is a background mutation, like an explanation. It is kept in JSON exports and validated by import repair, but left out of share links. The Markdown export lists the names.
+- **Show:** the inspector's "Lean / Mathlib" section links each declaration to `mathlib4_docs/<module path>.html#<name>` (`mathlibDocUrl`).
+- **Tests:** Loogle is blocked in tests like the encyclopedias; the e2e serves fixtures.
+
 ### Browser mode vs server mode
 
 ```mermaid

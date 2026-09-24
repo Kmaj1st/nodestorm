@@ -3,6 +3,7 @@ import {
   GraphExport,
   Mastery,
   SourceRef,
+  NodeFormal,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -156,6 +157,11 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   if (typeof n.notes === "string") {
     if (n.notes) node.notes = n.notes;
   } else if (n.notes !== undefined) fixes.add(t("repair.droppedNotes"));
+  if (n.formal !== undefined) {
+    const f = NodeFormal.safeParse(n.formal);
+    if (f.success) node.formal = f.data;
+    else fixes.add(t("repair.droppedFormal"));
+  }
   if (n.source !== undefined) {
     const src = SourceRef.safeParse(n.source);
     if (src.success) node.source = src.data;

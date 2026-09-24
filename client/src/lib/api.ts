@@ -23,6 +23,7 @@ import {
   type SplitProblemsRequest,
   type TutorHintRequest,
   type CheckStepRequest,
+  type MathlibRequest,
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
@@ -128,6 +129,7 @@ export const api = {
   readPage: (req: ReadPageRequest, signal?: AbortSignal) => run("readPage", req, signal),
   splitProblems: (req: SplitProblemsRequest, signal?: AbortSignal) => run("splitProblems", req, signal),
   tutorHint: (req: Partial<TutorHintRequest> & Pick<TutorHintRequest, "problem">, signal?: AbortSignal) => run("tutorHint", req, signal),
+  mathlib: (req: Partial<MathlibRequest> & Pick<MathlibRequest, "node">, signal?: AbortSignal) => run("mathlib", req, signal),
   checkStep: (req: Partial<CheckStepRequest> & Pick<CheckStepRequest, "problem" | "step">, signal?: AbortSignal) =>
     run("checkStep", req, signal),
   absurdChain: (req: Partial<AbsurdChainRequest> & Pick<AbsurdChainRequest, "from" | "to">, signal?: AbortSignal) =>

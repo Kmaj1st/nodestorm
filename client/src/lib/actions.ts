@@ -10,7 +10,9 @@ import {
   type Graph,
   type NameCandidate,
   type QuizStyle,
+  type FormalDecl,
   type Sense,
+  loogleDeclaration,
 } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
@@ -300,6 +302,34 @@ export async function relookup(nodeId: string, graphId = store().activeId) {
   }
   const [s] = found;
   store().mutate((g) => ops.updateNode(g, nodeId, { definition: s.definition, source: s.source }), graphId);
+}
+
+export const mathlibKey = (graphId: string, nodeId: string) => `mathlib:${graphId}:${nodeId}`;
+
+/**
+ * "Find in Mathlib": the AI names Lean 4 declarations that may formalise the concept, and each is checked against
+ * Mathlib with Loogle; only the ones that exist are kept (with their type, module and docstring). Stored on the
+ * node like an explanation: not an undo step.
+ */
+export async function findInMathlib(nodeId: string, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const res = await withBusy(mathlibKey(graphId, nodeId), t("task.mathlib", { name: node.name }), async (signal) => {
+    const { candidates } = await api.mathlib({ node: toBrief(node), context: g.nodes.filter((n) => n.id !== nodeId).slice(0, 80).map(toBrief) }, signal);
+    const decls: FormalDecl[] = [];
+    const unverified: string[] = [];
+    for (const c of candidates) {
+      const d = await loogleDeclaration(c.name, { signal });
+      if (d) decls.push({ ...d, ...(c.why ? { why: c.why } : {}) });
+      else unverified.push(c.name);
+    }
+    return { decls, unverified, checkedAt: Date.now() };
+  });
+  if (!res) return;
+  store().mutate((g) => (g.nodes.some((n) => n.id === nodeId) ? ops.updateNode(g, nodeId, { formal: res }) : g), graphId, { history: "background" });
+  if (!res.decls.length) store().setToast(t("formal.none", { name: node.name }), "info");
 }
 
 export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "source">) {

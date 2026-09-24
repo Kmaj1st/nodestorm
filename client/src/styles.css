@@ -936,3 +936,14 @@ kbd {
 .source-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin-top: calc(-1 * var(--space-2)); }
 .source-line a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
 .check.indent { padding-left: var(--space-5); min-height: 28px; }
+
+/* Lean / Mathlib declarations in the inspector. */
+.formal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.formal-decl { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); background: var(--surface); }
+.formal-decl__name { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 500; }
+.formal-decl__name code { font-family: var(--font-mono); font-size: var(--text-sm); }
+.formal-decl__type {
+  margin: var(--space-1) 0 0; font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; overflow-wrap: anywhere;
+  color: var(--text); max-height: 7.5em; overflow: auto;
+}
+.formal-decl__doc { margin: var(--space-1) 0 0; color: var(--muted); }

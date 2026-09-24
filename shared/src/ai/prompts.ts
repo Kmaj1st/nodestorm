@@ -18,11 +18,12 @@ import type {
   SplitProblemsRequest,
   TutorHintRequest,
   CheckStepRequest,
+  MathlibRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "absurdChain";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -378,5 +379,21 @@ Chain rules: the first hop's "from" is exactly "${req.from.name}"; the last hop'
 Schema: {"title":string,"chain":[{"from":string,"to":string,"kind":string,"fact":string,"quip":string}],"moral":string,"plausibility":string}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nFrom:\n${brief(req.from)}\n\nTo:\n${brief(req.to)}\n\nStyle: ${req.style}`),
+  ];
+}
+
+export function mathlibPrompt(req: MathlibRequest): ChatMessage[] {
+  return [
+    sys(
+      "mathlib",
+      `Name the declarations in Lean 4's Mathlib that formalise this concept: its main definition (a structure, class,
+def or predicate) or, for a theorem, the theorem itself, plus at most a few key lemmas about it. Give fully qualified
+Lean 4 names exactly as they are in current Mathlib (e.g. "MonoidHom.ker", "Subgroup.Normal",
+"QuotientGroup.quotientKerEquivRange"), never Lean 3 names. Every name is checked against Mathlib and names that don't
+exist are thrown away, so do not guess: when unsure, give fewer names or none. At most 6, most important first.
+"why": a few words on what the declaration is (e.g. "the kernel as a subgroup").
+Schema: {"candidates":[{"name":string,"why":string}]}`,
+    ),
+    input(req, `Concept:\n${brief(req.node)}\n\n${contextBlock(req.context)}`),
   ];
 }

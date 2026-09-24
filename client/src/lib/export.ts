@@ -75,6 +75,7 @@ export function toMarkdown(g: Graph): string {
       lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
     if (n.source) lines.push(`*Source:* ${mdEscape(sourceLabel(n.source))}`, "");
+    if (n.formal?.decls.length) lines.push(`*In Lean's Mathlib:* ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
     if (n.explanation) lines.push(...explanationMd(n.explanation));
     if (n.notes?.trim()) {
       // The user's notes are Markdown-ish already: keep them as written, quoted so their headings stay inside.
