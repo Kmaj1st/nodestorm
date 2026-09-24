@@ -1012,3 +1012,4 @@ kbd {
   color: var(--text); max-height: 7.5em; overflow: auto;
 }
 .formal-decl__doc { margin: var(--space-1) 0 0; color: var(--muted); }
+.formal-decl__try { display: inline-flex; align-items: center; gap: 3px; margin-top: var(--space-1); color: var(--accent); min-height: 24px; }

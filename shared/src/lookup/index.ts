@@ -50,4 +50,4 @@ export async function lookupConcept(req: LookupRequest, opts: LookupOptions = {}
   }
   return { senses: [], blocked };
 }
-export { isLeanName, loogleDeclaration, loogleSearchUrl, mathlibDocUrl, type LeanDecl } from "./loogle";
+export { isLeanName, leanEditorUrl, loogleDeclaration, loogleSearchUrl, mathlibDocUrl, type LeanDecl } from "./loogle";

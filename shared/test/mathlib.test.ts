@@ -2,7 +2,7 @@ import { describe, expect, it } from "vitest";
 import { MockProvider } from "../src/ai/mock";
 import type { Provider } from "../src/ai/provider";
 import { tasks } from "../src/ai/tasks";
-import { isLeanName, loogleDeclaration, mathlibDocUrl } from "../src/lookup/loogle";
+import { isLeanName, leanEditorUrl, loogleDeclaration, mathlibDocUrl } from "../src/lookup/loogle";
 
 const json = (body: unknown) => new Response(JSON.stringify(body), { status: 200, headers: { "content-type": "application/json" } });
 
@@ -29,6 +29,10 @@ describe("Mathlib names", () => {
   it("the offline demo knows its concepts", async () => {
     const r = await tasks.mathlib(new MockProvider(), { node: { name: "First Isomorphism Theorem" } });
     expect(r.candidates).toEqual([{ name: "QuotientGroup.quotientKerEquivRange", why: "G / ker φ ≃ range φ" }]);
+  });
+
+  it("opens the Lean web editor on the declaration", () => {
+    expect(decodeURIComponent(leanEditorUrl("MonoidHom.ker").split("#code=")[1])).toBe("import Mathlib\n\n#check MonoidHom.ker\n");
   });
 
   it("recognises Lean names", () => {

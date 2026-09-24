@@ -1819,6 +1819,8 @@ try {
         "https://leanprover-community.github.io/mathlib4_docs/Mathlib/Algebra/Group/Subgroup/Ker.html#MonoidHom.ker",
       "each links to the Mathlib documentation",
     );
+    const tryIt = await formal.getByRole("link", { name: "Try it in the Lean editor" }).first().getAttribute("href");
+    assert(decodeURIComponent(tryIt).endsWith("#code=import Mathlib\n\n#check MonoidHom.ker\n"), "…and opens it in the Lean web editor with Mathlib imported");
     await audit("inspector with Mathlib declarations");
     await context.unrouteAll();
     await blockLookups(context);

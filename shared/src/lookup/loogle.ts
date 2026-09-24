@@ -15,6 +15,13 @@ const LOOGLE = "https://loogle.lean-lang.org/json";
 export const mathlibDocUrl = (d: Pick<LeanDecl, "name" | "module">) =>
   `https://leanprover-community.github.io/mathlib4_docs/${d.module.split(".").join("/")}.html#${encodeURIComponent(d.name)}`;
 
+/**
+ * The Lean 4 web editor (live.lean-lang.org, whose default project has Mathlib) opened on `import Mathlib` and
+ * `#check <name>`, to try the declaration out.
+ */
+export const leanEditorUrl = (name: string) =>
+  `https://live.lean-lang.org/#code=${encodeURIComponent(`import Mathlib\n\n#check ${name}\n`)}`;
+
 /** Loogle's search page for a query (for "search yourself" links). */
 export const loogleSearchUrl = (q: string) => `https://loogle.lean-lang.org/?q=${encodeURIComponent(q)}`;
 

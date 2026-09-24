@@ -930,6 +930,7 @@ export const zh: Record<MessageKey, string> = {
   "formal.running": "正在核对…",
   "formal.empty": "查找 Lean 的 Mathlib 中形式化此概念的声明。AI 给出候选名称，每个都会在 Mathlib 中核对，只列出真实存在的。",
   "formal.unreachable": "无法连接 Loogle（Mathlib 搜索）。请稍后再试。",
+  "formal.tryInLean": "在 Lean 编辑器中试试",
   "formal.none": "没有找到“{name}”对应的 Mathlib 声明。",
   "formal.unverified": "Mathlib 中不存在（已丢弃）：{names}。",
   "formal.searchYourself": "自己在 Loogle 中搜索",

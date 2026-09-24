@@ -1,4 +1,4 @@
-import { isTheoremLike, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
+import { isTheoremLike, leanEditorUrl, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -793,6 +793,10 @@ function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
                   {d.why && <span className="muted small"> {d.why}</span>}
                   <pre className="formal-decl__type">{d.name} :{d.type.startsWith(" ") ? "" : " "}{d.type}</pre>
                   {d.doc && <p className="small formal-decl__doc">{d.doc}</p>}
+                  <a className="small formal-decl__try" href={leanEditorUrl(d.name)} target="_blank" rel="noopener noreferrer">
+                    {t("formal.tryInLean")}
+                    <Icon icon={ExternalLink} size={12} />
+                  </a>
                 </li>
               ))}
             </ul>
