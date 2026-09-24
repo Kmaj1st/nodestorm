@@ -751,6 +751,9 @@ try {
   const deleteReachesApp = await page.evaluate(() => document.activeElement === document.body);
   await page.keyboard.press("Delete");
   // Finding a concept the to-do view hides turns that view off instead of selecting something invisible.
+  // The pointer rests where the results appear: a row that shows up under a still pointer must not take over
+  // the keyboard's choice (it used to, now and then, when the browser sent it a hover).
+  await page.mouse.move(700, 210);
   await page.keyboard.press("Control+k");
   await page.getByRole("dialog", { name: "Find concept" }).getByRole("combobox").fill("Group");
   await page.keyboard.press("Enter");

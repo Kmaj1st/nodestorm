@@ -1,5 +1,5 @@
 import { Search } from "lucide-react";
-import { useMemo, useState, type KeyboardEvent } from "react";
+import { useMemo, useRef, useState, type KeyboardEvent } from "react";
 import { useT } from "../i18n";
 import { noteMatch, searchNodes } from "../lib/fuzzy";
 import { activeGraph, useGraphStore } from "../store/graphStore";
@@ -21,6 +21,16 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const hits = useMemo(() => searchNodes(graph.nodes, query), [graph.nodes, query]);
+
+  // Only a pointer that really moves picks a row. The browser also sends pointer events when the list appears or
+  // changes under a pointer that is standing still, which would otherwise take over the keyboard's choice.
+  const pointer = useRef<{ x: number; y: number } | null>(null);
+  const hover = (e: React.MouseEvent, i: number) => {
+    const at = { x: e.clientX, y: e.clientY };
+    const moved = pointer.current && (pointer.current.x !== at.x || pointer.current.y !== at.y);
+    pointer.current = at;
+    if (moved) setActive(i);
+  };
 
   const pick = (id: string) => {
     onClose();
@@ -69,7 +79,7 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
                 role="option"
                 aria-selected={i === active}
                 className={`palette__item${i === active ? " palette__item--on" : ""}`}
-                onMouseEnter={() => setActive(i)}
+                onMouseMove={(e) => hover(e, i)}
                 onClick={() => pick(n.id)}
               >
                 <span>{n.name}</span>
