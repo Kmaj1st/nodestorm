@@ -1,4 +1,5 @@
 import type { ConceptNode, Graph, NodeExplanation, SourceRef } from "@nodestorm/shared";
+import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
 
 /** Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. */
@@ -64,6 +65,7 @@ export function toMarkdown(g: Graph): string {
 
   for (const n of ordered) {
     lines.push(`### ${mdEscape(n.name)}`, "");
+    if (n.kind) lines.push(`*Kind:* ${KIND_NAME[n.kind]}`, "");
     if (n.aliases.length) lines.push(`*Also:* ${n.aliases.map(mdEscape).join(", ")}`, "");
     lines.push(n.definition.trim() ? mdEscape(n.definition) : "_No definition yet._", "");
     const prereqs = n.dependsOn

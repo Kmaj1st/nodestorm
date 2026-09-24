@@ -49,6 +49,10 @@ const inputs: Partial<Record<TaskName, unknown>> = {
     ],
   },
   tutorHint: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], references: [notes], context: [hom], nth: 1 },
+  anatomy: {
+    node: { name: "Lagrange's theorem", definition: "For a finite group $G$ and a subgroup $H$, $|H|$ divides $|G|$.", aliases: [], kind: "theorem" },
+    prerequisites: [{ name: "Subgroup", definition: "A subset of a group that is a group under the same operation.", aliases: [] }],
+  },
   checkStep: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], step: "Then $gkg^{-1} \\in \\ker\\varphi$.", references: [notes], context: [hom] },
 };
 // readPage needs a page image and a vision model: check it by importing a scanned PDF in the app.

@@ -251,7 +251,11 @@ export function applyGraphPlan(
   const chosen = plan.items.filter((it) => it.include && it.name.trim());
   const problem = chosen.find((it) => it.kind === "problem");
   const review: ExtractReview = {
-    items: chosen.map((it) => ({ source: it.key, name: it.name.trim(), definition: it.definition, aliases: [], include: true })),
+    // A solved problem is a proved result: a proposition.
+    items: chosen.map((it) => ({
+      source: it.key, name: it.name.trim(), definition: it.definition, aliases: [], include: true,
+      kind: it.kind === "problem" && isSolved(d) ? ("proposition" as const) : null,
+    })),
     links: problem
       ? chosen
           .filter((it) => it.kind === "concept")

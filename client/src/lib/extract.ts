@@ -1,4 +1,4 @@
-import { findByName, normalizeName, type ConceptNode, type DepRole, type DirRel, type ExtractResponse, type Graph } from "@nodestorm/shared";
+import { findByName, normalizeName, type ConceptKind, type ConceptNode, type DepRole, type DirRel, type ExtractResponse, type Graph } from "@nodestorm/shared";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 
@@ -15,6 +15,8 @@ export interface ExtractItem {
   definition: string;
   aliases: string[];
   quote?: string;
+  /** What the AI says it is (definition, theorem…); carried onto the new concept. */
+  kind?: ConceptKind | null;
   /** Add it to the graph. A candidate that duplicates an existing concept is never added: it links to that one. */
   include: boolean;
 }
@@ -48,7 +50,7 @@ export function buildReview(g: Graph, res: ExtractResponse): ExtractReview {
   for (const c of res.concepts) {
     const name = c.name.trim();
     if (!name || findByName(items, name)) continue;
-    const item = { source: name, name, definition: c.definition.trim(), aliases: c.aliases, quote: c.quote ?? undefined };
+    const item = { source: name, name, definition: c.definition.trim(), aliases: c.aliases, quote: c.quote ?? undefined, kind: c.kind ?? null };
     items.push({ ...item, include: !duplicateOf(g, item) });
   }
   const links: ExtractLink[] = [
@@ -151,7 +153,7 @@ export function applyExtraction(
   const added: string[] = [];
   let out = g;
   for (const { it, index } of newItems(g, items)) {
-    const r = ops.addNode(out, { name: it.name, definition: it.definition, aliases: it.aliases, position: positions.get(index) });
+    const r = ops.addNode(out, { name: it.name, definition: it.definition, aliases: it.aliases, kind: it.kind, position: positions.get(index) });
     ids.set(index, r.id);
     if (!r.existed) added.push(r.id);
     out = r.graph;

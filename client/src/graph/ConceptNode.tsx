@@ -7,6 +7,7 @@ import { analyzeNode } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
 import { Icon } from "../ui/Icon";
+import { KindTag } from "./KindTag";
 import { MasteryDot } from "./MasteryDot";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
@@ -42,6 +43,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       {/* Edges are drawn node-to-node ("floating"); handles only exist because React Flow requires them. */}
       <Handle type="target" position={Position.Top} className="concept__handle" isConnectable={false} />
       <Handle type="source" position={Position.Bottom} className="concept__handle" isConnectable={false} />
+      {c.kind && <div className="concept__kind"><KindTag kind={c.kind} /></div>}
       <div className="concept__head">
         <span className="concept__name">{c.name}{c.mastery && <MasteryDot mastery={c.mastery} name={c.name} />}</span>
         {action ? (

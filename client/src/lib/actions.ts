@@ -160,6 +160,8 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       return; // continues in chooseSense once the user picks a meaning
     }
     if (res.senses[0]?.definition) set({ definition: res.senses[0].definition });
+    const kind = res.senses[0]?.kind;
+    if (kind) bg((g) => ops.suggestKind(g, nodeId, kind));
   }
 
   const current = find();
@@ -173,7 +175,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     handlers,
   );
   if (!res) return;
-  bg((g) => ops.applyDeps(g, nodeId, res.prerequisites));
+  bg((g) => ops.suggestKind(ops.applyDeps(g, nodeId, res.prerequisites), nodeId, res.kind));
   // A prerequisite that (transitively) needs this node back is almost always a wrong AI answer.
   const cycle = find() ? paths.cycleThrough(graph(graphId), nodeId) : null;
   if (cycle && !opts.quiet) {
@@ -233,7 +235,7 @@ export async function resolveCycle(
 }
 
 /** The user picked (or wrote) a meaning for an ambiguous node. */
-export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition">) {
+export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "kind">) {
   let id = nodeId;
   let merged = false;
   store().mutate((g) => {
@@ -286,7 +288,7 @@ export function suggestNames(description: string) {
 }
 
 export function addCandidate(c: NameCandidate) {
-  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases });
+  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind });
 }
 
 /**
@@ -586,7 +588,10 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const cx = anchors.reduce((s, n) => s + n.position.x, 0) / Math.max(anchors.length, 1);
   const cy = Math.max(...anchors.map((n) => n.position.y), 0);
   // Preferred spot: below the anchors; addNode shifts it to the nearest free place.
-  const id = addConcept({ name: p.name, definition: p.definition, aliases: p.aliases, position: { x: cx, y: cy + 200 } }, graphId);
+  const id = addConcept(
+    { name: p.name, definition: p.definition, aliases: p.aliases, kind: p.kind, position: { x: cx, y: cy + 200 } },
+    graphId,
+  );
   store().mutate((g) => {
     let out = g;
     for (const l of p.links) {

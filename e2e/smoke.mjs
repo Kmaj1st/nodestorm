@@ -1611,6 +1611,48 @@ try {
     await panel.waitFor({ state: "detached" });
   }
 
+  console.log("Concept kinds");
+  {
+    // Still the offline demo in browser mode; a fresh project.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Lagrange's theorem");
+    await waitBadge("Lagrange's theorem", "blocked"); // needs Subgroup
+    const tag = (name) => node(name).locator(".kind-tag");
+    await tag("Lagrange's theorem").waitFor();
+    assert((await tag("Lagrange's theorem").textContent()) === "Theorem", "the check classifies a theorem, and its card says so");
+    await page.getByTestId("install-Subgroup").click();
+    await tag("Subgroup").waitFor();
+    assert((await tag("Subgroup").textContent()) === "Definition", "an installed prerequisite gets its kind too");
+    await node("Lagrange's theorem").click();
+    const select = page.getByTestId("kind-select");
+    assert((await select.inputValue()) === "theorem", "the inspector shows the kind");
+    await select.selectOption("lemma");
+    await tag("Lagrange's theorem").filter({ hasText: "Lemma" }).waitFor({ timeout: 5000 });
+    assert(true, "changing the kind in the inspector updates the card");
+    await select.selectOption("");
+    await tag("Lagrange's theorem").waitFor({ state: "detached", timeout: 5000 });
+    assert(true, "…and “Not set” removes the tag");
+    await select.selectOption("theorem");
+    await audit("kind tags on cards and the kind select");
+    await setTheme("dark");
+    await audit("kind tags on cards and the kind select, dark theme");
+    await setTheme("light");
+
+    // The View menu filters by kind.
+    await page.getByRole("button", { name: /^View/ }).click();
+    const view = page.getByRole("dialog", { name: "View" });
+    await view.getByRole("checkbox", { name: "Theorem", exact: true }).uncheck();
+    await node("Lagrange's theorem").waitFor({ state: "detached" });
+    assert(await node("Subgroup").isVisible(), "unticking Theorem in View hides the theorems, and only them");
+    assert((await page.getByRole("button", { name: "View (filters on)" }).count()) === 1, "…and the View button says a filter is on");
+    await audit("View menu with kind filters");
+    await view.getByRole("checkbox", { name: "Theorem", exact: true }).check();
+    await node("Lagrange's theorem").waitFor();
+    await page.keyboard.press("Escape");
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

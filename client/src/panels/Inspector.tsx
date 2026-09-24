@@ -1,4 +1,4 @@
-import type { ConceptNode, ExplainLevel, Graph, RelationOrigin } from "@nodestorm/shared";
+import { isTheoremLike, type ConceptKind, type ConceptNode, type ExplainLevel, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -26,7 +26,8 @@ import {
   mix,
   resolveCycle,
 } from "../lib/actions";
-import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
+import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
@@ -142,6 +143,20 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       </div>
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
       </header>
+
+      <label className="field field--inline">
+        {t("kind.label")}
+        <select
+          value={node.kind ?? ""}
+          disabled={viewing}
+          data-testid="kind-select"
+          // A hand-picked kind is a user edit: an undo step. The AI never overrides it (graphOps.suggestKind).
+          onChange={(e) => mutate((g) => setKind(g, node.id, (e.target.value || null) as ConceptKind | null), graphId)}
+        >
+          <option value="">{t("kind.none")}</option>
+          {KINDS.map((k) => <option key={k} value={k}>{t(KIND_LABEL[k])}</option>)}
+        </select>
+      </label>
 
       <label className="field">
         {t("node.definition")}

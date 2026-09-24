@@ -55,14 +55,15 @@ export function GraphCanvas() {
   // View filters and focus mode hide concepts and relations; the learning-path highlight only dims them.
   const origins = useView((v) => v.origins);
   const todoOnly = useView((v) => v.todoOnly);
+  const kinds = useView((v) => v.kinds);
   const hops = useView((v) => v.hops);
   const focusState = useView((v) => v.focus);
   const setFocus = useView((v) => v.setFocus);
   const focus = useMemo(() => activeFocus({ focus: focusState, hops }, graph), [focusState, hops, graph]);
   const visible = useMemo(() => {
-    const prefs = { origins, todoOnly, hops, edgeLabels: true };
+    const prefs = { origins, todoOnly, hops, kinds, edgeLabels: true };
     return showsEverything(prefs, focus) ? null : visibleParts(graph, prefs, focus);
-  }, [graph, origins, todoOnly, hops, focus]);
+  }, [graph, origins, todoOnly, hops, kinds, focus]);
 
   const [nodes, setNodes] = useState<ConceptFlowNode[]>([]);
   useEffect(() => {

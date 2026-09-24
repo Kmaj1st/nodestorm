@@ -37,7 +37,7 @@ export interface CodecOptions {
  */
 export function packGraph(g: Graph, name: string): unknown {
   const ids = new Map(g.nodes.map((n, i) => [n.id, i.toString(36)]));
-  // Quiz mastery, notes and explanations are deliberately left out: they are the sender's own study progress and
+  // Quiz mastery, notes, explanations and theorem anatomies are deliberately left out: they are the sender's own study progress and
   // notebook rather than part of the graph, and whoever saves a copy starts their own quiz from scratch.
   const nodes = g.nodes.map((n) => {
     // A check that's running or failed here can't be resumed by the viewer: show what's known.
@@ -55,6 +55,7 @@ export function packGraph(g: Graph, name: string): unknown {
     if (n.missingDeps.length) out.missingDeps = n.missingDeps.map((d) => ({ name: d.name, reason: d.reason, role: d.role }));
     if (status === "unclear" && n.senses?.length) out.senses = n.senses;
     if (n.source) out.source = n.source;
+    if (n.kind) out.kind = n.kind;
     return out;
   });
   const dir = (d: { kind: string; explanation: string }) => (d.explanation ? { kind: d.kind, explanation: d.explanation } : { kind: d.kind });

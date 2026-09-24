@@ -35,8 +35,8 @@ export const useView = create<ViewState>()((set, get) => ({
   ...load(),
   focus: null,
   setPrefs(patch) {
-    const { origins, edgeLabels, todoOnly, hops } = { ...get(), ...patch };
-    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops });
+    const { origins, edgeLabels, todoOnly, hops, kinds } = { ...get(), ...patch };
+    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds });
     try {
       localStorage.setItem(KEY, JSON.stringify(prefs));
     } catch {

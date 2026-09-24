@@ -3,6 +3,7 @@ import { useMemo, useState, type KeyboardEvent } from "react";
 import { useT } from "../i18n";
 import { noteMatch, searchNodes } from "../lib/fuzzy";
 import { viewport } from "../lib/viewport";
+import { kindFilterOf } from "../lib/view";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { useView, visibleNow } from "../store/viewStore";
 import { Modal } from "./Modal";
@@ -28,8 +29,11 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
     // A concept the to-do view hides would be selected but invisible: show everything again first.
     // (In focus mode that's not needed — selecting moves the focus to it.)
     const view = useView.getState();
-    if (!visibleNow().nodes.has(id) && view.todoOnly && !view.focus) {
-      view.setPrefs({ todoOnly: false });
+    const node = graph.nodes.find((n) => n.id === id);
+    const kindHidden = node && !view.kinds[kindFilterOf(node)];
+    if (!visibleNow().nodes.has(id) && (view.todoOnly || kindHidden) && !view.focus) {
+      // Show everything again (the to-do view, and the hidden concept's kind).
+      view.setPrefs({ todoOnly: false, ...(node && kindHidden ? { kinds: { ...view.kinds, [kindFilterOf(node)]: true } } : {}) });
       useGraphStore.getState().setToast(t("find.revealed"), "info");
     }
     // Let the canvas render the newly visible node before centring on it.

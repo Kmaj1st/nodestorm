@@ -1,4 +1,6 @@
 import {
+  AnatomyRequest,
+  AnatomyResponse,
   ClarifyRequest,
   ClarifyResponse,
   DepsRequest,
@@ -33,6 +35,7 @@ import {
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
 import {
+  anatomyPrompt,
   clarifyPrompt,
   depsPrompt,
   derivePrompt,
@@ -276,6 +279,10 @@ export const tasks = {
     const res = await runStructured(p, tutorHintPrompt(req), TutorHintResponse, o);
     return { ...res, cites: validCites(res.cites, req.references), concepts: cleanConcepts(res.concepts) };
   },
+  anatomy: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const res = await runStructured(p, anatomyPrompt(AnatomyRequest.parse(body)), AnatomyResponse, o);
+    return cleanAnatomy(res);
+  },
   checkStep: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = CheckStepRequest.parse(body);
     const res = await runStructured(p, checkStepPrompt(req), CheckStepResponse, o);
@@ -306,6 +313,21 @@ function cleanConcepts(cs: TutorConcept[]): TutorConcept[] {
     if (normalizeName(c.name) && !findByName(out, c.name)) out.push({ name: c.name.trim(), definition: c.definition.trim() });
   }
   return out;
+}
+
+/** Trim a theorem anatomy: at most 8 hypotheses and 3 (non-)examples, no empty entries. */
+export function cleanAnatomy(res: AnatomyResponse): AnatomyResponse {
+  const list = (xs: string[]) => [...new Set(xs.map((x) => x.trim()).filter(Boolean))].slice(0, 3);
+  return {
+    hypotheses: res.hypotheses
+      .map((h) => ({ text: h.text.trim(), whyNeeded: h.whyNeeded.trim(), counterexampleIfDropped: h.counterexampleIfDropped.trim() }))
+      .filter((h) => h.text)
+      .slice(0, 8),
+    conclusion: res.conclusion.trim(),
+    proofIdea: res.proofIdea.trim(),
+    examples: list(res.examples),
+    nonExamples: list(res.nonExamples),
+  };
 }
 
 /** Drop empty and repeated statements; a page that isn't one of the sheet's pages is forgotten. */

@@ -1,6 +1,7 @@
 import {
   findByName,
   normalizeName,
+  type ConceptKind,
   type ConceptNode,
   type DepRole,
   type DirRel,
@@ -25,6 +26,7 @@ export interface NewNodeInput {
   definition?: string;
   aliases?: string[];
   position?: { x: number; y: number };
+  kind?: ConceptKind | null;
 }
 
 const forward: Record<DepRole, string> = {
@@ -130,6 +132,7 @@ export function addNode(g: Graph, input: NewNodeInput): { graph: Graph; id: stri
     dependsOn: [],
     missingDeps: [],
   };
+  if (input.kind) node.kind = input.kind;
   const graph = satisfyMissing({ ...g, nodes: [...g.nodes, node] }, node.id);
   return { graph, id: node.id, existed: false };
 }
@@ -205,6 +208,28 @@ export function updateNode(g: Graph, nodeId: string, patch: Partial<ConceptNode>
   return { ...g, nodes: g.nodes.map((n) => (n.id === nodeId ? { ...n, ...patch } : n)) };
 }
 
+/**
+ * Give a node the kind the AI found, unless it already has one: the AI fills a gap, it never overrides a kind the
+ * user (or an earlier answer) chose. A null/undefined kind is a no-op.
+ */
+export function suggestKind(g: Graph, nodeId: string, kind: ConceptKind | null | undefined): Graph {
+  const node = g.nodes.find((n) => n.id === nodeId);
+  if (!kind || !node || node.kind) return g;
+  return updateNode(g, nodeId, { kind });
+}
+
+/** Set or clear (null) a node's kind by hand. */
+export function setKind(g: Graph, nodeId: string, kind: ConceptKind | null): Graph {
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      if (n.id !== nodeId) return n;
+      const { kind: _old, ...rest } = n;
+      return kind ? { ...rest, kind } : rest;
+    }),
+  };
+}
+
 export function removeNode(g: Graph, nodeId: string): Graph {
   return {
     ...g,
@@ -269,7 +294,7 @@ export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
 export function applySense(
   g: Graph,
   nodeId: string,
-  sense: { name: string; definition: string },
+  sense: { name: string; definition: string; kind?: ConceptKind | null },
 ): { graph: Graph; id: string; merged: boolean } {
   const node = g.nodes.find((n) => n.id === nodeId);
   if (!node) return { graph: g, id: nodeId, merged: false };
@@ -286,7 +311,9 @@ export function applySense(
     status: "checking",
     error: undefined,
   });
-  return { graph: satisfyMissing(out, nodeId), id: nodeId, merged: false };
+  // The chosen meaning's kind replaces one from the old meaning (a picked sense is a user decision).
+  const typed = sense.kind ? setKind(out, nodeId, sense.kind) : out;
+  return { graph: satisfyMissing(typed, nodeId), id: nodeId, merged: false };
 }
 
 /** Position for an installed dependency: above the dependent, spread by index. */

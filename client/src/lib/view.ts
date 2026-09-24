@@ -1,4 +1,4 @@
-import { RelationOrigin, type Graph, type Relation } from "@nodestorm/shared";
+import { ConceptKind, RelationOrigin, type ConceptNode, type Graph, type Relation } from "@nodestorm/shared";
 
 /**
  * What part of a graph the canvas shows: view filters (edge kinds, "to-do" concepts) and focus mode
@@ -17,13 +17,22 @@ export interface ViewPrefs {
   todoOnly: boolean;
   /** Focus mode radius (1…MAX_HOPS). */
   hops: number;
+  /** Which concepts are drawn, by `ConceptNode.kind` ("none" for concepts without one). */
+  kinds: Record<KindFilter, boolean>;
 }
+
+/** A kind filter: one per concept kind, plus "none" for concepts whose kind isn't set. */
+export type KindFilter = ConceptKind | "none";
+export const KIND_FILTERS: readonly KindFilter[] = [...ConceptKind.options, "none"];
+
+export const kindFilterOf = (n: Pick<ConceptNode, "kind">): KindFilter => n.kind ?? "none";
 
 export const DEFAULT_VIEW: ViewPrefs = {
   origins: { dependency: true, mix: true, derive: true, extract: true },
   edgeLabels: true,
   todoOnly: false,
   hops: 1,
+  kinds: Object.fromEntries(KIND_FILTERS.map((k) => [k, true])) as ViewPrefs["kinds"],
 };
 
 /** Accept whatever was stored (older, newer or hand-edited) and fall back to defaults field by field. */
@@ -35,11 +44,14 @@ export function sanitizeView(raw: unknown): ViewPrefs {
     RelationOrigin.options.map((k) => [k, bool(o[k], DEFAULT_VIEW.origins[k])]),
   ) as ViewPrefs["origins"];
   const hops = typeof v.hops === "number" && Number.isFinite(v.hops) ? Math.min(MAX_HOPS, Math.max(1, Math.round(v.hops))) : 1;
-  return { origins, edgeLabels: bool(v.edgeLabels, true), todoOnly: bool(v.todoOnly, false), hops };
+  const k = v.kinds && typeof v.kinds === "object" ? (v.kinds as Record<string, unknown>) : {};
+  const kinds = Object.fromEntries(KIND_FILTERS.map((x) => [x, bool(k[x], true)])) as ViewPrefs["kinds"];
+  return { origins, edgeLabels: bool(v.edgeLabels, true), todoOnly: bool(v.todoOnly, false), hops, kinds };
 }
 
 /** True when some filter hides part of the graph (focus mode aside). */
-export const isFiltered = (p: ViewPrefs) => p.todoOnly || RelationOrigin.options.some((k) => !p.origins[k]);
+export const isFiltered = (p: ViewPrefs) =>
+  p.todoOnly || RelationOrigin.options.some((k) => !p.origins[k]) || KIND_FILTERS.some((k) => !p.kinds[k]);
 
 /** Concepts within `hops` relation steps of `root` (including `root`), following the given relations. */
 export function neighbourhood(relations: Pick<Relation, "a" | "b">[], root: string, hops: number): Set<string> {
@@ -78,7 +90,8 @@ export interface Visible {
 /**
  * The concepts and relations the canvas shows. Hidden relation kinds are also left out of the focus
  * neighbourhood (what you see is what is connected). The to-do filter applies after focus, so a ready
- * concept can't hide its neighbours; the focused concept itself always stays visible.
+ * concept can't hide its neighbours; the focused concept itself always stays visible. The kind filter works like
+ * the to-do filter.
  * A relation is visible when its kind is shown and both of its ends are.
  */
 export function visibleParts(g: Graph, prefs: ViewPrefs, focus?: { nodeId: string; hops: number } | null): Visible {
@@ -89,6 +102,7 @@ export function visibleParts(g: Graph, prefs: ViewPrefs, focus?: { nodeId: strin
   for (const n of g.nodes) {
     if (near && !near.has(n.id)) continue;
     if (prefs.todoOnly && n.status === "ok" && n.id !== root) continue;
+    if (!prefs.kinds[kindFilterOf(n)] && n.id !== root) continue;
     nodes.add(n.id);
   }
   const relations = new Set(shownKinds.filter((r) => nodes.has(r.a) && nodes.has(r.b)).map((r) => r.id));
