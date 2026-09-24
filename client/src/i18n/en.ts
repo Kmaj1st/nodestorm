@@ -200,6 +200,7 @@ export const en = {
   "node.relations": "Relations",
   "node.notes": "My notes",
   "node.notesPlaceholder": "Your own notes: questions, examples, where you read about it…",
+  "math.preview": "Formatted",
   "node.recheck": "Re-check dependencies",
   "node.renameEmpty": "The name can't be empty.",
   "node.renameDuplicate": "“{name}” is already in the graph.",

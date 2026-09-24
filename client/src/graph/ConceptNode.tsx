@@ -4,6 +4,7 @@ import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
+import { MathText } from "../panels/MathText";
 import { MasteryDot } from "./MasteryDot";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
@@ -57,7 +58,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
           <span className={`concept__badge concept__badge--${c.status}`}>{t(badge[c.status])}</span>
         )}
       </div>
-      {c.definition && <div className="concept__def">{c.definition}</div>}
+      {c.definition && <div className="concept__def"><MathText text={c.definition} inline /></div>}
       {c.missingDeps.length > 0 && (
         <div className="concept__missing">
           {t("badge.missing", { names: c.missingDeps.map((d) => d.name).join(", ") })}

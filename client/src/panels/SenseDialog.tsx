@@ -5,6 +5,7 @@ import { analyzeNode, chooseSense } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
+import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 
 const OTHER = "__other__";
@@ -66,7 +67,7 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
               <span className="sense__head">
                 <b>{s.name}</b> <span className="role">{s.domain}</span>
               </span>
-              <span className="muted small">{s.definition}</span>
+              <span className="muted small"><MathText text={s.definition} /></span>
             </span>
           </label>
         ))}

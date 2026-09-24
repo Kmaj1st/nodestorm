@@ -20,20 +20,20 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
     deps: [{ name: "Group", role: "uses", reason: "A subgroup is a subset of a group closed under its operation." }],
   },
   "normal subgroup": {
-    definition: "A subgroup N of G with gNg⁻¹ = N for every g in G.",
+    definition: "A subgroup $N$ of $G$ with $gNg^{-1} = N$ for every $g \\in G$.",
     aliases: [],
     deps: [{ name: "Subgroup", role: "uses", reason: "A normal subgroup is a subgroup invariant under conjugation." }],
   },
   "quotient group": {
-    definition: "The group G/N of cosets of a normal subgroup N, with (aN)(bN) = abN.",
+    definition: "The group $G/N$ of cosets of a normal subgroup $N$, with $(aN)(bN) = abN$.",
     aliases: ["factor group"],
     deps: [
-      { name: "Group", role: "uses", reason: "G/N is built from a group G." },
-      { name: "Normal subgroup", role: "uses", reason: "Cosets only multiply consistently when N is normal." },
+      { name: "Group", role: "uses", reason: "$G/N$ is built from a group $G$." },
+      { name: "Normal subgroup", role: "uses", reason: "Cosets only multiply consistently when $N$ is normal." },
     ],
   },
   homomorphism: {
-    definition: "A map between algebraic structures that preserves the operations, e.g. φ(ab) = φ(a)φ(b) for groups.",
+    definition: "A map between algebraic structures that preserves the operations, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for groups.",
     aliases: ["group homomorphism"],
     deps: [],
   },
@@ -43,16 +43,16 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
     deps: [{ name: "Homomorphism", role: "uses", reason: "An isomorphism is defined as a bijective homomorphism." }],
   },
   kernel: {
-    definition: "The set of elements a homomorphism sends to the identity.",
+    definition: "The set $\\ker\\varphi$ of elements a homomorphism $\\varphi$ sends to the identity.",
     aliases: ["ker"],
     deps: [{ name: "Homomorphism", role: "uses", reason: "The kernel is defined for a homomorphism." }],
   },
   "first isomorphism theorem": {
-    definition: "For a homomorphism φ: G → H, G / ker φ is isomorphic to im φ.",
+    definition: "For a homomorphism $\\varphi: G \\to H$, $G / \\ker\\varphi$ is isomorphic to $\\operatorname{im}\\varphi$.",
     aliases: ["fundamental homomorphism theorem"],
     deps: [
-      { name: "Homomorphism", role: "uses", reason: "The theorem starts from a homomorphism φ: G → H." },
-      { name: "Isomorphism", role: "derives", reason: "Its conclusion is an isomorphism G/ker φ ≅ im φ." },
+      { name: "Homomorphism", role: "uses", reason: "The theorem starts from a homomorphism $\\varphi: G \\to H$." },
+      { name: "Isomorphism", role: "derives", reason: "Its conclusion is an isomorphism $G/\\ker\\varphi \\cong \\operatorname{im}\\varphi$." },
     ],
   },
 };
@@ -60,9 +60,9 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
 /** Names with several meanings, for exercising the "what do you mean?" flow offline. */
 const AMBIGUOUS: Record<string, { name: string; domain: string; definition: string }[]> = {
   expectation: [
-    { name: "Expectation (probability)", domain: "probability theory", definition: "The expected value E[X] of a random variable: its probability-weighted average." },
+    { name: "Expectation (probability)", domain: "probability theory", definition: "The expected value $E[X]$ of a random variable: its probability-weighted average." },
     { name: "Expectation (psychology)", domain: "psychology", definition: "A belief about what will happen in the future, which shapes perception and behaviour." },
-    { name: "Expectation value (quantum mechanics)", domain: "physics", definition: "The average outcome ⟨A⟩ of measuring an observable A on a quantum state." },
+    { name: "Expectation value (quantum mechanics)", domain: "physics", definition: "The average outcome $\\langle A \\rangle$ of measuring an observable $A$ on a quantum state." },
     { name: "Expectation (economics)", domain: "economics", definition: "Agents' forecasts of future economic variables, as in rational expectations." },
     { name: "Expectation (sociology)", domain: "sociology", definition: "A social norm about how a person in a given role ought to behave." },
   ],
@@ -73,25 +73,25 @@ const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples
   homomorphism: {
     intuition: "a homomorphism translates one structure into another without breaking its arithmetic: combine then map, or map then combine — same result.",
     keyPoints: [
-      "φ(ab) = φ(a)φ(b) for all a, b.",
+      "$\\varphi(ab) = \\varphi(a)\\varphi(b)$ for all $a, b$.",
       "It sends the identity to the identity and inverses to inverses.",
       "Its kernel is a normal subgroup and its image is a subgroup.",
     ],
     examples: [
-      { title: "Exponential map", body: "x ↦ eˣ from (ℝ, +) to (ℝ₊, ×): e^(x+y) = eˣ·eʸ." },
-      { title: "Reduction mod n", body: "ℤ → ℤ/nℤ sends each integer to its remainder class; sums map to sums." },
-      { title: "Non-example", body: "x ↦ x + 1 on (ℤ, +) does not send 0 to 0, so it is not a homomorphism." },
+      { title: "Exponential map", body: "$x \\mapsto e^x$ from $(\\mathbb{R}, +)$ to $(\\mathbb{R}_{>0}, \\times)$: $e^{x+y} = e^x e^y$." },
+      { title: "Reduction mod n", body: "$\\mathbb{Z} \\to \\mathbb{Z}/n\\mathbb{Z}$ sends each integer to its remainder class; sums map to sums." },
+      { title: "Non-example", body: "$x \\mapsto x + 1$ on $(\\mathbb{Z}, +)$ does not send $0$ to $0$, so it is not a homomorphism." },
     ],
     pitfalls: [
       "A homomorphism need not be injective or surjective — that is what isomorphisms add.",
-      "Check the operations of both structures: (ℝ, +) → (ℝ, ×) is a different setting from (ℝ, +) → (ℝ, +).",
+      "Check the operations of both structures: $(\\mathbb{R}, +) \\to (\\mathbb{R}, \\times)$ is a different setting from $(\\mathbb{R}, +) \\to (\\mathbb{R}, +)$.",
     ],
   },
   isomorphism: {
     intuition: "isomorphic structures are the same structure with the elements renamed.",
     keyPoints: ["An isomorphism is a bijective homomorphism.", "Its inverse is automatically a homomorphism.", "Isomorphic groups share every group-theoretic property."],
-    examples: [{ title: "Logarithm", body: "log: (ℝ₊, ×) → (ℝ, +) is an isomorphism, inverse to exp." }],
-    pitfalls: ["Having the same number of elements does not make two groups isomorphic (ℤ/4ℤ vs ℤ/2ℤ × ℤ/2ℤ)."],
+    examples: [{ title: "Logarithm", body: "$\\log: (\\mathbb{R}_{>0}, \\times) \\to (\\mathbb{R}, +)$ is an isomorphism, inverse to $\\exp$." }],
+    pitfalls: ["Having the same number of elements does not make two groups isomorphic ($\\mathbb{Z}/4\\mathbb{Z}$ vs $\\mathbb{Z}/2\\mathbb{Z} \\times \\mathbb{Z}/2\\mathbb{Z}$)."],
   },
 };
 

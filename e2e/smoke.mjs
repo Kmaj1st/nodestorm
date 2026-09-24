@@ -594,10 +594,12 @@ try {
   await nodePanel.locator(".explain summary").click();
   await page.screenshot({ path: `${shots}10-explain.png` });
   const definition = nodePanel.getByTestId("definition");
-  // The offline summary is the KB definition the node already has, so change that first.
+  // The offline summary is the KB definition the node already has, so change that first. (Compared as source text:
+  // the summary on screen has its formula typeset.)
+  const summarySource = await definition.inputValue();
   await definition.fill("A structure-preserving map.");
   await nodePanel.getByTestId("use-summary").click();
-  assert((await definition.inputValue()) === summaryText, "'Use summary as definition' copies the summary");
+  assert((await definition.inputValue()) === summarySource, "'Use summary as definition' copies the summary");
   assert(await nodePanel.getByTestId("use-summary").isDisabled(), "…and is disabled once they match");
 
   const notes = nodePanel.getByTestId("notes");
@@ -605,7 +607,7 @@ try {
   assert((await notes.inputValue()) === "Compare with zebra stripes", "a note can be typed");
   await page.getByRole("button", { name: "Undo", exact: true }).click();
   assert((await notes.inputValue()) === "", "one undo removes the whole typed note");
-  assert((await definition.inputValue()) === summaryText, "…and leaves the earlier definition change alone");
+  assert((await definition.inputValue()) === summarySource, "…and leaves the earlier definition change alone");
   await page.getByRole("button", { name: "Redo", exact: true }).click();
   assert((await notes.inputValue()) === "Compare with zebra stripes", "redo brings the note back");
 
@@ -1281,6 +1283,50 @@ try {
     await page.waitForTimeout(200);
     assert((await page.locator(".react-flow__node").count()) === count, "Delete/Backspace do nothing behind an open dialog");
     await shortcuts.getByRole("button", { name: "Close" }).click();
+  }
+
+  console.log("Math");
+  {
+    // Still the offline demo in browser mode; its Kernel definition is "The set $\ker\varphi$ of elements …".
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await addByName("Kernel");
+    const card = node("Kernel");
+    await card.locator(".concept__def .katex").first().waitFor();
+    const tex = await card.locator(".katex annotation").allTextContents();
+    assert(tex.includes("\\ker\\varphi"), `the card typesets $\\ker\\varphi$ with KaTeX (${tex.join(", ")})`);
+    assert(!(await card.locator(".concept__def").innerText()).includes("$"), "…and shows no dollar delimiters");
+    await card.click();
+    const definition = page.getByTestId("definition");
+    const source = await definition.inputValue();
+    assert(source.includes("$\\ker\\varphi$"), "the inspector edits the LaTeX source");
+    const preview = page.getByTestId("definition-preview");
+    await preview.locator(".katex").first().waitFor();
+    assert(await preview.isVisible(), "…and shows the typeset definition under the field");
+    await definition.fill("Costs \\$5, or $10 with $a^2$ and $x");
+    await page.waitForTimeout(100);
+    assert((await preview.locator(".katex").count()) === 1, "an escaped \\$, prices and an unclosed $ stay text; only $a^2$ is a formula");
+    assert((await preview.innerText()).includes("Costs $5, or $10 with"), "…and \\$ shows as a dollar");
+    await definition.fill("Broken: $\\frac{1}{$ here");
+    await preview.getByText("$\\frac{1}{$").waitFor();
+    assert(!(await preview.locator(".katex").count()), "a formula KaTeX can't parse is shown as its source");
+    await definition.fill("Plain text again");
+    assert(!(await preview.count()), "text without a formula has no preview");
+    await definition.fill(source);
+    await card.locator(".katex").first().waitFor();
+
+    await setTheme("dark");
+    await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+    const [mathColor, textColor] = await card.locator(".concept__def").evaluate((el) => [
+      getComputedStyle(el.querySelector(".katex")).color,
+      getComputedStyle(el).color,
+    ]);
+    const light = mathColor.match(/\d+/g).slice(0, 3).reduce((a, b) => a + Number(b), 0) > 3 * 128;
+    assert(mathColor === textColor && light, `formulas take the (light) text colour in dark mode (${mathColor})`);
+    await page.screenshot({ path: `${shots}math-dark.png` });
+    await audit("math on a card and in the inspector (dark)");
+    await setTheme("light");
+    await audit("math on a card and in the inspector (light)");
   }
 
   console.log("\nE2E passed");

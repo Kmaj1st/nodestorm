@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
+import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 
 export function AddNodeDialog({ onClose }: { onClose: () => void }) {
@@ -92,7 +93,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                   <div>
                     <strong>{c.name}</strong>
                     {c.aliases.length > 0 && <span className="muted"> · {c.aliases.join(", ")}</span>}
-                    <div className="muted small">{c.definition}</div>
+                    <div className="muted small"><MathText text={c.definition} /></div>
                   </div>
                   <button type="button" onClick={() => { addCandidate(c); onClose(); }}>{t("add.use")}</button>
                 </li>

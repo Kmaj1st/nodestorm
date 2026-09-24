@@ -15,9 +15,10 @@ import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz";
 
-const BASE = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
+export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
-Reply with a single JSON object only — no prose, no markdown fences.`;
+Reply with a single JSON object only — no prose, no markdown fences.
+Mathematical notation: in definitions, explanations, relations, examples and quiz text, write symbols and formulas as LaTeX between single dollar signs, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ or $G / \\ker\\varphi \\cong \\operatorname{im}\\varphi$; use $$…$$ only for a formula on a line of its own. Plain words stay plain text, concept names never contain $, and money is written without $ (e.g. "5 USD"). In the JSON every backslash must be escaped: write "$\\\\ker\\\\varphi$", not "$\\ker\\varphi$".`;
 
 function brief(n: NodeBrief) {
   const aka = n.aliases?.length ? ` (aka ${n.aliases.join(", ")})` : "";
@@ -31,7 +32,7 @@ function contextBlock(nodes: NodeBrief[]) {
 
 /** The marker line lets the mock provider (and logs) identify the task. */
 function sys(kind: TaskKind, instructions: string): ChatMessage {
-  return { role: "system", content: `${BASE}\n[task:${kind}]\n\n${instructions}` };
+  return { role: "system", content: `${BASE_PROMPT}\n[task:${kind}]\n\n${instructions}` };
 }
 
 function input(payload: unknown, text: string): ChatMessage {

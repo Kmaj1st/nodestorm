@@ -4,6 +4,7 @@ import { t as tr, useT, type MessageKey } from "../i18n";
 import { cancelTask, extractFromText, insertExtraction } from "../lib/actions";
 import { buildReview, duplicateOf, linkUsable, newItems, type ExtractItem, type ExtractReview } from "../lib/extract";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 
 const ROLE: Record<string, MessageKey> = { uses: "extract.roleUses", derives: "extract.roleDerives", assumes: "extract.roleAssumes" };
@@ -132,8 +133,8 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
                       aria-label={t("extract.rename", { name: it.source })}
                     />
                     {dup && <div className="extract__dup small">{t("extract.duplicate", { name: dup.name })}</div>}
-                    {it.definition && <div className="muted small">{it.definition}</div>}
-                    {it.quote && <blockquote className="extract__quote small">“{it.quote}”</blockquote>}
+                    {it.definition && <div className="muted small"><MathText text={it.definition} /></div>}
+                    {it.quote && <blockquote className="extract__quote small">“<MathText text={it.quote} />”</blockquote>}
                   </div>
                 </li>
               );

@@ -80,6 +80,8 @@ try {
   const assets = readdirSync(`${dist}assets`).filter((f) => !f.endsWith(".map"));
   const missing = assets.filter((f) => !sw.cached.includes(`${base}assets/${f}`));
   assert(assets.length > 3 && !missing.length, `every chunk of the build is precached, lazy ones included (${assets.length} files)${missing.length ? `; missing: ${missing}` : ""}`);
+  const fonts = assets.filter((f) => f.startsWith("KaTeX_"));
+  assert(fonts.length > 10 && fonts.every((f) => f.endsWith(".woff2")), `KaTeX's fonts are in the build as woff2 only (${fonts.length} files)`);
 
   console.log("Offline");
   stopServer();
@@ -98,6 +100,18 @@ try {
   await page.getByRole("dialog", { name: "Keyboard shortcuts" }).waitFor({ timeout: 10000 });
   await page.keyboard.press("Escape");
   assert(true, "lazily loaded dialogs (Settings, Keyboard shortcuts) open offline");
+  // KaTeX (script, CSS and fonts) is only loaded once a formula is on screen: that must work offline too.
+  await addButton.click();
+  await page.getByLabel("Concept name").fill("Kernel");
+  await page.getByRole("dialog").getByRole("textbox", { name: /^Definition/ }).fill("The set $\\ker\\varphi$.");
+  await page.getByRole("button", { name: "Add", exact: true }).click();
+  await page.getByTestId("node-Kernel").locator(".katex").waitFor({ timeout: 10000 });
+  await page.waitForFunction(
+    () => [...document.fonts].some((f) => f.family.replace(/"/g, "") === "KaTeX_Main" && f.status === "loaded"),
+    null,
+    { timeout: 10000 },
+  );
+  assert(true, "a formula is typeset offline, with KaTeX's fonts from the cache");
   const second = await context.newPage();
   await second.goto(`${base}?from=home-screen`);
   await second.getByRole("button", { name: "+ Add concept" }).waitFor({ timeout: 10000 });

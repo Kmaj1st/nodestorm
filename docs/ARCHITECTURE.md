@@ -419,6 +419,17 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `<html data-theme>` from the preference or `prefers-color-scheme`, and React Flow gets `colorMode`. Feature CSS lives
   next to its component (`client/src/graph/mastery.css`, `client/src/panels/quiz.css`,
   `client/src/panels/versions.css`, `client/src/panels/onboarding.css`).
+- **Math** (LaTeX via KaTeX): `client/src/lib/math.ts` is the pure delimiter parser (`splitMath`: `$…$`, `$$…$$`,
+  `\(…\)`, `\[…\]`, `\$` escapes, a Pandoc-style currency rule; unbalanced delimiters stay text).
+  `client/src/panels/MathText.tsx` renders a string with its formulas typeset; text without a formula never loads
+  KaTeX. `client/src/lib/katexRender.ts` is the lazily imported chunk (KaTeX + its CSS; `trust: false`, errors fall
+  back to the source, results cached), and `katexWoff2Only` in `client/vite.config.ts` drops KaTeX's woff/ttf fonts
+  so only the 19 woff2 files are built and precached. The inspector keeps definitions and relation explanations as
+  plain textareas and shows a *Formatted* preview under them when they contain math. Use `<MathText text=… />` for any
+  new place that shows definitions or AI prose (`inline` in tight spots such as cards). The AI is told about `$…$` in
+  `BASE_PROMPT` (`shared/src/ai/prompts.ts`), and `repairTexEscapes` (`shared/src/ai/tasks.ts`) doubles LaTeX
+  backslashes a model forgot to escape in its JSON (`\varphi` would fail to parse, `\frac` would become a form feed).
+  Markdown export keeps formulas as written (`mdEscape` escapes only the text around them).
 - **PWA** (`client/pwa/`): `client/pwa/plugin.ts` is a build-only Vite plugin that writes `client/pwa/sw.js` into
   `dist/` with the precache list (every built file) and a content-hash version. The worker serves only same-origin
   build files (navigations get the cached `index.html`), never `/api/*` or provider calls, and doesn't
@@ -439,12 +450,12 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   sandbox, server mode, persistence, export, undo & editing, layout, ambiguous names, failures, dependency tools,
   theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
-  中文), quiz, versions. The run is **pinned to English** (an init script sets `nodestorm-ui-language`) because the
+  中文), quiz, versions, math (KaTeX on a card and in the inspector, both themes). The run is **pinned to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
 - **PWA e2e** (`npm run e2e:pwa` → build + `e2e/pwa.mjs`): serves `client/dist` with `vite preview` (port
-  `E2E_WEB_PORT`, default 4273), checks the manifest and service worker, offline start, a failed chunk load and the
-  update notice.
+  `E2E_WEB_PORT`, default 4273), checks the manifest and service worker, offline start, typesetting a formula offline
+  (KaTeX chunk and fonts from the cache), a failed chunk load and the update notice.
 - **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph; `PERF_PROFILE=1` prints hot functions.
 - **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
   once against a real provider using `server/.env`, validates against the same schemas, prints timings.
@@ -541,4 +552,8 @@ and server-binding items are real problems worth fixing.
 - **Periodic snapshots** only cover the current project, and any graph change (even a late AI result for another
   project's graph) marks the current project as changed (`startAutoSnapshots`).
 - **IndexedDB unavailable** (some private windows): Versions is disabled with a notice; everything else works.
+- **Math is display-only.** Formulas are typeset where text is shown, not while typing in a field (the inspector
+  previews under it). Relation labels on the canvas, tooltips, concept names and the Mermaid export stay plain text
+  (the PNG export captures the cards as they are on screen).
+  The currency rule guesses: "$5 for $x$" works, but "$5 and 10$" is a formula.
 - **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).

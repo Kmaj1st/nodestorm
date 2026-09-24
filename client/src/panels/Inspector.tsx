@@ -3,10 +3,12 @@ import { useEffect, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
+import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
+import { MathText } from "./MathText";
 
 /**
  * A text field edited locally and saved on blur or Enter (Shift+Enter for a newline when multiline);
@@ -117,6 +119,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             mutate((g) => updateNode(g, node.id, { definition: e.target.value }), graphId, { key: `def:${node.id}` })}
         />
       </label>
+      <MathPreview text={node.definition} testId="definition-preview" />
 
       {node.status === "error" && (
         <div className="error-box">
@@ -147,7 +150,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             <li key={d.name} className="deps__missing">
               <div>
                 <strong>{d.name}</strong> <span className="role">{d.role}</span>
-                <div className="muted small">{d.reason}</div>
+                <div className="muted small"><MathText text={d.reason} /></div>
               </div>
               <button className="primary" onClick={() => installDep(node.id, d.name)} data-testid={`install-${d.name}`}>
                 {t("common.install")}
@@ -278,26 +281,28 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
             {t("explain.heading", { level: levelLabel(ex.level) })}{" "}
             <span className="muted small">· {new Date(ex.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
           </summary>
-          <p className="explain__summary" data-testid="explanation-summary">{ex.summary}</p>
-          {ex.intuition && <p className="small">{ex.intuition}</p>}
+          <p className="explain__summary" data-testid="explanation-summary"><MathText text={ex.summary} /></p>
+          {ex.intuition && <p className="small"><MathText text={ex.intuition} /></p>}
           {ex.keyPoints.length > 0 && (
             <>
               <h5>{t("explain.keyPoints")}</h5>
-              <ul className="explain__list">{ex.keyPoints.map((k, i) => <li key={i}>{k}</li>)}</ul>
+              <ul className="explain__list">{ex.keyPoints.map((k, i) => <li key={i}><MathText text={k} /></li>)}</ul>
             </>
           )}
           {ex.examples.length > 0 && (
             <>
               <h5>{t("explain.examples")}</h5>
               <ul className="explain__list">
-                {ex.examples.map((x, i) => <li key={i}><b>{x.title}</b>{x.body && <> — {x.body}</>}</li>)}
+                {ex.examples.map((x, i) => (
+                  <li key={i}><b><MathText text={x.title} inline /></b>{x.body && <> — <MathText text={x.body} /></>}</li>
+                ))}
               </ul>
             </>
           )}
           {ex.pitfalls.length > 0 && (
             <>
               <h5>{t("explain.pitfalls")}</h5>
-              <ul className="explain__list">{ex.pitfalls.map((p, i) => <li key={i}>{p}</li>)}</ul>
+              <ul className="explain__list">{ex.pitfalls.map((p, i) => <li key={i}><MathText text={p} /></li>)}</ul>
             </>
           )}
           {ex.furtherReading.length > 0 && (
@@ -324,6 +329,21 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
         </details>
       )}
     </section>
+  );
+}
+
+/**
+ * The typeset version of a text field that contains LaTeX, shown under the field (which stays plain text, so editing
+ * is an ordinary textarea). Nothing at all for text without a formula.
+ */
+function MathPreview({ text, testId }: { text: string; testId: string }) {
+  const t = useT();
+  if (!hasMath(text)) return null;
+  return (
+    <div className="math-preview" data-testid={testId}>
+      <span className="math-preview__label">{t("math.preview")}</span>
+      <MathText text={text} />
+    </div>
   );
 }
 
@@ -482,6 +502,7 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
         testId="relation-explanation"
         save={(v) => { mutate((g) => updateRelation(g, relationId, dir, { explanation: v.trim() })); return undefined; }}
       />
+      <MathPreview text={d.explanation} testId="relation-preview" />
       <div className="dir-switch">
         <button onClick={() => setInspect({ kind: "edge", relationId, dir: other })}>
           {t("rel.switch", { to: to?.name ?? "?", from: from?.name ?? "?" })}

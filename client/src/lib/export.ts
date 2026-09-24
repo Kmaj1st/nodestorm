@@ -1,4 +1,5 @@
 import type { ConceptNode, Graph, NodeExplanation } from "@nodestorm/shared";
+import { splitMath } from "./math";
 
 /** Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. */
 
@@ -29,13 +30,20 @@ export function studyOrder(g: Graph): ConceptNode[] {
 /** Collapse newlines/runs of whitespace so a value stays on one line. */
 const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
 
-/** Escape text for inline Markdown so names like "a*b" or "[x]" render literally. */
+/**
+ * Escape text for inline Markdown so names like "a*b" or "[x]" render literally. LaTeX formulas (lib/math.ts) are
+ * kept as written, `$…$` and all, which GitHub and most Markdown editors typeset; other dollars are escaped.
+ */
 export function mdEscape(s: string): string {
-  return oneLine(s)
-    .replace(/[\\`*_[\]<>|~]/g, "\\$&")
-    // Would otherwise start a heading/list/rule when the text begins a line.
-    .replace(/^[#+=-]/, "\\$&")
-    .replace(/^(\d+)([.)])/, "$1\\$2");
+  return splitMath(oneLine(s))
+    .map((seg, i) => (seg.kind === "math" ? seg.raw : mdEscapeText(seg.text, i === 0)))
+    .join("");
+}
+
+function mdEscapeText(s: string, atStart: boolean): string {
+  const out = s.replace(/[\\`*_[\]<>|~$]/g, "\\$&");
+  // Would otherwise start a heading/list/rule when the text begins a line.
+  return atStart ? out.replace(/^[#+=-]/, "\\$&").replace(/^(\d+)([.)])/, "$1\\$2") : out;
 }
 
 export function toMarkdown(g: Graph): string {

@@ -198,6 +198,7 @@ export const zh: Record<MessageKey, string> = {
   "node.relations": "关系",
   "node.notes": "我的笔记",
   "node.notesPlaceholder": "写下你自己的笔记：疑问、例子、在哪里读到的……",
+  "math.preview": "排版预览",
   "node.recheck": "重新检查前置知识",
   "node.renameEmpty": "名称不能为空。",
   "node.renameDuplicate": "“{name}”已在图谱中。",

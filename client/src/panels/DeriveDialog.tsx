@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { useT } from "../i18n";
 import { acceptProposal, derive } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 
 export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onClose: () => void }) {
@@ -37,7 +38,7 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
           <li key={p.name}>
             <div>
               <strong>{p.name}</strong>
-              <div className="muted small">{p.definition}</div>
+              <div className="muted small"><MathText text={p.definition} /></div>
               {p.links.map((l) => (
                 <div className="small" key={l.to}>→ {l.to}: <em>{l.fromNew.kind}</em></div>
               ))}

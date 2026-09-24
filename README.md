@@ -55,6 +55,12 @@ no key needed) or an empty graph.
 - **Fix anything by hand.** Rename a concept (the old name stays as an alias), edit a relation's text in the inspector,
   **Delete** removes the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or
   Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
+- **Math.** Write formulas as LaTeX: `$\varphi(ab) = \varphi(a)\varphi(b)$` or `\(…\)` inline, `$$G/\ker\varphi \cong
+  \operatorname{im}\varphi$$` or `\[…\]` on a line of their own. They're typeset (with KaTeX) on the cards, in the
+  inspector (a *Formatted* preview under the definition and relation fields, which stay plain text to edit), in
+  explanations, quizzes and the AI's proposals; the AI is asked to write its notation this way too. `\$` is a literal
+  dollar, and prices like "$5 and $10" stay text (a `$` followed by a space can't open a formula, and one after a
+  space or before a digit can't close it). A formula KaTeX can't read is shown as written.
 
 ### Study tools
 
@@ -118,7 +124,8 @@ Projects autosave to your browser's localStorage (data from earlier versions bec
   of rejecting them: it fills in missing fields and drops relations or prerequisite links that point to missing
   concepts, and a notice lists what was fixed.
 - **Markdown notes**: the current graph as study notes, in study order (prerequisites first), with aliases,
-  definitions and prerequisites, and every relation written out in both directions.
+  definitions and prerequisites, and every relation written out in both directions. Formulas are kept as `$…$`,
+  which GitHub and most Markdown editors typeset.
 - **Mermaid diagram**: flowchart text for GitHub, Notion, etc., copied to the clipboard and downloaded.
 - **PNG image**: a picture of the whole current graph.
 - **Share link…** packs the current graph (without its sandboxes) into a link. No account or server is involved: the

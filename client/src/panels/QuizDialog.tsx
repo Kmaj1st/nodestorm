@@ -4,6 +4,7 @@ import { useT, type MessageKey } from "../i18n";
 import { cancelTask, gradeConcept, quizKey, quizQuestion } from "../lib/actions";
 import * as quiz from "../lib/quiz";
 import { useGraphStore } from "../store/graphStore";
+import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 import "./quiz.css";
 
@@ -230,7 +231,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
           )}
           {q && (
             <div ref={questionRef} tabIndex={-1} className="quiz__question" data-testid="quiz-question">
-              {q.question}
+              <MathText text={q.question} />
             </div>
           )}
         </div>
@@ -248,7 +249,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
                   disabled={card.picked !== undefined}
                   onClick={() => setCard({ ...card, picked: i, revealed: true })}
                 >
-                  {c}
+                  <MathText text={c} inline />
                 </button>
               );
             })}
@@ -256,7 +257,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
         )}
         {q && card.hints > 0 && (
           <ol className="quiz__hints" aria-label={t("quiz.hintsLabel")}>
-            {q.hints.slice(0, card.hints).map((h, i) => <li key={i}>{h}</li>)}
+            {q.hints.slice(0, card.hints).map((h, i) => <li key={i}><MathText text={h} /></li>)}
           </ol>
         )}
         {q && !card.revealed && (
@@ -277,7 +278,7 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
               <p className={correct ? "ok" : "error"} role="status">{t(correct ? "quiz.right" : "quiz.wrong")}</p>
             )}
             <div className="quiz__answer" data-testid="quiz-answer">
-              <strong>{t("quiz.answer")}</strong> {q.answer}
+              <strong>{t("quiz.answer")}</strong> <MathText text={q.answer} />
             </div>
             <div className="quiz__grades" role="group" aria-label={t("quiz.gradeLabel")} ref={gradesRef}>
               <span className="small muted" aria-hidden="true">{t("quiz.gradeLabel")}</span>

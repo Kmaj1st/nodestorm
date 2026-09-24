@@ -50,12 +50,53 @@ export function extractJson(text: string): unknown {
       continue;
     }
     try {
-      return JSON.parse(body.slice(start, end + 1));
+      return JSON.parse(repairTexEscapes(body.slice(start, end + 1)));
     } catch (e) {
       lastError = e; // e.g. braces in prose before the real answer
     }
   }
   throw lastError;
+}
+
+// After a JSON escape letter, the rest of a LaTeX command: "\frac" is a form feed + "rac" to JSON.parse. Backspace
+// and form feed never belong in an answer, so \b and \f before a letter are always LaTeX; \n, \t and \r only before
+// the rest of a common command followed by a non-letter ("\neq", "\times", "\rho"), since "\nThe" is a line break.
+const TEX_AFTER_ESCAPE = new RegExp(
+  "^(?:[bf][a-zA-Z]" +
+    "|n(?:eq?|abla|eg|u|ot(?:in)?|mid|leq|geq|subseteq)(?![a-zA-Z])" +
+    "|t(?:imes|heta|au|ext(?:bf|it|rm)?|o|ilde|op|frac|riangle(?:left|right)?(?:eq)?)(?![a-zA-Z])" +
+    "|r(?:ho|ight(?:arrow)?|angle|floor|ceil|times|estriction|m)(?![a-zA-Z]))",
+);
+
+/**
+ * Double the backslashes of LaTeX that a model put into a JSON string unescaped ("$\varphi$" instead of
+ * "$\\varphi$"): invalid escapes like \v or \k would fail JSON.parse, and \frac or \times would silently become
+ * control characters. Valid escapes (\\, \", \n, \uXXXX…) are kept; only the inside of strings is touched.
+ */
+export function repairTexEscapes(json: string): string {
+  if (!json.includes("\\")) return json;
+  let out = "";
+  let inStr = false;
+  for (let i = 0; i < json.length; i++) {
+    const c = json[i];
+    if (!inStr || c !== "\\") {
+      if (c === '"') inStr = !inStr;
+      out += c;
+      continue;
+    }
+    const next = json[i + 1] ?? "";
+    const valid =
+      next === '"' || next === "\\" || next === "/" ||
+      (next === "u" && /^[0-9a-fA-F]{4}/.test(json.slice(i + 2, i + 6))) ||
+      (next !== "" && "bfnrt".includes(next) && !TEX_AFTER_ESCAPE.test(json.slice(i + 1, i + 16)));
+    if (valid) {
+      out += c + next;
+      i++;
+    } else {
+      out += "\\\\"; // a literal backslash; the command's letters follow as ordinary characters
+    }
+  }
+  return out;
 }
 
 /** Index of the "}" closing the "{" at `start`, respecting strings; -1 when it never closes. */
