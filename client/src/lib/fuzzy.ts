@@ -31,12 +31,27 @@ export function fuzzyScore(query: string, text: string): number | null {
   return score - t.length * 0.1;
 }
 
-/** Concepts matching the query by name or alias, best first. */
+/** Where the query occurs in the notes (case-insensitive, as typed; no scattered-letter matching), or -1. */
+export function noteMatch(query: string, notes: string | undefined): number {
+  const q = query.trim().toLowerCase();
+  // Scattered letters would match almost any long text, and one letter says little.
+  if (q.length < 2 || !notes) return -1;
+  return notes.toLowerCase().indexOf(q);
+}
+
+/** Below any name/alias score, so a note only ranks a concept after every name or alias match. */
+const NOTE_SCORE = -1e6;
+
+/** Concepts matching the query by name or alias, best first; then concepts whose notes contain it. */
 export function searchNodes(nodes: ConceptNode[], query: string, limit = 8): ConceptNode[] {
   const scored: { n: ConceptNode; s: number }[] = [];
   for (const n of nodes) {
     const scores = [n.name, ...n.aliases].map((t) => fuzzyScore(query, t)).filter((s): s is number => s !== null);
     if (scores.length) scored.push({ n, s: Math.max(...scores) });
+    else {
+      const at = noteMatch(query, n.notes);
+      if (at >= 0) scored.push({ n, s: NOTE_SCORE - at });
+    }
   }
   return scored.sort((a, b) => b.s - a.s).slice(0, limit).map((x) => x.n);
 }

@@ -109,4 +109,13 @@ describe("searchNodes", () => {
     expect(searchNodes(withAlias.nodes, "null")[0].name).toBe("Kernel");
     expect(searchNodes(g.nodes, "zzz")).toEqual([]);
   });
+
+  it("finds words in notes, ranked below name matches", () => {
+    let n = ops.updateNode(g, byName(g, "Kernel").id, { notes: "Ask the tutor about isotropy groups" });
+    n = ops.updateNode(n, byName(n, "Homomorphism").id, { notes: "Seen in lecture three" });
+    expect(searchNodes(n.nodes, "lecture").map((x) => x.name)).toEqual(["Homomorphism"]);
+    expect(searchNodes(n.nodes, "iso").map((x) => x.name)).toEqual(["Isomorphism", "First Isomorphism Theorem", "Kernel"]);
+    // Notes need the query as typed: scattered letters don't match them.
+    expect(searchNodes(n.nodes, "ltr")).toEqual([]);
+  });
 });

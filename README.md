@@ -11,6 +11,8 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
   - **Dependency cycles** (A needs B needs A) usually mean the AI gave a wrong answer. The affected nodes and edges are flagged, and the inspector offers **Remove this link**.
 - **Sandbox mode.** **Fork sandbox** makes a copy of the current graph. You can derive (**Derive ✦**), mix and install in the copy without touching the original. When you're done, **Merge back** or **Discard**.
 
+- **Explain more.** In the inspector, pick a level (*intuitive*, *rigorous* or *example-driven*) and press **Explain**. The AI writes a summary, the intuition, key points, examples, common pitfalls and further reading (described in words, never links), building on the concept's prerequisites and relations in the graph. The latest explanation is kept on the concept. **Use summary as definition** copies its summary into the definition. Each concept also has a free-text **My notes** field. Both appear in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias matches).
+
 New concepts appear in a free spot near what you're looking at (or near the concept they relate to), and the view pans to them. **Tidy** arranges the graph in layers, with prerequisites above the concepts that depend on them. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, then selects it and centres the view on it.
 
 The theme menu in the toolbar switches between **Auto** (follows your system's light/dark setting), **Light** and **Dark**. Everything works from the keyboard: dialogs trap focus and close with Escape, and Tab reaches each relation arrowhead (Enter opens it). On phones the less-used toolbar buttons fold into a **☰** menu and the inspector becomes a bottom sheet you can collapse.
@@ -81,7 +83,7 @@ The provider code lives in `shared/src/ai/`, so the browser and the server run t
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/{name,relate,deps,derive}, GET /api/providers, GET /api/models
+server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain}, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/graphOps.ts
 e2e/      Playwright smoke test (runs against the mock provider)
 ```

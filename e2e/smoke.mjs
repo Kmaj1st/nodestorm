@@ -489,6 +489,66 @@ try {
   await page.getByRole("button", { name: /^Cancel:/ }).click();
   await waitBadge("Semigroup", "failed – retry", 3000);
 
+  console.log("Explain & notes");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  {
+    const st = await openSettings();
+    // Earlier sections switched to the routed SiliconFlow (which now hangs); use the offline demo here.
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  const findAndOpen = async (query) => {
+    await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("Control+k");
+    await find.getByRole("combobox").fill(query);
+    const first = await find.getByRole("option").first().textContent();
+    await page.keyboard.press("Enter");
+    return first;
+  };
+  await findAndOpen("Homomorphism");
+  const nodePanel = page.getByTestId("node-panel");
+  await nodePanel.getByLabel("Explanation level").selectOption("example-driven");
+  await nodePanel.getByTestId("explain-button").click();
+  const summary = nodePanel.getByTestId("explanation-summary");
+  await summary.waitFor();
+  const summaryText = await summary.textContent();
+  assert(summaryText.includes("preserves the operations"), "Explain more shows a summary for Homomorphism");
+  const explainText = await nodePanel.getByTestId("explain").textContent();
+  assert(
+    explainText.includes("Example-driven explanation") && explainText.includes("Exponential map") && explainText.includes("Pitfalls"),
+    "the explanation shows its level, examples and pitfalls",
+  );
+  assert((await nodePanel.getByTestId("explain-button").textContent()) === "Regenerate", "the button now offers Regenerate");
+  await nodePanel.locator(".explain summary").click();
+  assert(await summary.isHidden(), "the explanation collapses");
+  await nodePanel.locator(".explain summary").click();
+  await page.screenshot({ path: `${shots}10-explain.png` });
+  const definition = nodePanel.getByTestId("definition");
+  // The offline summary is the KB definition the node already has, so change that first.
+  await definition.fill("A structure-preserving map.");
+  await nodePanel.getByTestId("use-summary").click();
+  assert((await definition.inputValue()) === summaryText, "'Use summary as definition' copies the summary");
+  assert(await nodePanel.getByTestId("use-summary").isDisabled(), "…and is disabled once they match");
+
+  const notes = nodePanel.getByTestId("notes");
+  await notes.pressSequentially("Compare with zebra stripes");
+  assert((await notes.inputValue()) === "Compare with zebra stripes", "a note can be typed");
+  await page.getByRole("button", { name: "Undo", exact: true }).click();
+  assert((await notes.inputValue()) === "", "one undo removes the whole typed note");
+  assert((await definition.inputValue()) === summaryText, "…and leaves the earlier definition change alone");
+  await page.getByRole("button", { name: "Redo", exact: true }).click();
+  assert((await notes.inputValue()) === "Compare with zebra stripes", "redo brings the note back");
+
+  await page.reload();
+  await node("Homomorphism").waitFor();
+  const hit = await findAndOpen("zebra");
+  assert(hit.includes("Homomorphism") && hit.includes("note:"), "Ctrl+K finds the concept by a word in its note");
+  assert((await page.getByLabel("Rename concept").inputValue()) === "Homomorphism", "…and opens it");
+  assert(
+    (await summary.textContent()) === summaryText && (await notes.inputValue()) === "Compare with zebra stripes",
+    "explanation and notes survive a reload",
+  );
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

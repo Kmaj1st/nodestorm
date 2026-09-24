@@ -16,6 +16,57 @@ const node = (id: string, extra: Record<string, unknown> = {}) => ({
 const dir = { kind: "k", explanation: "e" };
 const rel = (id: string, a: string, b: string) => ({ id, a, b, aToB: dir, bToA: dir, origin: "mix" });
 
+const explanation = {
+  summary: "S",
+  intuition: "I",
+  keyPoints: ["k"],
+  examples: [{ title: "t", body: "b" }],
+  pitfalls: [],
+  furtherReading: [{ title: "book", hint: "ch. 1" }],
+  level: "intuitive",
+  createdAt: 123,
+};
+
+describe("repairImport: explanations and notes", () => {
+  it("keeps a valid explanation and notes", () => {
+    const doc = {
+      format: "nodestorm/v1",
+      graphs: [{ id: "g", name: "Main", nodes: [node("a", { explanation, notes: "my note" })], relations: [] }],
+    };
+    const out = repairImport(doc);
+    expect(out.fixes).toEqual([]);
+    expect(out.doc).toEqual(doc);
+  });
+
+  it("drops malformed explanations and non-text notes, and reports them", () => {
+    const { doc, fixes } = repairImport({
+      format: "nodestorm/v1",
+      graphs: [
+        {
+          id: "g",
+          name: "Main",
+          nodes: [
+            node("a", { explanation: { ...explanation, level: "poetic" }, notes: 42 }),
+            node("b", { explanation: "just text" }),
+            node("c", { explanation: { ...explanation, summary: "" } }),
+            node("d", { explanation: { summary: "Only a summary", level: "rigorous", createdAt: 1 } }),
+          ],
+          relations: [],
+        },
+      ],
+    });
+    const [a, b, c, d] = doc.graphs[0].nodes;
+    expect(a.explanation).toBeUndefined();
+    expect(a.notes).toBeUndefined();
+    expect(b.explanation).toBeUndefined();
+    expect(c.explanation).toBeUndefined();
+    // Missing lists are filled in rather than dropping the whole explanation.
+    expect(d.explanation).toMatchObject({ summary: "Only a summary", keyPoints: [], furtherReading: [], level: "rigorous" });
+    expect(fixes).toEqual(expect.arrayContaining(["dropped malformed explanations (×3)", "dropped notes that aren't text"]));
+    expect(() => GraphExport.parse(doc)).not.toThrow();
+  });
+});
+
 describe("repairImport", () => {
   it("passes a valid file through untouched", () => {
     const doc = { format: "nodestorm/v1", graphs: [{ id: "g", name: "Main", nodes: [node("a"), node("b")], relations: [rel("r", "a", "b")] }] };
