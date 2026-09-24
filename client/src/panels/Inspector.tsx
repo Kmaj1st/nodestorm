@@ -1,4 +1,4 @@
-import type { ConceptNode, ExplainLevel, Graph } from "@nodestorm/shared";
+import type { ConceptNode, ExplainLevel, Graph, RelationOrigin } from "@nodestorm/shared";
 import { useEffect, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing, installDep, mix } from "../lib/actions";
@@ -433,6 +433,13 @@ function LearningPath({ node, graph }: { node: ConceptNode; graph: Graph }) {
   );
 }
 
+const ORIGIN_LABEL: Record<RelationOrigin, MessageKey> = {
+  dependency: "rel.dependency",
+  mix: "rel.mix",
+  derive: "rel.derive",
+  extract: "rel.extract",
+};
+
 function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: string; dir: "aToB" | "bToA" }) {
   const t = useT();
   const mutate = useGraphStore((s) => s.mutate);
@@ -447,7 +454,7 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
 
   return (
     <aside className="inspector" data-testid="relation-panel">
-      <div className="muted small">{t(rel.origin === "dependency" ? "rel.dependency" : rel.origin === "derive" ? "rel.derive" : "rel.mix")}</div>
+      <div className="muted small">{t(ORIGIN_LABEL[rel.origin])}</div>
       <h3 className="rel-title">
         <span>{from?.name}</span>
         <span className="rel-kind">

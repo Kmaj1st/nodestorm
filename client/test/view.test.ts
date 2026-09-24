@@ -91,7 +91,7 @@ describe("view prefs", () => {
     expect(sanitizeView(null)).toEqual(DEFAULT_VIEW);
     expect(sanitizeView("garbage")).toEqual(DEFAULT_VIEW);
     const v = sanitizeView({ origins: { mix: false, bogus: false }, edgeLabels: "no", todoOnly: true, hops: 9 });
-    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true }, edgeLabels: true, todoOnly: true, hops: 3 });
+    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true, extract: true }, edgeLabels: true, todoOnly: true, hops: 3 });
     expect(sanitizeView({ hops: 0 }).hops).toBe(1);
     expect(sanitizeView({ hops: 2.4 }).hops).toBe(2);
   });

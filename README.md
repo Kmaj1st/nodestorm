@@ -11,13 +11,15 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
   - **Dependency cycles** (A needs B needs A) usually mean the AI gave a wrong answer. The affected nodes and edges are flagged, and the inspector offers **Remove this link**.
 - **Sandbox mode.** **Fork sandbox** (the 🧪+ button next to the graph selector) makes a copy of the current graph. You can derive (**Derive ✦**), mix and install in the copy without touching the original. When you're done, **Merge back** or **Discard** from the sandbox banner.
 
+- **Extract from text.** Brainstorms often start from existing text. **File ▾ → Extract from text…** takes pasted lecture notes, a paragraph from a book or a messy list (or drop / load a `.txt` or `.md` file), up to 12,000 characters, with an optional *focus* hint. The AI lists candidate concepts, each with a definition and a short quote from the text, plus the relations (both directions) and prerequisites the text states. Review them before anything is added. Candidates already in the graph (by name, plural or alias) are unticked and flagged. Their relations link to the existing concept instead of adding a duplicate. You can rename candidates and untick concepts or relations. **Add selected** places the new concepts in layers near the middle of the view, adds the relations (a dotted line; the **View** menu can hide them as *Extracted relations*) and then checks each new concept's prerequisites through the AI queue. The whole insert is one undo step. The offline demo provider recognises its algebra concepts and terms you put in "quotes" or **bold**.
+
 - **Explain more.** In the inspector, pick a level (*intuitive*, *rigorous* or *example-driven*) and press **Explain**. The AI writes a summary, the intuition, key points, examples, common pitfalls and further reading (described in words, never links), building on the concept's prerequisites and relations in the graph. The latest explanation is kept on the concept. **Use summary as definition** copies its summary into the definition. Each concept also has a free-text **My notes** field. Both appear in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias matches).
 
 New concepts appear in a free spot near what you're looking at (or near the concept they relate to), and the view pans to them. **Tidy** (⊞) arranges the graph in layers, with prerequisites above the concepts that depend on them. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, then selects it and centres the view on it.
 
 For bigger graphs:
 - **Focus** (◎, or **F** on the canvas) shows only the selected concept and what is within 1–3 relations of it. Everything else is hidden. Selecting another concept moves the focus to it. **Esc** or the ✕ of the focus control shows the whole graph again.
-- **View** (👁 ▾) hides relation kinds (dependency links, mixed or derived relations) or the relation labels. **To-do only** hides ready concepts, so only blocked, unclear and failed ones are left. These choices are remembered in this browser. Hidden concepts and relations can't be deleted with the Delete key.
+- **View** (👁 ▾) hides relation kinds (dependency links, mixed, derived or extracted relations) or the relation labels. **To-do only** hides ready concepts, so only blocked, unclear and failed ones are left. These choices are remembered in this browser. Hidden concepts and relations can't be deleted with the Delete key.
 - Relation labels are left out when you zoom far out, and with 150 or more concepts only what's on screen is rendered. `node e2e/perf.mjs` times a generated 300-concept, 600-relation graph.
 
 The toolbar keeps to one row from 1200px up; its icon buttons explain themselves in a tooltip. **Settings** (⚙) → *Interface* chooses the theme, **Auto** (follows your system's light/dark setting), **Light** or **Dark**, and the **interface language**: English or 中文 (Simplified Chinese). By default it follows the browser's language. This only changes the app's menus, buttons and messages; the language the AI writes in is the separate **AI answers in** setting (see below). Everything works from the keyboard (press **?** for the list of shortcuts): dialogs trap focus and close with Escape, and Tab reaches each relation arrowhead (Enter opens it). On phones the less-used toolbar buttons fold into a **☰** menu and the inspector becomes a bottom sheet you can collapse.
@@ -100,7 +102,7 @@ The provider code lives in `shared/src/ai/`, so the browser and the server run t
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain}, GET /api/providers, GET /api/models
+server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract}, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/graphOps.ts
 e2e/      Playwright smoke test (runs against the mock provider)
 ```

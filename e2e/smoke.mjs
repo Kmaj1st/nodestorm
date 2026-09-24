@@ -805,8 +805,8 @@ try {
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
-      JSON.stringify(["Import JSON…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
-    "File ▾ holds import, every export format and the share link",
+      JSON.stringify(["Import JSON…", "Extract from text…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
+    "File ▾ holds import, Extract from text, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -841,6 +841,57 @@ try {
   await settingsZh.getByRole("button", { name: "保存", exact: true }).click();
   await page.getByRole("button", { name: "+ Add concept" }).waitFor();
   assert((await page.evaluate(() => document.documentElement.lang)) === "en", "and back to English");
+
+  console.log("Extract from text");
+  {
+    const st = await openSettings();
+    await st.getByText("Directly from this browser").click();
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await projectMenu("New project");
+  await page.getByLabel("Project name").press("Enter");
+  await page.locator(".canvas__empty").waitFor();
+  await addByName("Group");
+  await addByName("Homomorphism");
+  await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 2);
+  await page.getByRole("button", { name: "File ▾" }).click();
+  await page.getByRole("menuitem", { name: "Extract from text…" }).click();
+  const extract = page.getByRole("dialog", { name: "Extract from text" });
+  const extractText = extract.getByLabel("Text", { exact: true });
+  await extractText.fill("x".repeat(12_001));
+  assert(
+    (await extract.getByText(/^Too long/).isVisible()) && (await extract.getByRole("button", { name: "Extract", exact: true }).isDisabled()),
+    "a text over the length cap is refused with a clear message",
+  );
+  await extractText.fill(
+    "A group is a set with an associative operation, an identity and inverses. A homomorphism between groups preserves " +
+      "the operation, and its kernel is the set of elements it sends to the identity. We call such a map a \"Widget morphism\".",
+  );
+  await extract.getByRole("button", { name: "Extract", exact: true }).click();
+  await extract.getByTestId("extract-Kernel").waitFor();
+  const tick = (name) => extract.getByRole("checkbox", { name: `Add ${name}`, exact: true });
+  assert(
+    !(await tick("Group").isChecked()) && (await tick("Group").isDisabled()) && !(await tick("Homomorphism").isChecked()) &&
+      (await extract.getByTestId("extract-Homomorphism").textContent()).includes("Already in the graph as “Homomorphism”"),
+    "concepts already in the graph are flagged as duplicates and link to the existing ones",
+  );
+  assert(
+    (await tick("Kernel").isChecked()) && (await tick("Widget Morphism").isChecked()) &&
+      (await extract.getByTestId("extract-Kernel").textContent()).includes("its kernel is the set of elements"),
+    "new candidates are ticked, with a quote from the text",
+  );
+  assert((await extract.getByText("Kernel needs Homomorphism (uses)").count()) === 1, "the prerequisite the text states is listed");
+  await page.screenshot({ path: `${shots}16-extract.png` });
+  await extract.getByRole("button", { name: /^Add selected/ }).click();
+  await node("Widget Morphism").waitFor();
+  await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 4);
+  assert(await node("Kernel").isVisible(), "Add selected adds the new concepts (and not the duplicates)");
+  await waitBadge("Kernel", "ready");
+  assert((await page.locator(".react-flow__edge").count()) >= 1, "…linked to the existing concept they need");
+  await page.keyboard.press("Control+z");
+  await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 2);
+  assert((await node("Kernel").count()) === 0 && (await node("Widget Morphism").count()) === 0, "one Ctrl+Z removes the whole extraction");
 
   console.log("\nE2E passed");
 } catch (e) {

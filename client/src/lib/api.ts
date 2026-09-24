@@ -8,6 +8,7 @@ import {
   tasks,
   type DepsRequest,
   type DeriveRequest,
+  type ExtractRequest,
   type ExplainRequest,
   type ModelInfo,
   type NameRequest,
@@ -106,6 +107,7 @@ export const api = {
   deps: (req: DepsRequest, signal?: AbortSignal) => run("deps", req, signal),
   derive: (req: DeriveRequest, signal?: AbortSignal) => run("derive", req, signal),
   explain: (req: ExplainRequest, signal?: AbortSignal) => run("explain", req, signal),
+  extract: (req: ExtractRequest, signal?: AbortSignal) => run("extract", req, signal),
 
   /** Providers configured on the local server (server mode only). */
   serverProviders: () => serverFetch<ProvidersResponse>("providers"),

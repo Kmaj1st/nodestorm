@@ -4,13 +4,14 @@ import type {
   DeriveRequest,
   ExplainLevel,
   ExplainRequest,
+  ExtractRequest,
   NameRequest,
   NodeBrief,
   RelateRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract";
 
 const BASE = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -45,7 +46,7 @@ export function languageInstruction(language: string | undefined): string {
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
   return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints) in ${target}.
-Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "to"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
 /** Add the output-language paragraph to the system message of a task prompt. */
@@ -156,5 +157,25 @@ Build on the prerequisites and relations given, and refer to those concepts by t
 Schema: {"summary":string,"intuition":string,"keyPoints":string[],"examples":[{"title":string,"body":string}],"pitfalls":string[],"furtherReading":[{"title":string,"hint":string}]}`,
     ),
     input(req, [`Concept to explain:\n${brief(req.node)}`, prereqs, rels, `Level: ${req.level}`].filter(Boolean).join("\n\n")),
+  ];
+}
+
+export function extractPrompt(req: ExtractRequest): ChatMessage[] {
+  return [
+    sys(
+      "extract",
+      `The user pasted a text (notes, a passage from a book, a list…). Turn it into concept-graph material.
+"concepts": the distinct concepts the text introduces, defines or relies on (at most 30, most central first). Skip vague everyday words.
+For each: "name" = its standard name (singular); "definition" = one or two sentences, from the text where it defines the concept, else the standard one; "aliases" = other names the text uses; "quote" = a short excerpt (at most ~25 words) copied verbatim from the text, in its original language, that supports it.
+If a concept is already in the graph (even under another name), use the graph's exact name for it.
+"relations": relations the text states or clearly implies between two concepts (extracted ones or ones already in the graph), by exact name, separately in each direction: "aToB" = what "from" does to "to", "bToA" = what "to" does to "from"; "kind" is a short verb phrase (2-5 words), "explanation" 1-2 sentences.
+"prerequisites": only where the text says one concept needs another to be stated or understood: "dependent" needs "prerequisite"; role "uses" | "derives" | "assumes"; "reason" is one sentence.
+Schema: {"concepts":[{"name":string,"definition":string,"aliases":string[],"quote":string}],"relations":[{"from":string,"to":string,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}],"prerequisites":[{"dependent":string,"prerequisite":string,"role":"uses"|"derives"|"assumes","reason":string}]}`,
+    ),
+    // The text itself is only in the INPUT payload (the "text" field), so a long paste isn't sent twice.
+    input(
+      req,
+      `${contextBlock(req.existing)}${req.focus ? `\n\nFocus: ${req.focus}` : ""}\n\nExtract from the "text" field of the INPUT below.`,
+    ),
   ];
 }
