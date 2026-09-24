@@ -63,9 +63,16 @@ export function splitMath(text: string): MathSegment[] {
   // text full of unmatched "\(" stays linear instead of rescanning to the end for each opener.
   const unclosed = new Set<string>();
   let i = 0;
+  let backtickClosed = true; // false once a "`" had no partner: later ones won't either
   while (i < text.length) {
     const ch = text[i];
     if (ch === "\\" && text[i + 1] === "$") { buf += "$"; i += 2; continue; }
+    // `code` spans are never math: "`echo $HOME`" keeps its dollar signs.
+    if (ch === "`" && backtickClosed) {
+      const close = text.indexOf("`", i + 1);
+      if (close > 0) { buf += text.slice(i, close + 1); i = close + 1; continue; }
+      backtickClosed = false;
+    }
     const pair = PAIRS.find((p) => text.startsWith(p.open, i));
     if (pair) {
       const end = unclosed.has(pair.close) ? -1 : findClose(text, pair.close, i + pair.open.length);

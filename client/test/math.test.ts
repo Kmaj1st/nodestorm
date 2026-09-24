@@ -102,3 +102,11 @@ describe("performance on unmatched delimiters (final review)", () => {
     expect(segments.map((s) => (s.kind === "text" ? s.text : "")).join("")).toBe(text);
   });
 });
+
+describe("code spans (final review)", () => {
+  it("never reads dollar signs inside backticks as math", () => {
+    expect(hasMath("`echo $HOME` and `$PATH`")).toBe(false);
+    expect(splitMath("run `echo $a$` then $x^2$").filter((s) => s.kind === "math").map((s) => (s as { tex: string }).tex)).toEqual(["x^2"]);
+    expect(hasMath("an unmatched ` then $x$")).toBe(true);
+  });
+});
