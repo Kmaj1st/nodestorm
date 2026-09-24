@@ -35,7 +35,7 @@ export const en = {
   "toolbar.find": "Find concept",
   "toolbar.findTitle": "Find a concept (Ctrl+K)",
   "toolbar.more": "More tools",
-  "toolbar.sandbox": "Graphs and sandboxes",
+  "toolbar.sandbox": "Sandboxes",
   "toolbar.graph": "Graph",
   "toolbar.mainGraph": "Main graph",
   "toolbar.fork": "Fork sandbox",

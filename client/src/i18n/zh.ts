@@ -34,7 +34,7 @@ export const zh: Record<MessageKey, string> = {
   "toolbar.find": "查找概念",
   "toolbar.findTitle": "查找概念（Ctrl+K）",
   "toolbar.more": "更多工具",
-  "toolbar.sandbox": "图谱与沙盒",
+  "toolbar.sandbox": "沙盒",
   "toolbar.graph": "图谱",
   "toolbar.mainGraph": "主图谱",
   "toolbar.fork": "创建沙盒",

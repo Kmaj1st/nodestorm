@@ -37,7 +37,14 @@ try {
   await waitFor(`http://localhost:${WEB_PORT}/`);
   browser = await chromium.launch();
   // A context (not browser.newPage) so the share-link section can open a second page with the same storage.
-  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
+  // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
+  // the end switches the interface language itself, and that choice is kept across its reloads.
+  await context.addInitScript(() => {
+    try {
+      if (!localStorage.getItem("nodestorm-ui-language")) localStorage.setItem("nodestorm-ui-language", "en");
+    } catch {}
+  });
   const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(`http://localhost:${WEB_PORT}/`);
@@ -56,7 +63,7 @@ try {
   };
 
   console.log("AI setup");
-  assert((await page.getByRole("button", { name: "AI settings" }).textContent()).includes("Set up AI"), "toolbar asks to set up AI on first visit");
+  assert((await page.getByRole("button", { name: "Settings", exact: true }).textContent()).includes("Set up AI"), "toolbar asks to set up AI on first visit");
   await page.getByRole("button", { name: "+ Add concept" }).click();
   await page.getByRole("button", { name: "Describe it" }).click();
   await page.getByLabel("Concept description").fill("a map between groups that preserves the operation");
@@ -82,7 +89,7 @@ try {
   await settings.getByRole("button", { name: "Qwen/Qwen3-32B" }).click();
   await page.screenshot({ path: `${shots}0-settings.png` });
   await settings.getByRole("button", { name: "Save", exact: true }).click();
-  assert((await page.getByRole("button", { name: "AI settings" }).textContent()).includes("Qwen3-32B"), "toolbar shows chosen provider and model");
+  assert((await page.getByRole("button", { name: "Settings", exact: true }).textContent()).includes("Qwen3-32B"), "toolbar shows the chosen model");
   const stored = await page.evaluate(() => localStorage.getItem("nodestorm-settings") ?? "");
   assert(!stored.includes("sk-good") && stored.includes("Qwen/Qwen3-32B"), "key not written to localStorage when 'remember' is off");
 
@@ -90,7 +97,7 @@ try {
   await page.getByRole("dialog", { name: "Add concept" }).getByRole("button", { name: "Cancel" }).click();
 
   // Switch to the offline demo provider for the rest of the flow.
-  await page.getByRole("button", { name: "AI settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await settings.getByLabel("Provider", { exact: true }).selectOption("mock");
   await settings.getByRole("button", { name: "Save", exact: true }).click();
 
@@ -163,7 +170,7 @@ try {
   assert((await page.getByTestId("sandbox-banner").count()) === 0, "merged back into main graph, which now has Kernel");
 
   console.log("Server mode");
-  await page.getByRole("button", { name: "AI settings" }).click();
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
   await settings.getByText("Through the local NodeStorm server").click();
   await settings.getByTestId("models-ok").waitFor();
   assert(true, "server mode discovers models through the local server");
@@ -182,7 +189,7 @@ try {
 
   console.log("Export");
   const exportAs = async (label) => {
-    await page.getByRole("button", { name: "Export ▾" }).click();
+    await page.getByRole("button", { name: "File ▾" }).click();
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
     return { name: dl.suggestedFilename(), data: readFileSync(await dl.path()) };
   };
@@ -246,7 +253,7 @@ try {
   await page.screenshot({ path: `${shots}5b-edited.png` });
 
   const openSettings = async () => {
-    await page.getByRole("button", { name: "AI settings" }).click();
+    await page.getByRole("button", { name: "Settings", exact: true }).click();
     return page.getByRole("dialog", { name: "Settings" });
   };
   const badge = (name) => node(name).locator(".concept__badge");
@@ -420,12 +427,22 @@ try {
   const bodyBg = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
   const isDark = (css) => css.match(/\d+/g).slice(0, 3).map(Number).reduce((a, b) => a + b) / 3 < 64;
   assert(!isDark(await bodyBg()), "light theme by default (the browser prefers light)");
-  await page.getByLabel("Theme").selectOption("dark");
+  {
+    // The theme lives in Settings (Interface), next to the interface language.
+    const st = await openSettings();
+    await st.getByLabel("Theme", { exact: true }).selectOption("dark");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
   assert(isDark(await bodyBg()), "switching to Dark darkens the page background");
   await page.screenshot({ path: `${shots}9-dark.png` });
   await page.reload();
   await node("Group").waitFor();
-  assert(isDark(await bodyBg()) && (await page.getByLabel("Theme").inputValue()) === "dark", "dark theme is remembered after reload");
+  {
+    const st = await openSettings();
+    const remembered = (await st.getByLabel("Theme", { exact: true }).inputValue()) === "dark";
+    await st.getByRole("button", { name: "Cancel" }).click();
+    assert(isDark(await bodyBg()) && remembered, "dark theme is remembered after reload");
+  }
 
   const addBtn = page.getByRole("button", { name: "+ Add concept" });
   await addBtn.click();
@@ -447,9 +464,10 @@ try {
   await page.waitForTimeout(300);
   const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
   assert(await noHScroll(), "no horizontal scroll at 390px");
-  assert(!(await page.getByLabel("Theme").isVisible()), "less-used toolbar controls fold into a menu");
+  const fileMenu = page.getByRole("button", { name: "File ▾" });
+  assert(!(await fileMenu.isVisible()), "less-used toolbar controls fold into a menu");
   await page.getByRole("button", { name: "More tools" }).click();
-  assert((await page.getByLabel("Theme").isVisible()) && (await noHScroll()), "the menu opens them, still without horizontal scroll");
+  assert((await fileMenu.isVisible()) && (await noHScroll()), "the menu opens them, still without horizontal scroll");
   await page.screenshot({ path: `${shots}9-mobile.png` });
   await page.getByRole("button", { name: "Hide details" }).click();
   assert((await page.getByTestId("relation-panel").isHidden()), "the inspector bottom sheet collapses");
@@ -601,7 +619,7 @@ try {
   console.log("Share link");
   await page.setViewportSize({ width: 1400, height: 900 });
   const sharedCount = await nodeCount();
-  await page.getByRole("button", { name: "Export ▾" }).click();
+  await page.getByRole("button", { name: "File ▾" }).click();
   await page.getByRole("menuitem", { name: "Share link…" }).click();
   const link = await page.getByTestId("share-link").inputValue();
   assert(link.includes("#share=1.") && /[\d,]+ characters/.test(await page.getByTestId("share-size").textContent()), "Share link… shows the link and its length");
@@ -765,6 +783,57 @@ try {
     await st2.getByLabel("Provider", { exact: true }).selectOption("mock");
     await st2.getByRole("button", { name: "Save", exact: true }).click();
   }
+
+  console.log("Toolbar layout & 中文");
+  const toolbar = page.locator(".toolbar");
+  const oneRow = () => toolbar.evaluate((el) => el.getBoundingClientRect().height < 60);
+  await page.setViewportSize({ width: 1200, height: 800 });
+  assert(await oneRow(), "at 1200px the whole toolbar fits on one row");
+  await page.getByRole("button", { name: "Fork sandbox" }).click();
+  await page.getByTestId("sandbox-banner").getByRole("button", { name: "Merge back" }).waitFor();
+  assert(await oneRow(), "…also in a sandbox, whose Merge back and Discard sit in the sandbox banner");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await toolbar.screenshot({ path: `${shots}14-toolbar-en.png` });
+  await page.getByRole("button", { name: "File ▾" }).click();
+  const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
+  assert(
+    JSON.stringify(fileItems) ===
+      JSON.stringify(["Import JSON…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
+    "File ▾ holds import, every export format and the share link",
+  );
+  await page.keyboard.press("Escape");
+
+  {
+    const st = await openSettings();
+    await st.getByLabel("Interface language", { exact: true }).selectOption("zh");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  const addZh = page.getByRole("button", { name: "+ 添加概念" });
+  await addZh.waitFor();
+  assert(
+    (await page.evaluate(() => document.documentElement.lang)) === "zh-CN" &&
+      (await page.getByTestId("sandbox-banner").textContent()).includes("沙盒模式"),
+    "switching the interface to 中文 translates the toolbar and banners, and sets <html lang>",
+  );
+  await page.setViewportSize({ width: 1200, height: 800 });
+  assert(await oneRow(), "the Chinese toolbar fits on one row at 1200px too");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await toolbar.screenshot({ path: `${shots}15-toolbar-zh.png` });
+  await addZh.click();
+  const addDialogZh = page.getByRole("dialog", { name: "添加概念" });
+  await addDialogZh.waitFor();
+  assert((await addDialogZh.getByRole("button", { name: "我知道名字" }).count()) === 1, "dialogs are in Chinese");
+  await page.screenshot({ path: `${shots}15-zh.png` });
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await addZh.waitFor();
+  assert(true, "the interface language is remembered after reload");
+  await page.getByRole("button", { name: "设置", exact: true }).click();
+  const settingsZh = page.getByRole("dialog", { name: "设置" });
+  await settingsZh.getByLabel("界面语言", { exact: true }).selectOption("en");
+  await settingsZh.getByRole("button", { name: "保存", exact: true }).click();
+  await page.getByRole("button", { name: "+ Add concept" }).waitFor();
+  assert((await page.evaluate(() => document.documentElement.lang)) === "en", "and back to English");
 
   console.log("\nE2E passed");
 } catch (e) {
