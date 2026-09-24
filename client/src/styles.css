@@ -894,6 +894,17 @@ button.toast__close:hover:not(:disabled) {
 /* Keyboard shortcuts dialog */
 .shortcuts-button .icon { width: 14px; height: 14px; }
 .shortcuts__group h4 { margin: 0 0 var(--space-2); font-size: var(--text-xs); font-weight: 600; color: var(--muted); }
+/* Notation glossary (File → Notation…): symbol | concept rows. */
+.glossary__table { width: 100%; border-collapse: collapse; font-size: var(--text-sm); }
+.glossary__table th {
+  text-align: left; font-size: var(--text-xs); font-weight: 600; color: var(--muted);
+  padding: var(--space-1) var(--space-2); border-bottom: 1px solid var(--border);
+}
+.glossary__table td { padding: var(--space-2); border-bottom: 1px solid var(--border); vertical-align: top; }
+.glossary__table td.glossary__symbol { width: 1%; white-space: nowrap; font-size: var(--text-lg); padding-right: var(--space-4); }
+.glossary__concept { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+.glossary__formula { color: var(--muted); margin-top: 2px; }
+.glossary__empty { font-size: var(--text-sm); }
 /* The same key column width in every group, so the descriptions line up. */
 .shortcuts__group dl { display: grid; grid-template-columns: 13.5rem 1fr; gap: var(--space-2) var(--space-4); margin: 0; align-items: baseline; }
 .shortcuts__group dt { white-space: nowrap; }

@@ -69,6 +69,14 @@ export const en = {
   "file.quizTitle": "Study this graph (or the selected concept's learning path) with AI questions, prerequisites first",
   "file.walkthrough": "Walkthrough…",
   "file.walkthroughTitle": "Present the graph one concept per slide, prerequisites first",
+  "file.glossary": "Notation…",
+  "file.glossaryTitle": "The symbols this graph's definitions and notation concepts introduce, with a link to each concept",
+  "glossary.title": "Notation",
+  "glossary.intro": "Symbols from the definitions and notation concepts of this graph, prerequisites first: the left-hand side of a defining equation, or the first short formula.",
+  "glossary.empty": "No notation yet. Concepts of kind **Definition** or **Notation** whose definition has a formula appear here.",
+  "glossary.symbol": "Symbol",
+  "glossary.concept": "Concept",
+  "glossary.goTitle": "Show {name} on the canvas",
   "file.snapshot": "Save snapshot…",
   "file.snapshotTitle": "Save this project as it is now as a named version you can go back to later",
   "file.versions": "Versions…",
@@ -385,7 +393,7 @@ export const en = {
   "find.note": "note: {note}",
   "find.none": "No matching concept.",
   "find.empty": "This graph is empty.",
-  "find.revealed": "Turned off the to-do view to show that concept.",
+  "find.revealed": "Turned off a View filter to show that concept.",
 
   // Share link
   "share.dialog": "Share link",

@@ -68,6 +68,14 @@ export const zh: Record<MessageKey, string> = {
   "file.quizTitle": "用 AI 出题复习这个图谱（或选中概念的学习路径），先考前置知识",
   "file.walkthrough": "逐步讲解…",
   "file.walkthroughTitle": "按学习顺序逐页展示图谱，每页一个概念，先讲前置知识",
+  "file.glossary": "记号表…",
+  "file.glossaryTitle": "本图谱的定义和记号概念引入的符号，每个都可跳到对应概念",
+  "glossary.title": "记号表",
+  "glossary.intro": "本图谱中定义和记号概念里的符号，按学习顺序排列：取定义式的左边，或第一个简短公式。",
+  "glossary.empty": "还没有记号。类型为**定义**或**记号**、且定义中含公式的概念会出现在这里。",
+  "glossary.symbol": "符号",
+  "glossary.concept": "概念",
+  "glossary.goTitle": "在画布上显示 {name}",
   "file.snapshot": "保存快照…",
   "file.snapshotTitle": "把项目当前的状态保存为一个命名版本，以后可以随时回到这里",
   "file.versions": "历史版本…",
@@ -381,7 +389,7 @@ export const zh: Record<MessageKey, string> = {
   "find.note": "笔记：{note}",
   "find.none": "没有匹配的概念。",
   "find.empty": "这张图谱是空的。",
-  "find.revealed": "已关闭「只看待办」视图以显示该概念。",
+  "find.revealed": "已关闭一个视图筛选以显示该概念。",
 
   // 分享链接
   "share.dialog": "分享链接",

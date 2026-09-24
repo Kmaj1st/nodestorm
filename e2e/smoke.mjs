@@ -829,7 +829,7 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Save snapshot…", "Versions…", "Walkthrough…",
+        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Save snapshot…", "Versions…", "Walkthrough…", "Notation…",
         "JSON (this project)", "Markdown notes", "LaTeX document (.tex)", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File holds import, Extract from text, Quiz me, Derive together, Versions, every export format and the share link",
@@ -1692,6 +1692,48 @@ try {
     );
     assert(src.includes("\\emph{Uses:} Definition~\\ref{c:subgroup} (Subgroup)."), "a theorem refers to the definition it uses");
     assert(src.includes("\\begin{proof}[Proof idea]") && src.includes("$|H|$ divides $|G|$"), "the anatomy's proof idea is a proof sketch, formulas kept");
+  }
+
+  console.log("Notation glossary");
+  {
+    const openGlossary = async () => {
+      await page.getByRole("button", { name: "File", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Notation…" }).click();
+      const dialog = page.getByRole("dialog", { name: "Notation" });
+      await dialog.waitFor();
+      return dialog;
+    };
+    let dialog = await openGlossary();
+    assert((await dialog.textContent()).includes("No notation yet"), "a graph without symbols says how to get some");
+    await dialog.getByRole("button", { name: "Close" }).click();
+
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.getByRole("button", { name: "Load example: Group theory" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+    // Hide the definitions: jumping to one from the glossary must show it again.
+    await page.getByRole("button", { name: /^View/ }).click();
+    await page.getByRole("dialog", { name: "View" }).getByRole("checkbox", { name: "Definition", exact: true }).uncheck();
+    await page.keyboard.press("Escape");
+    await node("Kernel").waitFor({ state: "detached" });
+    dialog = await openGlossary();
+    const rows = dialog.getByTestId("glossary").locator("tbody tr");
+    assert((await rows.count()) >= 3, "the glossary lists the symbols the definitions introduce");
+    const kernelRow = rows.filter({ hasText: "Kernel" });
+    assert((await kernelRow.locator(".glossary__symbol .katex").count()) === 1, "…typeset, e.g. the kernel's symbol");
+    await audit("notation glossary");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await setTheme("dark");
+    dialog = await openGlossary();
+    await audit("notation glossary, dark theme");
+    await dialog.getByRole("button", { name: "Close" }).click();
+    await setTheme("light");
+    dialog = await openGlossary();
+    await dialog.getByRole("button", { name: "Kernel" }).click();
+    await dialog.waitFor({ state: "detached" });
+    await node("Kernel").waitFor();
+    await page.waitForFunction(() => document.querySelector('[aria-label="Rename concept"]')?.value === "Kernel");
+    assert(true, "a glossary entry jumps to its concept, turning off the filter that hid it");
   }
 
   console.log("\nE2E passed");
