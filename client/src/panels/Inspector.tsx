@@ -5,6 +5,7 @@ import { analyzeNode, explainKey, explainNode, installAllKey, installAllMissing,
 import { removeDependency, removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
+import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
 
 /**
@@ -209,6 +210,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       </label>
 
       <div className="form__actions">
+        {!viewing && <button onClick={() => useQuiz.getState().openQuiz(node.id)} data-testid="quiz-node">{t("quiz.fromNode")}</button>}
         <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
           {t("node.recheck")}
         </button>

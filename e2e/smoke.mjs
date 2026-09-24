@@ -809,8 +809,8 @@ try {
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
-      JSON.stringify(["Import JSON…", "Extract from text…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
-    "File ▾ holds import, Extract from text, every export format and the share link",
+      JSON.stringify(["Import JSON…", "Extract from text…", "Quiz me…", "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…"]),
+    "File ▾ holds import, Extract from text, Quiz me, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -1028,6 +1028,108 @@ try {
     await p.getByTestId("node-Group").waitFor();
     assert((await onboardingState(p))?.tour === "skipped" && (await welcome.count()) === 0 && (await tour.count()) === 0, "Skip ends the tour and is remembered");
     await ctx.close();
+  }
+
+  console.log("Quiz");
+  {
+    // The offline demo provider, in browser mode, on a fresh project: Group ← Subgroup ← Normal Subgroup.
+    const st = await openSettings();
+    await st.getByText("Directly from this browser").click();
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await projectMenu("New project");
+  await page.getByLabel("Project name").press("Enter");
+  await page.locator(".canvas__empty").waitFor();
+  for (const name of ["Group", "Subgroup", "Normal Subgroup"]) {
+    await addByName(name);
+    await waitBadge(name, "ready");
+  }
+  await page.getByRole("button", { name: "File ▾" }).click();
+  assert(await page.getByRole("menuitem", { name: "Quiz me…" }).isVisible(), "File has a Quiz me… entry");
+  await page.keyboard.press("Escape");
+  await node("Normal Subgroup").click();
+  await page.getByTestId("quiz-node").click();
+  const quizDialog = page.getByRole("dialog", { name: "Quiz me" });
+  await quizDialog.waitFor();
+  assert(
+    await quizDialog.getByRole("radio", { name: "The learning path of Normal Subgroup (3 concepts)" }).isChecked(),
+    "the inspector's Quiz me starts on the concept's learning path",
+  );
+  await quizDialog.getByTestId("quiz-start").click();
+  const quizConcept = quizDialog.getByTestId("quiz-concept");
+  await quizDialog.getByTestId("quiz-question").waitFor();
+  assert(
+    (await quizConcept.textContent()) === "Group" && (await quizDialog.getByText("Question 1 of 3").isVisible()),
+    "the first question is about a prerequisite (Group, 1 of 3)",
+  );
+  assert(
+    await quizDialog.getByTestId("quiz-question").evaluate((el) => el === document.activeElement),
+    "…and the question has focus",
+  );
+  await quizDialog.getByRole("button", { name: /^Hint/ }).click();
+  assert((await quizDialog.getByRole("list", { name: "Hints" }).locator("li").count()) === 1, "hints are shown on demand, one at a time");
+  await quizDialog.getByRole("button", { name: "Show answer" }).click();
+  assert(
+    (await quizDialog.getByTestId("quiz-answer").textContent()).includes("associative binary operation"),
+    "Show answer reveals the model answer",
+  );
+  await page.screenshot({ path: `${shots}18-quiz.png` });
+  await quizDialog.getByRole("group", { name: "How did it go?" }).getByRole("button", { name: "Knew it" }).click();
+  await quizConcept.filter({ hasText: "Subgroup" }).waitFor();
+  assert((await quizConcept.textContent()) === "Subgroup", "self-grading moves on to the next concept in study order");
+  await quizDialog.getByTestId("quiz-question").waitFor();
+  await quizDialog.getByRole("button", { name: "Show answer" }).click();
+  await quizDialog.getByRole("button", { name: "Didn't know" }).click();
+  await quizConcept.filter({ hasText: "Normal Subgroup" }).waitFor();
+  await quizDialog.getByTestId("quiz-question").waitFor();
+  await quizDialog.getByRole("button", { name: "Show answer" }).click();
+  await quizDialog.getByRole("button", { name: "Partly" }).click();
+  const quizSummary = quizDialog.getByTestId("quiz-summary");
+  await quizSummary.waitFor();
+  assert(
+    (await quizSummary.locator(".quiz__count").allTextContents()).join("|") === "1 Knew it|1 Partly|1 Didn't know|0 Skipped",
+    "the summary counts the self-grades",
+  );
+  await page.screenshot({ path: `${shots}18-quiz-summary.png` });
+  await quizSummary.getByRole("button", { name: "Close" }).click();
+  await quizDialog.waitFor({ state: "detached" });
+  const masteryOf = (name) => page.getByTestId(`mastery-${name}`);
+  assert(
+    (await masteryOf("Group").getAttribute("class")).includes("mastery--strong") &&
+      (await masteryOf("Subgroup").getAttribute("class")).includes("mastery--weak") &&
+      (await masteryOf("Normal Subgroup").getAttribute("class")).includes("mastery--fair"),
+    "each concept shows a mastery dot (strong / weak / fair)",
+  );
+  assert((await masteryOf("Group").getAttribute("aria-label")).startsWith("Mastery: strong"), "…with an accessible label");
+  await page.reload();
+  await masteryOf("Group").waitFor();
+  assert(
+    (await masteryOf("Subgroup").getAttribute("class")).includes("mastery--weak"),
+    "mastery is kept after a reload",
+  );
+  {
+    // A second quiz over the whole graph starts on the weak spot: Group is known well, so Subgroup needn't wait for it.
+    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("menuitem", { name: "Quiz me…" }).click();
+    await quizDialog.waitFor();
+    await quizDialog.getByRole("radio", { name: /^The whole graph/ }).check();
+    await quizDialog.getByLabel("Multiple choice (4 options)").check();
+    await quizDialog.getByTestId("quiz-start").click();
+    await quizDialog.getByRole("group", { name: "Choose an answer" }).waitFor();
+    assert((await quizConcept.textContent()) === "Subgroup", "the next quiz asks the weakest ready concept first");
+    const choices = quizDialog.getByRole("group", { name: "Choose an answer" }).getByRole("button");
+    assert((await choices.count()) === 4, "multiple choice offers four options");
+    await choices.first().click();
+    await quizDialog.getByTestId("quiz-answer").waitFor();
+    assert(await quizDialog.getByText(/^(Right!|Not quite\.)$/).isVisible(), "picking an option says whether it was right");
+    await quizDialog.getByRole("button", { name: "Knew it" }).click();
+    await quizDialog.getByText("Question 2 of 3").waitFor();
+    await quizDialog.getByRole("button", { name: "Finish" }).click();
+    await quizSummary.waitFor();
+    assert((await quizSummary.textContent()).includes("2 concepts weren't asked."), "finishing early says how many weren't asked");
+    await page.keyboard.press("Escape");
+    await quizDialog.waitFor({ state: "detached" });
   }
 
   console.log("\nE2E passed");

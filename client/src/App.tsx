@@ -9,6 +9,7 @@ import { DeriveDialog } from "./panels/DeriveDialog";
 import { FindDialog } from "./panels/FindDialog";
 import { Inspector } from "./panels/Inspector";
 import { OfflineBanner } from "./panels/OfflineBanner";
+import { QuizHost } from "./panels/QuizHost";
 import { Onboarding } from "./panels/Onboarding";
 import { SenseDialog } from "./panels/SenseDialog";
 import { SettingsDialog } from "./panels/SettingsDialog";
@@ -130,6 +131,7 @@ export function App() {
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
         {finding && <FindDialog onClose={() => setFinding(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
+        <QuizHost />
       </div>
     </ReactFlowProvider>
   );

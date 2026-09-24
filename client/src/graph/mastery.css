@@ -1,0 +1,8 @@
+/* Quiz mastery dot after a concept's name (graph/MasteryDot.tsx) */
+.mastery {
+  display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-left: 6px; vertical-align: middle;
+  border: 2px solid var(--panel); box-shadow: 0 0 0 1px var(--border);
+}
+.mastery--strong { background: var(--ok); }
+.mastery--fair { background: var(--checking); }
+.mastery--weak { background: var(--error-text); }

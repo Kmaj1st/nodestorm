@@ -15,6 +15,8 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
 
 - **Explain more.** In the inspector, pick a level (*intuitive*, *rigorous* or *example-driven*) and press **Explain**. The AI writes a summary, the intuition, key points, examples, common pitfalls and further reading (described in words, never links), building on the concept's prerequisites and relations in the graph. The latest explanation is kept on the concept. **Use summary as definition** copies its summary into the definition. Each concept also has a free-text **My notes** field. Both appear in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias matches).
 
+- **Quiz me.** Study what the graph knows. Start from **File ▾ → Quiz me…** (the whole graph, or the selected concept's learning path) or from the inspector's **Quiz me on this and its prerequisites**. Questions come one concept at a time, prerequisites first. Pick the kind of question: *recall* (what is it?), *apply* (use it on an example), *connect* (how it builds on one of its prerequisites) or *mixed*, which moves from recall to the others as you get better. Tick *Multiple choice* for four options instead of free recall with **Show answer**. Hints come one at a time on demand. After each answer, grade yourself **Knew it / Partly / Didn't know**. The grade is stored on the concept as its mastery (a score and the time of the last review), and a small dot after the concept's name shows it (green strong, amber fair, red weak). Mastery fades over time, more slowly the more often you reviewed it, so the next quiz asks what you didn't know, or haven't seen for a while, first. A prerequisite you already know well no longer has to come before the concepts that build on it. Blocked and unclear concepts are skipped and listed with the reason, and a summary ends the quiz. Grades are never undo steps. Mastery is kept in JSON exports and imports, but share links leave it out: it is your own study progress, like your notes and explanations. The read-only share viewer has no quiz.
+
 New concepts appear in a free spot near what you're looking at (or near the concept they relate to), and the view pans to them. **Tidy** (⊞) arranges the graph in layers, with prerequisites above the concepts that depend on them. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, then selects it and centres the view on it.
 
 For bigger graphs:
@@ -104,7 +106,7 @@ The provider code lives in `shared/src/ai/`, so the browser and the server run t
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract}, GET /api/providers, GET /api/models
+server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract,quiz}, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/graphOps.ts
 e2e/      Playwright smoke test (runs against the mock provider)
 ```
@@ -113,7 +115,7 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker, offline start and the update notice
 ```

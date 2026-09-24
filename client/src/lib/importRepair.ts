@@ -1,6 +1,7 @@
 import {
   DepRole,
   GraphExport,
+  Mastery,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -154,6 +155,11 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   if (typeof n.notes === "string") {
     if (n.notes) node.notes = n.notes;
   } else if (n.notes !== undefined) fixes.add(t("repair.droppedNotes"));
+  if (n.mastery !== undefined) {
+    const m = Mastery.safeParse(n.mastery);
+    if (m.success) node.mastery = m.data;
+    else fixes.add(t("repair.droppedMastery"));
+  }
   // Nothing left to block on / choose from: don't leave the node stuck.
   if (node.status === "blocked" && !missingDeps.length) node.status = "ok";
   if (node.status === "unclear" && !node.senses) node.status = "ok";

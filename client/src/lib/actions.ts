@@ -6,6 +6,7 @@ import {
   type ExplainLevel,
   type Graph,
   type NameCandidate,
+  type QuizStyle,
   type Sense,
 } from "@nodestorm/shared";
 import { t } from "../i18n";
@@ -17,6 +18,7 @@ import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { viewport } from "./viewport";
 import * as paths from "./paths";
+import { updateMastery, type Grade } from "./quiz";
 
 /**
  * Async flows that combine AI calls with graph mutations. Each binds to the graph it started in.
@@ -442,6 +444,32 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
     graphId,
     { history: "background" },
   );
+}
+
+export const quizKey = (graphId: string) => `quiz:${graphId}`;
+
+/** "Quiz me": one question about a concept, given its prerequisites in the graph (see panels/QuizDialog.tsx). */
+export async function quizQuestion(nodeId: string, style: QuizStyle, multipleChoice: boolean, graphId = store().activeId) {
+  if (inViewer(graphId)) return undefined;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return undefined;
+  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  return withBusy(quizKey(graphId), t("task.quiz", { name: node.name }), (signal) =>
+    api.quiz({ node: { ...toBrief(node), notes: node.notes?.slice(0, 4000) }, prerequisites, style, multipleChoice }, signal),
+  );
+}
+
+/**
+ * Store a self-grade on the concept. Study progress is a background change: the same new value goes into every undo
+ * snapshot, so undo/redo never takes it back (or replays an older one).
+ */
+export function gradeConcept(nodeId: string, grade: Grade, graphId = store().activeId, now = Date.now()) {
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const mastery = updateMastery(node.mastery, grade, now);
+  const has = (g: Graph) => g.nodes.some((n) => n.id === nodeId);
+  store().mutate((g) => (has(g) ? ops.updateNode(g, nodeId, { mastery }) : g), graphId, { history: "background" });
 }
 
 export function derive(selectedIds: string[], goal?: string) {
