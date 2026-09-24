@@ -12,6 +12,7 @@ import { SettingsDialog } from "./panels/SettingsDialog";
 import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
+import { toggleFocus, useView, visibleNow } from "./store/viewStore";
 
 export function App() {
   const [adding, setAdding] = useState(false);
@@ -34,7 +35,8 @@ export function App() {
     return () => window.removeEventListener("hashchange", open);
   }, []);
 
-  // Undo/redo and Delete. React Flow's own delete key is off (GraphCanvas) so deletions go through history.
+  // Undo/redo, Delete, and F / Esc for focus mode. React Flow's own delete key is off (GraphCanvas) so deletions
+  // go through history.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       // Leave keys alone while typing, and while a dialog is open.
@@ -47,13 +49,25 @@ export function App() {
         e.preventDefault();
         if (key === "y" || e.shiftKey) s.redo();
         else s.undo();
+      } else if (e.key === "Escape" && useView.getState().focus) {
+        // Menus and popovers close on Escape themselves; don't also leave focus mode behind them.
+        if (t?.closest(".menu, .popover")) return;
+        useView.getState().setFocus(null);
+      } else if (key === "f" && !mod && !e.altKey) {
+        // Focus mode, from the canvas only (like Delete).
+        if (t && t !== document.body && !t.closest(".react-flow")) return;
+        e.preventDefault();
+        toggleFocus();
       } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
         // Only from the canvas (or nothing focused): not while a menu, popover or inspector button has focus.
         if (t && t !== document.body && !t.closest(".react-flow")) return;
+        // Only what the canvas shows: concepts and relations hidden by focus mode or a filter are never deleted.
+        const shown = visibleNow(s);
+        const selected = s.selection.filter((id) => shown.nodes.has(id));
         // An open relation wins over the node selection (clicking an arrowhead doesn't deselect nodes).
         const ins = s.inspect;
-        if (ins?.kind === "edge") s.mutate((g) => removeRelation(g, ins.relationId));
-        else if (s.selection.length) s.mutate((g) => s.selection.reduce(removeNode, g));
+        if (ins?.kind === "edge" && shown.relations.has(ins.relationId)) s.mutate((g) => removeRelation(g, ins.relationId));
+        else if (selected.length) s.mutate((g) => selected.reduce(removeNode, g));
         else return;
         e.preventDefault();
         s.setSelection([]);

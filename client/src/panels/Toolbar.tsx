@@ -10,6 +10,7 @@ import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore
 import { isReady, useSettings } from "../store/settingsStore";
 import { ProjectMenu } from "./ProjectMenu";
 import { ShareDialog } from "./ShareDialog";
+import { FocusButton, ViewMenu } from "./ViewMenu";
 
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
   const s = useGraphStore();
@@ -87,6 +88,8 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         <button onClick={onFind} disabled={!graph.nodes.length} title="Find a concept (Ctrl+K)" aria-label="Find concept">
           🔍
         </button>
+        <FocusButton />
+        <ViewMenu />
       </div>
 
       <button
