@@ -334,18 +334,44 @@ export function updateRelation(g: Graph, relationId: string, dir: "aToB" | "bToA
 /** Deep-copy a graph as a sandbox. Node/relation ids are kept so merge-back can match them. */
 export function fork(g: Graph, name: string): Graph {
   const copy: Graph = structuredClone(g);
-  return { ...copy, id: uid("g"), name, parentId: g.id, forkedAt: Date.now() };
+  // A check still running for the original only ever updates the original; the copy must not wait for it.
+  const nodes = copy.nodes.map((n) =>
+    n.status === "checking"
+      ? { ...n, status: "error" as const, error: "This check was still running when the sandbox was forked. Retry to run it here." }
+      : n,
+  );
+  return { ...copy, nodes, id: uid("g"), name, parentId: g.id, forkedAt: Date.now() };
 }
 
 /**
  * Merge a sandbox into its parent. Sandbox versions win for nodes/relations that exist in both;
- * parent-only content is kept (nothing is deleted from the parent).
+ * parent-only content is kept (nothing is deleted from the parent). Concepts both sides added
+ * independently (same name or alias) are folded into the parent's, so merging never duplicates them.
  */
 export function merge(parent: Graph, sandbox: Graph): Graph {
+  const parentIds = new Set(parent.nodes.map((n) => n.id));
+  let sb = sandbox;
+  for (const n of sandbox.nodes) {
+    if (parentIds.has(n.id)) continue;
+    const twin = findByName(parent.nodes, n.name) ?? n.aliases.map((a) => findByName(parent.nodes, a)).find(Boolean);
+    if (twin) sb = redirectNode(sb, n.id, twin.id);
+  }
+
   const nodes = new Map(parent.nodes.map((n) => [n.id, n]));
-  for (const n of sandbox.nodes) nodes.set(n.id, n);
+  for (const n of sb.nodes) {
+    // The sandbox is discarded after merging, so a check still running there would never report back.
+    if (n.status === "checking") {
+      if (!nodes.has(n.id)) nodes.set(n.id, { ...n, status: "error", error: "The check was interrupted by the merge. Retry to run it again." });
+      continue;
+    }
+    nodes.set(n.id, n);
+  }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));
-  for (const r of sandbox.relations) relations.set(r.id, r);
+  for (const r of sb.relations) {
+    const samePair = parent.relations.find((p) => p.id !== r.id && ((p.a === r.a && p.b === r.b) || (p.a === r.b && p.b === r.a)));
+    if (samePair) continue; // both sides related the same pair: keep the parent's
+    relations.set(r.id, r);
+  }
   let out: Graph = { ...parent, nodes: [...nodes.values()], relations: [...relations.values()] };
   // A parent-only node might satisfy something the sandbox left missing (or vice versa).
   for (const n of out.nodes) out = satisfyMissing(out, n.id);

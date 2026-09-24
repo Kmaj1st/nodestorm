@@ -1,3 +1,4 @@
+import type { ConceptNode } from "@nodestorm/shared";
 import { useState } from "react";
 import { analyzeNode, chooseSense } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
@@ -10,26 +11,34 @@ const OTHER = "__other__";
 /** "What do you mean by X?" — shown when a concept name has several meanings. */
 export function SenseDialog() {
   const clarifying = useGraphStore((s) => s.clarifying);
-  const setClarifying = useGraphStore((s) => s.setClarifying);
-  const mutate = useGraphStore((s) => s.mutate);
   const node = useGraphStore((s) =>
     s.clarifying ? s.graphs[s.clarifying.graphId]?.nodes.find((n) => n.id === s.clarifying!.nodeId) : undefined,
   );
+  if (!clarifying || !node) return null;
+  // Keyed so the picked option and "something else" text never carry over to another node or a new set of meanings.
+  const key = `${clarifying.graphId}:${node.id}:${(node.senses ?? []).map((x) => x.name).join("|")}`;
+  return <SenseChoice key={key} graphId={clarifying.graphId} node={node} />;
+}
+
+function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) {
+  const setClarifying = useGraphStore((s) => s.setClarifying);
+  const mutate = useGraphStore((s) => s.mutate);
+  const clarifying = { graphId, nodeId: node.id };
   const optionCount = useSettings((s) => s.clarify.options);
   const [choice, setChoice] = useState<string | null>(null);
   const [otherName, setOtherName] = useState("");
   const [otherDef, setOtherDef] = useState("");
 
-  if (!clarifying || !node) return null;
   const senses = node.senses ?? [];
+  const picked = choice !== null && choice !== OTHER ? senses[Number(choice)] : undefined;
   const close = () => setClarifying(null); // node stays "unclear"; its badge reopens this dialog
 
   const confirm = () => {
     if (choice === OTHER) {
       if (!otherDef.trim()) return;
       chooseSense(clarifying.graphId, node.id, { name: otherName.trim() || node.name, definition: otherDef });
-    } else if (choice !== null) {
-      chooseSense(clarifying.graphId, node.id, senses[Number(choice)]);
+    } else if (picked) {
+      chooseSense(clarifying.graphId, node.id, picked);
     }
   };
   const moreOptions = () => {
@@ -92,7 +101,7 @@ export function SenseDialog() {
         <button
           className="primary"
           onClick={confirm}
-          disabled={choice === null || (choice === OTHER && !otherDef.trim())}
+          disabled={choice === OTHER ? !otherDef.trim() : !picked}
         >
           Use this meaning
         </button>

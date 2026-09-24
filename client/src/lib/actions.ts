@@ -63,7 +63,10 @@ async function withBusy<T>(
     if (ctrl.signal.aborted) throw new CancelledError();
     return res;
   } catch (e) {
-    if (e instanceof CancelledError || ctrl.signal.aborted) handlers.onCancel?.();
+    if (e instanceof CancelledError || ctrl.signal.aborted) {
+      // Superseded by a newer run of the same task: that run owns the outcome, so this one stays silent.
+      if (controllers.get(key) === ctrl) handlers.onCancel?.();
+    }
     else if (handlers.onError) handlers.onError(e);
     else reportError(e);
     return undefined;
@@ -94,7 +97,17 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   const node = find();
   if (!node) return;
   const key = analyzeKey(graphId, nodeId);
-  const bg = (fn: (g: Graph) => Graph) => store().mutate(fn, graphId, { history: "background" });
+  // Background results are also written into undo snapshots. Skip snapshots of a different concept: one still
+  // waiting for its meaning to be chosen, or known by a name this check wasn't started for (a rename keeps the
+  // old name as an alias, so renamed snapshots still match).
+  const startName = node.name;
+  const startedUnclear = node.status === "unclear";
+  const sameConcept = (g: Graph) => {
+    const n = g.nodes.find((x) => x.id === nodeId);
+    return !n || ((startedUnclear || n.status !== "unclear") && Boolean(findByName([n], startName)));
+  };
+  const bg = (fn: (g: Graph) => Graph) =>
+    store().mutate((g) => (sameConcept(g) ? fn(g) : g), graphId, { history: "background" });
   const set = (patch: Parameters<typeof ops.updateNode>[2]) => bg((g) => ops.updateNode(g, nodeId, patch));
   // Results are applied even if the node was deleted meanwhile: that is a no-op now, but undoing the delete
   // brings the node back with the result instead of a spinner that never stops.

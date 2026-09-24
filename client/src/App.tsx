@@ -38,6 +38,8 @@ export function App() {
         if (key === "y" || e.shiftKey) s.redo();
         else s.undo();
       } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
+        // Only from the canvas (or nothing focused): not while a menu, popover or inspector button has focus.
+        if (t && t !== document.body && !t.closest(".react-flow")) return;
         // An open relation wins over the node selection (clicking an arrowhead doesn't deselect nodes).
         const ins = s.inspect;
         if (ins?.kind === "edge") s.mutate((g) => removeRelation(g, ins.relationId));
