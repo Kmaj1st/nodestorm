@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode } from "../lib/actions";
-import { useGraphStore } from "../store/graphStore";
+import { isViewing, useGraphStore } from "../store/graphStore";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
 
@@ -21,8 +21,11 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
   const graphId = useGraphStore((s) => s.activeId);
   const setClarifying = useGraphStore((s) => s.setClarifying);
   // Error and unclear badges are buttons: retry, or reopen the "what do you mean?" dialog.
-  const action =
-    c.status === "error"
+  // In the read-only share viewer the badges are plain labels (not buttons you can Tab to).
+  const viewing = useGraphStore(isViewing);
+  const action = viewing
+    ? undefined
+    : c.status === "error"
       ? () => analyzeNode(c.id, graphId)
       : c.status === "unclear"
         ? () => setClarifying({ graphId, nodeId: c.id })

@@ -32,6 +32,16 @@ function reportError(e: unknown, prefix = "") {
   store().setToast(prefix + (e instanceof Error ? e.message : String(e)));
 }
 
+/**
+ * The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
+ * Only calls for that graph are refused: work still running on the user's own graphs carries on.
+ */
+function inViewer(graphId: string): boolean {
+  if (graphId !== store().view?.id) return false;
+  store().setToast(t("api.viewer"), "info");
+  return true;
+}
+
 const controllers = new Map<string, AbortController>();
 
 /** Cancel a running AI task (status-bar ✕, dialog Cancel). */
@@ -95,6 +105,7 @@ interface AnalyzeOptions {
  * it is ambiguous); then check its prerequisites. Also used for "Retry" and "Re-check".
  */
 export async function analyzeNode(nodeId: string, graphId = store().activeId, hint?: string, opts: AnalyzeOptions = {}) {
+  if (inViewer(graphId)) return;
   const find = () => graph(graphId)?.nodes.find((n) => n.id === nodeId);
   const node = find();
   if (!node) return;
@@ -210,6 +221,7 @@ export function tidy() {
 }
 
 export function suggestNames(description: string) {
+  if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   return withBusy("name", t("task.name"), (signal) =>
     api.name({ description, context: g.nodes.map(toBrief) }, signal).then((r) => r.candidates),
@@ -280,6 +292,7 @@ export const installAllKey = (graphId: string, nodeId: string) => `installAll:${
  * cancelling it also cancels the checks in flight. Ambiguous (unclear) concepts are skipped and reported.
  */
 export async function installAllMissing(rootId: string, graphId = store().activeId): Promise<InstallReport | undefined> {
+  if (inViewer(graphId)) return undefined;
   const find = (id: string) => graph(graphId)?.nodes.find((n) => n.id === id);
   const root = find(rootId);
   if (!root) return;
@@ -383,6 +396,7 @@ function installSummary(name: string, r: InstallReport, maxDepth: number): strin
 }
 
 export async function mix(aId: string, bId: string) {
+  if (inViewer(store().activeId)) return;
   const graphId = store().activeId;
   const g = graph(graphId);
   const a = g.nodes.find((n) => n.id === aId);
@@ -406,6 +420,7 @@ export const explainKey = (graphId: string, nodeId: string) => `explain:${graphI
  * relations. The answer is stored on the node as a background change (like other AI results, not an undo step).
  */
 export async function explainNode(nodeId: string, level: ExplainLevel, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
   const g = graph(graphId);
   const node = g?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
@@ -429,6 +444,7 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
 }
 
 export function derive(selectedIds: string[], goal?: string) {
+  if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   const selected = g.nodes.filter((n) => selectedIds.includes(n.id));
   return withBusy("derive", t("task.derive"), (signal) =>

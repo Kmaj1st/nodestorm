@@ -1,4 +1,5 @@
 import type { Graph } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { emptyGraph, uid } from "./graphOps";
 
 /**
@@ -97,6 +98,11 @@ export function cloneGraphs(list: Graph[]): { graphs: Graph[]; ids: Map<string, 
     for (const n of g.nodes) {
       n.id = fresh("n", n.id);
       n.dependsOn = n.dependsOn.map((d) => fresh("n", d));
+      // A running check keeps updating the original; the copy (fresh ids) would wait for it forever.
+      if (n.status === "checking") {
+        n.status = "error";
+        n.error = t("task.copyInterrupted");
+      }
     }
     for (const r of g.relations) {
       r.id = fresh("r", r.id);
@@ -158,7 +164,7 @@ export function switchProject(ws: Workspace, projectId: string): Workspace {
 export function importProject(ws: Workspace, imported: Graph[], name?: string): Workspace {
   const { graphs, ids } = cloneGraphs(imported);
   const main = graphs[0];
-  const p = newProject(ws, uniqueProjectName(ws, name?.trim() || main.name.trim() || "Imported project"), ids.get(imported[0].id)!);
+  const p = newProject(ws, uniqueProjectName(ws, name?.trim() || main.name.trim() || t("project.imported")), ids.get(imported[0].id)!);
   return {
     graphs: { ...ws.graphs, ...Object.fromEntries(graphs.map((g) => [g.id, g])) },
     projects: { ...ws.projects, [p.id]: p },

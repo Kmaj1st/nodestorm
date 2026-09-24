@@ -141,8 +141,12 @@ function clearShareHash() {
 /** Open the graph in the page's #share= link, if any. A bad link leaves the user's own work on screen. */
 async function openShareLink() {
   const token = shareToken(location.hash);
-  if (token === null) return;
   const s = useGraphStore.getState();
+  if (token === null) {
+    // Back (or editing the URL) away from a share link leaves the viewer, like its Close button.
+    if (isViewing(s)) s.closeView();
+    return;
+  }
   try {
     const { graph, name, fixes } = await decodeShare(token);
     // The hash may have changed while decoding (another link pasted): the newer one wins.

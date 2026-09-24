@@ -19,7 +19,7 @@ import {
   type TaskName,
 } from "@nodestorm/shared";
 import { t } from "../i18n";
-import { isViewing, useGraphStore } from "../store/graphStore";
+import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, useSettings } from "../store/settingsStore";
 import { addUsage } from "../store/usageStore";
 import { createLimiter } from "./aiQueue";
@@ -59,8 +59,6 @@ type TaskResult<N extends TaskName> = Awaited<ReturnType<(typeof tasks)[N]>>;
 const queue = createLimiter(() => useSettings.getState().aiConcurrency ?? DEFAULT_CONCURRENCY);
 
 function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
-  // The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
-  if (isViewing(useGraphStore.getState())) return Promise.reject(new Error(t("api.viewer")));
   // Offline: fail now instead of after the request timeout (the offline demo provider still works).
   if (offlineBlocks(useSettings.getState().provider, isOnline())) return Promise.reject(new OfflineError());
   return queue.run(() => runNow(name, req, signal), {

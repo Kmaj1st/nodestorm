@@ -25,13 +25,13 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
   let list: unknown[];
   if (Array.isArray(raw)) {
     list = raw;
-    fixes.add("wrapped a bare list of graphs");
+    fixes.add(t("repair.wrappedList"));
   } else if (isObj(raw) && Array.isArray(raw.graphs)) {
     list = raw.graphs;
-    if (raw.format !== "nodestorm/v1") fixes.add(`read ${typeof raw.format === "string" ? `format "${raw.format}"` : "a file without a format tag"} as nodestorm/v1`);
+    if (raw.format !== "nodestorm/v1") fixes.add(typeof raw.format === "string" ? t("repair.readFormat", { format: raw.format }) : t("repair.readUntagged"));
   } else if (isObj(raw) && Array.isArray(raw.nodes)) {
     list = [raw];
-    fixes.add("wrapped a single graph");
+    fixes.add(t("repair.wrappedGraph"));
   } else {
     throw new Error(t("file.notNodestorm"));
   }
@@ -39,9 +39,9 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
   const graphs: Graph[] = [];
   const seen = new Set<string>();
   for (const g of list) {
-    if (!isObj(g)) { fixes.add("dropped an entry that isn't a graph"); continue; }
+    if (!isObj(g)) { fixes.add(t("repair.droppedNonGraph")); continue; }
     const graph = repairGraph(g, fixes);
-    if (seen.has(graph.id)) { fixes.add("dropped a graph with a duplicate id"); continue; }
+    if (seen.has(graph.id)) { fixes.add(t("repair.droppedDupGraph")); continue; }
     seen.add(graph.id);
     graphs.push(graph);
   }
@@ -49,11 +49,11 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
 
   // Exactly one root: the first graph without a (valid) parent. Sandboxes of missing graphs hang off it.
   const main = graphs.find((g) => !g.parentId) ?? graphs[0];
-  if (main.parentId) { delete main.parentId; fixes.add("made the first sandbox the main graph (no main graph found)"); }
+  if (main.parentId) { delete main.parentId; fixes.add(t("repair.madeMain")); }
   for (const g of graphs) {
     if (g !== main && g.parentId && (!seen.has(g.parentId) || g.parentId === g.id)) {
       g.parentId = main.id;
-      fixes.add("re-attached a sandbox whose parent graph is missing to the main graph");
+      fixes.add(t("repair.reattached"));
     }
   }
   // Keep the main graph first, as exportJson does.
@@ -71,13 +71,13 @@ function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {
   rawNodes.forEach((n, i) => {
     const node = repairNode(n, i, fixes);
     if (!node) return;
-    if (ids.has(node.id)) { fixes.add("dropped a concept with a duplicate id"); return; }
+    if (ids.has(node.id)) { fixes.add(t("repair.droppedDupConcept")); return; }
     ids.add(node.id);
     nodes.push(node);
   });
   for (const n of nodes) {
     const kept = n.dependsOn.filter((d) => ids.has(d) && d !== n.id);
-    if (kept.length !== n.dependsOn.length) fixes.add("dropped prerequisite links to missing concepts", n.dependsOn.length - kept.length);
+    if (kept.length !== n.dependsOn.length) fixes.add(t("repair.droppedDeps"), n.dependsOn.length - kept.length);
     n.dependsOn = [...new Set(kept)];
   }
 
@@ -85,14 +85,14 @@ function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {
   const relIds = new Set<string>();
   for (const r of Array.isArray(g.relations) ? g.relations : []) {
     if (!isObj(r) || typeof r.a !== "string" || typeof r.b !== "string" || !ids.has(r.a) || !ids.has(r.b) || r.a === r.b) {
-      fixes.add("dropped relations pointing to missing concepts");
+      fixes.add(t("repair.droppedRelations"));
       continue;
     }
     let id = str(r.id);
-    if (!id || relIds.has(id)) { if (id) fixes.add("renamed a duplicate relation id"); id = uid("r"); }
+    if (!id || relIds.has(id)) { if (id) fixes.add(t("repair.renamedRelation")); id = uid("r"); }
     relIds.add(id);
     const origin = RelationOrigin.safeParse(r.origin);
-    if (r.origin !== undefined && !origin.success) fixes.add("reset an unknown relation origin to “mix”");
+    if (r.origin !== undefined && !origin.success) fixes.add(t("repair.resetOrigin"));
     relations.push({
       id,
       a: r.a,
@@ -105,7 +105,7 @@ function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {
 
   const graph: Graph = {
     id: str(g.id) || uid("g"),
-    name: str(g.name) || "Imported graph",
+    name: str(g.name) || t("repair.importedGraph"),
     nodes,
     relations,
   };
@@ -115,17 +115,17 @@ function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {
 }
 
 function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null {
-  if (!isObj(n) || !str(n.name).trim()) { fixes.add("dropped concepts without a name"); return null; }
+  if (!isObj(n) || !str(n.name).trim()) { fixes.add(t("repair.droppedNameless")); return null; }
   let status = NodeStatus.safeParse(n.status).success ? (n.status as NodeStatus) : "ok";
-  if (n.status !== undefined && status !== n.status) fixes.add("reset unknown concept statuses to “ok”");
+  if (n.status !== undefined && status !== n.status) fixes.add(t("repair.resetStatus"));
   let error = typeof n.error === "string" ? n.error : undefined;
   if (status === "checking") {
     // Like reload: a check can't be resumed from a file.
     status = "error";
-    error = "The check was interrupted before export. Retry to run it again.";
+    error = t("repair.interrupted");
   }
   const pos = isObj(n.position) && num(n.position.x) && num(n.position.y) ? { x: n.position.x, y: n.position.y } : null;
-  if (!pos) fixes.add("placed concepts that had no position");
+  if (!pos) fixes.add(t("repair.placed"));
   const missingDeps: MissingDep[] = (Array.isArray(n.missingDeps) ? n.missingDeps : []).flatMap((d) =>
     isObj(d) && str(d.name)
       ? [{ name: str(d.name), reason: str(d.reason), role: DepRole.safeParse(d.role).success ? (d.role as DepRole) : "uses" }]
@@ -149,11 +149,11 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   if (n.explanation !== undefined) {
     const ex = NodeExplanation.safeParse(n.explanation);
     if (ex.success) node.explanation = ex.data;
-    else fixes.add("dropped malformed explanations");
+    else fixes.add(t("repair.droppedExplanations"));
   }
   if (typeof n.notes === "string") {
     if (n.notes) node.notes = n.notes;
-  } else if (n.notes !== undefined) fixes.add("dropped notes that aren't text");
+  } else if (n.notes !== undefined) fixes.add(t("repair.droppedNotes"));
   // Nothing left to block on / choose from: don't leave the node stuck.
   if (node.status === "blocked" && !missingDeps.length) node.status = "ok";
   if (node.status === "unclear" && !node.senses) node.status = "ok";
@@ -162,7 +162,7 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
 
 function dirRel(d: unknown, fixes: Fixes): DirRel {
   if (isObj(d) && typeof d.kind === "string") return { kind: d.kind, explanation: str(d.explanation) };
-  fixes.add("filled in missing relation directions");
+  fixes.add(t("repair.filledDirections"));
   return { kind: "relates to", explanation: "" };
 }
 

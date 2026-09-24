@@ -286,6 +286,7 @@ export const en = {
   "find.note": "note: {note}",
   "find.none": "No matching concept.",
   "find.empty": "This graph is empty.",
+  "find.revealed": "Turned off the to-do view to show that concept.",
 
   // Share link
   "share.dialog": "Share link",
@@ -414,6 +415,7 @@ export const en = {
   "task.reloadInterrupted": "The check was interrupted (page closed or reloaded). Retry to run it again.",
   "task.forkInterrupted": "This check was still running when the sandbox was forked. Retry to run it here.",
   "task.mergeInterrupted": "The check was interrupted by the merge. Retry to run it again.",
+  "task.copyInterrupted": "This check was still running when the project was copied. Retry to run it here.",
   "toast.cycle": "Dependency cycle: {chain}. One of these links is probably wrong — see the inspector.",
   "toast.senseMerged": "“{name}” is already in the graph — linked to the existing concept.",
   "toast.exists": "“{name}” is already in the graph",
@@ -431,6 +433,29 @@ export const en = {
   "api.serverDown": "NodeStorm server is not running",
   "api.requestFailed": "Request failed ({status})",
   "api.viewer": "Save a copy of the shared graph to use AI features.",
+  // Import repair summary
+  "repair.wrappedList": "wrapped a bare list of graphs",
+  "repair.wrappedGraph": "wrapped a single graph",
+  "repair.droppedNonGraph": "dropped an entry that isn't a graph",
+  "repair.droppedDupGraph": "dropped a graph with a duplicate id",
+  "repair.madeMain": "made the first sandbox the main graph (no main graph found)",
+  "repair.reattached": "re-attached a sandbox whose parent graph is missing to the main graph",
+  "repair.droppedDupConcept": "dropped a concept with a duplicate id",
+  "repair.droppedDeps": "dropped prerequisite links to missing concepts",
+  "repair.droppedRelations": "dropped relations pointing to missing concepts",
+  "repair.renamedRelation": "renamed a duplicate relation id",
+  "repair.resetOrigin": "reset an unknown relation origin to “mix”",
+  "repair.droppedNameless": "dropped concepts without a name",
+  "repair.resetStatus": "reset unknown concept statuses to “ok”",
+  "repair.placed": "placed concepts that had no position",
+  "repair.droppedExplanations": "dropped malformed explanations",
+  "repair.droppedNotes": "dropped notes that aren't text",
+  "repair.filledDirections": "filled in missing relation directions",
+  "repair.readFormat": "read format \"{format}\" as nodestorm/v1",
+  "repair.readUntagged": "read a file without a format tag as nodestorm/v1",
+  "repair.importedGraph": "Imported graph",
+  "repair.interrupted": "The check was interrupted before export. Retry to run it again.",
+  "project.imported": "Imported project",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

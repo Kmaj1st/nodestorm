@@ -724,9 +724,16 @@ try {
   // Nothing has focus now, so Delete reaches the app's handler (as on the canvas).
   const deleteReachesApp = await page.evaluate(() => document.activeElement === document.body);
   await page.keyboard.press("Delete");
-  await (await viewMenu()).getByRole("checkbox", { name: /To-do only/ }).uncheck();
+  // Finding a concept the to-do view hides turns that view off instead of selecting something invisible.
+  await page.keyboard.press("Control+k");
+  await page.getByRole("dialog", { name: "Find concept" }).getByRole("combobox").fill("Group");
+  await page.keyboard.press("Enter");
   await waitCounts("7/11");
   assert(deleteReachesApp, "Delete doesn't remove a selected concept the to-do view hid");
+  assert(
+    (await node("Group").isVisible()) && (await page.getByLabel("Rename concept").inputValue()) === "Group",
+    "Find reveals a concept the to-do view was hiding",
+  );
   await (await viewMenu()).getByRole("checkbox", { name: "Relation labels" }).uncheck();
   await page.keyboard.press("Escape");
   await page.reload();
