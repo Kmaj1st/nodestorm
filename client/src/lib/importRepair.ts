@@ -56,7 +56,10 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
   }
   // Keep the main graph first, as exportJson does.
   const ordered = [main, ...graphs.filter((g) => g !== main)];
-  return { doc: GraphExport.parse({ format: "nodestorm/v1", graphs: ordered }), fixes: fixes.list() };
+  // The project name is optional (files from before projects have none); a malformed one is just ignored.
+  const name = isObj(raw) && isObj(raw.project) && typeof raw.project.name === "string" ? raw.project.name.trim() : "";
+  const project = name ? { project: { name } } : {};
+  return { doc: GraphExport.parse({ format: "nodestorm/v1", ...project, graphs: ordered }), fixes: fixes.list() };
 }
 
 function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {

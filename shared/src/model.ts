@@ -66,6 +66,9 @@ export type Graph = z.infer<typeof Graph>;
 
 export const GraphExport = z.object({
   format: z.literal("nodestorm/v1"),
+  /** The exported project (older files have none; import then names the project after the main graph). */
+  project: z.object({ name: z.string() }).optional(),
+  /** Main graph first, then its sandboxes. */
   graphs: z.array(Graph),
 });
 export type GraphExport = z.infer<typeof GraphExport>;

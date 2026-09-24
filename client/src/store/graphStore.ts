@@ -1,9 +1,11 @@
 import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
-import { emptyGraph, fork, merge } from "../lib/graphOps";
+import { buildExample, EXAMPLES } from "../lib/examples";
+import { fork, merge } from "../lib/graphOps";
 import { repairImport } from "../lib/importRepair";
 import * as hist from "../lib/history";
+import * as proj from "../lib/projects";
 
 export type Inspect =
   | { kind: "node"; id: string }
@@ -11,8 +13,11 @@ export type Inspect =
   | null;
 
 interface State {
+  /** Every graph of every project, by id (see lib/projects.ts). */
   graphs: Record<string, Graph>;
-  mainId: string;
+  projects: Record<string, proj.Project>;
+  /** The current project; `activeId` is one of its graphs. */
+  projectId: string;
   activeId: string;
   // UI state (not persisted)
   selection: string[];
@@ -59,21 +64,34 @@ interface Actions {
   setHighlight(h: State["highlight"]): void;
   setToast(msg: string | null): void;
   switchTo(graphId: string): void;
+  newProject(name?: string): void;
+  switchProject(projectId: string): void;
+  renameProject(projectId: string, name: string): void;
+  duplicateProject(projectId: string): void;
+  deleteProject(projectId: string): void;
+  /** Build the Group theory example into the active (empty) graph as one undo step. */
+  loadExample(): void;
   forkActive(): void;
   mergeSandbox(sandboxId: string): void;
   discardSandbox(sandboxId: string): void;
+  /** The current project (main graph first, then its sandboxes) as a nodestorm/v1 file. */
   exportJson(): string;
-  /** Replace all graphs with a file's contents, repairing what it can. Returns the fixes applied. */
-  importJson(text: string): string[];
+  /** Add a file's graphs as a new project and switch to it, repairing what it can. */
+  importJson(text: string): { name: string; fixes: string[] };
   reset(): void;
 }
 
 export type GraphStore = State & Actions;
 
-function initial(): Pick<State, "graphs" | "mainId" | "activeId"> {
-  const g = emptyGraph();
-  return { graphs: { [g.id]: g }, mainId: g.id, activeId: g.id };
+type Workspace = proj.Workspace;
+
+function initial(): Workspace {
+  return proj.createProject({ graphs: {}, projects: {}, projectId: "", activeId: "" }, "My brainstorm");
 }
+
+const workspace = (s: Workspace): Workspace => ({ graphs: s.graphs, projects: s.projects, projectId: s.projectId, activeId: s.activeId });
+/** Fresh UI state after switching projects. */
+const cleared = { selection: [], inspect: null, highlight: null } satisfies Partial<State>;
 
 /** Move through a graph's history. A check restored as "checking" with no task running is marked failed. */
 function travel(s: State, id: string, step: typeof hist.undo<Graph>): Pick<State, "graphs" | "history"> | null {
@@ -135,10 +153,32 @@ export const useGraphStore = create<GraphStore>()(
       setHighlight: (highlight) => set({ highlight }),
       switchTo: (activeId) => set({ activeId, selection: [], inspect: null }),
 
+      newProject: (name) => set({ ...proj.createProject(workspace(get()), name), ...cleared }),
+      switchProject: (id) => set({ ...proj.switchProject(workspace(get()), id), ...cleared }),
+      renameProject: (id, name) => set(proj.renameProject(workspace(get()), id, name)),
+      duplicateProject: (id) => set({ ...proj.duplicateProject(workspace(get()), id), ...cleared }),
+      deleteProject(id) {
+        const before = get();
+        const p = before.projects[id];
+        if (!p) return;
+        // Undo stacks of the deleted graphs go too (deleting a project can't be undone; the UI confirms first).
+        const history = { ...before.history };
+        for (const g of proj.projectGraphs(before, p)) delete history[g.id];
+        const next = proj.deleteProject(workspace(before), id);
+        set(next.projectId === before.projectId ? { ...next, history } : { ...next, history, ...cleared });
+      },
+      loadExample() {
+        const data = EXAMPLES.groupTheory;
+        get().mutate((g) => (g.nodes.length ? g : buildExample(g, data)));
+        // A project that was never named takes the example's name.
+        const p = get().projects[get().projectId];
+        if (p?.name.startsWith(proj.DEFAULT_PROJECT_NAME)) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
+      },
+
       forkActive() {
-        const { graphs, activeId } = get();
+        const { graphs, activeId, projects, projectId } = get();
         const src = graphs[activeId];
-        const n = Object.values(graphs).filter((g) => g.parentId).length + 1;
+        const n = proj.projectGraphs(get(), projects[projectId]).filter((g) => g.parentId).length + 1;
         const sb = fork(src, `Sandbox ${n}`);
         set({ graphs: { ...graphs, [sb.id]: sb }, activeId: sb.id, selection: [], inspect: null });
       },
@@ -157,7 +197,8 @@ export const useGraphStore = create<GraphStore>()(
         set({ graphs: rest, history, activeId: parent.id, selection: [], inspect: null });
       },
       discardSandbox(sandboxId) {
-        const { graphs, activeId, mainId } = get();
+        const { graphs, activeId, projects, projectId } = get();
+        const mainId = projects[projectId].mainId;
         const sb = graphs[sandboxId];
         if (!sb?.parentId) return;
         const rest = { ...graphs };
@@ -170,26 +211,33 @@ export const useGraphStore = create<GraphStore>()(
       },
 
       exportJson() {
-        const { graphs, mainId } = get();
-        // Main graph first so import knows which one is the root.
-        const ordered = [graphs[mainId], ...Object.values(graphs).filter((g) => g.id !== mainId)];
-        const doc: GraphExport = { format: "nodestorm/v1", graphs: ordered };
+        const project = get().projects[get().projectId];
+        // Main graph first (projectGraphs' order) so import knows which one is the root.
+        const graphs = proj.projectGraphs(get(), project);
+        const doc: GraphExport = { format: "nodestorm/v1", project: { name: project.name }, graphs };
         return JSON.stringify(doc, null, 2);
       },
       importJson(text) {
         const { doc, fixes } = repairImport(JSON.parse(text));
-        const graphs = Object.fromEntries(doc.graphs.map((g) => [g.id, g]));
-        const main = doc.graphs.find((g) => !g.parentId) ?? doc.graphs[0];
-        set({ graphs, mainId: main.id, activeId: main.id, selection: [], inspect: null, history: {} });
-        return fixes;
+        // Importing never overwrites anything: the file becomes a new project (with fresh ids) next to the others.
+        const next = proj.importProject(workspace(get()), doc.graphs, doc.project?.name);
+        set({ ...next, ...cleared });
+        return { name: next.projects[next.projectId].name, fixes };
       },
-      reset: () => set({ ...initial(), selection: [], inspect: null, history: {} }),
+      reset: () => set({ ...initial(), ...cleared, history: {} }),
     }),
     {
       name: "nodestorm",
-      version: 1,
+      // v2 added projects. A v1 state (one main graph + sandboxes) becomes the project "My brainstorm".
+      version: 2,
       storage: createJSONStorage(() => localStorage),
-      partialize: (s) => ({ graphs: s.graphs, mainId: s.mainId, activeId: s.activeId }),
+      partialize: (s: GraphStore) => workspace(s),
+      migrate: (persisted, version) => proj.migrateWorkspace(persisted, version) as GraphStore,
+      // Also repairs a v2 state that lost track of a graph or project (e.g. hand-edited storage).
+      merge: (persisted, current) => ({
+        ...current,
+        ...proj.normalizeWorkspace({ ...workspace(current), ...(persisted as Partial<Workspace>) }),
+      }),
       // A check that was running when the page closed never finished: say so rather than pretend it passed.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
@@ -206,5 +254,6 @@ export const useGraphStore = create<GraphStore>()(
 );
 
 export const activeGraph = (s: GraphStore) => s.graphs[s.activeId];
+export const currentProject = (s: GraphStore) => s.projects[s.projectId];
 export const canUndo = (s: GraphStore) => !!s.history[s.activeId]?.past.length;
 export const canRedo = (s: GraphStore) => !!s.history[s.activeId]?.future.length;

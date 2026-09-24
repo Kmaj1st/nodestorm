@@ -100,6 +100,14 @@ describe("repairImport", () => {
     expect(doc.graphs[0].nodes[1].status).toBe("ok");
   });
 
+  it("keeps the project name of a project export and ignores a malformed one", () => {
+    const graphs = [{ id: "g", name: "Main", nodes: [], relations: [] }];
+    const named = repairImport({ format: "nodestorm/v1", project: { name: " Algebra " }, graphs });
+    expect(named.doc.project).toEqual({ name: "Algebra" });
+    expect(named.fixes).toEqual([]);
+    expect(repairImport({ format: "nodestorm/v1", project: { name: 3 }, graphs }).doc.project).toBeUndefined();
+  });
+
   it("rejects files with no graphs", () => {
     expect(() => repairImport({ hello: 1 })).toThrow(/Not a NodeStorm file/);
     expect(() => repairImport({ format: "nodestorm/v1", graphs: [] })).toThrow(/no graphs/);
