@@ -18,7 +18,25 @@ interface SettingsState {
   serverModels: Partial<Record<ProviderKind, string>>;
   /** Ask "what do you mean?" when a concept name has several meanings, offering this many options. */
   clarify: { enabled: boolean; options: number };
+  /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
+  language: string;
+  /** How many AI calls may run at once; the rest wait in a queue (lib/aiQueue.ts). */
+  aiConcurrency: number;
 }
+
+/** Presets for the output-language picker; `value` is what the prompt says. Anything else is custom text. */
+export const LANGUAGES: { label: string; value: string }[] = [
+  { label: "Auto (match the concept names)", value: "auto" },
+  { label: "English", value: "English" },
+  { label: "中文", value: "Chinese (中文)" },
+  { label: "Español", value: "Spanish (Español)" },
+  { label: "Français", value: "French (Français)" },
+  { label: "Deutsch", value: "German (Deutsch)" },
+  { label: "日本語", value: "Japanese (日本語)" },
+  { label: "Русский", value: "Russian (Русский)" },
+];
+
+export const DEFAULT_CONCURRENCY = 3;
 
 interface SettingsActions {
   update(patch: Partial<SettingsState>): void;
@@ -81,6 +99,8 @@ export const useSettings = create<SettingsStore>()(
       rememberKeys: false,
       serverModels: {},
       clarify: { enabled: true, options: 3 },
+      language: "auto",
+      aiConcurrency: DEFAULT_CONCURRENCY,
 
       update: (patch) => set(patch),
       updateConfig: (kind, patch) =>

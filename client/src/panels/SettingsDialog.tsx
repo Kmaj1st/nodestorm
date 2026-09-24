@@ -1,5 +1,6 @@
 import {
   DEFAULT_TIMEOUT_MS,
+  normalizeLanguage,
   PROVIDERS,
   providerMeta,
   type ModelInfo,
@@ -10,7 +11,8 @@ import {
 import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useGraphStore } from "../store/graphStore";
-import { useSettings, type Connection } from "../store/settingsStore";
+import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
+import { formatTokens, useUsage } from "../store/usageStore";
 
 type ModelsState =
   | { status: "idle" }
@@ -27,6 +29,11 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [serverModels, setServerModels] = useState(saved.serverModels);
   const [rememberKeys, setRememberKeys] = useState(saved.rememberKeys);
   const [clarify, setClarify] = useState(saved.clarify);
+  const [language, setLanguage] = useState(saved.language);
+  // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
+  const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
+  const [aiConcurrency, setAiConcurrency] = useState(saved.aiConcurrency);
+  const tokens = useUsage((s) => s.tokens);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<ModelsState>({ status: "idle" });
   const [server, setServer] = useState<ProvidersResponse | { error: string } | null>(null);
@@ -76,7 +83,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }, [provider, connection, cfg.apiKey, cfg.baseURL, canDiscover]);
 
   const save = () => {
-    saved.update({ connection, provider, configs, serverModels, rememberKeys, clarify });
+    const lang = normalizeLanguage(language) ?? "auto";
+    saved.update({ connection, provider, configs, serverModels, rememberKeys, clarify, language: lang, aiConcurrency });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
   };
@@ -253,6 +261,51 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             />
             meanings (plus “something else”)
           </label>
+        </fieldset>
+
+        <fieldset className="choice">
+          <legend>AI answers</legend>
+          <label className="check">
+            Write in
+            <select
+              value={customLanguage ? "custom" : language}
+              onChange={(e) => {
+                const custom = e.target.value === "custom";
+                setCustomLanguage(custom);
+                setLanguage(custom ? "" : e.target.value);
+              }}
+              aria-label="AI answers in"
+            >
+              {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
+              <option value="custom">Other…</option>
+            </select>
+            {customLanguage && (
+              <input
+                value={language}
+                onChange={(e) => setLanguage(e.target.value)}
+                maxLength={40}
+                placeholder="e.g. Português"
+                aria-label="Custom answer language"
+              />
+            )}
+          </label>
+          <span className="muted small">Names, definitions and relations are written in this language.</span>
+          <label className="check">
+            Run at most
+            <input
+              type="number"
+              min={1}
+              max={10}
+              value={aiConcurrency}
+              onChange={(e) => setAiConcurrency(Math.min(10, Math.max(1, Number(e.target.value) || DEFAULT_CONCURRENCY)))}
+              aria-label="Concurrent AI requests"
+              className="num"
+            />
+            AI requests at once (the rest wait in a queue)
+          </label>
+          {connection === "browser" && tokens > 0 && (
+            <span className="muted small" data-testid="token-usage">This session: ~{formatTokens(tokens)} tokens</span>
+          )}
         </fieldset>
 
         {connection === "browser" && meta.needsKey && (

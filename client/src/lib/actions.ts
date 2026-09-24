@@ -54,7 +54,7 @@ async function withBusy<T>(
   controllers.get(key)?.abort(); // a newer run of the same task supersedes the old one
   const ctrl = new AbortController();
   controllers.set(key, ctrl);
-  store().setBusy(key, label);
+  store().setBusy(key, label, ctrl.signal);
   try {
     return await fn(ctrl.signal);
   } catch (e) {

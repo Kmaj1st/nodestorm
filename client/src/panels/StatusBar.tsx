@@ -19,11 +19,12 @@ export function StatusBar() {
     <div className="status" role="status" aria-live="polite">
       {entries.map(([key, t]) => {
         const secs = Math.max(0, Math.floor((now - t.startedAt) / 1000));
+        const queued = t.state === "queued";
         return (
-          <div key={key} className="status__row" data-testid="task">
-            <span className="spinner" aria-hidden />
+          <div key={key} className="status__row" data-testid="task" data-state={queued ? "queued" : "running"}>
+            {queued ? <span className="status__queued">queued</span> : <span className="spinner" aria-hidden />}
             <span>{t.label}</span>
-            {secs >= 2 && <span className="status__time">{secs}s</span>}
+            {!queued && secs >= 2 && <span className="status__time">{secs}s</span>}
             <button className="status__cancel" onClick={() => cancelTask(key)} aria-label={`Cancel: ${t.label}`}>
               ✕
             </button>
