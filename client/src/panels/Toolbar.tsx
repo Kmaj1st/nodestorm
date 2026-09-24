@@ -1,6 +1,9 @@
 import { providerMeta } from "@nodestorm/shared";
-import { useRef } from "react";
+import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
+import { toPng } from "html-to-image";
+import { useEffect, useRef, useState } from "react";
 import { mix, tidy } from "../lib/actions";
+import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 
@@ -28,17 +31,10 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   const sandboxes = Object.values(s.graphs).filter((g) => g.parentId);
   const main = s.graphs[s.mainId];
 
-  const doExport = () => {
-    const blob = new Blob([s.exportJson()], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `nodestorm-${new Date().toISOString().slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(a.href);
-  };
   const doImport = async (file: File) => {
     try {
-      s.importJson(await file.text());
+      const fixes = s.importJson(await file.text());
+      if (fixes.length) s.setToast(`Imported with repairs: ${fixes.join("; ")}.`);
     } catch (e) {
       s.setToast(`Import failed: ${e instanceof Error ? e.message : e}`);
     }
@@ -96,7 +92,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         >
           ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
         </button>
-        <button onClick={doExport}>Export</button>
+        <ExportMenu />
         <button onClick={() => fileRef.current?.click()}>Import</button>
         <input
           ref={fileRef}
@@ -107,5 +103,105 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         />
       </div>
     </header>
+  );
+}
+
+function download(name: string, content: Blob | string) {
+  const a = document.createElement("a");
+  a.href = typeof content === "string" ? content : URL.createObjectURL(content);
+  a.download = name;
+  a.click();
+  if (typeof content !== "string") setTimeout(() => URL.revokeObjectURL(a.href), 1000);
+}
+
+const text = (s: string, type: string) => new Blob([s], { type: `${type};charset=utf-8` });
+
+/** Export dropdown: all graphs as JSON, or the active graph as Markdown notes, Mermaid or a PNG image. */
+function ExportMenu() {
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const { getNodes } = useReactFlow();
+  const setToast = useGraphStore((st) => st.setToast);
+  const exportJson = useGraphStore((st) => st.exportJson);
+  const graph = useGraphStore(activeGraph);
+
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close);
+    };
+  }, [open]);
+
+  const base = exportFileName(graph);
+  const run = (fn: () => void | Promise<void>) => async () => {
+    setOpen(false);
+    try {
+      await fn();
+    } catch (e) {
+      setToast(`Export failed: ${e instanceof Error ? e.message : e}`);
+    }
+  };
+
+  const items: { label: string; title: string; action: () => void | Promise<void> }[] = [
+    {
+      label: "JSON (all graphs)",
+      title: "Everything, including sandboxes. Import it again later.",
+      action: () => download(`nodestorm-${new Date().toISOString().slice(0, 10)}.json`, text(exportJson(), "application/json")),
+    },
+    {
+      label: "Markdown notes",
+      title: "Study notes for this graph: concepts in study order, prerequisites and both directions of every relation",
+      action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
+    },
+    {
+      label: "Mermaid diagram",
+      title: "Flowchart text for Mermaid (GitHub, Notion, …): copied to the clipboard and downloaded",
+      action: async () => {
+        const src = toMermaid(graph);
+        download(`${base}.mmd`, text(src, "text/plain"));
+        const copied = await navigator.clipboard?.writeText(src).then(() => true, () => false);
+        setToast(copied ? "Mermaid diagram copied to the clipboard and downloaded." : "Mermaid diagram downloaded (clipboard not available).");
+      },
+    },
+    {
+      label: "PNG image",
+      title: "A picture of the whole graph",
+      action: async () => {
+        const nodes = getNodes();
+        const viewportEl = document.querySelector<HTMLElement>(".react-flow__viewport");
+        if (!nodes.length || !viewportEl) return setToast("Nothing to capture yet: add a concept first.");
+        // Render the full graph (not just what's on screen) at 1:1, as in React Flow's "download image" example.
+        const bounds = getNodesBounds(nodes);
+        const width = Math.min(4096, Math.ceil(bounds.width) + 160);
+        const height = Math.min(4096, Math.ceil(bounds.height) + 160);
+        const vp = getViewportForBounds(bounds, width, height, 0.2, 1, 0.05);
+        const url = await toPng(viewportEl, {
+          backgroundColor: getComputedStyle(document.documentElement).getPropertyValue("--bg").trim() || "#fff",
+          width,
+          height,
+          style: { width: `${width}px`, height: `${height}px`, transform: `translate(${vp.x}px, ${vp.y}px) scale(${vp.zoom})` },
+        });
+        download(`${base}.png`, url);
+      },
+    },
+  ];
+
+  return (
+    <div className="menu" ref={ref}>
+      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Export ▾</button>
+      {open && (
+        <div className="menu__list" role="menu" aria-label="Export">
+          {items.map((it) => (
+            <button key={it.label} role="menuitem" title={it.title} onClick={run(it.action)}>{it.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
   );
 }

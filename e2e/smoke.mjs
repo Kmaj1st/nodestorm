@@ -1,7 +1,7 @@
 // End-to-end smoke test: starts the server (mock AI) + Vite, drives the UI in Chromium.
 // Usage: npm run e2e   (screenshots land in e2e/screenshots/)
 import { spawn } from "node:child_process";
-import { mkdirSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const SERVER_PORT = Number(process.env.E2E_SERVER_PORT || 8799);
@@ -177,6 +177,27 @@ try {
   await node("Kernel").waitFor();
   assert((await page.locator(".react-flow__node").count()) === 4, "graph survives reload (localStorage)");
   await page.screenshot({ path: `${shots}5-merged.png` });
+
+  console.log("Export");
+  const exportAs = async (label) => {
+    await page.getByRole("button", { name: "Export ▾" }).click();
+    const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
+    return { name: dl.suggestedFilename(), data: readFileSync(await dl.path()) };
+  };
+  const md = await exportAs("Markdown notes");
+  const mdText = md.data.toString("utf8");
+  assert(md.name.endsWith(".md") && mdText.includes("### Homomorphism"), "Markdown notes contain the concepts");
+  assert(
+    mdText.includes("- First Isomorphism Theorem → Isomorphism: derives") &&
+      mdText.includes("- Isomorphism → First Isomorphism Theorem: is derived by"),
+    "Markdown describes a relation in both directions",
+  );
+  const mmd = await exportAs("Mermaid diagram");
+  assert(mmd.data.toString("utf8").startsWith("flowchart"), "Mermaid export is a flowchart");
+  await page.locator(".toast").click(); // "copied/downloaded" notice
+  const png = await exportAs("PNG image");
+  writeFileSync(`${shots}8-export.png`, png.data);
+  assert(png.name.endsWith(".png") && png.data.subarray(1, 4).toString() === "PNG" && png.data.length > 5000, "PNG image of the canvas");
 
   const openSettings = async () => {
     await page.getByRole("button", { name: "AI settings" }).click();
