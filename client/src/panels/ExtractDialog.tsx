@@ -19,13 +19,20 @@ const isTextFile = (f: File) => /^text\//.test(f.type) || /\.(txt|md|markdown|te
  * relations the text states, then review them. Candidates that duplicate a concept in the graph are unticked and link
  * to that concept instead. "Add selected" adds everything ticked as one undo step.
  */
-export function ExtractDialog({ onClose }: { onClose: () => void }) {
+export function ExtractDialog({
+  onClose,
+  initial,
+}: {
+  onClose: () => void;
+  /** Start at the review with these candidates (LaTeX import: lib/texImport.ts) instead of asking the AI. */
+  initial?: { review: ExtractReview; title: string };
+}) {
   const t = useT();
   const graph = useGraphStore(activeGraph);
   const busy = useGraphStore((s) => Boolean(s.busy.extract));
   const [text, setText] = useState("");
   const [focus, setFocus] = useState("");
-  const [review, setReview] = useState<ExtractReview | null>(null);
+  const [review, setReview] = useState<ExtractReview | null>(initial?.review ?? null);
   const [fileError, setFileError] = useState<string | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   const tooLong = text.length > EXTRACT_MAX_CHARS;
@@ -60,7 +67,12 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal label={t("extract.title")} title={t("extract.title")} onClose={onClose} className="extract">
+    <Modal
+      label={initial ? t("texImport.title", { title: initial.title }) : t("extract.title")}
+      title={initial ? t("texImport.title", { title: initial.title }) : t("extract.title")}
+      onClose={onClose}
+      className="extract"
+    >
       {!review ? (
         <form className="form" onSubmit={run}>
           <p className="muted small">{t("extract.intro")}</p>
@@ -114,7 +126,7 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
         </form>
       ) : (
         <>
-          <p className="muted small">{t("extract.reviewIntro")}</p>
+          <p className="muted small">{t(initial ? "texImport.intro" : "extract.reviewIntro")}</p>
           <h4 className="extract__head">{t("extract.concepts", { n: review.items.length })}</h4>
           {review.items.length === 0 && <p className="muted">{t("extract.none")}</p>}
           <ul className="extract__list" aria-label={t("extract.concepts", { n: review.items.length })}>
@@ -166,7 +178,7 @@ export function ExtractDialog({ onClose }: { onClose: () => void }) {
             </>
           )}
           <div className="form__actions">
-            <button className="form__lead" onClick={() => setReview(null)}><Icon icon={ArrowLeft} size={14} />{t("extract.back")}</button>
+            {!initial && <button className="form__lead" onClick={() => setReview(null)}><Icon icon={ArrowLeft} size={14} />{t("extract.back")}</button>}
             <button onClick={onClose}>{t("common.cancel")}</button>
             <button className="primary" disabled={!adding && !linking} onClick={add}>
               <Icon icon={Plus} size={14} />

@@ -915,6 +915,11 @@ export const en = {
   "formal.unverified": "Not in Mathlib (dropped): {names}.",
   "formal.searchYourself": "Search Loogle yourself",
   "repair.droppedFormal": "dropped Mathlib results that weren't valid",
+  "file.texImport": "Import LaTeX (.tex)…",
+  "file.texImportTitle": "Turn a paper's definitions, theorems and lemmas into concepts, linked by what each one refers to",
+  "texImport.title": "Import from LaTeX: {title}",
+  "texImport.intro": "Every definition, theorem, lemma… in the document, and what each refers to (\\ref in its statement or proof). Links through a defined term it mentions start unticked. Rename or untick before adding.",
+  "texImport.none": "No definitions, theorems or lemmas found in {name}.",
 } as const satisfies Record<string, string>;
 
 export type MessageKey = keyof typeof en;

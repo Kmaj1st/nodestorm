@@ -903,4 +903,9 @@ export const zh: Record<MessageKey, string> = {
   "formal.unverified": "Mathlib 中不存在（已丢弃）：{names}。",
   "formal.searchYourself": "自己在 Loogle 中搜索",
   "repair.droppedFormal": "丢弃了无效的 Mathlib 结果",
+  "file.texImport": "导入 LaTeX（.tex）…",
+  "file.texImportTitle": "把论文中的定义、定理和引理变成概念，并按彼此的引用建立链接",
+  "texImport.title": "从 LaTeX 导入：{title}",
+  "texImport.intro": "文档中的每个定义、定理、引理……以及各自引用的内容（陈述或证明中的 \\ref）。通过提到已定义术语建立的链接默认不勾选。添加前可以改名或取消勾选。",
+  "texImport.none": "在 {name} 中没有找到定义、定理或引理。",
 };

@@ -1,0 +1,318 @@
+import type { ConceptKind } from "@nodestorm/shared";
+import type { ExtractItem, ExtractLink, ExtractReview } from "./extract";
+
+/**
+ * Import a LaTeX paper or lecture notes: every theorem-like environment (definition, theorem, lemma…, including the
+ * ones a `\newtheorem` declares) becomes a candidate concept, and a result that `\ref`s another one (in its statement
+ * or its proof) needs it. No AI: this reads the structure the author already wrote. The result is an Extract-style
+ * review (lib/extract.ts), so the user picks what goes in, and it is one undo step.
+ */
+
+/** Kind by the environment's printed name ("Theorem", "Lemma"…) or its usual short names. */
+const KIND_BY_WORD: [RegExp, ConceptKind][] = [
+  [/^(definition|defn|dfn|def|defi)$/i, "definition"],
+  [/^(theorem|thm|theo)$/i, "theorem"],
+  [/^(lemma|lem|lma|claim|sublemma)$/i, "lemma"],
+  [/^(proposition|prop|fact|observation)$/i, "proposition"],
+  [/^(corollary|cor|coro)$/i, "corollary"],
+  [/^(axiom|ax|postulate)$/i, "axiom"],
+  [/^(conjecture|conj|hypothesis|question|problem)$/i, "conjecture"],
+  [/^(example|ex|exa|exmp|counterexample)$/i, "example"],
+  [/^(notation|nota|convention)$/i, "notation"],
+  [/^(remark|rem|rmk|note)$/i, "other"],
+];
+
+function kindOf(word: string): ConceptKind | null {
+  const w = word.trim().replace(/\*$/, "");
+  return KIND_BY_WORD.find(([re]) => re.test(w))?.[1] ?? null;
+}
+
+/** The source without comments (an unescaped `%` to the end of the line). */
+export function stripComments(tex: string): string {
+  return tex.replace(/(^|[^\\])%.*$/gm, "$1");
+}
+
+/** Environment name → printed name, from `\newtheorem{env}[counter]{Name}` / `\newtheorem*{env}{Name}` / `\newtheorem{env}{Name}[section]`. */
+export function theoremEnvs(tex: string): Map<string, string> {
+  const envs = new Map<string, string>();
+  for (const m of tex.matchAll(/\\(?:newtheorem|declaretheorem)\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)?(?:\{([^}]+)\})?/g)) {
+    const env = m[1].trim();
+    const name = (m[2] ?? env).trim();
+    envs.set(env, name);
+  }
+  return envs;
+}
+
+/** A theorem-like environment in the document. */
+export interface TexResult {
+  env: string;
+  kind: ConceptKind | null;
+  /** The printed name of the environment ("Theorem"). */
+  heading: string;
+  /** The optional title, `\begin{theorem}[First Isomorphism Theorem]`. */
+  title?: string;
+  labels: string[];
+  /** The statement as NodeStorm text ($…$ maths kept). */
+  statement: string;
+  /** Labels it refers to, in its statement and in the proof right after it. */
+  refs: string[];
+  /** For definitions: the terms it defines (\emph, \textbf, \textit, \index). */
+  terms: string[];
+  /** Its number among results with the same printed name, from 1. */
+  number: number;
+}
+
+/** Read a balanced `{…}` group starting at `i` (which must be `{`); returns its content and the index after it. */
+function group(s: string, i: number): { text: string; end: number } | null {
+  if (s[i] !== "{") return null;
+  let depth = 0;
+  for (let j = i; j < s.length; j++) {
+    if (s[j] === "\\") {
+      j++;
+      continue;
+    }
+    if (s[j] === "{") depth++;
+    else if (s[j] === "}" && --depth === 0) return { text: s.slice(i + 1, j), end: j + 1 };
+  }
+  return null;
+}
+
+/** The optional `[…]` argument at `i` (brackets may nest, e.g. a citation `[\cite[p.~3]{x}]`). */
+function optional(s: string, i: number): { text: string; end: number } | null {
+  let k = i;
+  while (s[k] === " " || s[k] === "\n") k++;
+  if (s[k] !== "[") return null;
+  let depth = 0;
+  for (let j = k; j < s.length; j++) {
+    if (s[j] === "\\") {
+      j++;
+      continue;
+    }
+    if (s[j] === "[") depth++;
+    else if (s[j] === "]" && --depth === 0) return { text: s.slice(k + 1, j), end: j + 1 };
+  }
+  return null;
+}
+
+/** Words that name what a \\ref points to ("Theorem~\\ref{…}"); dropped when the reference becomes a name. */
+const REF_WORDS = "Definitions?|Defs?|Theorems?|Thms?|Lemmas?|Lems?|Propositions?|Props?|Corollar(?:y|ies)|Cors?|Axioms?|Conjectures?|Examples?|Remarks?|Notations?|Claims?";
+
+const REF = /\\(?:ref|cref|Cref|autoref|eqref|pageref|namecref|nameref|vref|thmref)\*?\s*\{([^}]*)\}/g;
+
+/** Every label a piece of LaTeX refers to (`\cref{a,b}` counts twice). */
+export function refsIn(tex: string): string[] {
+  const out: string[] = [];
+  for (const m of tex.matchAll(REF)) for (const l of m[1].split(",")) if (l.trim()) out.push(l.trim());
+  return out;
+}
+
+/** Commands whose argument is kept as plain text. */
+const KEEP_ARG = /\\(?:emph|textbf|textit|textsl|textsc|texttt|textrm|textsf|underline|mbox|text|hbox|index)\s*\{/;
+
+/** Prose (not maths) → plain text: formatting commands keep their text, references read as names, citations go. */
+function proseToText(s: string, nameOf: (label: string) => string | undefined): string {
+  let out = s
+    .replace(/\\label\{[^}]*\}/g, "")
+    .replace(/~?\\(?:cite|citep|citet|parencite|textcite|footcite)\*?\s*(?:\[[^\]]*\]\s*){0,2}\{[^}]*\}/g, "")
+    // "Definition~\ref{def:hom}" reads "Homomorphism" when the label is a known result; a bare \ref too.
+    .replace(new RegExp(`(?:\\b(?:${REF_WORDS})\\.?[~ ]?)?${REF.source}`, "g"), (whole: string, ls: string) => {
+      const labels = ls.split(",").map((l) => l.trim());
+      const names = labels.map((l) => nameOf(l));
+      if (names.every(Boolean)) return names.join(", ");
+      return whole.replace(REF, (_m: string, x: string) => x.split(",").map((l) => nameOf(l.trim()) ?? l.trim()).join(", "));
+    })
+    .replace(/\\footnote\s*\{[^}]*\}/g, "")
+    .replace(/\\begin\{(itemize|enumerate|description)\}(\[[^\]]*\])?/g, "\n")
+    .replace(/\\end\{(itemize|enumerate|description)\}/g, "\n")
+    .replace(/\\item(\[[^\]]*\])?\s*/g, (_, lab?: string) => `\n- ${lab ? `${lab.slice(1, -1)} ` : ""}`);
+  // Formatting commands keep their argument (\index drops it); repeated for nesting.
+  for (let pass = 0; pass < 4 && KEEP_ARG.test(out); pass++) {
+    let res = "";
+    let i = 0;
+    for (;;) {
+      const m = KEEP_ARG.exec(out.slice(i));
+      if (!m) break;
+      const at = i + m.index;
+      const g = group(out, at + m[0].length - 1);
+      if (!g) {
+        res += out.slice(i, at + m[0].length);
+        i = at + m[0].length;
+        continue;
+      }
+      res += out.slice(i, at) + (m[0].startsWith("\\index") ? "" : g.text);
+      i = g.end;
+    }
+    out = res + out.slice(i);
+  }
+  return out
+    .replace(/(?<!\\)~/g, " ")
+    .replace(/\\(?:noindent|medskip|smallskip|bigskip|newline|par|qedhere|hfill|centering)\b/g, " ")
+    .replace(/\\\\/g, "\n")
+    .replace(/``|''/g, '"')
+    .replace(/\\([%&#_{}$])/g, "$1")
+    .replace(/[ \t]+([.,;:)])/g, "$1");
+}
+
+/**
+ * LaTeX → NodeStorm text: inline maths stays `$…$`, display maths (\[…\], equation, align…) becomes `$$…$$`, and
+ * the prose between is cleaned up (see proseToText). Maths itself is never touched.
+ */
+export function texToText(tex: string, nameOf: (label: string) => string | undefined = () => undefined): string {
+  let s = tex
+    // As in LaTeX, a single line break is a space; a blank line starts a paragraph.
+    .replace(/[ \t]*\n(?![ \t]*\n)[ \t]*/g, " ")
+    .replace(/\\\[([\s\S]*?)\\\]/g, (_, m: string) => `\n$$${m.trim()}$$\n`)
+    .replace(/\\begin\{(equation|align|gather|multline|eqnarray|displaymath)\*?\}([\s\S]*?)\\end\{\1\*?\}/g, (_, env: string, m: string) => {
+      const body = m.replace(/\\label\{[^}]*\}/g, "").replace(/\\(?:nonumber|notag)\b/g, "").trim();
+      return `\n$$${/^(align|eqnarray)/.test(env) ? `\\begin{aligned}${body}\\end{aligned}` : body}$$\n`;
+    })
+    .replace(/\\\(([\s\S]*?)\\\)/g, (_, m: string) => `$${m}$`);
+  // Prose and maths apart: $$…$$ and $…$ (not \$) are kept as they are.
+  const parts = s.split(/(\$\$[\s\S]*?\$\$|(?<!\\)\$(?:[^$\\]|\\.)*\$)/);
+  s = parts.map((p, i) => (i % 2 ? p.replace(/\s*\n\s*/g, " ") : proseToText(p, nameOf))).join("");
+  return s
+    .replace(/[ \t]+/g, " ")
+    .replace(/ *\n */g, "\n")
+    .replace(/\n{2,}(?=\$\$)/g, "\n")
+    .replace(/(\$\$)\n{2,}/g, "$1\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
+
+/** The terms a definition defines: its emphasised words (outside maths). */
+function definedTerms(body: string): string[] {
+  const terms: string[] = [];
+  for (const m of body.matchAll(/\\(?:emph|textbf|textit|index|defn|term)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)) {
+    const t = texToText(m[1]).replace(/\$[^$]*\$/g, "").replace(/\s+/g, " ").trim();
+    if (t && t.length <= 60 && /\p{L}/u.test(t) && !terms.includes(t)) terms.push(t);
+  }
+  return terms;
+}
+
+/** Every theorem-like environment of the document, in order, with the proof that follows each. */
+export function parseTexResults(source: string): TexResult[] {
+  const tex = stripComments(source);
+  const declared = theoremEnvs(tex);
+  const envName = (env: string) => declared.get(env) ?? declared.get(env.replace(/\*$/, "")) ?? env;
+  const isResultEnv = (env: string) => env !== "proof" && Boolean(kindOf(envName(env)) ?? kindOf(env) ?? (declared.has(env.replace(/\*$/, "")) ? "other" : null));
+  const counts = new Map<string, number>();
+  const out: TexResult[] = [];
+  const begin = /\\begin\{([A-Za-z*]+)\}/g;
+  let m: RegExpExecArray | null;
+  while ((m = begin.exec(tex))) {
+    const env = m[1];
+    if (!isResultEnv(env)) continue;
+    const endTag = `\\end{${env}}`;
+    const endAt = tex.indexOf(endTag, begin.lastIndex);
+    if (endAt < 0) continue;
+    let bodyStart = begin.lastIndex;
+    const opt = optional(tex, bodyStart);
+    let title: string | undefined;
+    if (opt && !/^\s*$/.test(opt.text)) {
+      title = texToText(opt.text).replace(/\s+/g, " ").trim() || undefined;
+      bodyStart = opt.end;
+    } else if (opt) bodyStart = opt.end;
+    const body = tex.slice(bodyStart, endAt);
+    // A proof right after it (only whitespace, or a \label, between them) belongs to it.
+    const after = tex.slice(endAt + endTag.length);
+    const proof = /^\s*\\begin\{proof\}(\[[^\]]*\])?([\s\S]*?)\\end\{proof\}/.exec(after);
+    const declaredName = envName(env).replace(/\*$/, "");
+    // Undeclared (built-in) environments print their name capitalised: "theorem" → "Theorem".
+    const heading = declaredName.charAt(0).toUpperCase() + declaredName.slice(1);
+    const number = (counts.get(heading) ?? 0) + 1;
+    counts.set(heading, number);
+    const kind = kindOf(heading) ?? kindOf(env) ?? "other";
+    out.push({
+      env,
+      kind,
+      heading,
+      title,
+      labels: [...body.matchAll(/\\label\{([^}]*)\}/g)].map((x) => x[1].trim()),
+      statement: body,
+      refs: [...new Set([...refsIn(body), ...(proof ? refsIn(proof[2]) : [])])],
+      terms: kind === "definition" || kind === "notation" ? definedTerms(body) : [],
+      number,
+    });
+    begin.lastIndex = endAt + endTag.length;
+  }
+  return out;
+}
+
+/** A concept name for a result: its title, else what a definition defines, else "Theorem 3". */
+export function resultName(r: TexResult): string {
+  if (r.title) return r.title.replace(/\s*\\cite.*$/, "").trim();
+  if (r.terms.length) return r.terms[0].charAt(0).toUpperCase() + r.terms[0].slice(1);
+  return `${r.heading} ${r.number}`;
+}
+
+/** Plain text of the document's title (for the review heading and sources). */
+export function texTitle(source: string): string | undefined {
+  const m = /\\title\s*(?:\[[^\]]*\])?\s*\{((?:[^{}]|\{[^{}]*\})*)\}/.exec(stripComments(source));
+  return m ? texToText(m[1]).replace(/\s+/g, " ").replace(/\\\\/g, " ").trim() || undefined : undefined;
+}
+
+/**
+ * The review for an imported document: one candidate per result (names made unique), and a prerequisite link
+ * wherever a result refers to another's label. With `mentions`, a result that uses a term a definition defines
+ * (as a whole word, at least four letters) also needs that definition; those links start unticked.
+ */
+export function texReview(source: string, opts: { mentions?: boolean } = {}): ExtractReview & { title?: string; results: number } {
+  const results = parseTexResults(source);
+  const byLabel = new Map<string, number>();
+  results.forEach((r, i) => r.labels.forEach((l) => byLabel.set(l, i)));
+  // Unique names: a second "Lemma" title gets its number.
+  const names: string[] = [];
+  for (const r of results) {
+    let n = resultName(r);
+    if (names.some((x) => x.toLowerCase() === n.toLowerCase())) n = `${n} (${r.heading} ${r.number})`;
+    names.push(n);
+  }
+  const nameOf = (label: string) => {
+    const i = byLabel.get(label);
+    return i === undefined ? undefined : names[i];
+  };
+  const items: ExtractItem[] = results.map((r, i) => ({
+    source: names[i],
+    name: names[i],
+    definition: texToText(r.statement, nameOf),
+    aliases: r.title && r.terms.length && r.terms[0].toLowerCase() !== names[i].toLowerCase() ? [r.terms[0]] : [],
+    kind: r.kind,
+    include: true,
+  }));
+  const links: ExtractLink[] = [];
+  const seen = new Set<string>();
+  const link = (from: number, to: number, why: string, include: boolean) => {
+    const key = `${from}>${to}`;
+    if (from === to || seen.has(key)) return;
+    seen.add(key);
+    links.push({
+      from: names[from],
+      to: names[to],
+      aToB: { kind: "uses", explanation: why },
+      bToA: { kind: "", explanation: "" },
+      role: results[from].kind === "example" ? "assumes" : "uses",
+      include,
+    });
+  };
+  results.forEach((r, i) => {
+    for (const l of r.refs) {
+      const j = byLabel.get(l);
+      if (j !== undefined) link(i, j, `Refers to ${results[j].heading} ${results[j].number}${results[j].title ? ` (${results[j].title})` : ""}.`, true);
+    }
+  });
+  if (opts.mentions) {
+    results.forEach((r, i) => {
+      const text = texToText(r.statement).replace(/\$[^$]*\$/g, " ").toLowerCase();
+      results.forEach((d, j) => {
+        if (j >= i) return; // only earlier definitions: a paper defines before it uses
+        for (const term of d.terms) {
+          const t = term.toLowerCase();
+          if (t.length < 4) continue;
+          const re = new RegExp(`(^|[^\\p{L}])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?([^\\p{L}]|$)`, "u");
+          if (re.test(text)) link(i, j, `Mentions “${term}”.`, false);
+        }
+      });
+    });
+  }
+  return { items, links, title: texTitle(source), results: results.length };
+}

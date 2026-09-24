@@ -835,7 +835,7 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…", "Notation…",
+        "Import JSON…", "Extract from text…", "Import LaTeX (.tex)…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…", "Notation…",
         "JSON (this project)", "Markdown notes", "LaTeX document (.tex)", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File holds import, Extract from text, Quiz me, Derive together, Absurd chain, Versions, every export format and the share link",
@@ -1944,6 +1944,35 @@ try {
     await node("Kernel").waitFor();
     await page.waitForFunction(() => document.querySelector('[aria-label="Rename concept"]')?.value === "Kernel");
     assert(true, "a glossary entry jumps to its concept, turning off the filter that hid it");
+  }
+
+  console.log("LaTeX import");
+  {
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await page.getByTestId("tex-import").setInputFiles("e2e/fixtures/homomorphisms.tex");
+    const dlg = page.getByRole("dialog", { name: "Import from LaTeX: Notes on Group Homomorphisms" });
+    await dlg.waitFor();
+    const names = await dlg.locator(".extract__name").evaluateAll((els) => els.map((e) => e.value));
+    assert(
+      JSON.stringify(names) === JSON.stringify(["Homomorphism", "Kernel", "Lemma 1", "First Isomorphism Theorem", "Remark 1"]),
+      "a .tex file's definitions, lemma, theorem and remark become candidates, named by title or defined term",
+    );
+    await audit("LaTeX import review");
+    await dlg.getByLabel("Add Remark 1").uncheck();
+    await dlg.getByLabel("Name for Lemma 1").fill("Kernel is normal");
+    await dlg.getByRole("button", { name: /^Add/ }).last().click();
+    await node("First Isomorphism Theorem").waitFor();
+    await node("Kernel is normal").waitFor();
+    assert((await page.locator('[data-testid="node-Remark 1"]').count()) === 0, "unticked results are left out, renamed ones keep the new name");
+    await node("First Isomorphism Theorem").click();
+    const panel = await page.locator(".inspector").textContent();
+    assert(panel.includes("Kernel is normal") && panel.includes("Homomorphism"), "a result needs what it refers to (\\ref in its statement or proof)");
+    await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("Control+z");
+    await page.locator('[data-testid="node-First Isomorphism Theorem"]').waitFor({ state: "detached" });
+    assert(true, "the whole import is one undo step");
   }
 
   console.log("\nE2E passed");

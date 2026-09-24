@@ -1,0 +1,44 @@
+\documentclass{amsart}
+\usepackage{amsthm,amssymb}
+\newtheorem{thm}{Theorem}[section]
+\newtheorem{lem}[thm]{Lemma}
+\theoremstyle{definition}
+\newtheorem{defn}[thm]{Definition}
+\newtheorem*{rem}{Remark}
+\title{Notes on Group Homomorphisms}
+\begin{document}
+\maketitle
+% A comment with \begin{thm} that must be ignored.
+\section{Basics}
+\begin{defn}\label{def:hom}
+Let $G$ and $H$ be groups. A \emph{homomorphism} is a map $\varphi\colon G \to H$ with
+\[ \varphi(ab) = \varphi(a)\varphi(b) \quad\text{for all } a, b \in G. \]
+\end{defn}
+
+\begin{defn}[Kernel]\label{def:ker}
+The \textbf{kernel} of a homomorphism~$\varphi$ (Definition~\ref{def:hom}) is
+$\ker\varphi = \{g \in G : \varphi(g) = e_H\}$.
+\end{defn}
+
+\begin{lem}\label{lem:normal}
+For every homomorphism $\varphi$, the kernel $\ker\varphi$ is a normal subgroup of $G$.
+\end{lem}
+\begin{proof}
+Use Definition~\ref{def:ker}: for $k \in \ker\varphi$, $\varphi(gkg^{-1}) = e$. 50\% of the work is done.
+\end{proof}
+
+\begin{thm}[First Isomorphism Theorem \cite{lang}]\label{thm:first}
+Let $\varphi\colon G\to H$ be a homomorphism. Then
+\begin{align}
+G/\ker\varphi &\cong \operatorname{im}\varphi \label{eq:iso} \\
+|G| &= |\ker\varphi|\,|\operatorname{im}\varphi| \quad (G \text{ finite})
+\end{align}
+\end{thm}
+\begin{proof}
+By Lemma~\ref{lem:normal} the quotient exists; see also \cref{def:hom,def:ker}.
+\end{proof}
+
+\begin{rem}
+Kernels of homomorphisms are exactly the normal subgroups.
+\end{rem}
+\end{document}

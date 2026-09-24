@@ -106,6 +106,13 @@ no key needed) or an empty graph.
   - Only declarations that really exist are listed, each with its type, docstring and a link to the Mathlib docs.
   - Names that don't exist are shown as dropped. Formal-science work can go straight from an idea to its formal
     statement.
+- **Import LaTeX** (**File → Import LaTeX (.tex)…**): every definition, theorem, lemma, proposition, corollary… of a
+  paper or lecture notes becomes a concept of that kind. Environments that `\newtheorem` declares are included.
+  - **Links**: a result needs whatever it `\ref`s, in its statement or in the proof that follows it.
+  - **Names**: each concept is named by its optional title, or by the term a definition `\emph`s, or else "Theorem 3".
+  - **Maths**: formulas are kept as LaTeX (`align` becomes `aligned`), and references read as the names they point to.
+  - **Review**: you review it like Extract from text, including optional links through defined terms a result mentions.
+    The whole import is one undo step, and no AI is involved.
 - **LaTeX document** (**File → LaTeX document (.tex)**): an `amsart` article with one `amsthm` environment per concept
   (Definition, Theorem, Lemma…; concepts without a kind are *Concept*), in study order, each labelled and saying what
   it uses (*Uses: Definition 3 (Kernel)*, as `\ref`s), with missing prerequisites, aliases, sources, your notes as

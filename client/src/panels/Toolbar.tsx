@@ -4,6 +4,7 @@ import {
   BookA,
   ChevronDown,
   Drama,
+  FileCode,
   FileJson,
   FileText,
   GitBranchPlus,
@@ -42,6 +43,8 @@ import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
+import { texReview } from "../lib/texImport";
+import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog, FlashcardsDialog, GlossaryDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, ViewMenu } from "./ViewMenu";
@@ -236,6 +239,8 @@ function FileMenu() {
   const projectName = view?.name ?? project.name;
   const [sharing, setSharing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  const [texImport, setTexImport] = useState<{ review: ExtractReview; title: string } | null>(null);
+  const texRef = useRef<HTMLInputElement>(null);
   const [glossary, setGlossary] = useState(false);
   // "Flashcards (Anki)…" remembers the concept selected when it was opened, for its learning-path option.
   const [flashcards, setFlashcards] = useState<{ rootId?: string } | null>(null);
@@ -281,6 +286,7 @@ function FileMenu() {
       : ([
           { label: "file.import", title: "file.importTitle", icon: Upload, action: () => fileRef.current?.click() },
           { label: "file.extract", title: "file.extractTitle", icon: ScanText, action: () => setExtracting(true) },
+          { label: "file.texImport", title: "file.texImportTitle", icon: FileCode, action: () => texRef.current?.click() },
           { label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
           { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => useDerive.getState().openPanel() },
           { label: "file.absurd", title: "file.absurdTitle", icon: Drama, action: () => useAbsurd.getState().openAbsurd() },
@@ -376,6 +382,22 @@ function FileMenu() {
         onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
       />
       {extracting && !view && <ExtractDialog onClose={() => setExtracting(false)} />}
+      <input
+        ref={texRef}
+        type="file"
+        accept=".tex,.ltx,.latex,text/x-tex,application/x-tex"
+        hidden
+        data-testid="tex-import"
+        onChange={async (e) => {
+          const f = e.target.files?.[0];
+          e.target.value = "";
+          if (!f) return;
+          const r = texReview(await f.text(), { mentions: true });
+          if (!r.items.length) return useGraphStore.getState().setToast(tr("texImport.none", { name: f.name }), "info");
+          setTexImport({ review: r, title: r.title ?? f.name.replace(/\.[^.]+$/, "") });
+        }}
+      />
+      {texImport && !view && <ExtractDialog initial={texImport} onClose={() => setTexImport(null)} />}
       {glossary && <GlossaryDialog graph={graph} onClose={() => setGlossary(false)} />}
       {versions && !view && <VersionsDialog focusSave={versions === "save"} onClose={() => setVersions(null)} />}
       {flashcards && (

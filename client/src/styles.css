@@ -738,6 +738,8 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .extract__dup { color: var(--sandbox); }
 .extract__quote { margin: 0; padding-left: 10px; border-left: 2px solid var(--border-strong); color: var(--muted); font-style: italic; }
 .extract__link .check { align-items: flex-start; }
+/* Stacked link checkboxes: at least 24px apart (WCAG 2.5.8 target size). */
+.extract__link { min-height: 26px; display: flex; align-items: center; }
 
 /* Settings */
 .settings { width: min(640px, calc(100vw - 32px)); }
