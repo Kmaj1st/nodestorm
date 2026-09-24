@@ -40,6 +40,8 @@ together.
 - **Quiz me**: questions in prerequisite order, self-grading, and a mastery dot on each concept.
 - **Math**: `$…$` LaTeX is rendered with KaTeX, which loads only when needed.
 - **Flashcards**: export for Anki (TSV, with math converted for MathJax) or as CSV.
+- **Walkthrough**: full-screen slides through a learning path or the whole graph, in study order. Also works on
+  a shared graph.
 
 ### Organising
 - **Projects**, plus an offline *Group theory* example with LaTeX formulas.
