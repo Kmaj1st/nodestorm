@@ -1,0 +1,547 @@
+# NodeStorm architecture
+
+A maintainer's guide: what the pieces are, how a click becomes an AI call and a graph change, and where to make the
+common changes. Paths are relative to the repository root. For what the app does from a user's point of view, see
+the [README](../README.md).
+
+- [1. The big picture](#1-the-big-picture)
+- [2. Data model](#2-data-model)
+- [3. Persistence](#3-persistence)
+- [4. The AI layer](#4-the-ai-layer)
+- [5. Client state](#5-client-state)
+- [6. Pure graph logic](#6-pure-graph-logic)
+- [7. Key flows, end to end](#7-key-flows-end-to-end)
+- [8. UI structure](#8-ui-structure)
+- [9. Testing and CI](#9-testing-and-ci)
+- [10. How to…](#10-how-to)
+- [11. Known limitations and follow-ups](#11-known-limitations-and-follow-ups)
+
+## 1. The big picture
+
+NodeStorm is an npm-workspaces monorepo with three packages:
+
+| Package | What it is | Entry points |
+|---|---|---|
+| `shared/` (`@nodestorm/shared`) | The zod data model and the whole AI core: providers, prompts, tasks, JSON extraction, retries. Runs unchanged in the browser and in Node. No build step: `main` points at `shared/src/index.ts`. | `shared/src/model.ts`, `shared/src/ai/index.ts` |
+| `server/` | Optional Express 5 API that runs the same tasks with keys from `server/.env`. | `server/src/index.ts`, `server/src/app.ts` |
+| `client/` | Vite 7 + React 19 + `@xyflow/react` v12 (React Flow) + zustand. The real application. | `client/src/main.tsx`, `client/src/App.tsx` |
+
+The client is a static site. In **browser mode** (the default) it imports the providers from `shared/` and calls the
+AI provider directly with a key the user typed in; no NodeStorm server exists at all. In **server mode** it POSTs to
+`/api/<task>` on the local server (Vite proxies `/api` to port 8787, see `client/vite.config.ts`), which runs the
+same task code with keys from its environment.
+
+Layering inside the client, from the bottom up:
+
+1. **Pure logic** in `client/src/lib/*.ts` (graphOps, paths, layout, view, extract, quiz, snapshots, share, export,
+   importRepair, projects…): functions from data to data, no React, no store. Most unit tests live here.
+2. **Stores** in `client/src/store/*.ts` (zustand): `graphStore` holds all graphs and projects and applies pure
+   operations through `mutate`; the others hold settings, view filters, snapshots, quiz and onboarding UI state.
+3. **Actions** in `client/src/lib/actions.ts`: async flows that combine AI calls (`client/src/lib/api.ts`) with graph
+   mutations and busy/cancel bookkeeping.
+4. **Components** in `client/src/panels/` and `client/src/graph/`: read stores, call actions.
+
+## 2. Data model
+
+Everything is defined with zod in `shared/src/model.ts`; the TypeScript types are `z.infer`s of the schemas.
+
+```mermaid
+classDiagram
+  class GraphExport {
+    format: "nodestorm/v1"
+    project?: name
+    graphs: Graph[]  main first
+  }
+  class Graph {
+    id, name
+    nodes: ConceptNode[]
+    relations: Relation[]
+    parentId?  (sandbox)
+    forkedAt?
+  }
+  class ConceptNode {
+    id, name, definition, aliases[]
+    status: ok|blocked|checking|unclear|error
+    position {x,y}
+    dependsOn: node ids
+    missingDeps: MissingDep[]
+    error?, senses?: Sense[]
+    explanation?, notes?, mastery?
+  }
+  class Relation {
+    id, a, b
+    aToB: DirRel
+    bToA: DirRel
+    origin: mix|dependency|derive|extract
+  }
+  class DirRel { kind, explanation }
+  class MissingDep { name, reason, role: uses|derives|assumes }
+  GraphExport --> Graph
+  Graph --> ConceptNode
+  Graph --> Relation
+  Relation --> DirRel : two directions
+  ConceptNode --> MissingDep
+```
+
+- **ConceptNode.** `name`, `definition`, `aliases` (a rename keeps the old name as an alias). `dependsOn` holds the ids
+  of prerequisites that are in the graph; `missingDeps` holds prerequisites the AI named that aren't (each with a
+  `role`: `uses`, `derives` or `assumes`, and a `reason`). Optional personal data: `explanation` (the latest
+  "Explain more" answer with its level and time), `notes` (free text) and `mastery` (quiz score, review count, last
+  review time).
+- **Status** (`NodeStatus`):
+  - `checking`: an AI call for this node is running. It never survives a reload (`onRehydrateStorage` in
+    `client/src/store/graphStore.ts` turns it into `error`) or an undo with no task running (`travel` in the same file).
+  - `blocked`: it has `missingDeps`.
+  - `ok`: checked, nothing missing.
+  - `unclear`: the name is ambiguous. `senses` holds the candidate meanings until the user picks one.
+  - `error`: the check failed or was cancelled; `error` holds the message and the badge is a Retry button.
+- **Relation.** Undirected pair `a`/`b` with **two directions**: `aToB` is what `a` does to `b` and `bToA` what `b`
+  does to `a`. Each is a `DirRel` (`kind`, a short phrase or `"none"`, plus an `explanation`). The canvas draws one
+  line with an arrowhead at each end; the arrowhead at `b` opens `aToB`. `graphOps.upsertRelation` keeps this
+  invariant when a relation is re-created in the other orientation (it swaps the directions).
+- **Relation origin** (`RelationOrigin`): where it came from. `mix` (Mix ⇄, and the default for old data),
+  `dependency` (created by `graphOps.link` when a prerequisite is linked; drawn dashed), `derive` (Derive ✦ proposal)
+  and `extract` (Extract from text). `upsertRelation` never downgrades a richer origin to `dependency`.
+- **Graph.** A main graph, or a **sandbox** when `parentId` is set (the graph it was forked from, possibly another
+  sandbox). Node and relation ids are preserved by `fork` so `merge` can match them.
+- **Project** (`client/src/lib/projects.ts`, client-only, not in the zod model): `{ id, name, mainId, createdAt }`.
+  All graphs of all projects live in one flat `graphs` map; a graph belongs to the project whose main graph it
+  descends from through `parentId` (`rootOf`). A flat map means AI results can keep addressing a graph by id no matter
+  which project is showing.
+- **Share-viewer graph.** A graph opened from a share link (or a previewed version) is put into `graphs` under a fresh
+  id and recorded in `graphStore.view`. It is never persisted, exported as part of a project or mutated (`mutate`
+  ignores it). See [Share link](#share-link).
+- **File format.** `GraphExport` (`format: "nodestorm/v1"`) is the one on-disk format: JSON export, share links and
+  version snapshots all use it, and all are read back through `client/src/lib/importRepair.ts`.
+- **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
+  `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
+  `QuizRequest/Response`. Requests carry `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`.
+- **Name matching.** `normalizeName` (lowercase, strip accents and punctuation, crude plural folding) and
+  `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
+  prerequisites, install, extract and merge.
+
+## 3. Persistence
+
+Everything is in the user's browser. No account, no backend storage.
+
+| Where | Key | What | Code |
+|---|---|---|---|
+| localStorage | `nodestorm` | Projects and graphs (zustand `persist`, version 2; v1 held a single brainstorm and is migrated by `migrateWorkspace`). Only the workspace is persisted (`partialize`), never UI state, undo history or a shared graph. | `client/src/store/graphStore.ts`, `client/src/lib/projects.ts` |
+| localStorage + sessionStorage | `nodestorm-settings` | Settings. **Split storage**: without *Remember keys* the copy in localStorage has every `apiKey` removed and the full copy (with keys) goes to sessionStorage, so keys vanish with the tab. With it, everything goes to localStorage. Reads prefer sessionStorage. | `client/src/store/settingsStore.ts` (`splitStorage`) |
+| localStorage | `nodestorm-view` | View filters (relation origins shown, edge labels, to-do only, focus radius). Focus itself isn't stored. | `client/src/store/viewStore.ts`, `sanitizeView` in `client/src/lib/view.ts` |
+| localStorage | `nodestorm-ui-language` | Interface language (absent = follow the browser). | `client/src/i18n/index.ts` |
+| localStorage | `nodestorm-theme` | Theme preference (absent = auto). | `client/src/lib/theme.ts` |
+| localStorage | `nodestorm-onboarding` | Welcome card / tour dismissed. | `client/src/lib/onboarding.ts` |
+| IndexedDB | database `nodestorm-snapshots`, stores `meta` and `data` | Version snapshots: metadata for the list, and the JSON only loaded to compare or restore. | `client/src/lib/snapshotDb.ts` |
+| memory | — | Undo/redo stacks (per graph, max 100), busy tasks, token usage. | `client/src/lib/history.ts`, `client/src/store/usageStore.ts` |
+
+Every storage access is wrapped in try/catch: a private window with blocked storage still runs, it just forgets.
+Snapshots turn themselves off (`useSnapshots.available === false`) when IndexedDB can't be opened.
+
+**Snapshots** (`client/src/lib/snapshots.ts` pure, `client/src/store/snapshotStore.ts` wiring): a snapshot is a
+project captured as a `nodestorm/v1` document (`capture`), with an FNV-1a hash so an automatic snapshot of an
+unchanged project is skipped. `autoSnapshot(reason)` is called before bulk changes (`installAll`, `extract`, `merge`,
+`discard`, `tidy`, `restore`); `startAutoSnapshots` (from `client/src/main.tsx`) marks projects dirty on change and
+`periodicTick` takes one every 10 minutes while editing. `planPrune` keeps the last 20 automatic snapshots per
+project, all named ones, and evicts old automatic ones past ~20 MB. Writes are serialised (`serial`) so pruning
+never races a write.
+
+## 4. The AI layer
+
+### Providers (`shared/src/ai/`)
+
+- `shared/src/ai/provider.ts`: the `Provider` interface (`complete(messages, opts)` and `listModels()`),
+  `ProviderError` (with an HTTP-ish `status` and an optional `retry` marker), `CancelledError`, and two helpers every
+  provider uses:
+  - **`withDeadline(label, {signal, timeoutMs}, fn)`**: runs `fn` with an AbortSignal that fires when the caller
+    cancels or the deadline passes, and guarantees the promise settles by then even if `fn` ignores the signal. Aborts
+    become `CancelledError` (user) or a 504 `ProviderError` (timeout). Nothing can hang.
+  - **`withRetries(label, signal, deadlineAt, attempt)`**: retries `ProviderError`s marked `retry` (429, 408, 5xx,
+    529, network failures) up to twice with exponential backoff and jitter, honouring `Retry-After`, and never
+    waiting past the deadline. Default timeout is 90 s (`DEFAULT_TIMEOUT_MS`), 15 s for model discovery.
+- `shared/src/ai/factory.ts`: `PROVIDERS` (the preset list: label, default model, base URL, whether a key is needed,
+  key page, `local`) and `createProvider(kind, cfg)`. SiliconFlow, DeepSeek, Moonshot, Zhipu, DashScope, Ollama and
+  "OpenAI-compatible" are all presets of one client.
+- `shared/src/ai/openaiCompatible.ts`: `OpenAICompatibleProvider` for any `/chat/completions` endpoint. Asks for
+  `response_format: json_object`, and if a model rejects that (an HTTP 400 naming `response_format`) retries without
+  it and remembers the endpoint+model in `noJsonMode`. `listModels` hides non-chat models.
+- `shared/src/ai/anthropic.ts`: `AnthropicProvider`. The `@anthropic-ai/sdk` is **imported lazily** (`loadSdk`), so
+  in the browser it's a separate chunk that only loads when someone talks to Claude; a failed load is retried next
+  time. SDK retries are off (`maxRetries: 0`) so `withRetries` owns them. Optional server-side web search for the
+  `name`, `clarify` and `relate` tasks; `pause_turn` is resumed up to 4 times.
+- `shared/src/ai/mock.ts`: `MockProvider`, the **Offline demo**. A tiny abstract-algebra knowledge base; it
+  identifies the task from the `[task:<name>]` marker in the system prompt and parses the `INPUT:` JSON of the user
+  message. Deterministic, so unit and e2e tests use it.
+
+### Tasks, prompts, schemas
+
+- `shared/src/ai/prompts.ts`: one `<task>Prompt(req)` per task returning `ChatMessage[]`. `sys(kind, …)` adds the
+  `[task:kind]` marker; `withLanguage` appends the output-language paragraph (`languageInstruction`) to the system
+  message when the user picked an answer language (`"auto"` means "match the input").
+- `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
+  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`. Each parses the request with its zod
+  schema, builds the prompt and calls `runStructured`, which:
+  1. calls `provider.complete(messages, { json: true, … })`,
+  2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
+     `<think>…</think>` block from reasoning models; tries each `{` until one parses),
+  3. validates it with the response schema, and on a malformed answer asks once more, quoting the error.
+  Timeouts and cancellation are not retried there. Some tasks post-process: `clarify` treats "ambiguous with one
+  sense" as unambiguous, `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
+  ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index).
+
+`TaskName = keyof typeof tasks` is used by both the server and the client, so adding a task to this object is what
+makes it exist everywhere.
+
+### Browser mode vs server mode
+
+```mermaid
+sequenceDiagram
+  participant UI as Component (e.g. Inspector)
+  participant A as lib/actions.ts
+  participant Q as lib/api.ts run() + aiQueue
+  participant T as shared tasks[name]
+  participant P as Provider
+  participant S as server /api/name
+  UI->>A: analyzeNode(id)
+  A->>A: withBusy(key, label, fn): AbortController, busy entry
+  A->>Q: api.deps(req, signal)
+  Q->>Q: offlineBlocks? reject OfflineError
+  Q->>Q: queue.run (≤ aiConcurrency, else "queued")
+  alt connection = browser
+    Q->>T: tasks.deps(createProvider(...), req, {signal, language, onUsage})
+    T->>P: complete() inside withDeadline + withRetries
+    P-->>T: text
+    T-->>Q: zod-validated result
+  else connection = server
+    Q->>S: POST /api/deps  x-ai-provider, x-ai-model, x-ai-language, x-ai-timeout
+    S->>T: tasks.deps(registry.get(...), body, {signal, language})
+    T-->>S: result
+    S-->>Q: JSON (errors as {error}, 499 on cancel)
+  end
+  Q-->>A: result
+  A->>A: store.mutate(fn, graphId, {history: "background"})
+```
+
+- **Client side** (`client/src/lib/api.ts`): `run(name, req, signal)` is the single entry point. `runNow` reads
+  settings at the moment the call actually starts (so a queued call uses the latest ones). Browser mode builds the
+  provider with `browserProvider` (throws `NeedsSetupError` when a key is missing; `reportError` in actions then
+  opens Settings). Server mode uses `serverFetch` with the headers `x-ai-provider`, `x-ai-model` (the per-provider
+  server model override), `x-ai-language` (URI-encoded, since header values must be ASCII) and `x-ai-timeout`; it
+  gives the server `2 × timeout + 5 s` because the server may retry once on malformed output.
+- **Server side** (`server/src/app.ts`): one `POST /api/<name>` route per key of `tasks`, plus `GET /api/providers`
+  and `GET /api/models?provider=`. `parseTimeout` clamps the header to 10 s…600 s. The request's `close` event aborts
+  the upstream call. Errors map to status codes: cancel → 499, zod → 400, `ProviderError` → its status, else 500.
+  `server/src/providers/registry.ts` builds providers from env vars `<KIND>_API_KEY`, `<KIND>_BASE_URL`,
+  `<KIND>_MODEL` (plus `ANTHROPIC_WEB_SEARCH=1` and `AI_PROVIDER` for the default). The client may choose provider
+  and model, never the key.
+- **Queue** (`client/src/lib/aiQueue.ts`): `createLimiter(limit)` is a FIFO concurrency limiter (default 3, Settings →
+  parallel AI calls). A task aborted while waiting is dropped with `CancelledError`. Its `onState` callback marks the
+  owning busy task as `queued`/`running` via `graphStore.setBusyState` (matched by AbortSignal), which is how the
+  status bar shows "queued".
+- **Offline guard** (`client/src/lib/online.ts`): `offlineBlocks(provider, navigator.onLine)` rejects immediately with
+  `OfflineError` unless the provider is `local` (Offline demo, Ollama), instead of waiting for a timeout.
+- **`withBusy(key, label, fn, handlers)`** (`client/src/lib/actions.ts`): wraps every AI call as a visible,
+  cancellable task. It owns one `AbortController` per busy key (a new run with the same key aborts the old one),
+  registers `busy[key]` for the status bar, drops answers that arrive after a cancel, and turns errors into a toast
+  (or the caller's `onError`). `cancelTask(key)` is what the status bar's ✕ and dialogs' Cancel call. Busy keys
+  follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
+  `explain:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`.
+- **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
+  an info toast) if so. Only calls for that graph are refused; work on the user's own graphs continues.
+- **Token usage**: browser-mode providers call `onUsage`, which adds to `client/src/store/usageStore.ts` (shown in
+  Settings). Server mode doesn't report usage.
+
+## 5. Client state
+
+### `graphStore` (`client/src/store/graphStore.ts`)
+
+Persisted: `graphs`, `projects`, `projectId`, `activeId`. UI-only: `selection`, `inspect` (a node, or one direction of
+a relation), `busy`, `toast`/`toastKind`, `settingsOpen`, `clarifying`, `highlight`, `history`, `view`.
+
+**`mutate(fn, graphId?, { history, key })`** is the only way graph content changes. `fn` is a pure
+`(Graph) => Graph` (normally from `graphOps`). The history option decides how it shows up in undo:
+
+- `"step"` (default): a new undo step. Consecutive steps with the same `key` are coalesced (typing into one field).
+- `"merge"`: folded into the previous step, for follow-up bookkeeping of one user action (e.g. Derive's links after
+  its add).
+- `"background"`: not an undo step at all. The same `fn` is also applied to every past and future snapshot
+  (`hist.rebase`). This is used for **AI progress and results** (status → checking, deps found, explanation, mastery).
+  Why: an AI answer arrives seconds later, possibly after the user did other things. If it were a step, undo would
+  first take back the AI result instead of the user's own last action; if it were applied only to the present, undo
+  would resurrect a stale "checking…" spinner or lose the prerequisites the AI found. Rebasing keeps the AI's findings
+  in every state the user can travel to. `fn` must therefore be a no-op where it doesn't apply, which is why
+  `analyzeNode` wraps its patches in `sameConcept` (skip snapshots where the node is a different concept, e.g. still
+  unclear or renamed).
+
+`mutate` silently ignores unknown graphs (discarded while an AI call was running) and the viewer graph.
+
+Other actions: project CRUD (`newProject`, `switchProject`, `renameProject`, `duplicateProject`, `deleteProject`,
+all delegating to `client/src/lib/projects.ts`), `forkActive`/`mergeSandbox`/`discardSandbox`, `exportJson`/
+`importJson`, `addProject`/`restoreProject` (Versions), `openView`/`closeView`/`saveViewCopy` (viewer), `loadExample`.
+Selectors: `activeGraph`, `isViewing`, `currentProject`, `canUndo`, `canRedo`.
+
+### Other stores
+
+- `client/src/store/settingsStore.ts`: connection (`browser`/`server`), provider, per-provider `configs` (key,
+  base URL, model, timeout), `rememberKeys`, `serverModels`, clarify options, install-all limits, answer `language`,
+  `aiConcurrency`. `isReady(s)` says whether AI calls can run without opening Settings.
+- `client/src/store/viewStore.ts`: view filters (persisted) and focus mode (`focus`, not persisted); `visibleNow`
+  and `toggleFocus` helpers used by `App.tsx`.
+- `client/src/store/snapshotStore.ts`: snapshot list and the functions described in [Persistence](#3-persistence).
+- `client/src/store/quizStore.ts`: which quiz dialog is open (progress itself is `mastery` on the nodes).
+- `client/src/store/onboardingStore.ts`: welcome card and tour state.
+- `client/src/store/usageStore.ts`: session token count.
+- `client/src/lib/theme.ts` and `client/src/i18n/index.ts` hold small zustand stores of their own (`useTheme`,
+  `useLocale`).
+
+## 6. Pure graph logic
+
+All in `client/src/lib/`, no React or store imports (except `t` for messages in a few places), unit-tested in
+`client/test/`.
+
+| File | What |
+|---|---|
+| `graphOps.ts` | Node/relation CRUD: `addNode` (dedupes by name/alias, places at `findFreeSpot`, then `satisfyMissing`), `applyDeps`, `link`, `satisfyMissing` ("installing" = adding a node whose name matches someone's missing dep), `upsertRelation`, `renameNode`, `updateRelation`, `removeNode`, `removeRelation`, `removeDependency`, `applySense`, `redirectNode`, `installPosition`, `setPositions`, `fork`, `merge`. |
+| `paths.ts` | Over `dependsOn`: `prerequisiteClosure`, `learningPath` (topological study order incl. missing deps), `findCycles` (Tarjan SCC), `cycleInfo`, `cycleThrough`. |
+| `layout.ts` | `layeredLayout` for Tidy: rows by dependency depth, prerequisites on top. |
+| `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts`, `showsEverything`. |
+| `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
+| `quiz.ts` | Spaced-repetition-lite: `updateMastery`, `strength`, `masteryLevel`, `studyOrder`, `quizPlan`, `nextConcept`, `pickStyle`, `summarize`. |
+| `snapshots.ts` / `snapshotDb.ts` | Version capture, hash, prune plan, diff, `keepMastery` / IndexedDB wrapper. |
+| `importRepair.ts` | `repairImport(raw)`: accepts anything graph-like, fills defaults, drops dangling references, resets unknown enum values, and returns human-readable `fixes`. |
+| `share.ts` | `packGraph`, `encodeShare`/`decodeShare` (deflate + base64url in the URL hash), size limits. |
+| `export.ts` | `toMarkdown`, `toMermaid`, `exportFileName` (and its own `studyOrder`). PNG export is in `Toolbar.tsx`. |
+| `projects.ts` | Workspace operations, `cloneGraphs` (fresh ids with one shared map), `normalizeWorkspace`, `migrateWorkspace`. |
+| `history.ts` | `record`, `undo`, `redo`, `rebase`. |
+| `fuzzy.ts`, `examples.ts`, `shortcuts.ts`, `onboarding.ts` | Find (`searchNodes`), the offline Group theory example (`client/src/data/groupTheory.json`), the shortcut list for the `?` dialog, tour logic. |
+| `viewport.ts` | Bridge from actions to the canvas (`viewport.center/reveal/focus/fit`); a no-op without a canvas (unit tests). |
+
+## 7. Key flows, end to end
+
+### Add concept → clarify → deps → install / install all
+
+1. `AddNodeDialog` calls `addConcept({ name, definition })` (or `suggestNames(description)` → `api.name` →
+   `addCandidate`).
+2. `addConcept` (`client/src/lib/actions.ts`) positions at the viewport centre, `mutate(ops.addNode)` as an undo step
+   (status `checking`; `satisfyMissing` links it into anyone who was missing it), reveals it, then calls
+   `analyzeNode(id, graphId)`.
+3. `analyzeNode`: if the node has no definition and clarifying is on, `api.clarify`. Ambiguous → background
+   `status: "unclear", senses`, and `setClarifying` opens `SenseDialog`; the user's choice goes to `chooseSense` →
+   `ops.applySense` (may merge into an existing concept) → `analyzeNode` again. Unambiguous → store the definition.
+4. `api.deps` with the other concepts as context → background `ops.applyDeps`: prerequisites that match an existing
+   concept (`matchesExisting` or by name) are `link`ed (`dependsOn` + a `dependency` relation); the rest become
+   `missingDeps` and the node is `blocked`. Then `paths.cycleThrough` warns about a cycle.
+5. **Install** (Inspector) → `installDep(dependentId, name)` → `placeDep` adds the concept at `installPosition` with a
+   hint ("Needed by X (role): reason") so its clarify rarely needs the user → `analyzeNode` on it.
+6. **Install all** → `installAllMissing(rootId)`: `autoSnapshot("installAll")`, then breadth-first over levels: place
+   every missing dep of the frontier (`placeDep`), analyze siblings in parallel with `{ quiet: true }` (no dialogs,
+   through the AI queue), next frontier = the ones that became ok/blocked. Stops at `installAll.maxDepth` /
+   `maxNodes`. One `withBusy` covers the run; cancelling it cancels the in-flight checks. Ends with an
+   `installSummary` toast (unclear, failed, left over, cycles).
+
+### Mix
+
+Toolbar Mix (two selected, neither blocked/unclear) → `mix(aId, bId)` → `api.relate` → `mutate(upsertRelation(…,
+"mix"))` as a normal undo step (the user asked for it) → the inspector opens the `a → b` direction.
+
+### Derive
+
+`DeriveDialog` → `derive(selectedIds, goal)` → `api.derive` returns proposals; each **Accept** →
+`acceptProposal(p, anchorIds)` → `addConcept` below the anchors, then one `mutate` adding a `derive` relation per
+link, as `"merge"` into the add's undo step.
+
+### Extract from text
+
+`ExtractDialog` → `extractFromText(text, focus)` → `api.extract` (server-side `cleanExtraction`) → `buildReview` (dup
+detection, ticks) → user edits the review → `insertExtraction(review)`: `autoSnapshot("extract")`, one
+`mutate(applyExtraction(…, viewport.center()))` (one undo step; new concepts laid out in layers; relations with
+origin `extract`, never overwriting a user relation), then quiet `analyzeNode` for every new concept through the queue.
+
+### Fork / merge
+
+`forkActive` → `ops.fork` (deep copy, same node/relation ids, `parentId`, `forkedAt`) and switch to it. Sandbox banner
+(`SandboxBanner` in `client/src/App.tsx`): **Merge back** → `autoSnapshot("merge")` + `mergeSandbox` → `ops.merge`
+(sandbox wins on shared ids, parent-only content kept, independently-added same-name concepts folded), recorded as one
+undo step in the parent; child sandboxes are re-parented. **Discard** → `autoSnapshot("discard")` + `discardSandbox`.
+
+### Share link
+
+`ShareDialog` → `encodeShare(graph, name)`: `packGraph` (short ids, drops empty fields, settles `checking`/`error`,
+**leaves out notes, explanations and mastery**) → JSON → raw deflate (`CompressionStream`, or `fflate` loaded on
+demand) → base64url → `#share=1.<data>`. The hash never reaches a server. Opening: `openShareLink` in
+`client/src/App.tsx` (on load and on `hashchange`) → `decodeShare` (length caps, inflate with a 5 MB bomb guard,
+`repairImport`) → `graphStore.openView(graph, name)` (fresh id, `view` set, read-only). `ViewerBanner` offers **Save a
+copy** (`saveViewCopy` → `importProject`, fresh ids) and **Close** (`closeView`, clears the hash).
+
+### Snapshot restore
+
+`VersionsDialog` (File → Versions…) lists `useSnapshots().metas` for the current project. **Compare** loads
+`snapshotMain` and shows `diffSummary` against the current main graph. **Preview** → `openView(graph, …,
+"snapshot")`. **Restore** → `restoreSnapshot(id)`: load via `readSnapshot` (import repair), `takeSnapshot({ reason:
+"restore" })` of the current state (captured synchronously first), then `restoreProject(projectId, keepMastery(…))`,
+which also clears the project's undo stacks. **Restore as new project** → `restoreAsNew` → `addProject`.
+
+## 8. UI structure
+
+- `client/src/main.tsx`: `initTheme()`, `registerServiceWorker()`, `startAutoSnapshots()`, render `<App>`, then
+  `preloadDialogs()`.
+- `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
+  for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
+  `InspectorSheet` (a collapsible bottom sheet under 800px), toast, and the dialogs.
+- `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Derive, Tidy/Find/Focus/View, graph/sandbox
+  selector and fork, Settings, File ▾ (import, exports incl. PNG via lazily imported `html-to-image`, Extract,
+  Quiz, Share, Versions). One row from 1200px up; under 800px the less-used groups fold into ☰.
+- `client/src/graph/GraphCanvas.tsx`: the React Flow canvas. **Performance notes:**
+  - React Flow node and edge objects are kept in local state/cache and **reused by identity** when their concept,
+    relation, classes and visibility are unchanged, so an AI status update re-renders only that node; the edges array
+    is reused when no edge changed. `ConceptNode` and `BiRelationEdge` are `memo`ised.
+  - From 150 concepts (`LARGE_GRAPH`) `onlyRenderVisibleElements` is on.
+  - `client/src/graph/BiRelationEdge.tsx` portals its labels into React Flow's label layer found once per edge
+    (`useLabelLayer`) instead of using `<EdgeLabelRenderer>`, whose per-edge `querySelector` inside a store selector
+    dominated big graphs; labels are dropped below zoom 0.45. `e2e/perf.mjs` measures a 300-concept graph.
+  - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
+- `client/src/panels/Inspector.tsx`: node view (dependency flow, install, rename, explain, notes, learning path,
+  quiz) and relation-direction view (edit, delete, cycle "remove this link").
+- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Sense, Settings, Share, Shortcuts,
+  Versions are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`) that shows
+  "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle, and the
+  service worker precaches them. The quiz dialog is lazy-loaded separately by `client/src/panels/QuizHost.tsx`.
+- `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
+  Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
+- **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
+  `zh.ts` is typed `Record<MessageKey, string>`, so a missing or extra key fails `npm run typecheck`, and
+  `client/test/i18n.test.ts` also checks placeholders and markup match. `t(key, params)` works anywhere, components
+  use `useT()` to re-render on language change, `rich()` renders `**bold**`/`` `code` `` and element placeholders.
+  Plurals: `{n, plural, one {…} other {…}}` (see `client/src/i18n/format.ts`). The interface language is independent of
+  the AI answer language (`settingsStore.language`).
+- **Theming**: CSS variables on `:root` and `:root[data-theme="dark"]` in `client/src/styles.css`; `initTheme` sets
+  `<html data-theme>` from the preference or `prefers-color-scheme`, and React Flow gets `colorMode`. Feature CSS lives
+  next to its component (`client/src/graph/mastery.css`, `client/src/panels/quiz.css`,
+  `client/src/panels/versions.css`, `client/src/panels/onboarding.css`).
+- **PWA** (`client/pwa/`): `client/pwa/plugin.ts` is a build-only Vite plugin that writes `client/pwa/sw.js` into
+  `dist/` with the precache list (every built file) and a content-hash version. The worker serves only same-origin
+  build files (navigations get the cached `index.html`), never `/api/*` or provider calls, and doesn't
+  `skipWaiting` on its own: `client/src/lib/pwa.ts` shows `UpdateNotice` and sends `SKIP_WAITING` when the user
+  presses Reload. `vite dev` never registers it. Manifest: `client/public/manifest.webmanifest`; icons are rendered
+  by `node client/pwa/make-icons.mjs`.
+
+## 9. Testing and CI
+
+- **Unit tests**: `npm test` runs vitest over `shared/test/`, `server/test/` and `client/test/` (`vitest.config.ts`,
+  Node environment). Client tests that touch stores install an in-memory `localStorage` with `vi.hoisted` (see
+  `client/test/installAll.test.ts`) and use `fake-indexeddb` for snapshots. Flow tests (`installAll`, `quizActions`,
+  `snapshots`, `reviewFixes*`) drive the real actions against the mock provider.
+  `shared/test/robustness.test.ts` covers deadlines, retries and JSON extraction; `server/test/app.test.ts` the HTTP
+  layer.
+- **e2e** (`npm run e2e` → `e2e/smoke.mjs`): starts the server with `AI_PROVIDER=mock` and Vite, then drives Chromium
+  through Playwright in sections printed as it goes: AI setup, naming, blocking and install, arrowheads, Mix,
+  sandbox, server mode, persistence, export, undo & editing, layout, ambiguous names, failures, dependency tools,
+  theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
+  offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
+  中文), quiz, versions. The run is **pinned to English** (an init script sets `nodestorm-ui-language`) because the
+  selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
+  `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
+- **PWA e2e** (`npm run e2e:pwa` → build + `e2e/pwa.mjs`): serves `client/dist` with `vite preview` (port
+  `E2E_WEB_PORT`, default 4273), checks the manifest and service worker, offline start, a failed chunk load and the
+  update notice.
+- **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph; `PERF_PROFILE=1` prints hot functions.
+- **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
+  once against a real provider using `server/.env`, validates against the same schemas, prints timings.
+- **CI** (`.github/workflows/ci.yml`): on every push and PR: `npm ci`, typecheck, test, install Chromium, e2e,
+  e2e:pwa; uploads `e2e/screenshots/` on failure. **Pages** (`.github/workflows/pages.yml`): manual
+  (`workflow_dispatch`) build and deploy of `client/dist`.
+
+## 10. How to…
+
+### Add an AI task
+
+1. **Schema**: add `FooRequest` / `FooResponse` in `shared/src/model.ts` (use `.default()` for optional fields so
+   lenient model output still parses).
+2. **Prompt**: add `"foo"` to `TaskKind` and write `fooPrompt(req)` in `shared/src/ai/prompts.ts` using `sys("foo", …)`
+   and `input(req, …)`. If it has human-readable output fields, mention them in `languageInstruction`.
+3. **Task**: add `foo` to `tasks` in `shared/src/ai/tasks.ts` (parse the request, `runStructured`, post-process if
+   needed).
+4. **Mock**: add a `case "foo"` in `MockProvider.answer` (`shared/src/ai/mock.ts`) with a deterministic answer.
+5. **Server**: nothing to do; `/api/foo` exists because the route loop iterates `tasks`. Update the route list in the
+   README's layout section.
+6. **Client API**: add `foo: (req, signal) => run("foo", req, signal)` to `api` in `client/src/lib/api.ts`.
+7. **Action**: write an action in `client/src/lib/actions.ts`: `inViewer` check, `withBusy(key, t("task.foo"), …)`,
+   and store results with `mutate(…, { history: "background" })` unless the user explicitly asked for a graph change.
+8. **i18n**: add the busy label and UI strings to `client/src/i18n/en.ts` and `client/src/i18n/zh.ts`.
+9. **Tests**: `shared/test/tasks.test.ts` (parsing, mock), a client test if the action has logic, an e2e section in
+   `e2e/smoke.mjs`, and an input in `scripts/live-smoke.mts` (tasks without one are reported as skipped).
+
+### Add a provider preset
+
+For an OpenAI-compatible service: add the kind to `ProviderKind`, to the `OPENAI_COMPATIBLE` set and a `PROVIDERS`
+entry (label, default model, base URL, `needsKey`, `keyUrl`, `local` if it runs on the machine) in
+`shared/src/ai/factory.ts`. The server picks up `<KIND>_API_KEY/_BASE_URL/_MODEL` automatically
+(`server/src/providers/registry.ts`); document them in `server/.env.example` and the README's providers table.
+`settingsStore`'s `merge` gives new providers an empty config for existing users. For a different API, implement
+`Provider` (use `withDeadline` + `withRetries`, map errors to `ProviderError` with `retry` for transient ones) and add
+a `case` to `createProvider`. Add a test to `shared/test/providers.test.ts`.
+
+### Add a UI string
+
+Add the key to `client/src/i18n/en.ts` (grouped by feature prefix), then the same key to `client/src/i18n/zh.ts`
+(typecheck fails until you do). Use `t("key", { param })` or `rich()` for markup. Plural syntax is English-only.
+
+### Add a relation origin
+
+Every place that knows the list:
+
+1. `RelationOrigin` enum in `shared/src/model.ts` (and its doc comment).
+2. Where it's created: pass it to `ops.upsertRelation(…, origin)`; check the "keep the richer origin" rule in
+   `upsertRelation` (`client/src/lib/graphOps.ts`), and `removeDependency`, which only drops `dependency` edges.
+3. View filters: `DEFAULT_VIEW.origins` in `client/src/lib/view.ts` (`sanitizeView` and `isFiltered` iterate the enum)
+   and `KINDS` in `client/src/panels/ViewMenu.tsx`, with `view.<origin>`/`view.<origin>Title` strings.
+4. Inspector label: `ORIGIN_LABEL` in `client/src/panels/Inspector.tsx` (a `Record<RelationOrigin, …>`, so typecheck
+   reminds you) plus its string.
+5. Canvas style: `.relation--<origin>` in `client/src/styles.css` (the class is added in `BiRelationEdge.tsx`).
+6. Export: `toMermaid` in `client/src/lib/export.ts` draws only `dependency` dotted; decide for yours.
+7. Share: `packGraph` in `client/src/lib/share.ts` omits `mix` (the default) and writes any other origin as is.
+8. Import repair: `client/src/lib/importRepair.ts` accepts any enum value and resets unknown ones to `mix`; nothing to
+   do unless older files need mapping.
+9. Extract: `applyExtraction` in `client/src/lib/extract.ts` only overwrites existing `dependency` relations.
+10. i18n (`en.ts`, `zh.ts`) and tests: `client/test/view.test.ts`, the e2e "Focus & filters" section.
+
+### Add a dialog
+
+Write the component in `client/src/panels/` wrapped in `<Modal label=… onClose=…>`. Register a loader in `loaders`
+and export `lazyDialog(…)` from `client/src/panels/lazy.tsx` (so it gets its own chunk, preloading and the failed-load
+boundary), and render it conditionally from `App.tsx` or `Toolbar.tsx`. Add its strings to both locales and open it
+in the e2e "Accessibility audit" section so axe checks it.
+
+## 11. Known limitations and follow-ups
+
+Collected from code comments, commit messages and reading the code. Most are deliberate trade-offs; the name-matching
+and server-binding items are real problems worth fixing.
+
+- **Personal data isn't shared.** Share links leave out mastery, notes and explanations on purpose (`packGraph`); the
+  viewer has no quiz, notes, Explain or Versions. A shared sandbox arrives as a graph named "Main".
+- **Share link length.** Links over ~8,000 characters (`LONG_LINK`) may be cut off by chat/mail apps; the dialog warns
+  and suggests the JSON export. Tokens over 500,000 characters and payloads over 5 MB are refused.
+- **Versions compare/preview only the main graph.** `diffSummary` and Preview (`snapshotMain`) look at the main graph;
+  Restore replaces main graph and sandboxes. Mastery is kept across restores (`keepMastery`), and restoring clears
+  the project's undo stacks.
+- **Undo history is in memory only** (max 100 steps per graph) and lost on reload. Deleting a project or a sandbox
+  can't be undone, a restore only through Versions, and undoing a merge doesn't bring the sandbox back.
+- **AI results are never undo steps**: undo can't remove prerequisites a check found; the user removes them by hand
+  (e.g. "Remove this link" on a cycle).
+- **Re-check is additive**: `applyDeps` replaces `missingDeps` but never removes existing `dependsOn` links the AI no
+  longer lists.
+- **Token usage** is only counted in browser mode.
+- **Server mode has no auth** and is meant for your own machine only. Note that `server/src/index.ts` calls
+  `listen(port)` without a host, so it binds every interface: anyone on the same network can reach it and spend the keys
+  in `server/.env`.
+- **Name matching is crude** (`normalizeName`): plural folding strips a trailing "s" from every word, and only
+  Latin letters, digits and CJK ideographs survive normalisation. A name written only in Cyrillic, Greek, kana or
+  Hangul normalises to `""`, so such concepts are never matched as duplicates, `applyDeps` skips every prerequisite of
+  such a concept (its empty key equals the concept's own), and `cleanExtraction` drops them. This matters because the
+  answer-language picker offers Русский and 日本語.
+- **Two `studyOrder`s**: `client/src/lib/export.ts` (Kahn-style, for Markdown) and `client/src/lib/quiz.ts` (DFS
+  post-order, for quizzes) are separate implementations.
+- **Periodic snapshots** only cover the current project, and any graph change (even a late AI result for another
+  project's graph) marks the current project as changed (`startAutoSnapshots`).
+- **IndexedDB unavailable** (some private windows): Versions is disabled with a notice; everything else works.
+- **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).
