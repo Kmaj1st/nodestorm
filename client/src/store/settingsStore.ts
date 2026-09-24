@@ -16,6 +16,8 @@ interface SettingsState {
   rememberKeys: boolean;
   /** Model override used in server mode, per provider. */
   serverModels: Partial<Record<ProviderKind, string>>;
+  /** Ask "what do you mean?" when a concept name has several meanings, offering this many options. */
+  clarify: { enabled: boolean; options: number };
 }
 
 interface SettingsActions {
@@ -78,6 +80,7 @@ export const useSettings = create<SettingsStore>()(
       configs: emptyConfigs(),
       rememberKeys: false,
       serverModels: {},
+      clarify: { enabled: true, options: 3 },
 
       update: (patch) => set(patch),
       updateConfig: (kind, patch) =>
@@ -96,7 +99,12 @@ export const useSettings = create<SettingsStore>()(
       // New providers added in later versions get an empty config.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
-        return { ...current, ...p, configs: { ...emptyConfigs(), ...(p.configs ?? {}) } };
+        return {
+          ...current,
+          ...p,
+          configs: { ...emptyConfigs(), ...(p.configs ?? {}) },
+          clarify: { ...current.clarify, ...(p.clarify ?? {}) },
+        };
       },
     },
   ),

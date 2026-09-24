@@ -97,3 +97,29 @@ describe("sandboxes", () => {
     expect(node(merged, "First Isomorphism Theorem").status).toBe("ok");
   });
 });
+
+describe("choosing a meaning", () => {
+  it("renames to the chosen sense, keeps the original name as an alias, and links waiting dependents", () => {
+    let g = ops.emptyGraph();
+    const law = ops.addNode(g, { name: "Law of Large Numbers" });
+    g = ops.applyDeps(law.graph, law.id, [{ name: "Expectation (probability)", role: "uses", reason: "sample mean → E[X]", matchesExisting: null }]);
+    const exp = ops.addNode(g, { name: "Expectation" });
+    const r = ops.applySense(exp.graph, exp.id, { name: "Expectation (probability)", definition: "E[X]" });
+    const n = node(r.graph, "Expectation (probability)");
+    expect(r.merged).toBe(false);
+    expect(n.aliases).toContain("Expectation");
+    expect(n.definition).toBe("E[X]");
+    expect(node(r.graph, "Law of Large Numbers").status).toBe("ok");
+    expect(node(r.graph, "Law of Large Numbers").dependsOn).toEqual([exp.id]);
+  });
+
+  it("folds into an existing concept with that meaning, moving its links", () => {
+    const { g, homId } = theoremScenario();
+    const dup = ops.addNode(g, { name: "Morphism" });
+    const linked = ops.upsertRelation(dup.graph, dup.id, node(dup.graph, "First Isomorphism Theorem").id, { kind: "k", explanation: "" }, { kind: "k2", explanation: "" });
+    const r = ops.applySense(linked, dup.id, { name: "homomorphism", definition: "…" });
+    expect(r).toMatchObject({ merged: true, id: homId });
+    expect(r.graph.nodes.some((n) => n.id === dup.id)).toBe(false);
+    expect(r.graph.relations).toHaveLength(1); // the moved link collapsed onto the existing one
+  });
+});

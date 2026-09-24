@@ -173,3 +173,34 @@ textarea { resize: vertical; width: 100%; }
 .ai-button { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-button--warn { border-color: var(--checking); color: var(--checking); background: #fffbeb; }
 code { font-size: 12px; background: var(--bg); padding: 0 3px; border-radius: 3px; }
+
+/* Status bar with cancellable tasks */
+.status { display: flex; flex-direction: column; gap: 4px; padding: 6px 8px; }
+.status__row { display: flex; align-items: center; gap: 8px; }
+.status__time { opacity: 0.7; font-variant-numeric: tabular-nums; }
+.status__cancel { background: transparent; border: 1px solid rgb(255 255 255 / 0.3); color: #fff; padding: 0 6px; font-size: 12px; }
+.spinner {
+  width: 10px; height: 10px; border-radius: 50%; border: 2px solid rgb(255 255 255 / 0.35); border-top-color: #fff;
+  animation: spin 0.8s linear infinite;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+
+/* Clickable node badges */
+button.concept__badge { border: none; cursor: pointer; font: inherit; font-size: 10px; }
+button.concept__badge:hover { text-decoration: underline; }
+.concept--unclear { border-color: var(--accent); border-style: dashed; }
+.concept__badge--unclear { background: var(--accent-soft); color: var(--accent); }
+.error-box { display: flex; align-items: center; justify-content: space-between; gap: 8px; background: #fff7ed; border-radius: 6px; padding: 8px; }
+.error-box p { margin: 0; }
+.error-box--unclear { background: var(--accent-soft); }
+
+/* "What do you mean?" dialog */
+.senses { display: flex; flex-direction: column; gap: 8px; }
+.sense { display: flex; gap: 10px; align-items: flex-start; border: 1px solid var(--border); border-radius: 8px; padding: 10px; cursor: pointer; }
+.sense > span { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sense--on { border-color: var(--accent); background: var(--accent-soft); }
+.sense input[type="radio"] { margin-top: 3px; }
+.sense__head { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.sense__other { gap: 6px !important; }
+.spacer { flex: 1; }
+input.num { width: 64px; }

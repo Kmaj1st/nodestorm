@@ -1,4 +1,5 @@
 import {
+  DEFAULT_TIMEOUT_MS,
   PROVIDERS,
   providerMeta,
   type ModelInfo,
@@ -6,7 +7,7 @@ import {
   type ProviderKind,
   type ProvidersResponse,
 } from "@nodestorm/shared";
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings, type Connection } from "../store/settingsStore";
@@ -25,6 +26,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [configs, setConfigs] = useState(saved.configs);
   const [serverModels, setServerModels] = useState(saved.serverModels);
   const [rememberKeys, setRememberKeys] = useState(saved.rememberKeys);
+  const [clarify, setClarify] = useState(saved.clarify);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<ModelsState>({ status: "idle" });
   const [server, setServer] = useState<ProvidersResponse | { error: string } | null>(null);
@@ -45,26 +47,36 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   const canDiscover = connection === "server" ? Boolean(serverInfo?.configured) : !meta.needsKey || Boolean(cfg.apiKey);
 
+  // Only the latest discovery request may update the list; older ones are aborted.
+  const discovery = useRef<AbortController | null>(null);
   const discover = useCallback(async () => {
+    discovery.current?.abort();
+    const ctrl = new AbortController();
+    discovery.current = ctrl;
     setModels({ status: "loading" });
     try {
-      setModels({ status: "ok", models: await api.listModels(provider, cfg, connection) });
+      const models = await api.listModels(provider, cfg, connection, ctrl.signal);
+      if (!ctrl.signal.aborted) setModels({ status: "ok", models });
     } catch (e) {
-      setModels({ status: "error", message: e instanceof Error ? e.message : String(e) });
+      if (!ctrl.signal.aborted) setModels({ status: "error", message: e instanceof Error ? e.message : String(e) });
     }
   }, [provider, cfg, connection]);
+  useEffect(() => () => discovery.current?.abort(), []);
 
   // Discover automatically when the provider/connection changes or a key is entered (debounced).
   useEffect(() => {
     setModels({ status: "idle" });
     if (!canDiscover) return;
     const t = setTimeout(discover, 500);
-    return () => clearTimeout(t);
+    return () => {
+      clearTimeout(t);
+      discovery.current?.abort();
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [provider, connection, cfg.apiKey, cfg.baseURL, canDiscover]);
 
   const save = () => {
-    saved.update({ connection, provider, configs, serverModels, rememberKeys });
+    saved.update({ connection, provider, configs, serverModels, rememberKeys, clarify });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
   };
@@ -198,6 +210,50 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             ))}
           </ul>
         )}
+
+        {provider !== "mock" && (
+          <label className="field">
+            Request timeout (seconds)
+            <input
+              type="number"
+              min={10}
+              max={600}
+              value={Math.round((cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}
+              onChange={(e) => {
+                const secs = Math.min(600, Math.max(10, Number(e.target.value) || DEFAULT_TIMEOUT_MS / 1000));
+                setCfg({ timeoutMs: secs * 1000 });
+              }}
+              aria-label="Request timeout (seconds)"
+            />
+            <span className="muted small">If the AI hasn't answered by then, the request fails with an error you can retry.</span>
+          </label>
+        )}
+
+        <fieldset className="choice">
+          <legend>Ambiguous names</legend>
+          <label className="check">
+            <input
+              type="checkbox"
+              checked={clarify.enabled}
+              onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
+            />
+            Ask what I mean when a name has several meanings
+          </label>
+          <label className="check">
+            Offer
+            <input
+              type="number"
+              min={2}
+              max={10}
+              value={clarify.options}
+              disabled={!clarify.enabled}
+              onChange={(e) => setClarify({ ...clarify, options: Math.min(10, Math.max(2, Number(e.target.value) || 3)) })}
+              aria-label="Number of meanings to offer"
+              className="num"
+            />
+            meanings (plus “something else”)
+          </label>
+        </fieldset>
 
         {connection === "browser" && meta.needsKey && (
           <div className="keynote">

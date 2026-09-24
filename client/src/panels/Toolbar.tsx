@@ -16,11 +16,14 @@ export function Toolbar({ onAdd, onDerive }: { onAdd: () => void; onDerive: () =
     (settings.connection === "browser" ? meta.defaultModel : "server default");
 
   const selected = graph.nodes.filter((n) => s.selection.includes(n.id));
-  const blocked = selected.filter((n) => n.status === "blocked");
+  // Blocked (missing deps) and unclear (meaning not chosen) concepts can't be mixed or derived from yet.
+  const blocked = selected.filter((n) => n.status === "blocked" || n.status === "unclear");
   const busyMix = Object.keys(s.busy).some((k) => k.startsWith("mix:"));
   const canMix = selected.length === 2 && blocked.length === 0 && !busyMix;
   const canDerive = selected.length >= 1 && blocked.length === 0;
-  const blockReason = blocked.length ? `Install missing dependencies of ${blocked.map((n) => n.name).join(", ")} first` : undefined;
+  const blockReason = blocked.length
+    ? `Resolve ${blocked.map((n) => n.name).join(", ")} first (install missing dependencies / choose a meaning)`
+    : undefined;
 
   const sandboxes = Object.values(s.graphs).filter((g) => g.parentId);
   const main = s.graphs[s.mainId];

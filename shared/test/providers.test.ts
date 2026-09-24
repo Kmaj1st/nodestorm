@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProvider } from "../src/ai/factory";
+import { CancelledError, ProviderError, withDeadline, type Provider } from "../src/ai/provider";
+import { tasks } from "../src/ai/tasks";
 
 afterEach(() => vi.unstubAllGlobals());
 
@@ -54,5 +56,59 @@ describe("model discovery", () => {
 
   it("mock provider needs no key", async () => {
     expect(await createProvider("mock").listModels()).toHaveLength(1);
+  });
+});
+
+describe("timeouts and cancellation", () => {
+  // A server that accepts the request and never answers (but honours abort, like real fetch).
+  const hangingFetch = () =>
+    vi.stubGlobal(
+      "fetch",
+      (_url: string, init?: RequestInit) =>
+        new Promise((_, reject) => init?.signal?.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")))),
+    );
+
+  it("a request that never answers fails with a timeout error", async () => {
+    hangingFetch();
+    const p = createProvider("siliconflow", { apiKey: "k", timeoutMs: 50 });
+    const err = await p.complete([{ role: "user", content: "hi" }]).catch((e) => e);
+    expect(err).toBeInstanceOf(ProviderError);
+    expect(err.status).toBe(504);
+    expect(err.message).toMatch(/didn't respond within/);
+  });
+
+  it("settles even if the underlying call ignores the abort signal", async () => {
+    vi.stubGlobal("fetch", () => new Promise(() => {}));
+    const p = createProvider("openai", { apiKey: "k", timeoutMs: 50 });
+    await expect(p.listModels({ timeoutMs: 50 })).rejects.toMatchObject({ status: 504 });
+  });
+
+  it("caller cancellation surfaces as CancelledError, not a failure", async () => {
+    hangingFetch();
+    const ctrl = new AbortController();
+    const p = createProvider("siliconflow", { apiKey: "k" });
+    const pending = p.complete([{ role: "user", content: "hi" }], { signal: ctrl.signal });
+    ctrl.abort();
+    await expect(pending).rejects.toBeInstanceOf(CancelledError);
+  });
+
+  it("an already-cancelled signal never sends the request", async () => {
+    const calls = stubFetch(() => json({}));
+    const ctrl = new AbortController();
+    ctrl.abort();
+    await expect(createProvider("siliconflow", { apiKey: "k" }).listModels({ signal: ctrl.signal })).rejects.toBeInstanceOf(
+      CancelledError,
+    );
+    expect(calls).toHaveLength(0);
+  });
+
+  it("timeouts are not retried as malformed output", async () => {
+    let calls = 0;
+    const slow: Provider = {
+      id: "slow", label: "Slow", model: "m", configured: true, listModels: async () => [],
+      complete: (_m, o) => withDeadline("Slow", { signal: o?.signal, timeoutMs: 30 }, () => { calls++; return new Promise(() => {}); }),
+    };
+    await expect(tasks.deps(slow, { node: { name: "X" } })).rejects.toMatchObject({ status: 504 });
+    expect(calls).toBe(1);
   });
 });

@@ -10,6 +10,8 @@ export interface ProviderConfig {
   baseURL?: string;
   model?: string;
   webSearch?: boolean;
+  /** Per-request deadline; defaults to DEFAULT_TIMEOUT_MS. */
+  timeoutMs?: number;
 }
 
 export interface ProviderMeta {
@@ -57,13 +59,13 @@ export function createProvider(kind: ProviderKind, cfg: ProviderConfig = {}): Pr
   switch (kind) {
     case "siliconflow":
       return new OpenAICompatibleProvider({
-        id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model,
+        id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model, timeoutMs: cfg.timeoutMs,
         modelsQuery: "type=text&sub_type=chat",
       });
     case "openai":
-      return new OpenAICompatibleProvider({ id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model });
+      return new OpenAICompatibleProvider({ id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model, timeoutMs: cfg.timeoutMs });
     case "anthropic":
-      return new AnthropicProvider({ apiKey: cfg.apiKey, model, webSearch: cfg.webSearch });
+      return new AnthropicProvider({ apiKey: cfg.apiKey, model, webSearch: cfg.webSearch, timeoutMs: cfg.timeoutMs });
     case "mock":
       return new MockProvider();
   }

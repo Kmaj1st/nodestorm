@@ -1,5 +1,5 @@
 import type { ConceptNode, Graph } from "@nodestorm/shared";
-import { checkDeps, installDep, mix } from "../lib/actions";
+import { analyzeNode, installDep, mix } from "../lib/actions";
 import { removeNode, removeRelation, updateNode } from "../lib/graphOps";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 
@@ -32,6 +32,8 @@ export function Inspector() {
 function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const mutate = useGraphStore((s) => s.mutate);
   const setInspect = useGraphStore((s) => s.setInspect);
+  const setClarifying = useGraphStore((s) => s.setClarifying);
+  const graphId = graph.id;
   const deps = graph.nodes.filter((n) => node.dependsOn.includes(n.id));
   const dependents = graph.nodes.filter((n) => n.dependsOn.includes(node.id));
   const byId = (id: string) => graph.nodes.find((n) => n.id === id);
@@ -53,12 +55,25 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         />
       </label>
 
-      {node.status === "error" && <p className="error small">{node.error}</p>}
+      {node.status === "error" && (
+        <div className="error-box">
+          <p className="error small">{node.error}</p>
+          <button onClick={() => analyzeNode(node.id)}>Retry</button>
+        </div>
+      )}
+      {node.status === "unclear" && (
+        <div className="error-box error-box--unclear">
+          <p className="small">“{node.name}” has several meanings.</p>
+          <button className="primary" onClick={() => setClarifying({ graphId, nodeId: node.id })}>
+            Choose meaning…
+          </button>
+        </div>
+      )}
 
       <section>
         <h4>Missing dependencies</h4>
         {node.status === "checking" && <p className="muted small">Checking prerequisites…</p>}
-        {node.status !== "checking" && node.missingDeps.length === 0 && <p className="muted small">None — this concept is ready.</p>}
+        {node.status === "ok" && <p className="muted small">None — this concept is ready.</p>}
         <ul className="deps">
           {node.missingDeps.map((d) => (
             <li key={d.name} className="deps__missing">
@@ -109,7 +124,9 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       </section>
 
       <div className="form__actions">
-        <button onClick={() => checkDeps(node.id)} disabled={node.status === "checking"}>Re-check dependencies</button>
+        <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
+          Re-check dependencies
+        </button>
         <button
           className="danger"
           onClick={() => { mutate((g) => removeNode(g, node.id)); setInspect(null); }}

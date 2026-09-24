@@ -4,7 +4,9 @@ import { GraphCanvas } from "./graph/GraphCanvas";
 import { AddNodeDialog } from "./panels/AddNodeDialog";
 import { DeriveDialog } from "./panels/DeriveDialog";
 import { Inspector } from "./panels/Inspector";
+import { SenseDialog } from "./panels/SenseDialog";
 import { SettingsDialog } from "./panels/SettingsDialog";
+import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
 import { activeGraph, useGraphStore } from "./store/graphStore";
 
@@ -13,7 +15,6 @@ export function App() {
   const [deriveFrom, setDeriveFrom] = useState<string[] | null>(null);
   const graph = useGraphStore(activeGraph);
   const selection = useGraphStore((s) => s.selection);
-  const busy = useGraphStore((s) => s.busy);
   const toast = useGraphStore((s) => s.toast);
   const setToast = useGraphStore((s) => s.setToast);
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
@@ -24,8 +25,6 @@ export function App() {
     const t = setTimeout(() => setToast(null), 6000);
     return () => clearTimeout(t);
   }, [toast, setToast]);
-
-  const busyLabels = Object.values(busy);
 
   return (
     <ReactFlowProvider>
@@ -40,9 +39,10 @@ export function App() {
           <GraphCanvas />
           <Inspector />
         </main>
-        {busyLabels.length > 0 && <div className="status">{busyLabels.join(" · ")}</div>}
+        <StatusBar />
         {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
+        <SenseDialog />
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
       </div>

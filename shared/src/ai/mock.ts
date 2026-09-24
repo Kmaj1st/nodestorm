@@ -1,5 +1,5 @@
 import { normalizeName } from "../model";
-import type { ChatMessage, ModelInfo, Provider } from "./provider";
+import { withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 
 /**
  * Offline provider with a tiny abstract-algebra knowledge base.
@@ -38,6 +38,17 @@ const KB: Record<string, { definition: string; aliases: string[]; deps: Dep[] }>
   },
 };
 
+/** Names with several meanings, for exercising the "what do you mean?" flow offline. */
+const AMBIGUOUS: Record<string, { name: string; domain: string; definition: string }[]> = {
+  expectation: [
+    { name: "Expectation (probability)", domain: "probability theory", definition: "The expected value E[X] of a random variable: its probability-weighted average." },
+    { name: "Expectation (psychology)", domain: "psychology", definition: "A belief about what will happen in the future, which shapes perception and behaviour." },
+    { name: "Expectation value (quantum mechanics)", domain: "physics", definition: "The average outcome ⟨A⟩ of measuring an observable A on a quantum state." },
+    { name: "Expectation (economics)", domain: "economics", definition: "Agents' forecasts of future economic variables, as in rational expectations." },
+    { name: "Expectation (sociology)", domain: "sociology", definition: "A social norm about how a person in a given role ought to behave." },
+  ],
+};
+
 function kbGet(name: string) {
   const key = normalizeName(name);
   const entry = Object.entries(KB).find(
@@ -62,16 +73,25 @@ export class MockProvider implements Provider {
   model = "mock-kb";
   configured = true;
 
-  async listModels(): Promise<ModelInfo[]> {
+  async listModels(_opts?: RequestOptions): Promise<ModelInfo[]> {
     return [{ id: "mock-kb", label: "Built-in algebra knowledge base" }];
   }
 
-  async complete(messages: ChatMessage[]): Promise<string> {
+  async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
+    // Honour cancellation like a real provider; the answer itself is instant.
+    return withDeadline(this.label, { signal: opts.signal, timeoutMs: opts.timeoutMs ?? 10_000 }, async () =>
+      this.answer(messages),
+    );
+  }
+
+  private answer(messages: ChatMessage[]): string {
     const task = messages[0]?.content.match(/\[task:(\w+)\]/)?.[1];
     const inp = parseInput(messages);
     switch (task) {
       case "name":
         return JSON.stringify(this.name(String(inp.description ?? "")));
+      case "clarify":
+        return JSON.stringify(this.clarify(String(inp.name ?? ""), Number(inp.count ?? 3)));
       case "relate":
         return JSON.stringify(this.relate(inp.a.name, inp.b.name));
       case "deps":
@@ -91,6 +111,16 @@ export class MockProvider implements Provider {
     if (d.includes("identity") && d.includes("send")) return { candidates: [pick("kernel")] };
     const words = desc.split(/\s+/).filter(Boolean).slice(0, 3).join(" ");
     return { candidates: [{ name: title(words || "Unnamed idea"), definition: desc, aliases: [] }] };
+  }
+
+  private clarify(name: string, count: number) {
+    const senses = AMBIGUOUS[normalizeName(name)];
+    if (senses) return { ambiguous: true, senses: senses.slice(0, count) };
+    const entry = kbGet(name);
+    return {
+      ambiguous: false,
+      senses: [{ name, domain: entry ? "algebra" : "general", definition: entry?.definition ?? "" }],
+    };
   }
 
   private relate(a: string, b: string) {

@@ -15,9 +15,16 @@ interface State {
   // UI state (not persisted)
   selection: string[];
   inspect: Inspect;
-  busy: Record<string, string>; // key -> label of running AI tasks
+  busy: Record<string, BusyTask>; // running AI tasks by key
   toast: string | null;
   settingsOpen: boolean;
+  /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
+  clarifying: { graphId: string; nodeId: string } | null;
+}
+
+export interface BusyTask {
+  label: string;
+  startedAt: number;
 }
 
 interface Actions {
@@ -26,6 +33,7 @@ interface Actions {
   setSelection(ids: string[]): void;
   setInspect(i: Inspect): void;
   setSettingsOpen(open: boolean): void;
+  setClarifying(c: State["clarifying"]): void;
   setBusy(key: string, label: string | null): void;
   setToast(msg: string | null): void;
   switchTo(graphId: string): void;
@@ -53,6 +61,7 @@ export const useGraphStore = create<GraphStore>()(
       busy: {},
       toast: null,
       settingsOpen: false,
+      clarifying: null,
 
       mutate(fn, graphId) {
         const id = graphId ?? get().activeId;
@@ -63,9 +72,10 @@ export const useGraphStore = create<GraphStore>()(
       setSelection: (selection) => set({ selection }),
       setInspect: (inspect) => set({ inspect }),
       setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
+      setClarifying: (clarifying) => set({ clarifying }),
       setBusy(key, label) {
         const busy = { ...get().busy };
-        if (label) busy[key] = label;
+        if (label) busy[key] = { label, startedAt: Date.now() };
         else delete busy[key];
         set({ busy });
       },
@@ -122,11 +132,15 @@ export const useGraphStore = create<GraphStore>()(
       version: 1,
       storage: createJSONStorage(() => localStorage),
       partialize: (s) => ({ graphs: s.graphs, mainId: s.mainId, activeId: s.activeId }),
-      // Nodes left mid-check when the page closed would otherwise spin forever.
+      // A check that was running when the page closed never finished: say so rather than pretend it passed.
       onRehydrateStorage: () => (state) => {
         if (!state) return;
         for (const g of Object.values(state.graphs)) {
-          for (const n of g.nodes) if (n.status === "checking") n.status = n.missingDeps.length ? "blocked" : "ok";
+          for (const n of g.nodes) {
+            if (n.status !== "checking") continue;
+            n.status = "error";
+            n.error = "The check was interrupted (page closed or reloaded). Retry to run it again.";
+          }
         }
       },
     },

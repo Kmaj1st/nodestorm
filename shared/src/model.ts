@@ -12,7 +12,8 @@ export const MissingDep = z.object({
 });
 export type MissingDep = z.infer<typeof MissingDep>;
 
-export const NodeStatus = z.enum(["ok", "blocked", "checking", "error"]);
+/** "unclear": the name has several meanings and the user hasn't picked one yet. */
+export const NodeStatus = z.enum(["ok", "blocked", "checking", "unclear", "error"]);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
 export const ConceptNode = z.object({
@@ -27,6 +28,8 @@ export const ConceptNode = z.object({
   /** Prerequisites the AI found that are not yet in the graph. */
   missingDeps: z.array(MissingDep),
   error: z.string().optional(),
+  /** Candidate meanings offered while the node is "unclear". */
+  senses: z.array(z.lazy(() => Sense)).optional(),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -120,6 +123,31 @@ export const DepsResponse = z.object({
   prerequisites: z.array(Prerequisite),
 });
 export type DepsResponse = z.infer<typeof DepsResponse>;
+
+/** One possible meaning of an ambiguous name, e.g. "Expectation (probability)". */
+export const Sense = z.object({
+  name: z.string(),
+  domain: z.string(),
+  definition: z.string(),
+});
+export type Sense = z.infer<typeof Sense>;
+
+export const ClarifyRequest = z.object({
+  name: z.string().min(1),
+  /** Extra context, e.g. why a dependent node needs this concept. */
+  hint: z.string().optional(),
+  context: z.array(NodeBrief).default([]),
+  /** How many meanings to offer when the name is ambiguous. */
+  count: z.number().int().min(2).max(10).default(3),
+});
+export type ClarifyRequest = z.infer<typeof ClarifyRequest>;
+
+export const ClarifyResponse = z.object({
+  /** False when the name (in this graph's context) has one clear meaning — then senses[0] is it. */
+  ambiguous: z.boolean(),
+  senses: z.array(Sense).min(1),
+});
+export type ClarifyResponse = z.infer<typeof ClarifyResponse>;
 
 export const DeriveRequest = z.object({
   selected: z.array(NodeBrief).min(1),

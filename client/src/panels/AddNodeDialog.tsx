@@ -1,6 +1,6 @@
 import type { NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
-import { addCandidate, addConcept, suggestNames } from "../lib/actions";
+import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
 
 export function AddNodeDialog({ onClose }: { onClose: () => void }) {
@@ -63,6 +63,11 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
             </label>
             <div className="form__actions">
               <button type="button" onClick={onClose}>Cancel</button>
+              {searching && (
+                <button type="button" className="link" onClick={() => cancelTask("name")}>
+                  Stop
+                </button>
+              )}
               <button type="submit" className="primary" disabled={!description.trim() || searching}>
                 {searching ? "Searching…" : "Find a name"}
               </button>

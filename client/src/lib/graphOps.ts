@@ -76,7 +76,7 @@ export function upsertRelation(
 }
 
 function withStatus(n: ConceptNode): ConceptNode {
-  if (n.status === "checking" || n.status === "error") return n;
+  if (n.status === "checking" || n.status === "error" || n.status === "unclear") return n;
   return { ...n, status: n.missingDeps.length ? "blocked" : "ok" };
 }
 
@@ -187,6 +187,49 @@ export function removeRelation(g: Graph, relationId: string): Graph {
       (n.id === rel.a || n.id === rel.b) ? { ...n, dependsOn: n.dependsOn.filter((d) => d !== rel.a && d !== rel.b) } : n,
     ),
   };
+}
+
+/** Point everything that referenced `fromId` at `toId` instead, then drop `fromId`. */
+export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
+  const swap = (id: string) => (id === fromId ? toId : id);
+  const relations: Relation[] = [];
+  for (const r of g.relations) {
+    const moved = { ...r, a: swap(r.a), b: swap(r.b) };
+    if (moved.a === moved.b || relations.some((x) => findRelation({ ...g, relations: [x] }, moved.a, moved.b))) continue;
+    relations.push(moved);
+  }
+  const nodes = g.nodes
+    .filter((n) => n.id !== fromId)
+    .map((n) => ({ ...n, dependsOn: [...new Set(n.dependsOn.map(swap))].filter((d) => d !== n.id) }));
+  return { ...g, nodes, relations };
+}
+
+/**
+ * Give an ambiguous node the meaning the user picked. The name may become more specific
+ * (e.g. "Expectation (probability)"); the original name is kept as an alias. If that meaning is already
+ * in the graph, the node is folded into the existing one.
+ */
+export function applySense(
+  g: Graph,
+  nodeId: string,
+  sense: { name: string; definition: string },
+): { graph: Graph; id: string; merged: boolean } {
+  const node = g.nodes.find((n) => n.id === nodeId);
+  if (!node) return { graph: g, id: nodeId, merged: false };
+  const name = sense.name.trim() || node.name;
+  const dup = findByName(g.nodes.filter((n) => n.id !== nodeId), name);
+  if (dup) return { graph: satisfyMissing(redirectNode(g, nodeId, dup.id), dup.id), id: dup.id, merged: true };
+  const renamed = normalizeName(name) !== normalizeName(node.name);
+  const aliases = renamed && !node.aliases.includes(node.name) ? [...node.aliases, node.name] : node.aliases;
+  const out = updateNode(g, nodeId, {
+    name,
+    definition: sense.definition.trim(),
+    aliases,
+    senses: undefined,
+    status: "checking",
+    error: undefined,
+  });
+  return { graph: satisfyMissing(out, nodeId), id: nodeId, merged: false };
 }
 
 /** Position for an installed dependency: above the dependent, spread by index. */

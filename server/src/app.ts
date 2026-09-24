@@ -1,5 +1,5 @@
 import express from "express";
-import { ProviderError, tasks, type TaskName } from "@nodestorm/shared";
+import { CancelledError, ProviderError, tasks, type TaskName } from "@nodestorm/shared";
 import { ZodError } from "zod";
 import type { Registry } from "./providers/registry.js";
 
@@ -25,9 +25,14 @@ export function createApp(registry: Registry) {
     app.post(`/api/${name}`, async (req, res) => {
       try {
         const provider = registry.get(req.header("x-ai-provider"), req.header("x-ai-model"));
-        res.json(await tasks[name](provider, req.body));
+        // Stop the upstream AI call if the browser gives up (cancel, timeout, closed tab).
+        const ctrl = new AbortController();
+        res.on("close", () => !res.writableFinished && ctrl.abort());
+        res.json(await tasks[name](provider, req.body, { signal: ctrl.signal }));
       } catch (err) {
-        if (err instanceof ZodError) {
+        if (err instanceof CancelledError) {
+          if (!res.headersSent) res.status(499).end();
+        } else if (err instanceof ZodError) {
           res.status(400).json({ error: "Invalid request", details: err.issues });
         } else if (err instanceof ProviderError) {
           res.status(err.status).json({ error: err.message });

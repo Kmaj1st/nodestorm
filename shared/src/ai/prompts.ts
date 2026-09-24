@@ -1,7 +1,7 @@
-import type { DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "../model";
+import type { ClarifyRequest, DepsRequest, DeriveRequest, NameRequest, NodeBrief, RelateRequest } from "../model";
 import type { ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "relate" | "deps" | "derive";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive";
 
 const BASE = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -35,6 +35,21 @@ Return 3-5 candidates, best first. If no standard term exists, coin a short desc
 Schema: {"candidates":[{"name":string,"definition":string (one or two sentences),"aliases":string[]}]}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nDescription: ${req.description}`),
+  ];
+}
+
+export function clarifyPrompt(req: ClarifyRequest): ChatMessage[] {
+  return [
+    sys(
+      "clarify",
+      `The user added a concept by name only. Decide whether the name is ambiguous: does it have several established meanings, in different fields or within one field? (E.g. "expectation": expected value in probability, anticipation in psychology, expectation value in quantum mechanics…)
+Use the concepts already in the graph and any hint: if they make one meaning clearly intended, it is NOT ambiguous.
+If ambiguous: set "ambiguous": true and return exactly ${req.count} distinct senses, most likely first (given the graph).
+If not ambiguous: set "ambiguous": false and return a single sense with a precise definition.
+Each sense: "name" = display name, disambiguated with a parenthetical only if needed (e.g. "Expectation (probability)"); "domain" = short field label; "definition" = one or two sentences.
+Schema: {"ambiguous":boolean,"senses":[{"name":string,"domain":string,"definition":string}]}`,
+    ),
+    input(req, `${contextBlock(req.context)}\n\nName: ${req.name}${req.hint ? `\nHint: ${req.hint}` : ""}`),
   ];
 }
 

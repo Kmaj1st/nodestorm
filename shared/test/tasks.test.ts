@@ -38,6 +38,24 @@ describe("tasks with mock provider", () => {
     expect(r.bToA.kind).toBe("is used by");
   });
 
+  it("asks for clarification only when a name is ambiguous, with the requested number of options", async () => {
+    const amb = await tasks.clarify(mock, { name: "expectation", count: 4 });
+    expect(amb.ambiguous).toBe(true);
+    expect(amb.senses).toHaveLength(4);
+    expect(amb.senses[0].name).toBe("Expectation (probability)");
+    const clear = await tasks.clarify(mock, { name: "Isomorphism" });
+    expect(clear).toMatchObject({ ambiguous: false, senses: [{ name: "Isomorphism" }] });
+    expect(clear.senses[0].definition).toMatch(/bijective/);
+  });
+
+  it("treats 'ambiguous' with a single sense as not ambiguous", async () => {
+    const odd: Provider = {
+      id: "odd", label: "Odd", model: "m", configured: true, listModels: async () => [],
+      complete: async () => '{"ambiguous":true,"senses":[{"name":"X","domain":"d","definition":"only one"}]}',
+    };
+    expect(await tasks.clarify(odd, { name: "X" })).toMatchObject({ ambiguous: false });
+  });
+
   it("rejects invalid requests", async () => {
     await expect(tasks.relate(mock, { a: { name: "x" } })).rejects.toThrow();
   });

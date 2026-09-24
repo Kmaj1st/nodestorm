@@ -170,6 +170,83 @@ try {
   assert((await page.locator(".react-flow__node").count()) === 4, "graph survives reload (localStorage)");
   await page.screenshot({ path: `${shots}5-merged.png` });
 
+  const openSettings = async () => {
+    await page.getByRole("button", { name: "AI settings" }).click();
+    return page.getByRole("dialog", { name: "Settings" });
+  };
+  const badge = (name) => node(name).locator(".concept__badge");
+  const waitBadge = (name, text, timeout = 15000) =>
+    page.waitForFunction(
+      ([n, t]) => document.querySelector(`[data-testid="node-${n}"] .concept__badge`)?.textContent === t,
+      [name, text],
+      { timeout },
+    );
+
+  console.log("Ambiguous names");
+  {
+    const st = await openSettings();
+    await st.getByText("Directly from this browser").click();
+    await st.getByLabel("Provider", { exact: true }).selectOption("mock");
+    await st.getByLabel("Number of meanings to offer").fill("4");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await addByName("Expectation");
+  const what = page.getByRole("dialog", { name: "What do you mean?" });
+  await what.waitFor();
+  assert((await what.getByRole("radio").count()) === 5, "dialog offers the configured 4 meanings + 'something else'");
+  await page.screenshot({ path: `${shots}6-what-do-you-mean.png` });
+  await what.getByRole("button", { name: "Later" }).click();
+  await waitBadge("Expectation", "what do you mean?");
+  assert(await page.getByRole("button", { name: /Mix/ }).isDisabled(), "unclear concept can't be mixed yet");
+  await badge("Expectation").click();
+  await what.getByText("Expectation (probability)").click();
+  await what.getByRole("button", { name: "Use this meaning" }).click();
+  await waitBadge("Expectation (probability)", "ready");
+  assert(true, "picking a meaning renames the node and continues the analysis");
+  assert((await page.getByTestId("node-panel").textContent()).includes("also: Expectation"), "original name kept as alias");
+
+  console.log("Failures");
+  let chatMode = "hang";
+  await page.route("https://api.siliconflow.cn/v1/chat/completions", async (route) => {
+    if (chatMode === "hang") return; // never answer
+    const body = route.request().postData() ?? "";
+    const content = body.includes("[task:clarify]")
+      ? { ambiguous: false, senses: [{ name: "Group", domain: "algebra", definition: "A set with an associative operation, identity and inverses." }] }
+      : { prerequisites: [] };
+    await route.fulfill({ contentType: "application/json", body: JSON.stringify({ choices: [{ message: { content: JSON.stringify(content) } }] }) });
+  });
+  {
+    const st = await openSettings();
+    await st.getByLabel("Provider", { exact: true }).selectOption("siliconflow");
+    await st.getByLabel("API key", { exact: true }).fill("sk-good");
+    await st.getByLabel("Request timeout (seconds)").fill("10");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+  }
+  await addByName("Group");
+  await page.getByTestId("task").first().waitFor();
+  assert(true, "running check is visible in the status bar");
+  await waitBadge("Group", "failed – retry", 15000);
+  await page.locator(".toast").waitFor();
+  assert((await page.locator(".toast").textContent()).includes("didn't respond within 10s"), "a hanging request times out with a clear error");
+  await page.screenshot({ path: `${shots}7-timeout.png` });
+  await page.locator(".toast").click();
+
+  await addByName("Ring");
+  await page.getByTestId("task").first().waitFor();
+  await page.getByRole("button", { name: /^Cancel:/ }).click();
+  await waitBadge("Ring", "failed – retry", 3000);
+  assert((await page.getByTestId("task").count()) === 0 && (await page.locator(".toast").count()) === 0, "cancel stops the task without an error toast");
+
+  await addByName("Field");
+  await page.reload();
+  await waitBadge("Field", "failed – retry", 5000);
+  assert(true, "a check interrupted by reload shows as failed, not ready");
+
+  chatMode = "ok";
+  await badge("Group").click();
+  await waitBadge("Group", "ready");
+  assert(true, "retry succeeds once the API answers");
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

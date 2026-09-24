@@ -1,5 +1,6 @@
-import { findByName, toBrief, type DerivedProposal, type NameCandidate } from "@nodestorm/shared";
+import { CancelledError, findByName, toBrief, type DerivedProposal, type NameCandidate, type Sense } from "@nodestorm/shared";
 import { useGraphStore } from "../store/graphStore";
+import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import * as ops from "./graphOps";
 
@@ -14,37 +15,123 @@ function reportError(e: unknown, prefix = "") {
   store().setToast(prefix + (e instanceof Error ? e.message : String(e)));
 }
 
-async function withBusy<T>(key: string, label: string, fn: () => Promise<T>): Promise<T | undefined> {
+const controllers = new Map<string, AbortController>();
+
+/** Cancel a running AI task (status-bar ✕, dialog Cancel). */
+export function cancelTask(key: string) {
+  controllers.get(key)?.abort();
+}
+
+interface BusyHandlers {
+  onError?: (e: unknown) => void;
+  onCancel?: () => void;
+}
+
+/**
+ * Run an AI call as a visible, cancellable task. Returns undefined when it failed or was cancelled
+ * (the handlers decide what the user sees; by default errors become a toast and cancels are silent).
+ */
+async function withBusy<T>(
+  key: string,
+  label: string,
+  fn: (signal: AbortSignal) => Promise<T>,
+  handlers: BusyHandlers = {},
+): Promise<T | undefined> {
+  controllers.get(key)?.abort(); // a newer run of the same task supersedes the old one
+  const ctrl = new AbortController();
+  controllers.set(key, ctrl);
   store().setBusy(key, label);
   try {
-    return await fn();
+    return await fn(ctrl.signal);
   } catch (e) {
-    reportError(e);
+    if (e instanceof CancelledError || ctrl.signal.aborted) handlers.onCancel?.();
+    else if (handlers.onError) handlers.onError(e);
+    else reportError(e);
     return undefined;
   } finally {
-    store().setBusy(key, null);
+    if (controllers.get(key) === ctrl) {
+      controllers.delete(key);
+      store().setBusy(key, null);
+    }
   }
 }
 
-export async function checkDeps(nodeId: string, graphId = store().activeId) {
-  const g = graph(graphId);
-  const node = g?.nodes.find((n) => n.id === nodeId);
+const analyzeKey = (graphId: string, nodeId: string) => `analyze:${graphId}:${nodeId}`;
+
+/**
+ * Work out a node: if it has no definition, ask the AI what the name means (and let the user pick when
+ * it is ambiguous); then check its prerequisites. Also used for "Retry" and "Re-check".
+ */
+export async function analyzeNode(nodeId: string, graphId = store().activeId, hint?: string) {
+  const find = () => graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  const node = find();
   if (!node) return;
-  store().mutate((g) => ops.updateNode(g, nodeId, { status: "checking", error: undefined }), graphId);
-  try {
-    const res = await api.deps({
-      node: toBrief(node),
-      existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief),
-    });
-    store().mutate((g) => ops.applyDeps(g, nodeId, res.prerequisites), graphId);
-  } catch (e) {
-    const msg = e instanceof Error ? e.message : String(e);
-    store().mutate((g) => ops.setNodeError(g, nodeId, msg), graphId);
-    reportError(e, "Dependency check failed: ");
+  const key = analyzeKey(graphId, nodeId);
+  const set = (patch: Parameters<typeof ops.updateNode>[2]) => store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId);
+  const handlers: BusyHandlers = {
+    onError: (e) => {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (find()) store().mutate((g) => ops.setNodeError(g, nodeId, msg), graphId);
+      reportError(e, `${node.name}: `);
+    },
+    onCancel: () => {
+      if (find()) store().mutate((g) => ops.setNodeError(g, nodeId, "Check cancelled. Retry to run it again."), graphId);
+    },
+  };
+  set({ status: "checking", error: undefined });
+
+  const clarify = useSettings.getState().clarify;
+  if (!node.definition.trim() && clarify.enabled) {
+    const g = graph(graphId);
+    const res = await withBusy(
+      key,
+      `Working out what “${node.name}” means…`,
+      (signal) =>
+        api.clarify(
+          { name: node.name, hint, context: g.nodes.filter((n) => n.id !== nodeId).map(toBrief), count: clarify.options },
+          signal,
+        ),
+      handlers,
+    );
+    if (!res || !find()) return;
+    if (res.ambiguous) {
+      set({ status: "unclear", senses: res.senses });
+      store().setClarifying({ graphId, nodeId });
+      return; // continues in chooseSense once the user picks a meaning
+    }
+    if (res.senses[0]?.definition) set({ definition: res.senses[0].definition });
   }
+
+  const current = find();
+  if (!current) return;
+  const g = graph(graphId);
+  const res = await withBusy(
+    key,
+    `Checking prerequisites of ${current.name}…`,
+    (signal) =>
+      api.deps({ node: toBrief(current), existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief) }, signal),
+    handlers,
+  );
+  if (res && find()) store().mutate((g) => ops.applyDeps(g, nodeId, res.prerequisites), graphId);
 }
 
-export function addConcept(input: ops.NewNodeInput, graphId = store().activeId): string {
+/** The user picked (or wrote) a meaning for an ambiguous node. */
+export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition">) {
+  let id = nodeId;
+  let merged = false;
+  store().mutate((g) => {
+    const r = ops.applySense(g, nodeId, sense);
+    id = r.id;
+    merged = r.merged;
+    return r.graph;
+  }, graphId);
+  store().setClarifying(null);
+  store().setInspect({ kind: "node", id });
+  if (merged) store().setToast(`“${sense.name}” is already in the graph — linked to the existing concept.`);
+  else void analyzeNode(id, graphId);
+}
+
+export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, hint?: string): string {
   let id = "";
   let existed = false;
   store().mutate((g) => {
@@ -56,7 +143,7 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId):
   if (existed) {
     store().setToast(`"${input.name}" is already in the graph`);
   } else {
-    void checkDeps(id, graphId);
+    void analyzeNode(id, graphId, hint);
   }
   store().setInspect({ kind: "node", id });
   return id;
@@ -64,8 +151,8 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId):
 
 export function suggestNames(description: string) {
   const g = graph(store().activeId);
-  return withBusy("name", "Finding a name…", () =>
-    api.name({ description, context: g.nodes.map(toBrief) }).then((r) => r.candidates),
+  return withBusy("name", "Finding a name…", (signal) =>
+    api.name({ description, context: g.nodes.map(toBrief) }, signal).then((r) => r.candidates),
   );
 }
 
@@ -78,8 +165,11 @@ export function installDep(dependentId: string, depName: string) {
   const graphId = store().activeId;
   const g = graph(graphId);
   const dependent = g.nodes.find((n) => n.id === dependentId);
-  const index = dependent?.missingDeps.findIndex((d) => d.name === depName) ?? 0;
-  const id = addConcept({ name: depName, position: ops.installPosition(g, dependentId, index) }, graphId);
+  const dep = dependent?.missingDeps.find((d) => d.name === depName);
+  const index = dependent?.missingDeps.indexOf(dep!) ?? 0;
+  // The dependent tells the AI which meaning is meant, so installs rarely need a "what do you mean?".
+  const hint = dependent && dep ? `Needed by "${dependent.name}" (${dep.role}): ${dep.reason}` : undefined;
+  const id = addConcept({ name: depName, position: ops.installPosition(g, dependentId, index) }, graphId, hint);
   // If the concept already existed under this name, addNode didn't run satisfyMissing for it.
   store().mutate((g) => ops.satisfyMissing(g, id), graphId);
   store().setInspect({ kind: "node", id: dependentId });
@@ -92,8 +182,8 @@ export async function mix(aId: string, bId: string) {
   const a = g.nodes.find((n) => n.id === aId);
   const b = g.nodes.find((n) => n.id === bId);
   if (!a || !b) return;
-  const res = await withBusy(`mix:${aId}:${bId}`, `Relating ${a.name} ⇄ ${b.name}…`, () =>
-    api.relate({ a: toBrief(a), b: toBrief(b) }),
+  const res = await withBusy(`mix:${aId}:${bId}`, `Relating ${a.name} ⇄ ${b.name}…`, (signal) =>
+    api.relate({ a: toBrief(a), b: toBrief(b) }, signal),
   );
   if (!res) return;
   store().mutate((g) => ops.upsertRelation(g, aId, bId, res.aToB, res.bToA, "mix"), graphId);
@@ -104,8 +194,8 @@ export async function mix(aId: string, bId: string) {
 export function derive(selectedIds: string[], goal?: string) {
   const g = graph(store().activeId);
   const selected = g.nodes.filter((n) => selectedIds.includes(n.id));
-  return withBusy("derive", "Deriving…", () =>
-    api.derive({ selected: selected.map(toBrief), context: g.nodes.map(toBrief), goal }).then((r) => r.proposals),
+  return withBusy("derive", "Deriving…", (signal) =>
+    api.derive({ selected: selected.map(toBrief), context: g.nodes.map(toBrief), goal }, signal).then((r) => r.proposals),
   );
 }
 
