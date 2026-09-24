@@ -19,6 +19,16 @@ import {
   RelateResponse,
   ResolveCycleRequest,
   ResolveCycleResponse,
+  ReadPageRequest,
+  ReadPageResponse,
+  SplitProblemsRequest,
+  SplitProblemsResponse,
+  TutorHintRequest,
+  TutorHintResponse,
+  CheckStepRequest,
+  CheckStepResponse,
+  type SheetProblem,
+  type TutorConcept,
 } from "../model";
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
@@ -31,6 +41,10 @@ import {
   namePrompt,
   quizPrompt,
   resolveCyclePrompt,
+  readPagePrompt,
+  splitProblemsPrompt,
+  tutorHintPrompt,
+  checkStepPrompt,
   relatePrompt,
   withLanguage,
 } from "./prompts";
@@ -247,5 +261,63 @@ export const tasks = {
     if (!remove.length) throw new ProviderError(`${p.label} didn't name a valid link to remove`);
     return { remove, reason: res.reason };
   },
+  readPage: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    // A dense page of formulas can run long.
+    const res = await runStructured(p, readPagePrompt(ReadPageRequest.parse(body)), ReadPageResponse, { ...o, maxTokens: 8192 });
+    return { text: res.text.trim() };
+  },
+  splitProblems: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = SplitProblemsRequest.parse(body);
+    const res = await runStructured(p, splitProblemsPrompt(req), SplitProblemsResponse, { ...o, maxTokens: 8192 });
+    return cleanProblems(res, req.pages.map((pg) => pg.page));
+  },
+  tutorHint: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = TutorHintRequest.parse(body);
+    const res = await runStructured(p, tutorHintPrompt(req), TutorHintResponse, o);
+    return { ...res, cites: validCites(res.cites, req.references), concepts: cleanConcepts(res.concepts) };
+  },
+  checkStep: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = CheckStepRequest.parse(body);
+    const res = await runStructured(p, checkStepPrompt(req), CheckStepResponse, o);
+    return {
+      ...res,
+      missing: [...new Set(res.missing.map((m) => m.trim()).filter(Boolean))].slice(0, MAX_TUTOR_CONCEPTS),
+      cites: validCites(res.cites, req.references),
+      concepts: cleanConcepts(res.concepts),
+      // "Solved" only counts for a step that is itself fine.
+      solved: res.solved && res.verdict === "ok",
+    };
+  },
 };
 export type TaskName = keyof typeof tasks;
+
+const MAX_TUTOR_CONCEPTS = 5;
+
+/** Citation numbers that name a reference that was given, each once, in order. */
+export function validCites(cites: number[], refs: { n: number }[]): number[] {
+  const known = new Set(refs.map((r) => r.n));
+  return [...new Set(cites)].filter((n) => known.has(n)).sort((a, b) => a - b);
+}
+
+function cleanConcepts(cs: TutorConcept[]): TutorConcept[] {
+  const out: TutorConcept[] = [];
+  for (const c of cs) {
+    if (out.length >= MAX_TUTOR_CONCEPTS) break;
+    if (normalizeName(c.name) && !findByName(out, c.name)) out.push({ name: c.name.trim(), definition: c.definition.trim() });
+  }
+  return out;
+}
+
+/** Drop empty and repeated statements; a page that isn't one of the sheet's pages is forgotten. */
+export function cleanProblems(res: SplitProblemsResponse, pages: number[]): SplitProblemsResponse {
+  const seen = new Set<string>();
+  const problems: SheetProblem[] = [];
+  for (const pr of res.problems) {
+    const statement = pr.statement.trim();
+    const key = statement.replace(/\s+/g, " ").toLowerCase();
+    if (!statement || seen.has(key)) continue;
+    seen.add(key);
+    problems.push({ label: pr.label.trim(), statement, page: pr.page != null && pages.includes(pr.page) ? pr.page : null });
+  }
+  return { problems };
+}

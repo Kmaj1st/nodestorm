@@ -21,6 +21,8 @@ if (!provider.configured) {
 
 const hom = { name: "Homomorphism", definition: "A map between groups that preserves the operation.", aliases: [] };
 const thm = { name: "First Isomorphism Theorem", definition: "", aliases: [] };
+const kernelProblem = "Show that the kernel of a group homomorphism is a normal subgroup.";
+const notes = { n: 1, title: "Lecture notes", page: 4, text: "The kernel of a homomorphism $\\varphi: G \\to H$ is $\\{g \\in G : \\varphi(g) = e\\}$." };
 
 // One realistic input per task; tasks added later without an entry here are reported as skipped.
 const inputs: Partial<Record<TaskName, unknown>> = {
@@ -41,25 +43,33 @@ const inputs: Partial<Record<TaskName, unknown>> = {
     existing: [hom],
   },
   quiz: { node: thm, prerequisites: [hom], style: "connect", multipleChoice: true },
+  splitProblems: {
+    pages: [
+      { page: 1, text: "Sheet 3\n1. Show that the kernel of a group homomorphism is a normal subgroup.\n2. (a) Show that the image is a subgroup. (b) Give an example where it is not normal." },
+    ],
+  },
+  tutorHint: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], references: [notes], context: [hom], nth: 1 },
+  checkStep: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], step: "Then $gkg^{-1} \\in \\ker\\varphi$.", references: [notes], context: [hom] },
 };
+// readPage needs a page image and a vision model: check it by importing a scanned PDF in the app.
 
 console.log(`Provider: ${provider.label} · model ${provider.model}${language ? ` · language ${language}` : ""}\n`);
 let failed = 0;
 for (const name of Object.keys(tasks) as TaskName[]) {
   const input = inputs[name];
   if (input === undefined) {
-    console.log(`- ${name.padEnd(8)} skipped (no sample input in scripts/live-smoke.mts)`);
+    console.log(`- ${name.padEnd(13)} skipped (no sample input in scripts/live-smoke.mts)`);
     continue;
   }
   const started = Date.now();
   try {
     const out = await tasks[name](provider, input, { language });
     const secs = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`✓ ${name.padEnd(8)} ${secs.padStart(5)}s  ${JSON.stringify(out).slice(0, 160)}…`);
+    console.log(`✓ ${name.padEnd(13)} ${secs.padStart(5)}s  ${JSON.stringify(out).slice(0, 160)}…`);
   } catch (e) {
     failed++;
     const secs = ((Date.now() - started) / 1000).toFixed(1);
-    console.log(`✗ ${name.padEnd(8)} ${secs.padStart(5)}s  ${e instanceof Error ? e.message : e}`);
+    console.log(`✗ ${name.padEnd(13)} ${secs.padStart(5)}s  ${e instanceof Error ? e.message : e}`);
   }
 }
 console.log(failed ? `\n${failed} task(s) failed.` : "\nAll tasks returned valid answers.");

@@ -20,6 +20,7 @@ const loaders = {
   quiz: () => import("./QuizDialog"),
   versions: () => import("./VersionsDialog"),
   walkthrough: () => import("./WalkthroughDialog"),
+  deriveTogether: () => import("./derive/DerivePanel"),
 };
 
 /** Shown for the moment a dialog's chunk takes to load (normally from the cache). */
@@ -94,6 +95,19 @@ export const ShortcutsDialog = lazyDialog(() => loaders.shortcuts().then((m) => 
 export const QuizDialog = lazyDialog(() => loaders.quiz().then((m) => m.QuizDialog));
 export const VersionsDialog = lazyDialog(() => loaders.versions().then((m) => m.VersionsDialog));
 export const WalkthroughDialog = lazyDialog(() => loaders.walkthrough().then((m) => m.WalkthroughDialog));
+
+/** "Derive together" is a docked panel, not a dialog: while it loads, an empty panel holds its place. */
+const DerivePanelInner = lazy(() => loaders.deriveTogether().then((m) => ({ default: m.DerivePanel })));
+export function DerivePanel({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  return (
+    <LoadBoundary fallback={<LoadFailed onClose={onClose} />}>
+      <Suspense fallback={<aside className="derive-panel"><p className="derive-panel__loading muted" role="status">{t("common.loading")}</p></aside>}>
+        <DerivePanelInner />
+      </Suspense>
+    </LoadBoundary>
+  );
+}
 
 // Closing after a failed load leaves the concept "unclear"; its badge reopens the dialog.
 const SenseDialogLazy = lazyDialog(

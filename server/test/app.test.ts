@@ -64,6 +64,32 @@ describe("server: x-ai-language", () => {
   });
 });
 
+describe("server: request size", () => {
+  const provider: Provider = {
+    id: "rec", label: "Rec", model: "m", configured: true, listModels: async () => [],
+    complete: async () => '{"text":"read","prerequisites":[]}',
+  };
+  const registry = { get: () => provider, info: () => ({ default: "mock", providers: [] }) } as unknown as Registry;
+  let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let base = "";
+  beforeAll(async () => {
+    server = createApp(registry).listen(0);
+    await new Promise((r) => server.once("listening", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => server.close());
+  const post = (task: string, body: unknown) =>
+    fetch(`${base}/api/${task}`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("accepts a page image of a few MB for readPage only", async () => {
+    const data = "A".repeat(3_000_000);
+    const read = await post("readPage", { mediaType: "image/jpeg", data });
+    expect(read.status).toBe(200);
+    expect(await read.json()).toEqual({ text: "read" });
+    expect((await post("deps", { node: { name: "X" }, padding: data })).status).toBe(413);
+  });
+});
+
 describe("server: x-ai-timeout", () => {
   it("uses the browser's timeout, clamped to 10s–600s", () => {
     expect(parseTimeout("30000")).toBe(30_000);

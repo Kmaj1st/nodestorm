@@ -5,6 +5,7 @@ import {
   isTransientStatus,
   parseRetryAfter,
   ProviderError,
+  textOf,
   withDeadline,
   withRetries,
   type ChatMessage,
@@ -105,13 +106,27 @@ export class AnthropicProvider implements Provider {
     );
     const system = messages
       .filter((m) => m.role === "system")
-      .map((m) => m.content)
+      .map((m) => textOf(m.content))
       .join("\n\n");
     const initial: Anthropic.Beta.BetaMessageParam[] = messages
       .filter((m) => m.role !== "system")
       .map((m) => ({
         role: m.role as "user" | "assistant",
-        content: m.content,
+        content:
+          typeof m.content === "string"
+            ? m.content
+            : m.content.map((p): Anthropic.Beta.BetaContentBlockParam =>
+                p.type === "text"
+                  ? { type: "text", text: p.text }
+                  : {
+                      type: "image",
+                      source: {
+                        type: "base64",
+                        media_type: p.mediaType as "image/jpeg" | "image/png" | "image/gif" | "image/webp",
+                        data: p.data,
+                      },
+                    },
+              ),
       }));
     const tools: Anthropic.Beta.BetaToolUnion[] =
       opts.search && this.webSearch ? [{ type: "web_search_20260209", name: "web_search", max_uses: 3 }] : [];

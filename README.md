@@ -86,6 +86,21 @@ no key needed) or an empty graph.
   explanations); the share viewer has no quiz.
 - **Walkthrough** (**File → Walkthrough…**, or the inspector's **Walk through the learning path**): a full-screen,
   read-only presentation, one concept per slide in study order (←/→, Space, Home/End); it works in the share viewer too.
+- **Derive together** (toolbar, **File → Derive together…**, or the inspector's **Derive together**): work a problem
+  out yourself with an AI tutor that **only gives hints**. It never writes a step or the answer for you.
+  - **Import documents** (PDF, text or Markdown). A **problem sheet** is split into its problems, and you pick one to
+    start. **Reference** material (notes, a textbook chapter) is what the tutor cites, as `[1] Notes, p. 4`. Click a
+    citation to open that page.
+  - **Scanned PDF pages** (no text layer) are sent as a picture to a **vision model**, which reads formulas as LaTeX.
+    Set it in Settings → **Vision model**; SiliconFlow defaults to Qwen2.5-VL. A page that can't be read can have its
+    text pasted in.
+  - **Choosing a problem**: select a passage in a document and choose **Use selection as problem**, or type any problem.
+  - **Steps**: write each step. **Check** marks it *Correct*, *Gap* (true, but relies on something unstated, which it
+    names), *Error* or *Unclear*. **Hint** gets more specific each time you ask for the same step.
+  - **Add to graph**: tick what goes in. The problem becomes a concept that depends on the concepts it used, with the
+    source page recorded and your steps saved in its notes. It is one undo step.
+  - Documents and derivations are kept per project in this browser (IndexedDB). They are not part of JSON exports or
+    share links; **Copy as Markdown** exports a derivation.
 
 ### Organising
 

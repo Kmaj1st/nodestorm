@@ -2,6 +2,7 @@ import {
   DepRole,
   GraphExport,
   Mastery,
+  SourceRef,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -155,6 +156,11 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   if (typeof n.notes === "string") {
     if (n.notes) node.notes = n.notes;
   } else if (n.notes !== undefined) fixes.add(t("repair.droppedNotes"));
+  if (n.source !== undefined) {
+    const src = SourceRef.safeParse(n.source);
+    if (src.success) node.source = src.data;
+    else fixes.add(t("repair.droppedSource"));
+  }
   if (n.mastery !== undefined) {
     const m = Mastery.safeParse(n.mastery);
     if (m.success) node.mastery = m.data;

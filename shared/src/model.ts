@@ -70,6 +70,8 @@ export const ConceptNode = z.object({
   notes: z.string().optional(),
   /** Quiz progress. Personal study data, so share links leave it out (see packGraph in client/src/lib/share.ts). */
   mastery: Mastery.optional(),
+  /** Where the concept came from: an imported document and page (see "Derive together"). */
+  source: z.lazy(() => SourceRef).optional(),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -113,6 +115,13 @@ export const GraphExport = z.object({
   graphs: z.array(Graph),
 });
 export type GraphExport = z.infer<typeof GraphExport>;
+
+/** A place in an imported document. */
+export const SourceRef = z.object({
+  title: z.string().max(300),
+  page: z.number().int().min(1).optional(),
+});
+export type SourceRef = z.infer<typeof SourceRef>;
 
 // ---------- AI task I/O ----------
 
@@ -338,6 +347,109 @@ export const ExtractResponse = z.object({
   prerequisites: z.array(ExtractedPrerequisite).default([]),
 });
 export type ExtractResponse = z.infer<typeof ExtractResponse>;
+
+// ---------- Derive together ----------
+
+/** Largest page image `readPage` accepts (base64 characters, about 6 MB of JPEG). */
+export const PAGE_IMAGE_MAX = 8_000_000;
+
+/** Read a scanned page: its text, formulas as LaTeX. */
+export const ReadPageRequest = z.object({
+  mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
+  data: z.string().min(1).max(PAGE_IMAGE_MAX, "The page image is too large."),
+});
+export type ReadPageRequest = z.infer<typeof ReadPageRequest>;
+
+export const ReadPageResponse = z.object({ text: z.string().default("") });
+export type ReadPageResponse = z.infer<typeof ReadPageResponse>;
+
+/** Longest stretch of a problem sheet `splitProblems` reads at once (characters). */
+export const PROBLEMS_MAX_CHARS = 12_000;
+
+export const SplitProblemsRequest = z.object({
+  /** Pages of the sheet, in order. */
+  pages: z
+    .array(z.object({ page: z.number().int().min(1), text: z.string() }))
+    .min(1)
+    .refine(
+      (ps) => ps.reduce((n, p) => n + p.text.length, 0) <= PROBLEMS_MAX_CHARS,
+      `Too much text: at most ${PROBLEMS_MAX_CHARS} characters at a time.`,
+    ),
+});
+export type SplitProblemsRequest = z.infer<typeof SplitProblemsRequest>;
+
+export const SheetProblem = z.object({
+  /** How the sheet numbers it ("1", "2(b)", "Exercise 4.3"). */
+  label: z.string().default(""),
+  statement: z.string().trim().min(1),
+  page: z.number().int().min(1).nullish(),
+});
+export type SheetProblem = z.infer<typeof SheetProblem>;
+
+export const SplitProblemsResponse = z.object({ problems: z.array(SheetProblem) });
+export type SplitProblemsResponse = z.infer<typeof SplitProblemsResponse>;
+
+/** A retrieved passage of a reference document; the tutor cites it as [n]. */
+export const RefChunk = z.object({
+  n: z.number().int().min(1),
+  title: z.string().max(300),
+  page: z.number().int().min(1),
+  text: z.string().max(2000),
+});
+export type RefChunk = z.infer<typeof RefChunk>;
+
+const TutorBase = z.object({
+  problem: z.string().trim().min(1, "Choose a problem first.").max(4000),
+  /** The user's steps so far, in order. */
+  steps: z.array(z.string().max(4000)).max(60).default([]),
+  references: z.array(RefChunk).max(8).default([]),
+  /** Concepts in the graph, so the tutor uses their names. */
+  context: z.array(NodeBrief).max(80).default([]),
+});
+
+export const TutorHintRequest = TutorBase.extend({
+  /** 1 for the first hint on this step, higher when the user asks again: each hint may say a little more. */
+  nth: z.number().int().min(1).max(10).default(1),
+});
+export type TutorHintRequest = z.infer<typeof TutorHintRequest>;
+
+/** A concept the tutor refers to, which the user may add to the graph. */
+export const TutorConcept = z.object({
+  name: z.string().trim().min(1),
+  definition: z.string().default(""),
+});
+export type TutorConcept = z.infer<typeof TutorConcept>;
+
+export const TutorHintResponse = z.object({
+  hint: z.string().min(1),
+  /** Numbers of the references the hint relies on. */
+  cites: z.array(z.number().int()).default([]),
+  concepts: z.array(TutorConcept).default([]),
+});
+export type TutorHintResponse = z.infer<typeof TutorHintResponse>;
+
+export const CheckStepRequest = TutorBase.extend({
+  /** The step to check; `steps` holds the ones before it. */
+  step: z.string().trim().min(1, "Write the step first.").max(4000),
+});
+export type CheckStepRequest = z.infer<typeof CheckStepRequest>;
+
+/** "ok": valid and justified; "gap": true but a justification is missing; "error": wrong; "unclear": can't tell. */
+export const StepVerdict = z.enum(["ok", "gap", "error", "unclear"]);
+export type StepVerdict = z.infer<typeof StepVerdict>;
+
+export const CheckStepResponse = z.object({
+  verdict: StepVerdict,
+  comment: z.string().default(""),
+  /** Facts or concepts the step relies on without saying so. */
+  missing: z.array(z.string()).default([]),
+  cites: z.array(z.number().int()).default([]),
+  /** Concepts the step uses. */
+  concepts: z.array(TutorConcept).default([]),
+  /** True when this step completes the derivation. */
+  solved: z.boolean().default(false),
+});
+export type CheckStepResponse = z.infer<typeof CheckStepResponse>;
 
 export interface ProviderInfo {
   id: string;

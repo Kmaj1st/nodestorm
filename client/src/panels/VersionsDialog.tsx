@@ -21,6 +21,7 @@ import "./versions.css";
 const REASONS: Record<AutoReason, MessageKey> = {
   installAll: "versions.reason.installAll",
   extract: "versions.reason.extract",
+  deriveTogether: "versions.reason.deriveTogether",
   merge: "versions.reason.merge",
   discard: "versions.reason.discard",
   tidy: "versions.reason.tidy",

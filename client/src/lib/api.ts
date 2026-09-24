@@ -18,6 +18,10 @@ import {
   type ProvidersResponse,
   type QuizRequest,
   type ResolveCycleRequest,
+  type ReadPageRequest,
+  type SplitProblemsRequest,
+  type TutorHintRequest,
+  type CheckStepRequest,
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
@@ -76,11 +80,14 @@ async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortS
   const s = useSettings.getState();
   const timeoutMs = s.configs[s.provider]?.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const language = normalizeLanguage(s.language);
+  // Scanned pages go to a model that can see images.
+  const vision = name === "readPage" ? visionModel(s.provider) : undefined;
   if (s.connection === "browser") {
-    const provider = browserProvider(s.provider, s.configs[s.provider]);
+    const cfg = s.configs[s.provider];
+    const provider = browserProvider(s.provider, vision ? { ...cfg, model: vision } : cfg);
     return (await tasks[name](provider, req, { signal, language, onUsage: addUsage })) as unknown as TaskResult<N>;
   }
-  const model = s.serverModels[s.provider];
+  const model = vision ?? s.serverModels[s.provider];
   return serverFetch<TaskResult<N>>(
     name,
     {
@@ -102,6 +109,11 @@ async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortS
   );
 }
 
+/** The model that reads scanned pages for this provider, or undefined to use the chat model. */
+export function visionModel(kind: ProviderKind): string | undefined {
+  return useSettings.getState().visionModels[kind]?.trim() || providerMeta(kind).visionModel;
+}
+
 export const api = {
   name: (req: NameRequest, signal?: AbortSignal) => run("name", req, signal),
   clarify: (req: Partial<ClarifyRequest> & { name: string }, signal?: AbortSignal) => run("clarify", req, signal),
@@ -112,6 +124,11 @@ export const api = {
   extract: (req: ExtractRequest, signal?: AbortSignal) => run("extract", req, signal),
   quiz: (req: Partial<QuizRequest> & Pick<QuizRequest, "node">, signal?: AbortSignal) => run("quiz", req, signal),
   resolveCycle: (req: ResolveCycleRequest, signal?: AbortSignal) => run("resolveCycle", req, signal),
+  readPage: (req: ReadPageRequest, signal?: AbortSignal) => run("readPage", req, signal),
+  splitProblems: (req: SplitProblemsRequest, signal?: AbortSignal) => run("splitProblems", req, signal),
+  tutorHint: (req: Partial<TutorHintRequest> & Pick<TutorHintRequest, "problem">, signal?: AbortSignal) => run("tutorHint", req, signal),
+  checkStep: (req: Partial<CheckStepRequest> & Pick<CheckStepRequest, "problem" | "step">, signal?: AbortSignal) =>
+    run("checkStep", req, signal),
 
   /** Providers configured on the local server (server mode only). */
   serverProviders: () => serverFetch<ProvidersResponse>("providers"),

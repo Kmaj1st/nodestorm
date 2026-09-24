@@ -1,7 +1,12 @@
-import type { ConceptNode, Graph, NodeExplanation } from "@nodestorm/shared";
+import type { ConceptNode, Graph, NodeExplanation, SourceRef } from "@nodestorm/shared";
 import { splitMath } from "./math";
 
 /** Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. */
+
+/** "Title, p. 3", or just the title. */
+export function sourceLabel(s: SourceRef): string {
+  return s.page ? `${s.title}, p. ${s.page}` : s.title;
+}
 
 /**
  * Nodes ordered so every concept comes after its (in-graph) prerequisites. Ties keep graph order;
@@ -69,6 +74,7 @@ export function toMarkdown(g: Graph): string {
     if (n.missingDeps.length) {
       lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
+    if (n.source) lines.push(`*Source:* ${mdEscape(sourceLabel(n.source))}`, "");
     if (n.explanation) lines.push(...explanationMd(n.explanation));
     if (n.notes?.trim()) {
       // The user's notes are Markdown-ish already: keep them as written, quoted so their headings stay inside.

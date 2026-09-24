@@ -35,6 +35,11 @@ export interface ProviderMeta {
   keyUrl?: string;
   /** Runs on this machine, so it keeps working without an internet connection. */
   local?: boolean;
+  /**
+   * Model that reads scanned PDF pages (images), when the default model can't see images. Unset: the chat model is
+   * used, which works for providers whose models all take images.
+   */
+  visionModel?: string;
 }
 
 /** Everything the UI needs to render a provider picker. Add new providers here and in createProvider. */
@@ -44,6 +49,7 @@ export const PROVIDERS: ProviderMeta[] = [
     label: "SiliconFlow",
     defaultModel: "deepseek-ai/DeepSeek-V3",
     defaultBaseURL: "https://api.siliconflow.cn/v1",
+    visionModel: "Qwen/Qwen2.5-VL-72B-Instruct",
     needsKey: true,
     keyUrl: "https://cloud.siliconflow.cn/account/ak",
   },
@@ -69,6 +75,7 @@ export const PROVIDERS: ProviderMeta[] = [
     label: "Moonshot (Kimi)",
     defaultModel: "moonshot-v1-8k",
     defaultBaseURL: "https://api.moonshot.cn/v1",
+    visionModel: "moonshot-v1-8k-vision-preview",
     needsKey: true,
     keyUrl: "https://platform.moonshot.cn/console/api-keys",
   },
@@ -77,6 +84,7 @@ export const PROVIDERS: ProviderMeta[] = [
     label: "Zhipu (GLM)",
     defaultModel: "glm-4-flash",
     defaultBaseURL: "https://open.bigmodel.cn/api/paas/v4",
+    visionModel: "glm-4v-flash",
     needsKey: true,
     keyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
   },
@@ -85,6 +93,7 @@ export const PROVIDERS: ProviderMeta[] = [
     label: "Alibaba Qwen (DashScope)",
     defaultModel: "qwen-plus",
     defaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    visionModel: "qwen-vl-max",
     needsKey: true,
     keyUrl: "https://bailian.console.aliyun.com/?apiKey=1",
   },

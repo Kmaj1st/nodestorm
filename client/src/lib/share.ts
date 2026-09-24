@@ -54,6 +54,7 @@ export function packGraph(g: Graph, name: string): unknown {
     if (deps.length) out.dependsOn = deps;
     if (n.missingDeps.length) out.missingDeps = n.missingDeps.map((d) => ({ name: d.name, reason: d.reason, role: d.role }));
     if (status === "unclear" && n.senses?.length) out.senses = n.senses;
+    if (n.source) out.source = n.source;
     return out;
   });
   const dir = (d: { kind: string; explanation: string }) => (d.explanation ? { kind: d.kind, explanation: d.explanation } : { kind: d.kind });

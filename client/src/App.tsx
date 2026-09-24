@@ -11,6 +11,7 @@ import { AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } 
 import { OfflineBanner } from "./panels/OfflineBanner";
 import { QuizHost } from "./panels/QuizHost";
 import { WalkthroughHost } from "./panels/WalkthroughHost";
+import { DeriveHost } from "./panels/DeriveHost";
 import { Onboarding } from "./panels/Onboarding";
 import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
@@ -116,6 +117,7 @@ export function App() {
         <main className="main">
           <GraphCanvas />
           <InspectorSheet />
+          <DeriveHost />
           <Onboarding />
         </main>
         <StatusBar />

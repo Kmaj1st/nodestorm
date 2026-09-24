@@ -10,11 +10,17 @@ import type {
   QuizRequest,
   QuizStyle,
   RelateRequest,
+  ReadPageRequest,
+  RefChunk,
   ResolveCycleRequest,
+  SplitProblemsRequest,
+  TutorHintRequest,
+  CheckStepRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -237,6 +243,108 @@ Schema: {"remove":number[],"reason":string}`,
       `Concepts:\n${[...new Map(req.links.flatMap((l) => [l.from, l.to]).map((c) => [c.name, c])).values()]
         .map(brief)
         .join("\n")}\n\nLinks on the cycle:\n${list}`,
+    ),
+  ];
+}
+
+export function readPagePrompt(req: ReadPageRequest): ChatMessage[] {
+  return [
+    sys(
+      "readPage",
+      `The image is one page of a scanned document (a textbook, lecture notes or a problem sheet). Transcribe its text
+faithfully, in reading order and in the page's own language. Write every formula as LaTeX between $…$ ($$…$$ for a
+displayed formula). Keep numbering of problems, theorems and equations. Leave out page headers, footers and page
+numbers. Describe a figure in one short line in square brackets. Do not summarise, translate or correct anything.
+Schema: {"text":string}`,
+    ),
+    {
+      role: "user",
+      content: [
+        { type: "text", text: `Transcribe this page.\n\nINPUT:\n${JSON.stringify({ mediaType: req.mediaType })}` },
+        { type: "image", mediaType: req.mediaType, data: req.data },
+      ],
+    },
+  ];
+}
+
+export function splitProblemsPrompt(req: SplitProblemsRequest): ChatMessage[] {
+  return [
+    sys(
+      "splitProblems",
+      `The text is a problem sheet (exercises, homework, an exam), page by page. List every problem the learner could
+work on, in order. A problem with parts (a), (b)… is one problem unless the parts ask for unrelated things; then list
+each part as its own problem, with its label like "2(b)". "statement": the full statement, word for word, including
+any shared setup the problem depends on (e.g. "Let G be a group…" given before several problems). "label": the
+sheet's own number or name for it. "page": the page it starts on. Skip instructions, hints for the grader and answers.
+Schema: {"problems":[{"label":string,"statement":string,"page":number}]}`,
+    ),
+    input(req, req.pages.map((p) => `--- Page ${p.page} ---\n${p.text}`).join("\n\n")),
+  ];
+}
+
+function referencesBlock(refs: RefChunk[]): string {
+  if (!refs.length) return "No reference passages were given; rely on standard knowledge of the field.";
+  return `Reference passages from the learner's documents (cite them by number):\n${refs
+    .map((r) => `[${r.n}] ${r.title}, p. ${r.page}:\n${r.text}`)
+    .join("\n\n")}`;
+}
+
+function stepsBlock(steps: string[]): string {
+  return steps.length ? `The learner's steps so far:\n${steps.map((s, i) => `Step ${i + 1}: ${s}`).join("\n")}` : "The learner hasn't written any steps yet.";
+}
+
+const TUTOR = `You are a patient tutor in a "derive together" session. The learner works a problem out themselves;
+you never do it for them. Never write out the next step, the final answer or a full proof, even when asked. Base what
+you say on the reference passages when they are relevant, citing them as [n] in the text and listing their numbers in
+"cites"; use only numbers that were given. Use the names of concepts already in the graph when you refer to them.
+"concepts": the definitions and theorems your answer relies on (name plus a one-sentence definition), so the learner
+can add them to their concept graph; at most 5.`;
+
+export function tutorHintPrompt(req: TutorHintRequest): ChatMessage[] {
+  const strength =
+    req.nth <= 1
+      ? "This is the first hint: point in a direction (which definition, theorem or idea to look at) without saying how to use it."
+      : req.nth === 2
+        ? "The learner asked again: be more specific about what to consider, but still leave the step itself to them."
+        : "The learner is stuck after several hints: name the exact fact or technique to apply and what it should be applied to, but do not carry it out.";
+  return [
+    sys(
+      "tutorHint",
+      `${TUTOR}
+Give ONE hint for the learner's next step, one to three sentences. ${strength}
+Schema: {"hint":string,"cites":number[],"concepts":[{"name":string,"definition":string}]}`,
+    ),
+    input(
+      req,
+      [`Problem: ${req.problem}`, stepsBlock(req.steps), referencesBlock(req.references), contextBlock(req.context)].join("\n\n"),
+    ),
+  ];
+}
+
+export function checkStepPrompt(req: CheckStepRequest): ChatMessage[] {
+  return [
+    sys(
+      "checkStep",
+      `${TUTOR}
+Check the learner's newest step, given the problem and the steps before it.
+"verdict": "ok" when the step is correct and justified; "gap" when it is true but relies on something the learner
+hasn't justified or stated (a missing hypothesis, an unproved lemma, a skipped case); "error" when it is wrong or does
+not follow; "unclear" when you can't tell what it claims.
+"comment": one to three sentences for the learner. For "gap" and "error", say where the problem is and what kind of
+thing is missing, but do not supply the fix. For "ok", say briefly why it holds.
+"missing": the facts, hypotheses or concepts the step relies on without justification (short names), else [].
+"solved": true only when, with this step, the problem is completely solved.
+Schema: {"verdict":"ok"|"gap"|"error"|"unclear","comment":string,"missing":string[],"cites":number[],"concepts":[{"name":string,"definition":string}],"solved":boolean}`,
+    ),
+    input(
+      req,
+      [
+        `Problem: ${req.problem}`,
+        stepsBlock(req.steps),
+        `Newest step to check: ${req.step}`,
+        referencesBlock(req.references),
+        contextBlock(req.context),
+      ].join("\n\n"),
     ),
   ];
 }

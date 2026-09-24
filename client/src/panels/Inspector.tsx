@@ -5,6 +5,7 @@ import {
   ArrowRight,
   ChevronRight,
   GraduationCap,
+  PenLine,
   Highlighter,
   Presentation,
   RefreshCw,
@@ -29,6 +30,7 @@ import { removeDependency, removeNode, removeRelation, renameNode, updateNode, u
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
+import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
 import { useWalkthrough } from "../store/walkthroughStore";
@@ -95,7 +97,7 @@ export function Inspector() {
     if (rel) return <RelationPanel graph={graph} relationId={rel.id} dir={inspect.dir} />;
   }
   return (
-    <aside className="inspector">
+    <aside className="inspector inspector--help">
       <h3>{t("help.title")}</h3>
       <ol className="help">
         {HELP.map((k) => <li key={k}>{rich(k)}</li>)}
@@ -252,6 +254,18 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         {!viewing && (
           <button onClick={() => useQuiz.getState().openQuiz(node.id)} data-testid="quiz-node">
             <Icon icon={GraduationCap} size={14} />{t("quiz.fromNode")}
+          </button>
+        )}
+        {!viewing && (
+          <button
+            onClick={() =>
+              void useDerive.getState().openPanel({
+                problem: { statement: t("dt.fromNode.statement", { name: node.name, definition: node.definition || node.name }) },
+              })}
+            title={t("dt.fromNode.title")}
+            data-testid="derive-node"
+          >
+            <Icon icon={PenLine} size={14} />{t("dt.fromNode")}
           </button>
         )}
         <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>

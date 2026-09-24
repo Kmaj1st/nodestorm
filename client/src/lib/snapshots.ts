@@ -10,7 +10,7 @@ import { projectGraphs, type Workspace } from "./projects";
  */
 
 /** Why an automatic snapshot was taken: before a bulk change, or periodically while editing. */
-export type AutoReason = "installAll" | "extract" | "merge" | "discard" | "tidy" | "restore" | "periodic";
+export type AutoReason = "installAll" | "extract" | "deriveTogether" | "merge" | "discard" | "tidy" | "restore" | "periodic";
 
 /** What the Versions list shows about a snapshot; its data is stored separately and only loaded when needed. */
 export interface SnapshotMeta {

@@ -16,6 +16,8 @@ interface SettingsState {
   rememberKeys: boolean;
   /** Model override used in server mode, per provider. */
   serverModels: Partial<Record<ProviderKind, string>>;
+  /** Model that reads scanned PDF pages, per provider; unset uses the provider's `visionModel`, else the chat model. */
+  visionModels: Partial<Record<ProviderKind, string>>;
   /** Ask "what do you mean?" when a concept name has several meanings, offering this many options. */
   clarify: { enabled: boolean; options: number };
   /** Limits for "Install all missing": how many levels of prerequisites to follow, and how many concepts to add. */
@@ -102,6 +104,7 @@ export const useSettings = create<SettingsStore>()(
       configs: emptyConfigs(),
       rememberKeys: false,
       serverModels: {},
+      visionModels: {},
       clarify: { enabled: true, options: 3 },
       installAll: { maxDepth: 3, maxNodes: 15 },
       autoResolveCycles: true,

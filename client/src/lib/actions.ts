@@ -41,7 +41,7 @@ function reportError(e: unknown, prefix = "") {
  * The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
  * Only calls for that graph are refused: work still running on the user's own graphs carries on.
  */
-function inViewer(graphId: string): boolean {
+export function inViewer(graphId: string): boolean {
   if (graphId !== store().view?.id) return false;
   store().setToast(t("api.viewer"), "info");
   return true;
@@ -63,7 +63,7 @@ interface BusyHandlers {
  * Run an AI call as a visible, cancellable task. Returns undefined when it failed or was cancelled
  * (the handlers decide what the user sees; by default errors become a toast and cancels are silent).
  */
-async function withBusy<T>(
+export async function withBusy<T>(
   key: string,
   label: string,
   fn: (signal: AbortSignal) => Promise<T>,

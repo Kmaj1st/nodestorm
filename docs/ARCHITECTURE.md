@@ -134,6 +134,7 @@ Everything is in the user's browser. No account, no backend storage.
 | localStorage | `nodestorm-theme` | Theme preference (absent = auto). | `client/src/lib/theme.ts` |
 | localStorage | `nodestorm-onboarding` | Welcome card / tour dismissed. | `client/src/lib/onboarding.ts` |
 | IndexedDB | database `nodestorm-snapshots`, stores `meta` and `data` | Version snapshots: metadata for the list, and the JSON only loaded to compare or restore. | `client/src/lib/snapshotDb.ts` |
+| IndexedDB | database `nodestorm-docs`, stores `docs`, `pages` (key `[docId, page]`) and `sessions` | Derive together: imported documents (metadata plus problems found), their page text, and derivation sessions, per project. Deleted with the project. | `client/src/lib/docDb.ts` |
 | memory | — | Undo/redo stacks (per graph, max 100), busy tasks, token usage. | `client/src/lib/history.ts`, `client/src/store/usageStore.ts` |
 
 Every storage access is wrapped in try/catch: a private window with blocked storage still runs, it just forgets.
@@ -180,7 +181,8 @@ never races a write.
   `[task:kind]` marker; `withLanguage` appends the output-language paragraph (`languageInstruction`) to the system
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
-  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`. Each parses the request with its zod
+  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`, `resolveCycle`, and for Derive
+  together `readPage`, `splitProblems`, `tutorHint` and `checkStep`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
   2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
@@ -192,6 +194,18 @@ never races a write.
 
 `TaskName = keyof typeof tasks` is used by both the server and the client, so adding a task to this object is what
 makes it exist everywhere.
+
+**Images.** `ChatMessage.content` is a string or `ContentPart[]` (text and base64 images; `textOf` reads the text).
+Only `readPage` sends an image: `openaiCompatible.ts` turns it into an `image_url` data URL and `anthropic.ts` into an
+`image` block. The client sends `readPage` to the provider's vision model (`visionModel(kind)` in
+`client/src/lib/api.ts`: the Settings value, else `ProviderMeta.visionModel`, else the chat model). The server accepts
+10 MB bodies on `/api/readPage` only; every other route keeps 1 MB.
+
+**Tutor tasks.** `tutorHint` and `checkStep` get the problem, the earlier steps, up to 8 numbered reference passages
+and the graph's concepts. The shared system text (`TUTOR` in `prompts.ts`) forbids writing the next step or the
+answer. Hints get stronger with `nth`. Post-processing drops citation numbers that weren't given (`validCites`),
+dedupes concepts, and counts `solved` only for an `ok` step. `splitProblems` runs `cleanProblems` (dedupe; pages
+outside the sheet become null).
 
 ### Browser mode vs server mode
 
@@ -290,6 +304,11 @@ Selectors: `activeGraph`, `isViewing`, `currentProject`, `canUndo`, `canRedo`.
   and `toggleFocus` helpers used by `App.tsx`.
 - `client/src/store/snapshotStore.ts`: snapshot list and the functions described in [Persistence](#3-persistence).
 - `client/src/store/quizStore.ts`: which quiz dialog is open (progress itself is `mastery` on the nodes).
+- `client/src/store/deriveStore.ts`: Derive together. Panel state (open, tab, reader), the project's documents, pages
+  and sessions (loaded from `docDb` per project; reloaded on project switch), and its actions: `importFile` (pdf.js
+  text, then scanned pages through `readPage` one at a time), `findProblems` (`splitProblems` in batches of about 11,000
+  characters), `hint` / `check` (BM25 retrieval over the reference documents, then the tutor task; a check whose step
+  was edited meanwhile is dropped), and `addToGraph`.
 - `client/src/store/onboardingStore.ts`: welcome card and tour state.
 - `client/src/store/usageStore.ts`: session token count.
 - `client/src/lib/theme.ts` and `client/src/i18n/index.ts` hold small zustand stores of their own (`useTheme`,
@@ -308,6 +327,9 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `layout.ts` | `layeredLayout` for Tidy: rows by dependency depth, prerequisites on top. |
 | `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts`, `showsEverything`. |
 | `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
+| `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`. |
+| `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
+| `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. |
 | `quiz.ts` | Spaced-repetition-lite: `updateMastery`, `strength`, `masteryLevel`, `studyOrder`, `quizPlan`, `nextConcept`, `pickStyle`, `summarize`. |
 | `snapshots.ts` / `snapshotDb.ts` | Version capture, hash, prune plan, diff, `keepMastery` / IndexedDB wrapper. |
 | `importRepair.ts` | `repairImport(raw)`: accepts anything graph-like, fills defaults, drops dangling references, resets unknown enum values, and returns human-readable `fixes`. |
@@ -362,6 +384,25 @@ link, as `"merge"` into the add's undo step.
 detection, ticks) → user edits the review → `insertExtraction(review)`: `autoSnapshot("extract")`, one
 `mutate(applyExtraction(…, viewport.center()))` (one undo step; new concepts laid out in layers; relations with
 origin `extract`, never overwriting a user relation), then quiet `analyzeNode` for every new concept through the queue.
+
+### Derive together
+
+The panel (`client/src/panels/derive/`, lazily loaded, mounted by `DeriveHost` inside `.main` next to the canvas; not
+a modal, so the graph stays usable) has a Library (import, problem sheets, your own problem, sessions), a Workspace
+(problem, steps with verdicts, hints, which references to cite) and a Reader (page text; selecting text starts a
+derivation from it; unreadable scanned pages can have text pasted in).
+
+1. Import: `readPdf` → pages; scanned pages → `renderPageImage` → `api.readPage` (vision model) → `putDoc`. For a
+   sheet, `findProblems` runs straight away.
+2. Hint / Check: `references()` builds (or reuses) a BM25 index over the chosen reference documents. The query is the
+   problem, the last two steps and the step being checked; the top 6 chunks go in, numbered. `api.tutorHint` /
+   `api.checkStep` answer with `[n]` citations, which `numberReferences().resolve` maps back to document and page.
+3. Add to graph: `AddToGraphDialog` edits a `GraphPlan` (`buildGraphPlan`), then `addToGraph` →
+   `autoSnapshot("deriveTogether")` → one `mutate(applyGraphPlan)` (one undo step) → quiet `analyzeNode` on new
+   concepts → the result is highlighted and revealed.
+
+A node's optional `source` (`{title, page}`, `SourceRef` in `model.ts`) travels in JSON exports, share links (it
+is graph content, not personal), import repair and the Markdown export.
 
 ### Fork / merge
 
@@ -575,4 +616,12 @@ and server-binding items are real problems worth fixing.
   previews under it). Relation labels on the canvas, tooltips, concept names and the Mermaid export stay plain text
   (the PNG export captures the cards as they are on screen).
   The currency rule guesses: "$5 for $x$" works, but "$5 and 10$" is a formula.
+- **Derive together**:
+  - Retrieval is keyword-based (BM25), not embeddings, so a reference that words things differently can be missed.
+  - Documents stay in this browser: they are not in JSON exports or share links.
+  - Scanned pages need a vision-capable model; server mode caps a page image at 10 MB.
+  - pdf.js runs without its wasm, standard-font and CMap assets (not bundled), so JPEG 2000 / JBIG2 scans may render
+    blank, and CJK PDFs without embedded fonts may give wrong text.
+  - The pdf.js worker (~1.3 MB) is precached by the service worker like every chunk. It ends in `.mjs`, which a static
+    host must serve as JavaScript.
 - **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).

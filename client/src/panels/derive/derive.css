@@ -1,0 +1,132 @@
+/* "Derive together" panel (panels/derive/). Docked beside the canvas; full screen under 800px. */
+.derive-panel {
+  width: 440px; flex-shrink: 0; display: flex; flex-direction: column; min-height: 0;
+  background: var(--panel); border-left: 1px solid var(--border); font-size: var(--text-md);
+}
+.derive-panel:focus { outline: none; }
+.derive-panel:focus-visible { box-shadow: inset var(--focus-ring); }
+.derive-panel__loading { padding: var(--space-4); margin: 0; }
+.derive-panel__header {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-2) var(--space-2) var(--space-4);
+  border-bottom: 1px solid var(--border);
+}
+.derive-panel__title { margin: 0; font-size: var(--text-lg); font-weight: 600; white-space: nowrap; }
+.derive-panel__body { flex: 1; overflow-y: auto; overflow-x: hidden; padding: var(--space-4); display: flex; flex-direction: column; gap: var(--space-5); }
+
+.derive-tabs { display: flex; gap: 2px; margin-left: auto; padding: 2px; background: var(--surface); border-radius: var(--radius-md); }
+button.derive-tab {
+  min-height: var(--control-h-dense); padding: 0 10px; font-size: var(--text-sm); border-color: transparent;
+  background: transparent; box-shadow: none; color: var(--muted);
+}
+button.derive-tab:hover:not(:disabled) { color: var(--text); background: var(--hover); border-color: transparent; }
+button.derive-tab--on, button.derive-tab--on:hover:not(:disabled) {
+  background: var(--panel); color: var(--text); border-color: var(--border); box-shadow: 0 1px 2px var(--shadow);
+}
+
+.derive-section { display: flex; flex-direction: column; gap: var(--space-2); }
+.derive-section__title { margin: 0; font-size: var(--text-md); font-weight: 600; }
+.derive-subtitle { margin: var(--space-2) 0 0; font-size: var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
+.derive-section p, .derive-work p { margin: 0; }
+.derive-library, .derive-work, .derive-reader { display: flex; flex-direction: column; gap: var(--space-5); min-width: 0; }
+.derive-panel__body > * { min-width: 0; }
+.derive-library textarea, .derive-work textarea, .derive-reader textarea { width: 100%; resize: vertical; font: inherit; }
+.derive-own { display: flex; flex-direction: column; gap: var(--space-2); }
+.derive-import { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.derive-progress { display: flex; align-items: center; gap: var(--space-2); color: var(--muted); }
+
+.derive-docs, .derive-sessions, .derive-problems, .derive-hints, .derive-steps { list-style: none; margin: 0; padding: 0; }
+.derive-docs, .derive-sessions { display: flex; flex-direction: column; gap: 2px; }
+.derive-doc, .derive-session { display: flex; align-items: center; gap: var(--space-2); min-height: var(--control-h); }
+.derive-doc__icon { color: var(--muted); flex-shrink: 0; }
+.derive-doc__title, .derive-session__open { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.derive-sheet { display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start; }
+.derive-sheet > .derive-doc { align-self: stretch; }
+.derive-problems { display: flex; flex-direction: column; gap: var(--space-2); align-self: stretch; }
+.derive-problem {
+  display: grid; grid-template-columns: auto 1fr auto; gap: var(--space-2) var(--space-3); align-items: start;
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel);
+}
+.derive-problem__label { font-weight: 600; color: var(--muted); min-width: 1.5em; line-height: 1.5; }
+.derive-problem__text { display: flex; flex-direction: column; gap: var(--space-1); align-items: flex-start; line-height: 1.5; }
+
+.derive-reader { display: flex; flex-direction: column; gap: var(--space-3); }
+.derive-reader__bar { display: flex; align-items: center; gap: var(--space-1); }
+.derive-reader__where { flex: 1; min-width: 0; font-size: var(--text-sm); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; padding-left: var(--space-2); }
+.derive-reader__text {
+  border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-3) var(--space-4);
+  background: var(--surface); line-height: 1.6; user-select: text;
+}
+.derive-reader__text p { margin: 0 0 var(--space-3); white-space: pre-wrap; }
+.derive-reader__text p:last-child { margin-bottom: 0; }
+.derive-reader__paste { display: flex; flex-direction: column; gap: var(--space-2); }
+
+.derive-problem-card {
+  display: flex; flex-direction: column; gap: var(--space-2); align-items: flex-start;
+  padding: var(--space-3) var(--space-4); border: 1px solid var(--accent-border); background: var(--accent-soft); border-radius: var(--radius-lg);
+}
+.derive-problem-card__text { line-height: 1.6; }
+.derive-solved {
+  display: flex; align-items: center; gap: var(--space-2); padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--ok-border); background: var(--ok-soft); color: var(--ok); border-radius: var(--radius-md); font-weight: 500;
+}
+
+.derive-steps { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.derive-step {
+  display: grid; grid-template-columns: 24px 1fr; gap: var(--space-1) var(--space-2);
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--panel);
+}
+.derive-step--ok { border-color: var(--ok-border); }
+.derive-step--gap, .derive-step--unclear { border-color: var(--checking-border); }
+.derive-step--error { border-color: var(--blocked-border); }
+.derive-step__n {
+  width: 22px; height: 22px; border-radius: var(--radius-full); background: var(--surface); color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center; font-size: var(--text-xs); font-weight: 600; margin-top: 1px;
+}
+.derive-step__body { min-width: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.derive-step__text { line-height: 1.6; overflow-wrap: anywhere; }
+.derive-step__actions { grid-column: 2; display: flex; gap: var(--space-1); align-items: center; }
+.derive-check { display: flex; flex-direction: column; gap: var(--space-1); align-items: flex-start; font-size: var(--text-sm); }
+.derive-check__comment { line-height: 1.5; }
+.derive-check__missing { color: var(--muted); }
+.derive-verdict {
+  display: inline-flex; align-items: center; gap: 5px; padding: 1px 8px; border-radius: var(--radius-full);
+  font-size: var(--text-xs); font-weight: 600; border: 1px solid;
+}
+.derive-verdict--ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-border); }
+.derive-verdict--gap, .derive-verdict--unclear { color: var(--checking); background: var(--checking-soft); border-color: var(--checking-border); }
+.derive-verdict--error { color: var(--blocked); background: var(--blocked-soft); border-color: var(--blocked-border); }
+.derive-cites { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-3); }
+
+.derive-new-step { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-3); }
+.derive-row { display: flex; flex-wrap: wrap; gap: var(--space-2); align-items: center; }
+.derive-row__spacer { flex: 1; }
+
+.derive-hints { display: flex; flex-direction: column; gap: var(--space-2); margin-top: var(--space-2); }
+.derive-hint {
+  display: flex; gap: var(--space-2); padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  background: var(--warn-soft); border: 1px solid var(--checking-border); line-height: 1.5;
+}
+.derive-hint__icon { color: var(--checking); flex-shrink: 0; margin-top: 3px; }
+.derive-hint > div { display: flex; flex-direction: column; gap: var(--space-1); }
+
+.derive-refs summary { cursor: pointer; font-size: var(--text-sm); color: var(--muted); }
+.derive-refs[open] { display: flex; flex-direction: column; gap: var(--space-1); }
+.derive-work__actions { position: static; }
+
+.derive-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+/* The toolbar button shows when the panel is open. */
+.toolbar button[data-testid="derive-together"][aria-pressed="true"] {
+  background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent);
+}
+
+@media (max-width: 800px) {
+  .derive-panel { position: fixed; inset: 0; z-index: 8; width: auto; border-left: none; }
+  /* Title and close on the first row, the tabs under them. */
+  .derive-panel__header { display: grid; grid-template-columns: 1fr auto; row-gap: var(--space-2); }
+  .derive-tabs { grid-row: 2; grid-column: 1 / -1; margin-left: 0; }
+  .derive-tabs > button { flex: 1; justify-content: center; }
+}
+
+/* With the panel open, the inspector only shows when something is selected: its "How to use" would squeeze the graph. */
+.main:has(.derive-panel) .inspector--help { display: none; }

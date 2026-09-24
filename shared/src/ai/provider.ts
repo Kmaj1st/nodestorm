@@ -1,6 +1,17 @@
+/** Part of a multimodal message. Images are base64 without a `data:` prefix. */
+export type ContentPart = { type: "text"; text: string } | { type: "image"; mediaType: string; data: string };
+
 export interface ChatMessage {
   role: "system" | "user" | "assistant";
-  content: string;
+  /** Plain text, or parts when the message carries images (only user messages do). */
+  content: string | ContentPart[];
+}
+
+/** The text of a message, ignoring any images. */
+export function textOf(content: ChatMessage["content"]): string {
+  return typeof content === "string"
+    ? content
+    : content.map((p) => (p.type === "text" ? p.text : "")).filter(Boolean).join("\n\n");
 }
 
 export interface RequestOptions {

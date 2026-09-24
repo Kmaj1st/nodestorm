@@ -12,6 +12,7 @@ import {
   LayoutGrid,
   Link,
   Menu,
+  PenLine,
   Plus,
   Presentation,
   Redo2,
@@ -32,6 +33,7 @@ import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
+import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
@@ -108,6 +110,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
           <Icon icon={Sparkles} />
           {t("toolbar.derive")}
         </button>
+        <DeriveTogetherButton />
       </div>}
 
       {/* Canvas tools: compact icon buttons, named by aria-label and explained by their tooltips. */}
@@ -262,6 +265,7 @@ function FileMenu() {
           { label: "file.import", title: "file.importTitle", icon: Upload, action: () => fileRef.current?.click() },
           { label: "file.extract", title: "file.extractTitle", icon: ScanText, action: () => setExtracting(true) },
           { label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
+          { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => useDerive.getState().openPanel() },
           { label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
           { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
         ] satisfies Item[])),
@@ -360,5 +364,22 @@ function FileMenu() {
         />
       )}
     </div>
+  );
+}
+
+/** Opens (or closes) the "Derive together" panel. */
+function DeriveTogetherButton() {
+  const t = useT();
+  const open = useDerive((s) => s.open);
+  return (
+    <button
+      aria-pressed={open}
+      onClick={() => (open ? useDerive.getState().close() : void useDerive.getState().openPanel())}
+      title={t("toolbar.deriveTogetherTitle")}
+      data-testid="derive-together"
+    >
+      <Icon icon={PenLine} />
+      <span className="toolbar__label">{t("toolbar.deriveTogether")}</span>
+    </button>
   );
 }

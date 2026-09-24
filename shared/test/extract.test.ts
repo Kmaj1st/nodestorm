@@ -89,6 +89,6 @@ describe("extract: mock provider", () => {
     expect(sys.content).toMatch(/\[task:extract\][\s\S]*in Chinese/);
     expect(user.content).toContain("- Ring");
     expect(user.content).toContain("Focus: definitions");
-    expect(user.content.split("群是一个集合。")).toHaveLength(2);
+    expect((user.content as string).split("群是一个集合。")).toHaveLength(2);
   });
 });

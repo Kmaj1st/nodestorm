@@ -1,5 +1,9 @@
 import { normalizeName } from "../model";
-import { withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
+import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
+
+/** What the offline demo "reads" on any scanned page. */
+const SCANNED_PAGE =
+  "4. Let $\\varphi: G \\to H$ be a group homomorphism. Show that $\\ker\\varphi$ is a normal subgroup of $G$.";
 
 /**
  * Offline provider with a tiny abstract-algebra knowledge base.
@@ -119,8 +123,8 @@ function title(s: string) {
 }
 
 function parseInput(messages: ChatMessage[]): any {
-  const user = [...messages].reverse().find((m) => m.role === "user" && m.content.includes("INPUT:"));
-  const raw = user?.content.split("INPUT:\n").pop() ?? "{}";
+  const user = [...messages].reverse().find((m) => m.role === "user" && textOf(m.content).includes("INPUT:"));
+  const raw = user ? textOf(user.content).split("INPUT:\n").pop()! : "{}";
   return JSON.parse(raw);
 }
 
@@ -142,7 +146,7 @@ export class MockProvider implements Provider {
   }
 
   private answer(messages: ChatMessage[]): string {
-    const task = messages[0]?.content.match(/\[task:(\w+)\]/)?.[1];
+    const task = textOf(messages[0]?.content ?? "").match(/\[task:(\w+)\]/)?.[1];
     const inp = parseInput(messages);
     switch (task) {
       case "name":
@@ -163,9 +167,89 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.resolveCycle(inp.links ?? []));
       case "quiz":
         return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
+      case "readPage":
+        return JSON.stringify({ text: SCANNED_PAGE });
+      case "splitProblems":
+        return JSON.stringify(this.splitProblems(inp.pages ?? []));
+      case "tutorHint":
+        return JSON.stringify(this.tutorHint(inp));
+      case "checkStep":
+        return JSON.stringify(this.checkStep(inp));
       default:
         return "{}";
     }
+  }
+
+  /** Problems numbered "1." or "2)" at the start of a line or after a sentence. */
+  private splitProblems(pages: { page: number; text: string }[]) {
+    const problems: { label: string; statement: string; page: number }[] = [];
+    for (const pg of pages) {
+      for (const m of pg.text.matchAll(/(?:^|\s)(\d{1,2})[.)]\s+([\s\S]+?)(?=\s\d{1,2}[.)]\s|$)/g)) {
+        problems.push({ label: m[1], statement: m[2].replace(/\s+/g, " ").trim(), page: pg.page });
+      }
+    }
+    return { problems };
+  }
+
+  /**
+   * KB concepts named in the text, in the order they appear. Longer names are matched first, so "normal subgroup"
+   * doesn't also count as "subgroup".
+   */
+  private mentioned(text: string) {
+    const t = ` ${normalizeName(text)} `;
+    const found: { name: string; definition: string; at: number }[] = [];
+    for (const k of Object.keys(KB).sort((a, b) => b.length - a.length)) {
+      const at = Math.min(...[k, ...KB[k].aliases].map((n) => t.indexOf(` ${normalizeName(n)} `)).filter((i) => i >= 0));
+      if (Number.isFinite(at) && !found.some((f) => normalizeName(f.name).includes(normalizeName(k)))) {
+        found.push({ name: title(k), definition: KB[k].definition, at });
+      }
+    }
+    return found.sort((a, b) => a.at - b.at).slice(0, 5).map(({ name, definition }) => ({ name, definition }));
+  }
+
+  private tutorHint(inp: { problem: string; steps?: string[]; references?: { n: number }[]; nth?: number }) {
+    const concepts = this.mentioned(`${inp.problem} ${(inp.steps ?? []).join(" ")}`);
+    const first = concepts[0]?.name ?? "the definitions involved";
+    const nth = inp.nth ?? 1;
+    const hint =
+      nth <= 1
+        ? `Start from the definition of ${first}: what does it say, and which part of the problem does it apply to?`
+        : nth === 2
+          ? `Write down what membership in ${first} means as an equation, then see what the other hypothesis gives you.`
+          : `Take an arbitrary element and conjugate it; use that a homomorphism preserves products and inverses.`;
+    const cites = inp.references?.length ? [inp.references[0].n] : [];
+    return { hint: cites.length ? `${hint} See [${cites[0]}].` : hint, cites, concepts };
+  }
+
+  /**
+   * Deterministic stand-in for checking a step: a step with a question mark or under 8 characters is unclear, one
+   * that says "wrong" is an error, one that gives a reason (because/since/by, or uses φ) is fine, anything else has
+   * a gap: the first concept of the problem it doesn't mention.
+   */
+  private checkStep(inp: { problem: string; step: string; references?: { n: number }[] }) {
+    const step = inp.step.trim();
+    const lower = step.toLowerCase();
+    const concepts = this.mentioned(`${inp.problem} ${step}`);
+    const cites = inp.references?.length ? [inp.references[0].n] : [];
+    if (step.length < 8 || step.includes("?")) {
+      return { verdict: "unclear", comment: "I can't tell what this step claims; write it as a statement.", missing: [], cites: [], concepts: [], solved: false };
+    }
+    if (/\bwrong\b/.test(lower)) {
+      return { verdict: "error", comment: "This does not follow from the previous steps.", missing: [], cites, concepts, solved: false };
+    }
+    if (/\b(because|since|by)\b|\\varphi|φ/.test(lower)) {
+      const solved = /\b(hence|therefore|thus)\b/.test(lower);
+      return { verdict: "ok", comment: "Correct, and the reason is stated.", missing: [], cites, concepts, solved };
+    }
+    const gap = this.mentioned(inp.problem).find((c) => !lower.includes(c.name.toLowerCase()))?.name ?? "a justification";
+    return {
+      verdict: "gap",
+      comment: `The claim is plausible, but you use a property of ${gap} without saying so.`,
+      missing: [gap],
+      cites,
+      concepts,
+      solved: false,
+    };
   }
 
   private name(desc: string) {

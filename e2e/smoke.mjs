@@ -157,7 +157,7 @@ try {
   await page.getByRole("button", { name: "Fork sandbox" }).click();
   await page.getByTestId("sandbox-banner").waitFor();
   await node("Homomorphism").click();
-  await page.getByRole("button", { name: /Derive/ }).click();
+  await page.getByRole("button", { name: "Derive", exact: true }).click();
   await page.getByRole("button", { name: "Accept" }).first().click();
   await page.getByRole("button", { name: "Close" }).click();
   await node("Kernel").waitFor();
@@ -829,10 +829,10 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…", "Walkthrough…",
+        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Save snapshot…", "Versions…", "Walkthrough…",
         "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
-    "File holds import, Extract from text, Quiz me, Versions, every export format and the share link",
+    "File holds import, Extract from text, Quiz me, Derive together, Versions, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -1500,6 +1500,115 @@ try {
     await page.getByTestId("resolve-cycle").click();
     await page.getByTestId("cycle-warning").waitFor({ state: "detached" });
     assert(true, "“Resolve with AI” in the inspector breaks it again");
+  }
+
+  console.log("Derive together");
+  {
+    // Still the offline demo in browser mode. A fresh project, so its library starts empty.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await page.getByTestId("derive-together").click();
+    const panel = page.getByTestId("derive-panel");
+    await panel.getByRole("heading", { name: "Derive together" }).waitFor();
+    const toast = (text) => page.locator(".toast").filter({ hasText: text }).waitFor();
+
+    // References: a text file, and a scanned PDF (a page without text) that the vision model reads.
+    await page.getByTestId("import-reference").setInputFiles({
+      name: "Lecture notes.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("The kernel of a homomorphism is the set of elements it sends to the identity.\fA normal subgroup is invariant under conjugation."),
+    });
+    await toast("Imported Lecture notes (2 pages)");
+    await page.getByTestId("import-reference").setInputFiles("e2e/fixtures/scanned.pdf");
+    await toast("Imported scanned (1 page)");
+    await panel.getByRole("button", { name: "scanned", exact: true }).click();
+    await panel.getByText("Read from the scanned page by the vision model").waitFor();
+    assert((await panel.getByTestId("reader-text").textContent()).includes("is a normal subgroup of"), "a scanned page is read by the vision model");
+    await panel.getByRole("button", { name: "Back" }).click();
+
+    // A problem sheet: its problems are found and listed.
+    await page.getByTestId("import-problems").setInputFiles("e2e/fixtures/problems.pdf");
+    await panel.getByRole("list", { name: "Problems on problems" }).waitFor();
+    assert((await panel.locator(".derive-problem").count()) === 3, "the problems on an imported sheet are listed");
+    await panel.getByRole("button", { name: "Start problem 1" }).click();
+    assert((await panel.getByTestId("dt-problem").textContent()).includes("kernel of a group homomorphism"), "starting a problem opens it in the workspace");
+
+    // A step with a gap, a hint that cites the notes, then a correct step that solves it.
+    await panel.getByLabel("Step 1").fill("The kernel is closed under conjugation.");
+    await panel.getByRole("button", { name: "Add and check" }).click();
+    const v1 = panel.getByTestId("verdict-1");
+    await v1.waitFor();
+    assert((await v1.textContent()).includes("Gap") && (await v1.textContent()).includes("Relies on: Homomorphism"), "a step with a gap is flagged, naming what it relies on");
+    await panel.getByRole("button", { name: "Hint", exact: true }).click();
+    const hint = panel.locator(".derive-hint").first();
+    await hint.waitFor();
+    const cite = hint.getByRole("button", { name: /^\[1\] Lecture notes, p\. \d$/ });
+    assert(await cite.isVisible(), "a hint cites the reference by page");
+    assert(await panel.getByRole("button", { name: "Another hint" }).isVisible(), "…and the next one is a stronger hint");
+    const cited = (await cite.textContent()).match(/p\. (\d)/)[1];
+    await cite.click();
+    await panel.getByTestId("reader-text").waitFor();
+    assert((await panel.locator(".derive-reader__where").textContent()) === `Lecture notes · page ${cited} of 2`, "a citation opens the cited page");
+    await panel.getByRole("button", { name: "Back" }).click();
+    await panel.getByLabel("Step 2").fill("Since $\\varphi(gkg^{-1}) = \\varphi(g)\\varphi(k)\\varphi(g)^{-1} = e$, hence $gkg^{-1} \\in \\ker\\varphi$.");
+    await panel.getByLabel("Step 2").press("Control+Enter");
+    await panel.getByTestId("verdict-2").filter({ hasText: "Correct" }).waitFor();
+    await panel.getByText("Solved.").waitFor();
+    assert(true, "Ctrl+Enter adds and checks a step; a correct final step solves the problem");
+    await audit("Derive together workspace");
+    await setTheme("dark");
+    await audit("Derive together workspace, dark theme");
+    await setTheme("light");
+
+    // Into the graph: the learner picks what goes in.
+    await panel.getByRole("button", { name: "Add to graph…" }).click();
+    const add = page.getByRole("dialog", { name: "Add to graph" });
+    await add.waitFor();
+    await audit("Add to graph dialog");
+    await add.getByLabel("Include Normal Subgroup").uncheck();
+    await add.getByRole("button", { name: /^Add \d items$/ }).click();
+    const result = "The kernel of a group homomorphism is a normal subgroup";
+    await node(result).waitFor();
+    await node("Kernel").waitFor();
+    assert((await page.locator('[data-testid="node-Normal Subgroup"]').count()) === 0, "only the ticked concepts are added");
+    await node(result).click();
+    assert((await page.locator(".inspector").textContent()).includes("Kernel"), "the result depends on the concepts it used");
+    assert((await page.getByLabel("My notes").inputValue()).includes("2. Since"), "the steps are kept in the result's notes");
+    await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+    await page.keyboard.press("Control+z");
+    await page.locator(`[data-testid="node-${result}"]`).waitFor({ state: "detached" });
+    assert(true, "Ctrl+Z takes the whole addition back");
+
+    // Pointing at a problem in a document: select its text in the reader.
+    await panel.getByRole("tab", { name: "Library" }).click();
+    await panel.getByRole("button", { name: "problems", exact: true }).click();
+    await panel.getByTestId("reader-text").waitFor();
+    await page.evaluate(() => {
+      const p = [...document.querySelectorAll(".derive-reader__text p")].find((el) => el.textContent.includes("image"));
+      const text = p.firstChild.nodeType === 3 ? p.firstChild : p.querySelector("span").firstChild;
+      const at = text.textContent.indexOf("2. Show");
+      const range = document.createRange();
+      range.setStart(text, at);
+      range.setEnd(text, text.textContent.indexOf("subgroup.", at) + "subgroup.".length);
+      getSelection().removeAllRanges();
+      getSelection().addRange(range);
+      p.dispatchEvent(new MouseEvent("mouseup", { bubbles: true }));
+    });
+    await panel.getByRole("button", { name: "Use selection as problem" }).click();
+    assert(
+      (await panel.getByTestId("dt-problem").textContent()).startsWith("2. Show that the image of a group homomorphism is a subgroup."),
+      "selected text in a document becomes the problem",
+    );
+
+    // Documents and derivations are kept (IndexedDB) across a reload.
+    await page.reload();
+    await page.getByTestId("derive-together").click();
+    await panel.getByRole("tab", { name: "Library" }).click();
+    await panel.getByRole("heading", { name: "Your derivations" }).waitFor();
+    assert((await panel.locator(".derive-session").count()) === 2 && (await panel.locator(".derive-doc").count()) === 3, "documents and derivations survive a reload");
+    await panel.getByRole("button", { name: "Close" }).click();
+    await panel.waitFor({ state: "detached" });
   }
 
   console.log("\nE2E passed");

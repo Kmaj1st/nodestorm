@@ -25,6 +25,8 @@ export function parseTimeout(raw: string | undefined): number | undefined {
 
 export function createApp(registry: Registry) {
   const app = express();
+  // Scanned pages sent for reading are images; every other request is small.
+  app.use("/api/readPage", express.json({ limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/api/providers", (_req, res) => {

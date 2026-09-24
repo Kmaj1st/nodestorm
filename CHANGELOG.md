@@ -42,6 +42,12 @@ together.
 - `npm run smoke:live` checks a real key and model end to end.
 
 ### Study and thinking tools
+- **Derive together**: a tutor mode for working a problem out yourself.
+  - Import PDFs (scanned pages are read by a vision model), text or Markdown, as problem sheets or references.
+  - Pick a problem from a sheet, select one in a document, or type your own.
+  - The AI checks each step (correct / gap / error / unclear) and gives hints that get more specific when asked
+    again. It never writes the derivation for you, and it cites your references by page.
+  - You choose what goes into the graph: the result, linked to the concepts it used, with its source page.
 - **Automatic cycle resolution**: when a check closes a dependency cycle, the AI picks the wrong link from the
   reasons each link was added with, and it is removed as one undoable step (a Settings toggle; "Resolve with AI" in
   the inspector).
@@ -67,6 +73,7 @@ together.
 - **Share by link**: the graph is compressed into the URL hash and opens in a read-only viewer with "Save a copy".
 
 ### App quality
+- **Visual refresh**: consistent design tokens, and lucide icons instead of emoji and symbols.
 - **Interface in English and 中文**. Dark mode. Accessible dialogs. A small-screen layout. An axe WCAG A/AA audit
   in e2e.
 - **Installable, offline-capable PWA** with an update notice. `?` shows the keyboard shortcuts.

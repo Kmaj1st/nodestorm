@@ -25,7 +25,20 @@ export interface OpenAICompatibleConfig {
 }
 
 // Endpoints like OpenAI's list every model; hide the ones that can't do chat.
-const NON_CHAT = /embed|whisper|tts|dall-e|image|audio|moderation|rerank|transcribe|realtime|speech|vision-preview|search-/i;
+const NON_CHAT = /embed|whisper|tts|dall-e|gpt-image|image-gen|flux|stable-diffusion|kolors|audio|moderation|rerank|transcribe|realtime|speech|search-/i;
+
+/** OpenAI's multimodal shape: images as `image_url` data URLs. */
+function toOpenAI(m: ChatMessage) {
+  if (typeof m.content === "string") return m;
+  return {
+    role: m.role,
+    content: m.content.map((p) =>
+      p.type === "text"
+        ? { type: "text", text: p.text }
+        : { type: "image_url", image_url: { url: `data:${p.mediaType};base64,${p.data}` } },
+    ),
+  };
+}
 
 /** Endpoint+model pairs that rejected `response_format: json_object` (providers are rebuilt per call in the browser). */
 const noJsonMode = new Set<string>();
@@ -97,7 +110,7 @@ export class OpenAICompatibleProvider implements Provider {
           method: "POST",
           body: JSON.stringify({
             model: this.model,
-            messages,
+            messages: messages.map(toOpenAI),
             temperature: 0.3,
             // Reasoning models spend part of this on thinking before they answer.
             max_tokens: opts.maxTokens ?? 4096,

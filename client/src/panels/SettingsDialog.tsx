@@ -35,6 +35,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [provider, setProvider] = useState<ProviderKind>(saved.provider);
   const [configs, setConfigs] = useState(saved.configs);
   const [serverModels, setServerModels] = useState(saved.serverModels);
+  const [visionModels, setVisionModels] = useState(saved.visionModels);
   const [rememberKeys, setRememberKeys] = useState(saved.rememberKeys);
   const [clarify, setClarify] = useState(saved.clarify);
   const [installAll, setInstallAll] = useState(saved.installAll);
@@ -97,7 +98,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setPref(theme);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, rememberKeys, clarify, installAll, autoResolveCycles, language: lang, aiConcurrency,
+      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, autoResolveCycles, language: lang, aiConcurrency,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
@@ -268,6 +269,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             </li>
           ))}
         </ul>
+      )}
+
+      {provider !== "mock" && (
+        <label className="field">
+          {t("settings.visionModel")}
+          <input
+            list="model-options"
+            value={visionModels[provider] ?? ""}
+            onChange={(e) => setVisionModels({ ...visionModels, [provider]: e.target.value.trim() })}
+            placeholder={t("settings.modelDefault", { model: meta.visionModel ?? (model || defaultModel) })}
+            spellCheck={false}
+          />
+          <span className="muted small">{t("settings.visionModelHint")}</span>
+        </label>
       )}
 
       {provider !== "mock" && (

@@ -137,7 +137,7 @@ describe("output language", () => {
       id: "rec", label: "Rec", model: "m", configured: true, listModels: async () => [],
       complete: async (m) => {
         prompts.push(m);
-        const task = m[0].content.match(/\[task:(\w+)\]/)![1];
+        const task = (m[0].content as string).match(/\[task:(\w+)\]/)![1];
         return JSON.stringify(answers[task]);
       },
     };
