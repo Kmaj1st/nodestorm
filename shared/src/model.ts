@@ -39,6 +39,17 @@ export const NodeExplanation = Explanation.extend({
 });
 export type NodeExplanation = z.infer<typeof NodeExplanation>;
 
+/**
+ * How well the user knows a concept, from "Quiz me" self-grades (see client/src/lib/quiz.ts): `score` is 0 (didn't
+ * know) … 1 (knew it), a running average of the grades; `reviews` counts them and `reviewedAt` is the last one (ms).
+ */
+export const Mastery = z.object({
+  score: z.number().min(0).max(1),
+  reviews: z.number().int().min(1),
+  reviewedAt: z.number(),
+});
+export type Mastery = z.infer<typeof Mastery>;
+
 export const ConceptNode = z.object({
   id: z.string(),
   name: z.string(),
@@ -57,6 +68,8 @@ export const ConceptNode = z.object({
   explanation: NodeExplanation.optional(),
   /** The user's own free-text notes (Markdown-ish plain text). */
   notes: z.string().optional(),
+  /** Quiz progress. Personal study data, so share links leave it out (see packGraph in client/src/lib/share.ts). */
+  mastery: Mastery.optional(),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -226,6 +239,33 @@ export type ExplainRequest = z.infer<typeof ExplainRequest>;
 
 export const ExplainResponse = Explanation;
 export type ExplainResponse = Explanation;
+
+/**
+ * What a quiz question asks: "recall" the concept itself, "apply" it to a small concrete case, or "connect" it to one
+ * of its prerequisites (how the concept builds on it).
+ */
+export const QuizStyle = z.enum(["recall", "apply", "connect"]);
+export type QuizStyle = z.infer<typeof QuizStyle>;
+
+export const QuizRequest = z.object({
+  node: NodeBrief.extend({ notes: z.string().max(4000).optional() }),
+  /** Its prerequisites that are in the graph (a "connect" question picks one of them). */
+  prerequisites: z.array(NodeBrief).default([]),
+  style: QuizStyle.default("recall"),
+  /** Ask for four choices with one correct answer instead of a free-recall question. */
+  multipleChoice: z.boolean().default(false),
+});
+export type QuizRequest = z.infer<typeof QuizRequest>;
+
+export const QuizResponse = z.object({
+  question: z.string().trim().min(1),
+  answer: z.string().trim().min(1),
+  hints: z.array(z.string()).default([]),
+  /** Multiple choice only: exactly four options and the index of the right one (tasks.quiz drops malformed sets). */
+  choices: z.array(z.string()).nullish(),
+  correctIndex: z.number().int().nullish(),
+});
+export type QuizResponse = z.infer<typeof QuizResponse>;
 
 /** Longest text "Extract from text" accepts (characters): a few pages, which fits every provider's context. */
 export const EXTRACT_MAX_CHARS = 12_000;

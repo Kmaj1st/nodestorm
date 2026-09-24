@@ -13,6 +13,8 @@ import {
   normalizeName,
   NameRequest,
   NameResponse,
+  QuizRequest,
+  QuizResponse,
   RelateRequest,
   RelateResponse,
 } from "../model";
@@ -25,6 +27,7 @@ import {
   explainPrompt,
   extractPrompt,
   namePrompt,
+  quizPrompt,
   relatePrompt,
   withLanguage,
 } from "./prompts";
@@ -120,6 +123,27 @@ export function cleanExtraction(res: ExtractResponse, existing: { name: string; 
   };
 }
 
+const MAX_HINTS = 3;
+
+/**
+ * Tidy a quiz question: at most three non-empty hints, and a multiple-choice set only when it really is one (four
+ * distinct options and a valid correct index). Anything else falls back to a free-recall question with its answer.
+ */
+export function cleanQuiz(res: QuizResponse, multipleChoice: boolean): QuizResponse {
+  const hints = res.hints.map((h) => h.trim()).filter(Boolean).slice(0, MAX_HINTS);
+  const choices = res.choices?.map((c) => c.trim()) ?? [];
+  const at = res.correctIndex ?? -1;
+  const ok =
+    multipleChoice &&
+    choices.length === 4 &&
+    choices.every(Boolean) &&
+    new Set(choices.map((c) => c.toLowerCase())).size === 4 &&
+    at >= 0 &&
+    at < 4;
+  const base = { question: res.question, answer: res.answer, hints };
+  return ok ? { ...base, choices, correctIndex: at } : base;
+}
+
 export const tasks = {
   name: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, namePrompt(NameRequest.parse(body)), NameResponse, { ...o, search: true }),
@@ -141,6 +165,10 @@ export const tasks = {
   extract: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = ExtractRequest.parse(body);
     return cleanExtraction(await runStructured(p, extractPrompt(req), ExtractResponse, o), req.existing);
+  },
+  quiz: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = QuizRequest.parse(body);
+    return cleanQuiz(await runStructured(p, quizPrompt(req), QuizResponse, o), req.multipleChoice);
   },
 };
 export type TaskName = keyof typeof tasks;
