@@ -3,6 +3,7 @@ import {
   createProvider,
   normalizeLanguage,
   withDeadline,
+  type AbsurdChainRequest,
   type ClarifyRequest,
   providerMeta,
   tasks,
@@ -129,6 +130,8 @@ export const api = {
   tutorHint: (req: Partial<TutorHintRequest> & Pick<TutorHintRequest, "problem">, signal?: AbortSignal) => run("tutorHint", req, signal),
   checkStep: (req: Partial<CheckStepRequest> & Pick<CheckStepRequest, "problem" | "step">, signal?: AbortSignal) =>
     run("checkStep", req, signal),
+  absurdChain: (req: Partial<AbsurdChainRequest> & Pick<AbsurdChainRequest, "from" | "to">, signal?: AbortSignal) =>
+    run("absurdChain", req, signal),
 
   /** Providers configured on the local server (server mode only). */
   serverProviders: () => serverFetch<ProvidersResponse>("providers"),

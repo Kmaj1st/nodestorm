@@ -110,6 +110,81 @@ const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples
   },
 };
 
+/**
+ * True facts linking the KB with a few everyday things, for the offline "absurd chain": a Homomorphism is three
+ * links from the Fourier transform, which is four from Toast. `kind` reads from a to b, `back` from b to a.
+ */
+const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string }[] = [
+  { a: "Subgroup", b: "Group", kind: "lives inside", back: "contains", fact: "A subgroup is a subset of a group that is itself a group under the same operation." },
+  { a: "Normal subgroup", b: "Subgroup", kind: "is a kind of", back: "narrows down to", fact: "A normal subgroup is a subgroup that is invariant under conjugation." },
+  { a: "Quotient group", b: "Normal subgroup", kind: "is built from", back: "gives rise to", fact: "The quotient group $G/N$ is made of the cosets of a normal subgroup $N$." },
+  { a: "Group", b: "Homomorphism", kind: "is respected by", back: "preserves", fact: "A homomorphism is a map between groups that preserves the group operation." },
+  { a: "Kernel", b: "Homomorphism", kind: "is defined by", back: "determines", fact: "The kernel of a homomorphism is the set of elements it sends to the identity." },
+  { a: "Isomorphism", b: "Homomorphism", kind: "is a kind of", back: "specialises to", fact: "An isomorphism is a bijective homomorphism." },
+  { a: "First isomorphism theorem", b: "Homomorphism", kind: "starts from", back: "is the subject of", fact: "The first isomorphism theorem starts from a homomorphism $\\varphi: G \\to H$ and describes its image." },
+  { a: "Homomorphism", b: "Exponential function", kind: "is exemplified by", back: "is an example of", fact: "The exponential $x \\mapsto e^x$ is a homomorphism from $(\\mathbb{R}, +)$ to $(\\mathbb{R}_{>0}, \\times)$, since $e^{x+y} = e^x e^y$." },
+  { a: "Exponential function", b: "Fourier transform", kind: "is the building block of", back: "is built from", fact: "The Fourier transform writes a function as a superposition of complex exponentials $e^{2\\pi i \\xi x}$." },
+  { a: "Fourier transform", b: "Heat equation", kind: "was invented to solve", back: "was solved with", fact: "Joseph Fourier developed Fourier analysis to solve the heat equation, in his 1822 book on the theory of heat." },
+  { a: "Heat equation", b: "Heat", kind: "describes the flow of", back: "flows by", fact: "The heat equation $u_t = \\alpha \\nabla^2 u$ describes how heat diffuses through a material." },
+  { a: "Heat", b: "Maillard reaction", kind: "speeds up", back: "needs", fact: "The Maillard reaction between amino acids and reducing sugars becomes fast at around 140 to 165 °C." },
+  { a: "Maillard reaction", b: "Toast", kind: "browns", back: "browns through", fact: "Toast turns brown mainly through the Maillard reaction at the surface of the bread." },
+  { a: "Egg", b: "Heat", kind: "is set by", back: "sets", fact: "When an egg is heated, its proteins denature and it sets." },
+  { a: "Chicken", b: "Egg", kind: "lays", back: "is laid by", fact: "Hens lay eggs." },
+  // Anything the demo doesn't know joins through the page it is written on.
+  { a: "Written language", b: "Paper", kind: "is recorded on", back: "carries", fact: "Written language has been recorded on paper for about two thousand years." },
+  { a: "Paper", b: "Heat", kind: "is ignited by", back: "ignites", fact: "Paper catches fire when heated to roughly 230 °C." },
+];
+const WRITTEN = "Written language";
+
+type Quip = (a: string, b: string) => string;
+const ABSURD_VOICE: Record<string, { title: Quip; moral: string; quips: Quip[] }> = {
+  deadpan: {
+    title: (a, b) => `${a} and ${b}: a perfectly ordinary connection`,
+    moral: "So that is that. Everything is connected, and it is mostly fine.",
+    quips: [
+      (a, b) => `${a} leads to ${b}. Nobody seems surprised.`,
+      (_a, b) => `Then ${b}. Naturally.`,
+      (a, b) => `From ${a} it is a short walk to ${b}. We walked it.`,
+    ],
+  },
+  conspiracy: {
+    title: (a, b) => `What they don't want you to know about ${a} and ${b}`,
+    moral: "Connect enough dots and you get a line. Draw your own conclusions.",
+    quips: [
+      (a, b) => `${a} and ${b}. Coincidence? I think not.`,
+      (a, b) => `Follow the thread from ${a}: it goes straight to ${b}. Hidden in plain sight, as always.`,
+      (a, b) => `Who benefits from ${a}? ${b}. Every single time.`,
+    ],
+  },
+  epic: {
+    title: (a, b) => `The Saga of ${a} and ${b}`,
+    moral: "And so the prophecy was fulfilled, as prophecies in textbooks usually are.",
+    quips: [
+      (a, b) => `And lo, out of ${a} rose ${b}, and the ages trembled.`,
+      (a, b) => `Then came ${b}, as foretold in the ancient scrolls of ${a}.`,
+      (a, b) => `Bards still sing of the day ${a} met ${b}.`,
+    ],
+  },
+  bureaucratic: {
+    title: (a, b) => `Form 27-B: request to connect ${a} to ${b}`,
+    moral: "Approved in triplicate. Please allow six to eight weeks for enlightenment.",
+    quips: [
+      (a, b) => `The Department of ${a} has forwarded your request to the Office of ${b}.`,
+      (a, b) => `Link from ${a} to ${b} approved, pending a second signature.`,
+      (a, b) => `Please take a number: ${b} will see ${a} shortly.`,
+    ],
+  },
+  "academic-overkill": {
+    title: (a, b) => `On the non-trivial relationship between ${a} and ${b}: a preliminary note`,
+    moral: "Further research is needed. So is further funding.",
+    quips: [
+      (a, b) => `It can be shown (see footnote 47) that ${a} is, in a precise sense, related to ${b}.`,
+      (a, b) => `Lemma: ${a} obliges us to discuss ${b}. Proof: left to the reviewer.`,
+      (a, b) => `Under mild assumptions, ${b} follows from ${a}, although the authors admit they had coffee first.`,
+    ],
+  },
+};
+
 function kbGet(name: string) {
   const key = normalizeName(name);
   const entry = Object.entries(KB).find(
@@ -175,9 +250,74 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.tutorHint(inp));
       case "checkStep":
         return JSON.stringify(this.checkStep(inp));
+      case "absurdChain":
+        return JSON.stringify(this.absurdChain(inp));
       default:
         return "{}";
     }
+  }
+
+  /**
+   * The shortest route through BRIDGES (avoiding earlier rolls' concepts when another route exists). An end the demo
+   * doesn't know joins through "Written language" (its name is written with letters, which is true of anything).
+   * The narration comes from the style's templates; a "Roll again" (with an avoid list) starts one template later.
+   */
+  private absurdChain(inp: { from: { name: string }; to: { name: string }; style?: string; avoid?: string[] }) {
+    const from = inp.from.name;
+    const to = inp.to.name;
+    const known = (name: string) =>
+      [...new Set(BRIDGES.flatMap((l) => [l.a, l.b]))].find((n) => normalizeName(n) === normalizeName(name));
+    type Edge = { next: string; kind: string; fact: string };
+    const edges = new Map<string, Edge[]>();
+    const add = (x: string, e: Edge) => edges.set(normalizeName(x), [...(edges.get(normalizeName(x)) ?? []), e]);
+    for (const l of BRIDGES) {
+      add(l.a, { next: l.b, kind: l.kind, fact: l.fact });
+      add(l.b, { next: l.a, kind: l.back, fact: l.fact });
+    }
+    for (const end of [from, to]) {
+      if (known(end)) continue;
+      const fact = `The name “${end}” is written with the letters of a writing system.`;
+      add(end, { next: WRITTEN, kind: "is written in", fact });
+      add(WRITTEN, { next: end, kind: "is used to write", fact });
+    }
+    const route = (avoid: Set<string>) => {
+      const prev = new Map<string, { at: string; edge: Edge }>();
+      const queue = [from];
+      const seen = new Set([normalizeName(from)]);
+      while (queue.length) {
+        const at = queue.shift()!;
+        if (normalizeName(at) === normalizeName(to)) break;
+        for (const e of edges.get(normalizeName(at)) ?? []) {
+          const k = normalizeName(e.next);
+          if (seen.has(k) || (avoid.has(k) && k !== normalizeName(to))) continue;
+          seen.add(k);
+          prev.set(k, { at, edge: e });
+          queue.push(e.next);
+        }
+      }
+      const hops: { from: string; to: string; kind: string; fact: string }[] = [];
+      for (let k = normalizeName(to); prev.has(k); ) {
+        const { at, edge } = prev.get(k)!;
+        hops.unshift({ from: at, to: edge.next, kind: edge.kind, fact: edge.fact });
+        k = normalizeName(at);
+      }
+      return hops.length ? hops : null;
+    };
+    const avoid = inp.avoid ?? [];
+    const hops = route(new Set(avoid.map(normalizeName))) ?? route(new Set())!;
+    const voice = ABSURD_VOICE[inp.style ?? "deadpan"] ?? ABSURD_VOICE.deadpan;
+    const n = voice.quips.length;
+    return {
+      title: voice.title(from, to),
+      chain: hops.map((h, i) => ({
+        ...h,
+        from: i === 0 ? from : h.from,
+        to: i === hops.length - 1 ? to : h.to,
+        quip: voice.quips[(i + (avoid.length ? 1 : 0)) % n](h.from, h.to),
+      })),
+      moral: voice.moral,
+      plausibility: "Offline demo: the links come from a short built-in list of true facts, and the jokes from templates.",
+    };
   }
 
   /** Problems numbered "1." or "2)" at the start of a line or after a sentence. */

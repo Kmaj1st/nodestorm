@@ -1,4 +1,6 @@
 import type {
+  AbsurdChainRequest,
+  AbsurdStyle,
   ClarifyRequest,
   DepsRequest,
   DeriveRequest,
@@ -20,7 +22,7 @@ import type {
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "absurdChain";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -55,7 +57,7 @@ export function languageInstruction(language: string | undefined): string {
   if (!lang) return "";
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
-  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices) in ${target}.
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes) in ${target}.
 Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
@@ -346,5 +348,35 @@ Schema: {"verdict":"ok"|"gap"|"error"|"unclear","comment":string,"missing":strin
         contextBlock(req.context),
       ].join("\n\n"),
     ),
+  ];
+}
+
+const ABSURD_STYLE: Record<AbsurdStyle, string> = {
+  deadpan: "Deadpan: flat, understated and matter-of-fact, as if nothing about this were strange.",
+  conspiracy:
+    'Conspiracy: a breathless investigator connecting the dots ("Coincidence? I think not."), about harmless things only; never about real groups, people, events or health.',
+  epic: "Epic: an overly dramatic saga of destiny, ages, heroes and grand pronouncements.",
+  bureaucratic: "Bureaucratic: memos, forms, departments, approvals in triplicate and procedural sign-offs.",
+  "academic-overkill":
+    'Academic overkill: absurdly rigorous hedging, footnotes, "it can be shown that", lemmas for the obvious.',
+};
+
+export function absurdChainPrompt(req: AbsurdChainRequest): ChatMessage[] {
+  const { min, max } = req.hops;
+  const avoid = req.avoid.length
+    ? ` Take a different route than before: do not use ${req.avoid.map((a) => `"${a}"`).join(", ")} as intermediate concepts.`
+    : "";
+  return [
+    sys(
+      "absurdChain",
+      `Parody mode. Link two concepts, possibly from totally different fields, through a chain of related concepts, like a detective connecting two things that look unrelated. The chain has ${min === max ? min : `${min}-${max}`} hops: from → X1 → X2 → … → to.
+THE FACTS ARE REAL. Every hop must be a genuinely true, checkable relation between its two concepts: standard knowledge that a reference work or textbook would confirm. "fact" states it soberly and accurately in one sentence: no jokes, no exaggeration, no invented dates, names, numbers or quotes. If you are not sure a link is true, take another route. Intermediate concepts are real, established things (concepts, objects, people, places, phenomena), named as they usually are, without $.
+THE COMEDY IS IN THE TELLING. "quip" narrates the same hop in the requested style, in one or two sentences; "title" is a funny title for the whole chain (at most about 10 words); "moral" is a funny closing line. A quip may overdramatise the reasoning but must not contradict or embellish the fact. Keep it kind: no insults, no mocking of people or groups, nothing offensive, political, sexual or about tragedies.
+Style: ${ABSURD_STYLE[req.style]}
+Chain rules: the first hop's "from" is exactly "${req.from.name}"; the last hop's "to" is exactly "${req.to.name}"; each hop's "from" is exactly the previous hop's "to"; no concept appears twice.${avoid}
+"kind" is a short relation label (2-4 words, e.g. "was invented to solve", "browns through"). "plausibility" is one sober sentence for the reader on how solid the links are (name the loosest one, if any).
+Schema: {"title":string,"chain":[{"from":string,"to":string,"kind":string,"fact":string,"quip":string}],"moral":string,"plausibility":string}`,
+    ),
+    input(req, `${contextBlock(req.context)}\n\nFrom:\n${brief(req.from)}\n\nTo:\n${brief(req.to)}\n\nStyle: ${req.style}`),
   ];
 }

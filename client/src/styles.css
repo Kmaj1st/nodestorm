@@ -882,7 +882,7 @@ kbd {
   .react-flow__minimap { display: none; }
 }
 /* Below this width the brand gives way, so all toolbar groups still fit on one row down to 1200px. */
-@media (max-width: 1359px) {
+@media (max-width: 1439px) {
   .toolbar__brand { display: none; }
   /* Labels that give way to an icon (the button keeps the label as its name, and a tooltip). */
   .toolbar__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }

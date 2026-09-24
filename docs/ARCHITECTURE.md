@@ -115,7 +115,7 @@ classDiagram
   version snapshots all use it, and all are read back through `client/src/lib/importRepair.ts`.
 - **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
   `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
-  `QuizRequest/Response`. Requests carry `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`.
+  `QuizRequest/Response`, `AbsurdChainRequest/Response` (with `AbsurdStyle` and `AbsurdHop`). Requests carry `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`.
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
   crude plural folding for Latin words) and
   `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
@@ -181,19 +181,32 @@ never races a write.
   `[task:kind]` marker; `withLanguage` appends the output-language paragraph (`languageInstruction`) to the system
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
-  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`, `resolveCycle`, and for Derive
-  together `readPage`, `splitProblems`, `tutorHint` and `checkStep`. Each parses the request with its zod
+  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`, `resolveCycle`, `absurdChain`, and for
+  Derive together `readPage`, `splitProblems`, `tutorHint` and `checkStep`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
   2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
      `<think>…</think>` block from reasoning models; tries each `{` until one parses),
-  3. validates it with the response schema, and on a malformed answer asks once more, quoting the error.
+  3. validates it with the response schema and the task's optional `check` function, and on a malformed answer
+     (either one throws) asks once more, quoting the error.
   Timeouts and cancellation are not retried there. Some tasks post-process: `clarify` treats "ambiguous with one
   sense" as unambiguous, `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
   ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index).
 
 `TaskName = keyof typeof tasks` is used by both the server and the client, so adding a task to this object is what
 makes it exist everywhere.
+
+**Absurd chain** (parody mode). `absurdChain` gets two `NodeBrief` ends, a `style` (`deadpan`, `conspiracy`, `epic`,
+`bureaucratic`, `academic-overkill`), a hop range (1-7, default 3-5), the graph's concepts as context and an `avoid`
+list (intermediate concepts of earlier rolls, so "Roll again" takes another route). The answer is a `title`, a
+`chain` of hops `{from, to, kind, fact, quip}`, a `moral` and a sober `plausibility` note. The prompt insists that
+every `fact` is true, standard knowledge and that the comedy stays in `quip`, `title` and `moral`, and that nothing is
+unkind. `cleanAbsurdChain` (its `check`) gives the ends the requested names (matching by name or alias), cuts the
+chain where it first reaches the goal, cuts out loops, and throws a `ProviderError` for a chain that starts
+elsewhere, has a gap between hops, never arrives or has more than 10 links; a broken chain is therefore asked for once
+more before the error reaches the user. The mock answers from `BRIDGES` in `mock.ts`: true facts linking its algebra
+KB to *Fourier transform*, *Heat equation*, *Maillard reaction*, *Toast* and a few more (shortest route by BFS, avoiding
+`avoid` when it can), an unknown end joining through *Written language*, and per-style templates for the narration.
 
 **Images.** `ChatMessage.content` is a string or `ContentPart[]` (text and base64 images; `textOf` reads the text).
 Only `readPage` sends an image: `openaiCompatible.ts` turns it into an `image_url` data URL and `anthropic.ts` into an
@@ -291,7 +304,7 @@ sequenceDiagram
   registers `busy[key]` for the status bar, drops answers that arrive after a cancel, and turns errors into a toast
   (or the caller's `onError`). `cancelTask(key)` is what the status bar's cancel (X) button and dialogs' Cancel call. Busy keys
   follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
-  `explain:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`.
+  `explain:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`, `absurd`.
 - **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
   an info toast) if so. Only calls for that graph are refused; work on the user's own graphs continues.
 - **Token usage**: browser-mode providers call `onUsage`, which adds to `client/src/store/usageStore.ts` (shown in
@@ -340,6 +353,8 @@ Selectors: `activeGraph`, `isViewing`, `currentProject`, `canUndo`, `canRedo`.
   text, then scanned pages through `readPage` one at a time), `findProblems` (`splitProblems` in batches of about 11,000
   characters), `hint` / `check` (BM25 retrieval over the reference documents, then the tutor task; a check whose step
   was edited meanwhile is dropped), and `addToGraph`.
+- `client/src/store/absurdStore.ts`: whether the Absurd chain dialog is open and its starting ends (`openAbsurd` takes
+  them from the selection: two selected concepts, else the one selected or inspected).
 - `client/src/store/onboardingStore.ts`: welcome card and tour state.
 - `client/src/store/usageStore.ts`: session token count.
 - `client/src/lib/theme.ts` and `client/src/i18n/index.ts` hold small zustand stores of their own (`useTheme`,
@@ -359,6 +374,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts`, `showsEverything`. |
 | `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
 | `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`. |
+| `absurd.ts` | Absurd chain: `chainConcepts`, `intermediates`, `chainToText` (clipboard), `sandboxName`, `hopExplanation`, and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
 | `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. |
 | `quiz.ts` | Spaced-repetition-lite: `updateMastery`, `strength`, `masteryLevel`, `studyOrder`, `quizPlan`, `nextConcept`, `pickStyle`, `summarize`. |
@@ -435,9 +451,19 @@ derivation from it; unreadable scanned pages can have text pasted in).
 A node's optional `source` (`{title, page}`, `SourceRef` in `model.ts`) travels in JSON exports, share links (it
 is graph content, not personal), import repair and the Markdown export.
 
+### Absurd chain
+
+Toolbar (theatre-masks button next to Mix) or File → Absurd chain… → `useAbsurd.openAbsurd()` → `AbsurdChainDialog`
+(lazy, mounted by `App.tsx`; ends prefilled from the selection, editable, with the graph's names as suggestions) →
+`absurdChain(from, to, style, hops, avoid)` in actions.ts: an end that names a concept of the graph goes with its
+definition, anything else as typed; `withBusy("absurd", …)`, cancelled when the dialog closes. Nothing touches the
+graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res)`: `forkActive(sandboxName(title))` (switches to the
+new sandbox), one `mutate(applyAbsurdChain)` there (one undo step), then quiet `analyzeNode` for each new concept with
+the hop's fact as the clarify hint. The user's graph only changes through **Merge back**.
+
 ### Fork / merge
 
-`forkActive` → `ops.fork` (deep copy, same node/relation ids, `parentId`, `forkedAt`) and switch to it. Sandbox banner
+`forkActive(name?)` → `ops.fork` (deep copy, same node/relation ids, `parentId`, `forkedAt`) and switch to it. Sandbox banner
 (`SandboxBanner` in `client/src/App.tsx`): **Merge back** → `autoSnapshot("merge")` + `mergeSandbox` → `ops.merge`
 (sandbox wins on shared ids, parent-only content kept, independently-added same-name concepts folded), recorded as one
 undo step in the parent; child sandboxes are re-parented. **Discard** → `autoSnapshot("discard")` + `discardSandbox`.
@@ -466,9 +492,11 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
   for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
   `InspectorSheet` (a collapsible bottom sheet under 800px), toast, and the dialogs.
-- `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Derive, Tidy/Find/Focus/View, graph/sandbox
-  selector and fork, Settings (an AI status chip), File (import, exports incl. PNG via lazily imported `html-to-image`, Extract,
-  Quiz, Share, Versions). One row from 1200px up; under 800px the less-used groups fold into the More tools menu.
+- `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Absurd chain/Derive, Tidy/Find/Focus/View,
+  graph/sandbox selector and fork, Settings (an AI status chip), File (import, exports incl. PNG via lazily imported
+  `html-to-image`, Extract, Quiz, Derive together, Absurd chain, Share, Versions). One row from 1200px up: below 1440px
+  the brand and some button labels give way (the button keeps its name and tooltip); under 800px the less-used groups
+  fold into the More tools menu. A new toolbar button has to fit that budget (the e2e checks 1200px and 1400px).
 - `client/src/graph/GraphCanvas.tsx`: the React Flow canvas. **Performance notes:**
   - React Flow node and edge objects are kept in local state/cache and **reused by identity** when their concept,
     relation, classes and visibility are unchanged, so an AI status update re-renders only that node; the edges array
@@ -480,8 +508,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
 - `client/src/panels/Inspector.tsx`: node view (dependency flow, install, rename, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
-- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Flashcards, Sense, Settings, Share,
-  Shortcuts, Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
+- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Absurd chain, Add, Derive, Extract, Find, Flashcards, Sense,
+  Settings, Share, Shortcuts, Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
@@ -495,7 +523,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - **Theming**: CSS variables on `:root` and `:root[data-theme="dark"]` in `client/src/styles.css`; `initTheme` sets
   `<html data-theme>` from the preference or `prefers-color-scheme`, and React Flow gets `colorMode`. Feature CSS lives
   next to its component (`client/src/graph/mastery.css`, `client/src/panels/quiz.css`,
-  `client/src/panels/versions.css`, `client/src/panels/onboarding.css`).
+  `client/src/panels/versions.css`, `client/src/panels/onboarding.css`, `client/src/panels/absurd.css`).
   - **Design tokens** (top of `styles.css`): spacing `--space-1..5` (4/8/12/16/24), radius `--radius-sm/md/lg`
     (6/8/12), type `--text-xs..xl` (12/13/14/16/20), `--font-sans`, shadows `--shadow-sm/md/lg`, `--focus` /
     `--focus-ring`, and the colour roles (`--panel`, `--surface`, `--hover`, `--muted`, `--border(-strong)`,
@@ -540,7 +568,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   sandbox, server mode, persistence, export, undo & editing, layout, ambiguous names, failures, dependency tools,
   theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
-  中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes). The run is **pinned
+  中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes), cycle resolution,
+  Derive together and absurd chain (free-form and from the selection, roll again, copy, add to a sandbox, axe in both
+  themes). The run is **pinned
   to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
@@ -659,4 +689,7 @@ and server-binding items are real problems worth fixing.
     blank, and CJK PDFs without embedded fonts may give wrong text.
   - The pdf.js worker (~1.3 MB) is precached by the service worker like every chunk. It ends in `.mjs`, which a static
     host must serve as JavaScript.
+- **Absurd chain**: the facts are only as true as the model makes them (the prompt insists, the UI says to check, and
+  nothing reaches the graph except through a sandbox). Its relations have origin `mix`, so after a merge they can't be
+  told apart or filtered separately; a dedicated origin would follow "Add a relation origin" above.
 - **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).

@@ -8,6 +8,7 @@ import { useGraphStore } from "../store/graphStore";
  * so opening one (or typing right after Ctrl+K) normally doesn't wait for the network at all.
  */
 const loaders = {
+  absurd: () => import("./AbsurdChainDialog"),
   add: () => import("./AddNodeDialog"),
   derive: () => import("./DeriveDialog"),
   extract: () => import("./ExtractDialog"),
@@ -84,6 +85,7 @@ function lazyDialog<P extends object>(load: () => Promise<ComponentType<P>>, clo
   };
 }
 
+export const AbsurdChainDialog = lazyDialog(() => loaders.absurd().then((m) => m.AbsurdChainDialog));
 export const AddNodeDialog = lazyDialog(() => loaders.add().then((m) => m.AddNodeDialog));
 export const DeriveDialog = lazyDialog(() => loaders.derive().then((m) => m.DeriveDialog));
 export const ExtractDialog = lazyDialog(() => loaders.extract().then((m) => m.ExtractDialog));

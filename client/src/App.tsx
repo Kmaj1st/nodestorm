@@ -7,7 +7,7 @@ import { removeNode, removeRelation } from "./lib/graphOps";
 import { decodeShare, shareToken } from "./lib/share";
 import { Inspector } from "./panels/Inspector";
 // Dialogs load on demand (their own chunks), see panels/lazy.tsx.
-import { AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
+import { AbsurdChainDialog, AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
 import { OfflineBanner } from "./panels/OfflineBanner";
 import { QuizHost } from "./panels/QuizHost";
 import { WalkthroughHost } from "./panels/WalkthroughHost";
@@ -17,6 +17,7 @@ import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
 import { UpdateNotice } from "./panels/UpdateNotice";
+import { useAbsurd } from "./store/absurdStore";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 import { autoSnapshot } from "./store/snapshotStore";
 import { toggleFocus, useView, visibleNow } from "./store/viewStore";
@@ -35,6 +36,8 @@ export function App() {
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
   const viewing = useGraphStore(isViewing);
+  const absurd = useAbsurd((s) => s.open);
+  const closeAbsurd = useAbsurd((s) => s.closeAbsurd);
 
   // A share link (#share=…) opens its graph read-only, on load and when a link is pasted into this tab.
   useEffect(() => {
@@ -139,6 +142,7 @@ export function App() {
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
         {finding && <FindDialog onClose={() => setFinding(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
+        {absurd && !viewing && <AbsurdChainDialog {...absurd} onClose={closeAbsurd} />}
         <QuizHost />
         <WalkthroughHost />
       </div>

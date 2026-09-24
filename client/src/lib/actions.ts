@@ -2,6 +2,8 @@ import {
   CancelledError,
   findByName,
   normalizeName,
+  type AbsurdChainResponse,
+  type AbsurdStyle,
   toBrief,
   type DerivedProposal,
   type ExplainLevel,
@@ -15,6 +17,7 @@ import { useGraphStore } from "../store/graphStore";
 import { autoSnapshot } from "../store/snapshotStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
+import { applyAbsurdChain, sandboxName } from "./absurd";
 import { applyExtraction, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
@@ -662,4 +665,54 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
     return out;
   }, graphId, { history: g.nodes.some((n) => n.id === id) ? "step" : "merge" }); // one undo step with the add
   return id;
+}
+
+export const absurdKey = "absurd";
+
+/**
+ * "Absurd chain": ask the AI for a chain of true links from one concept to another, narrated in `style`. The ends
+ * are names: a concept of the active graph (by name or alias) goes with its definition, anything else as typed.
+ * Nothing changes in the graph; see addAbsurdChainToSandbox.
+ */
+export function absurdChain(
+  from: string,
+  to: string,
+  style: AbsurdStyle,
+  hops: { min: number; max: number },
+  avoid: string[] = [],
+  graphId = store().activeId,
+) {
+  if (inViewer(graphId)) return Promise.resolve(undefined);
+  const nodes = graph(graphId)?.nodes ?? [];
+  const brief = (name: string) => {
+    const n = findByName(nodes, name);
+    return n ? toBrief(n) : { name: name.trim(), definition: "", aliases: [] };
+  };
+  const [a, b] = [brief(from), brief(to)];
+  const context = nodes.slice(0, 80).map(toBrief);
+  return withBusy(absurdKey, t("task.absurd", { a: a.name, b: b.name }), (signal) =>
+    api.absurdChain({ from: a, to: b, style, hops, context, avoid }, signal),
+  );
+}
+
+/**
+ * Put an absurd chain into a new sandbox forked from the active graph and named after the chain, as one undo step
+ * there, and switch to it: the user's graph only changes if they merge the sandbox back. The new concepts are then
+ * checked quietly, like extracted ones (the hop that introduced each one tells the AI which meaning is meant).
+ */
+export function addAbsurdChainToSandbox(res: AbsurdChainResponse): string | undefined {
+  const s = store();
+  if (inViewer(s.activeId)) return undefined;
+  s.forkActive(sandboxName(res.title));
+  const sandboxId = store().activeId;
+  let added: { id: string; fact: string }[] = [];
+  store().mutate((g) => {
+    const r = applyAbsurdChain(g, res, viewport.center());
+    added = r.added;
+    return r.graph;
+  }, sandboxId);
+  for (const a of added) void analyzeNode(a.id, sandboxId, t("absurd.hint", { fact: a.fact }), { quiet: true });
+  store().setToast(t("absurd.added", { n: added.length, name: graph(sandboxId)?.name ?? "" }), "info");
+  viewport.fit();
+  return sandboxId;
 }

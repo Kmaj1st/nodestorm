@@ -353,6 +353,62 @@ export const ExtractResponse = z.object({
 });
 export type ExtractResponse = z.infer<typeof ExtractResponse>;
 
+// ---------- Absurd chain (parody mode) ----------
+
+/** How an absurd chain is narrated. The facts are sober whatever the style; only the narration changes. */
+export const AbsurdStyle = z.enum(["deadpan", "conspiracy", "epic", "bureaucratic", "academic-overkill"]);
+export type AbsurdStyle = z.infer<typeof AbsurdStyle>;
+
+/** Shortest and longest chain anyone may ask for (hops, i.e. links). */
+export const ABSURD_MIN_HOPS = 1;
+export const ABSURD_MAX_HOPS = 7;
+/** A model answer longer than this is rejected rather than shown (cleanAbsurdChain first cuts out loops). */
+export const ABSURD_HARD_MAX = 10;
+
+export const AbsurdChainRequest = z
+  .object({
+    from: NodeBrief,
+    to: NodeBrief,
+    style: AbsurdStyle.default("deadpan"),
+    hops: z
+      .object({
+        min: z.number().int().min(ABSURD_MIN_HOPS).max(ABSURD_MAX_HOPS),
+        max: z.number().int().min(ABSURD_MIN_HOPS).max(ABSURD_MAX_HOPS),
+      })
+      .refine((h) => h.min <= h.max, "hops.min must not exceed hops.max")
+      .default({ min: 3, max: 5 }),
+    /** Concepts in the graph, as background (the chain may pass through them). */
+    context: z.array(NodeBrief).max(80).default([]),
+    /** Intermediate concepts of earlier rolls, so "Roll again" takes a different route. */
+    avoid: z.array(z.string().max(200)).max(40).default([]),
+  })
+  .refine((r) => normalizeName(r.from.name) !== "" && normalizeName(r.to.name) !== "", "Name both ends of the chain.")
+  .refine((r) => normalizeName(r.from.name) !== normalizeName(r.to.name), "The two ends of the chain must be different concepts.");
+export type AbsurdChainRequest = z.infer<typeof AbsurdChainRequest>;
+
+/** One link of the chain: a true, checkable relation (`fact`), narrated comically (`quip`). */
+export const AbsurdHop = z.object({
+  from: z.string().trim().min(1),
+  to: z.string().trim().min(1),
+  /** Short relation label, e.g. "is solved by", "browns through". */
+  kind: z.string().trim().default(""),
+  /** The sober, accurate statement of the relation. */
+  fact: z.string().trim().min(1),
+  /** The funny narration of the same step. */
+  quip: z.string().trim().default(""),
+});
+export type AbsurdHop = z.infer<typeof AbsurdHop>;
+
+export const AbsurdChainResponse = z.object({
+  title: z.string().trim().default(""),
+  chain: z.array(AbsurdHop).min(1),
+  /** A funny closing line. */
+  moral: z.string().trim().default(""),
+  /** A sober note on how solid the links are (which ones are loose, if any). */
+  plausibility: z.string().trim().default(""),
+});
+export type AbsurdChainResponse = z.infer<typeof AbsurdChainResponse>;
+
 // ---------- Derive together ----------
 
 /** Largest page image `readPage` accepts (base64 characters, about 6 MB of JPEG). */

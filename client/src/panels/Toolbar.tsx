@@ -2,6 +2,7 @@ import { providerMeta } from "@nodestorm/shared";
 import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
 import {
   ChevronDown,
+  Drama,
   FileJson,
   FileText,
   GitBranchPlus,
@@ -33,6 +34,7 @@ import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
+import { useAbsurd } from "../store/absurdStore";
 import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
@@ -106,6 +108,16 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
           {busyMix ? <span className="spinner" aria-hidden="true" /> : <Icon icon={Shuffle} />}
           {busyMix ? t("toolbar.mixing") : t("toolbar.mix")}
         </button>
+        {/* Mix's playful sibling: the same two concepts (or any two typed in), linked by an absurd chain of true facts. */}
+        <button
+          className="icon-btn"
+          onClick={() => useAbsurd.getState().openAbsurd()}
+          title={t("toolbar.absurdTitle")}
+          aria-label={t("toolbar.absurd")}
+          data-testid="absurd-chain"
+        >
+          <Icon icon={Drama} />
+        </button>
         <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? t("toolbar.deriveTitle")}>
           <Icon icon={Sparkles} />
           {t("toolbar.derive")}
@@ -148,7 +160,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
               </optgroup>
             )}
           </select>
-          <button className="icon-btn" onClick={s.forkActive} data-tour="fork" title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
+          <button className="icon-btn" onClick={() => s.forkActive()} data-tour="fork" title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
             <Icon icon={GitBranchPlus} />
           </button>
         </div>}
@@ -266,6 +278,7 @@ function FileMenu() {
           { label: "file.extract", title: "file.extractTitle", icon: ScanText, action: () => setExtracting(true) },
           { label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
           { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => useDerive.getState().openPanel() },
+          { label: "file.absurd", title: "file.absurdTitle", icon: Drama, action: () => useAbsurd.getState().openAbsurd() },
           { label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
           { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
         ] satisfies Item[])),
