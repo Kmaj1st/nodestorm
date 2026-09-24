@@ -1,4 +1,5 @@
 import type { Graph } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { repairImport } from "./importRepair";
 
 /**
@@ -20,7 +21,7 @@ export const MAX_JSON_BYTES = 5 * 1024 * 1024;
 /** A link that can't be opened. The message is meant for the user. */
 export class ShareError extends Error {}
 
-const DAMAGED = "This share link is damaged or incomplete. It may have been cut off when it was copied.";
+const damaged = () => new ShareError(t("share.damaged"));
 
 export interface CodecOptions {
   /** Use the browser's CompressionStream (default). False forces the pure-JS fallback (tests). */
@@ -93,11 +94,11 @@ export interface SharedGraph {
 
 /** Decode, validate and repair a share token. Throws ShareError with a message for the user. */
 export async function decodeShare(token: string, opts: CodecOptions = {}): Promise<SharedGraph> {
-  if (token.length > MAX_TOKEN_CHARS) throw new ShareError("This share link is too large to open.");
+  if (token.length > MAX_TOKEN_CHARS) throw new ShareError(t("share.tooLarge"));
   const dot = token.indexOf(".");
-  if (dot < 0) throw new ShareError(DAMAGED);
+  if (dot < 0) throw damaged();
   if (token.slice(0, dot) !== VERSION) {
-    throw new ShareError("This share link was made by a newer version of NodeStorm. Reload the page and try again.");
+    throw new ShareError(t("share.newer"));
   }
   const max = opts.maxBytes ?? MAX_JSON_BYTES;
   let raw: unknown;
@@ -105,18 +106,18 @@ export async function decodeShare(token: string, opts: CodecOptions = {}): Promi
     const bytes = await inflate(fromBase64Url(token.slice(dot + 1)), opts.native ?? true, max);
     raw = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(bytes));
   } catch (e) {
-    throw e instanceof ShareError ? e : new ShareError(DAMAGED);
+    throw e instanceof ShareError ? e : damaged();
   }
   let repaired: ReturnType<typeof repairImport>;
   try {
     repaired = repairImport(raw);
   } catch {
-    throw new ShareError("This share link doesn't contain a NodeStorm graph.");
+    throw new ShareError(t("share.notGraph"));
   }
   const { doc, fixes } = repaired;
   // Only the first graph is shown; a hand-made link can't smuggle in sandboxes.
   const { parentId: _p, forkedAt: _f, ...graph } = doc.graphs[0];
-  return { graph, name: doc.project?.name || graph.name || "Shared graph", fixes };
+  return { graph, name: doc.project?.name || graph.name || t("share.defaultName"), fixes };
 }
 
 // ---------- compression ----------
@@ -137,7 +138,7 @@ async function deflate(data: Uint8Array<ArrayBuffer>, native: boolean): Promise<
 
 /** Raw inflate that stops as soon as the output passes `max` bytes. */
 async function inflate(data: Uint8Array<ArrayBuffer>, native: boolean, max: number): Promise<Uint8Array> {
-  const tooBig = () => new ShareError("This share link expands to more data than NodeStorm opens from a link.");
+  const tooBig = () => new ShareError(t("share.expandsTooMuch"));
   const chunks: Uint8Array[] = [];
   let total = 0;
   let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
@@ -192,7 +193,7 @@ export function toBase64Url(bytes: Uint8Array): string {
 }
 
 export function fromBase64Url(s: string): Uint8Array<ArrayBuffer> {
-  if (!/^[A-Za-z0-9_-]*$/.test(s) || s.length % 4 === 1) throw new ShareError(DAMAGED);
+  if (!/^[A-Za-z0-9_-]*$/.test(s) || s.length % 4 === 1) throw damaged();
   const bin = atob(s.replace(/-/g, "+").replace(/_/g, "/") + "=".repeat((4 - (s.length % 4)) % 4));
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);

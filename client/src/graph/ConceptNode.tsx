@@ -1,20 +1,22 @@
 import type { ConceptNode as CN } from "@nodestorm/shared";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { memo } from "react";
+import { useT, type MessageKey } from "../i18n";
 import { analyzeNode } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
 
-const badge: Record<CN["status"], string> = {
-  ok: "ready",
-  blocked: "blocked",
-  checking: "checking…",
-  unclear: "what do you mean?",
-  error: "failed – retry",
+const badge: Record<CN["status"], MessageKey> = {
+  ok: "state.ok",
+  blocked: "state.blocked",
+  checking: "state.checking",
+  unclear: "badge.unclear",
+  error: "badge.error",
 };
 
 function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
+  const t = useT();
   const c = data.concept;
   const graphId = useGraphStore((s) => s.activeId);
   const setClarifying = useGraphStore((s) => s.setClarifying);
@@ -43,23 +45,23 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
               action();
             }}
             title={c.error}
-            aria-label={c.status === "error" ? `Retry checking ${c.name}` : `Choose what you mean by ${c.name}`}
+            aria-label={t(c.status === "error" ? "badge.retryAria" : "badge.chooseAria", { name: c.name })}
           >
-            {badge[c.status]}
+            {t(badge[c.status])}
           </button>
         ) : (
-          <span className={`concept__badge concept__badge--${c.status}`}>{badge[c.status]}</span>
+          <span className={`concept__badge concept__badge--${c.status}`}>{t(badge[c.status])}</span>
         )}
       </div>
       {c.definition && <div className="concept__def">{c.definition}</div>}
       {c.missingDeps.length > 0 && (
         <div className="concept__missing">
-          missing: {c.missingDeps.map((d) => d.name).join(", ")}
+          {t("badge.missing", { names: c.missingDeps.map((d) => d.name).join(", ") })}
         </div>
       )}
       {data.inCycle && (
-        <div className="concept__cycle" title="This concept is (indirectly) its own prerequisite. Open it to fix the links.">
-          ⚠ dependency cycle
+        <div className="concept__cycle" title={t("badge.cycleTitle")}>
+          {t("badge.cycle")}
         </div>
       )}
     </div>

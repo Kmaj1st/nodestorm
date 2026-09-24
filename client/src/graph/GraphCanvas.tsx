@@ -10,6 +10,7 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { rich, useT } from "../i18n";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
 import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
 import { useTheme } from "../lib/theme";
@@ -27,6 +28,7 @@ const edgeTypes = { bi: BiRelationEdge };
 const LARGE_GRAPH = 150;
 
 export function GraphCanvas() {
+  const t = useT();
   const graph = useGraphStore(activeGraph);
   const mutate = useGraphStore((s) => s.mutate);
   const setSelection = useGraphStore((s) => s.setSelection);
@@ -248,25 +250,23 @@ export function GraphCanvas() {
       >
         <Background gap={24} />
         <Controls showInteractive={false} />
-        <MiniMap pannable zoomable ariaLabel="Overview map" />
+        <MiniMap pannable zoomable ariaLabel={t("canvas.map")} />
       </ReactFlow>
       {focus && (
-        <div className="focus-bar" role="group" aria-label="Focus mode" data-testid="focus-bar">
-          <span className="focus-bar__label">
-            Focus: <b>{focusName}</b>
-          </span>
+        <div className="focus-bar" role="group" aria-label={t("focus.bar")} data-testid="focus-bar">
+          <span className="focus-bar__label">{rich("focus.label", { name: focusName })}</span>
           <select
             value={focus.hops}
             onChange={(e) => useView.getState().setPrefs({ hops: Number(e.target.value) })}
             onKeyDown={(e) => e.key === "Escape" && setFocus(null)} // App ignores keys while a select has focus
-            aria-label="Focus radius"
-            title="How many relation steps away from the focused concept to show"
+            aria-label={t("focus.radius")}
+            title={t("focus.radiusTitle")}
           >
             {Array.from({ length: MAX_HOPS }, (_, i) => i + 1).map((h) => (
-              <option key={h} value={h}>within {h} {h === 1 ? "hop" : "hops"}</option>
+              <option key={h} value={h}>{t("focus.hops", { n: h })}</option>
             ))}
           </select>
-          <button className="focus-bar__close" onClick={() => setFocus(null)} title="Show the whole graph (Esc)" aria-label="Leave focus mode">
+          <button className="focus-bar__close" onClick={() => setFocus(null)} title={t("focus.close")} aria-label={t("focus.leave")}>
             ✕
           </button>
         </div>
@@ -274,11 +274,11 @@ export function GraphCanvas() {
       {graph.nodes.length === 0 && (
         <div className="canvas__empty">
           <div>
-            Add a concept to start. Describe it if you don't know its name — the AI will find one.
+            {t("canvas.empty")}
             <div className="canvas__example">
               {/* Built offline from static data (lib/examples.ts): no AI call, works without a key. */}
-              <button onClick={loadExample} title="A small ready-made graph, with one concept blocked on a missing prerequisite">
-                Load example: Group theory
+              <button onClick={loadExample} title={t("canvas.exampleTitle")}>
+                {t("canvas.example")}
               </button>
             </div>
           </div>

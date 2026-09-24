@@ -1,6 +1,7 @@
 import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { t } from "../i18n";
 import { buildExample, EXAMPLES } from "../lib/examples";
 import { fork, merge, uid } from "../lib/graphOps";
 import { repairImport } from "../lib/importRepair";
@@ -108,7 +109,7 @@ export type GraphStore = State & Actions;
 type Workspace = proj.Workspace;
 
 function initial(): Workspace {
-  return proj.createProject({ graphs: {}, projects: {}, projectId: "", activeId: "" }, "My brainstorm");
+  return proj.createProject({ graphs: {}, projects: {}, projectId: "", activeId: "" }, t("project.default"));
 }
 
 /** The user's own data: without a shared graph that is open in the viewer (so it's never saved or exported). */
@@ -130,7 +131,7 @@ function travel(s: State, id: string, step: typeof hist.undo<Graph>): Pick<State
   // Busy key format of analyzeNode (lib/actions.ts).
   const stale = (n: Graph["nodes"][number]) => n.status === "checking" && !s.busy[`analyze:${id}:${n.id}`];
   const nodes = r.present.nodes.map((n) =>
-    stale(n) ? { ...n, status: "error" as const, error: "The check was interrupted by undo/redo. Retry to run it again." } : n,
+    stale(n) ? { ...n, status: "error" as const, error: t("task.undoInterrupted") } : n,
   );
   return { graphs: { ...s.graphs, [id]: { ...r.present, nodes } }, history: { ...s.history, [id]: r.history } };
 }
@@ -196,7 +197,10 @@ export const useGraphStore = create<GraphStore>()(
       setHighlight: (highlight) => set({ highlight }),
       switchTo: (activeId) => set({ activeId, selection: [], inspect: null }),
 
-      newProject: (name) => set({ ...proj.createProject(workspace(get()), name), ...cleared }),
+      newProject(name) {
+        const ws = workspace(get());
+        set({ ...proj.createProject(ws, name ?? proj.uniqueProjectName(ws, t("project.untitled"))), ...cleared });
+      },
       switchProject: (id) => set({ ...proj.switchProject(workspace(get()), id), ...cleared }),
       renameProject: (id, name) => set(proj.renameProject(workspace(get()), id, name)),
       duplicateProject: (id) => set({ ...proj.duplicateProject(workspace(get()), id), ...cleared }),
@@ -215,7 +219,7 @@ export const useGraphStore = create<GraphStore>()(
         get().mutate((g) => (g.nodes.length ? g : buildExample(g, data)));
         // A project that was never named takes the example's name.
         const p = get().projects[get().projectId];
-        if (p?.name.startsWith(proj.DEFAULT_PROJECT_NAME)) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
+        if (p && [proj.DEFAULT_PROJECT_NAME, t("project.untitled")].some((d) => p.name.startsWith(d))) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
       },
 
       forkActive() {
@@ -223,7 +227,7 @@ export const useGraphStore = create<GraphStore>()(
         const { graphs, activeId, projects, projectId } = get();
         const src = graphs[activeId];
         const n = proj.projectGraphs(get(), projects[projectId]).filter((g) => g.parentId).length + 1;
-        const sb = fork(src, `Sandbox ${n}`);
+        const sb = fork(src, t("sandbox.name", { n }));
         set({ graphs: { ...graphs, [sb.id]: sb }, activeId: sb.id, selection: [], inspect: null });
       },
       mergeSandbox(sandboxId) {
@@ -316,7 +320,7 @@ export const useGraphStore = create<GraphStore>()(
           for (const n of g.nodes) {
             if (n.status !== "checking") continue;
             n.status = "error";
-            n.error = "The check was interrupted (page closed or reloaded). Retry to run it again.";
+            n.error = t("task.reloadInterrupted");
           }
         }
       },

@@ -1,10 +1,12 @@
 import type { DerivedProposal } from "@nodestorm/shared";
 import { useEffect, useState } from "react";
+import { useT } from "../i18n";
 import { acceptProposal, derive } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { Modal } from "./Modal";
 
 export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onClose: () => void }) {
+  const t = useT();
   const graph = useGraphStore(activeGraph);
   const [goal, setGoal] = useState("");
   const [proposals, setProposals] = useState<DerivedProposal[] | null>(null);
@@ -19,18 +21,18 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
   useEffect(() => { void run(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <Modal label="Derive" onClose={onClose}>
-      <h3>Derive from {names.join(" + ")}</h3>
+    <Modal label={t("derive.dialog")} onClose={onClose}>
+      <h3>{t("derive.title", { names: names.join(" + ") })}</h3>
       {!graph.parentId && (
-        <p className="hint">Tip: derivations are safer in a sandbox — fork first to experiment without touching the main graph.</p>
+        <p className="hint">{t("derive.tip")}</p>
       )}
       <div className="row">
-        <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder="Optional goal, e.g. 'a counterexample'" aria-label="Goal" />
-        <button onClick={run} disabled={busy}>{busy ? "Thinking…" : "Regenerate"}</button>
+        <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
+        <button onClick={run} disabled={busy}>{busy ? t("derive.thinking") : t("derive.regenerate")}</button>
       </div>
-      {busy && !proposals && <p className="muted">Thinking…</p>}
+      {busy && !proposals && <p className="muted">{t("derive.thinking")}</p>}
       <ul className="candidates">
-        {proposals?.length === 0 && <li className="muted">No proposals.</li>}
+        {proposals?.length === 0 && <li className="muted">{t("derive.none")}</li>}
         {proposals?.map((p) => (
           <li key={p.name}>
             <div>
@@ -41,13 +43,13 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
               ))}
             </div>
             <button disabled={accepted.has(p.name)} onClick={() => { acceptProposal(p, anchorIds); setAccepted(new Set(accepted).add(p.name)); }}>
-              {accepted.has(p.name) ? "Added" : "Accept"}
+              {accepted.has(p.name) ? t("derive.added") : t("derive.accept")}
             </button>
           </li>
         ))}
       </ul>
       <div className="form__actions">
-        <button onClick={onClose}>Close</button>
+        <button onClick={onClose}>{t("common.close")}</button>
       </div>
     </Modal>
   );

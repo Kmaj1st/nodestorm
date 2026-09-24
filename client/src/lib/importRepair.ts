@@ -11,6 +11,7 @@ import {
   type Relation,
   type Sense,
 } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { uid } from "./graphOps";
 
 /**
@@ -32,7 +33,7 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
     list = [raw];
     fixes.add("wrapped a single graph");
   } else {
-    throw new Error("Not a NodeStorm file (no graphs found)");
+    throw new Error(t("file.notNodestorm"));
   }
 
   const graphs: Graph[] = [];
@@ -44,7 +45,7 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
     seen.add(graph.id);
     graphs.push(graph);
   }
-  if (!graphs.length) throw new Error("File contains no graphs");
+  if (!graphs.length) throw new Error(t("file.noGraphs"));
 
   // Exactly one root: the first graph without a (valid) parent. Sandboxes of missing graphs hang off it.
   const main = graphs.find((g) => !g.parentId) ?? graphs[0];

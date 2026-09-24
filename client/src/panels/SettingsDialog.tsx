@@ -9,7 +9,9 @@ import {
   type ProvidersResponse,
 } from "@nodestorm/shared";
 import { useCallback, useEffect, useRef, useState } from "react";
+import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref } from "../i18n";
 import { api } from "../lib/api";
+import { useTheme, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
 import { formatTokens, useUsage } from "../store/usageStore";
@@ -22,8 +24,11 @@ type ModelsState =
   | { status: "error"; message: string };
 
 export function SettingsDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const saved = useSettings();
   // Edit a draft; nothing is stored until Save.
+  const [uiLang, setUiLang] = useState<LangPref>(useLocale.getState().pref);
+  const [theme, setTheme] = useState<ThemePref>(useTheme.getState().pref);
   const [connection, setConnection] = useState<Connection>(saved.connection);
   const [provider, setProvider] = useState<ProviderKind>(saved.provider);
   const [configs, setConfigs] = useState(saved.configs);
@@ -85,6 +90,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   }, [provider, connection, cfg.apiKey, cfg.baseURL, canDiscover]);
 
   const save = () => {
+    useLocale.getState().setPref(uiLang);
+    useTheme.getState().setPref(theme);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
       connection, provider, configs, serverModels, rememberKeys, clarify, installAll, language: lang, aiConcurrency,
@@ -100,36 +107,66 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     models.status !== "ok" ? [] : modelKnown ? models.models : models.models.filter((m) => `${m.id} ${m.label ?? ""}`.toLowerCase().includes(q));
 
   return (
-    <Modal label="Settings" onClose={onClose} className="settings">
-      <h3>AI settings</h3>
+    <Modal label={t("settings.title")} onClose={onClose} className="settings">
+      <h3>{t("settings.title")}</h3>
 
+      {/* Interface first: it is about this app, not the AI (whose answer language is under "AI answers"). */}
       <fieldset className="choice">
-        <legend>Connection</legend>
+        <legend>{t("settings.interface")}</legend>
+        <div className="settings__row">
+          <label className="field">
+            {t("settings.uiLanguage")}
+            <select
+              value={uiLang}
+              onChange={(e) => setUiLang(e.target.value as LangPref)}
+              aria-label={t("settings.uiLanguage")}
+              data-testid="ui-language"
+            >
+              <option value="auto">{t("settings.uiAuto", { lang: LANG_NAMES[browserLang()] })}</option>
+              <option value="en">English</option>
+              <option value="zh">中文</option>
+            </select>
+          </label>
+          <label className="field">
+            {t("settings.theme")}
+            <select value={theme} onChange={(e) => setTheme(e.target.value as ThemePref)} aria-label={t("settings.theme")}>
+              <option value="auto">{t("settings.themeAuto")}</option>
+              <option value="light">{t("settings.themeLight")}</option>
+              <option value="dark">{t("settings.themeDark")}</option>
+            </select>
+          </label>
+        </div>
+        <span className="muted small">{t("settings.uiHint")}</span>
+      </fieldset>
+
+      <h4 className="settings__head">{t("settings.ai")}</h4>
+      <fieldset className="choice">
+        <legend>{t("settings.connection")}</legend>
         <label>
           <input type="radio" checked={connection === "browser"} onChange={() => setConnection("browser")} />
           <span>
-            <b>Directly from this browser</b>
-            <span className="muted small">Paste your own API key. No server needed.</span>
+            <b>{t("settings.browser")}</b>
+            <span className="muted small">{t("settings.browserHint")}</span>
           </span>
         </label>
         <label>
           <input type="radio" checked={connection === "server"} onChange={() => setConnection("server")} />
           <span>
-            <b>Through the local NodeStorm server</b>
-            <span className="muted small">Keys stay in <code>server/.env</code>; run <code>npm run dev</code>.</span>
+            <b>{t("settings.server")}</b>
+            <span className="muted small">{rich("settings.serverHint")}</span>
           </span>
         </label>
       </fieldset>
 
       <label className="field">
-        Provider
-        <select value={provider} onChange={(e) => setProvider(e.target.value as ProviderKind)} aria-label="Provider">
+        {t("settings.provider")}
+        <select value={provider} onChange={(e) => setProvider(e.target.value as ProviderKind)} aria-label={t("settings.provider")}>
           {PROVIDERS.map((p) => {
             const s = server && "providers" in server ? server.providers.find((x) => x.id === p.kind) : undefined;
             const off = connection === "server" && s !== undefined && !s.configured;
             return (
               <option key={p.kind} value={p.kind}>
-                {p.label}{off ? " (no key on server)" : ""}
+                {p.label}{off ? ` ${t("settings.noServerKey")}` : ""}
               </option>
             );
           })}
@@ -138,16 +175,16 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
       {connection === "server" && server && "error" in server && <p className="error small">{server.error}</p>}
       {connection === "server" && serverInfo && !serverInfo.configured && (
-        <p className="error small">The server has no key for {meta.label}. Add it to server/.env and restart, or use browser mode.</p>
+        <p className="error small">{t("settings.serverMissingKey", { provider: meta.label })}</p>
       )}
 
       {connection === "browser" && meta.needsKey && (
         <>
           <label className="field">
             <span>
-              API key
+              {t("settings.apiKey")}
               {meta.keyUrl && (
-                <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">get one</a></>
+                <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">{t("settings.getKey")}</a></>
               )}
             </span>
             <div className="row">
@@ -158,26 +195,26 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
                 placeholder="sk-…"
                 autoComplete="off"
                 spellCheck={false}
-                aria-label="API key"
+                aria-label={t("settings.apiKey")}
               />
-              <button type="button" onClick={() => setShowKey(!showKey)}>{showKey ? "Hide" : "Show"}</button>
+              <button type="button" onClick={() => setShowKey(!showKey)}>{t(showKey ? "settings.hide" : "settings.show")}</button>
             </div>
           </label>
           {meta.defaultBaseURL && (
             <label className="field">
-              Base URL
+              {t("settings.baseUrl")}
               <input
                 value={cfg.baseURL ?? ""}
                 onChange={(e) => setCfg({ baseURL: e.target.value.trim() || undefined })}
                 placeholder={meta.defaultBaseURL}
-                aria-label="Base URL"
+                aria-label={t("settings.baseUrl")}
               />
             </label>
           )}
           {provider === "anthropic" && (
             <label className="check">
               <input type="checkbox" checked={Boolean(cfg.webSearch)} onChange={(e) => setCfg({ webSearch: e.target.checked })} />
-              Let Claude search the web when naming and relating concepts
+              {t("settings.webSearch")}
             </label>
           )}
         </>
@@ -185,33 +222,33 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
       <label className="field">
         <span>
-          Model
-          {models.status === "ok" && <span className="muted"> · {models.models.length} available</span>}
+          {t("settings.model")}
+          {models.status === "ok" && <span className="muted"> · {t("settings.available", { n: models.models.length })}</span>}
         </span>
         <div className="row">
           <input
             list="model-options"
             value={model}
             onChange={(e) => setModel(e.target.value.trim())}
-            placeholder={`${defaultModel} (default)`}
-            aria-label="Model"
+            placeholder={t("settings.modelDefault", { model: defaultModel })}
+            aria-label={t("settings.model")}
             spellCheck={false}
           />
           <button type="button" onClick={discover} disabled={!canDiscover || models.status === "loading"}>
-            {models.status === "loading" ? "Loading…" : "Refresh"}
+            {t(models.status === "loading" ? "settings.loading" : "settings.refresh")}
           </button>
         </div>
         <datalist id="model-options">
           {models.status === "ok" && models.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
         </datalist>
         {models.status === "error" && <span className="error small" data-testid="models-error">{models.message}</span>}
-        {models.status === "ok" && <span className="ok small" data-testid="models-ok">✓ Connected — type to filter, or pick from the list.</span>}
-        {!modelKnown && shown.length === 0 && <span className="warn small">This model isn't in the provider's list; check the spelling.</span>}
-        {!canDiscover && connection === "browser" && <span className="muted small">Enter a key to load the model list.</span>}
+        {models.status === "ok" && <span className="ok small" data-testid="models-ok">{t("settings.connected")}</span>}
+        {!modelKnown && shown.length === 0 && <span className="warn small">{t("settings.unknownModel")}</span>}
+        {!canDiscover && connection === "browser" && <span className="muted small">{t("settings.enterKey")}</span>}
       </label>
 
       {shown.length > 0 && (
-        <ul className="model-list" aria-label="Available models">
+        <ul className="model-list" aria-label={t("settings.models")}>
           {shown.map((m) => (
             <li key={m.id}>
               <button type="button" className={m.id === (model || defaultModel) ? "model model--on" : "model"} onClick={() => setModel(m.id)}>
@@ -224,7 +261,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
       {provider !== "mock" && (
         <label className="field">
-          Request timeout (seconds)
+          {t("settings.timeout")}
           <input
             type="number"
             min={10}
@@ -234,24 +271,24 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               const secs = Math.min(600, Math.max(10, Number(e.target.value) || DEFAULT_TIMEOUT_MS / 1000));
               setCfg({ timeoutMs: secs * 1000 });
             }}
-            aria-label="Request timeout (seconds)"
+            aria-label={t("settings.timeout")}
           />
-          <span className="muted small">If the AI hasn't answered by then, the request fails with an error you can retry.</span>
+          <span className="muted small">{t("settings.timeoutHint")}</span>
         </label>
       )}
 
       <fieldset className="choice">
-        <legend>Ambiguous names</legend>
+        <legend>{t("settings.ambiguous")}</legend>
         <label className="check">
           <input
             type="checkbox"
             checked={clarify.enabled}
             onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
           />
-          Ask what I mean when a name has several meanings
+          {t("settings.askMeaning")}
         </label>
         <label className="check">
-          Offer
+          {t("settings.offer")}
           <input
             type="number"
             min={2}
@@ -259,44 +296,44 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             value={clarify.options}
             disabled={!clarify.enabled}
             onChange={(e) => setClarify({ ...clarify, options: Math.min(10, Math.max(2, Number(e.target.value) || 3)) })}
-            aria-label="Number of meanings to offer"
+            aria-label={t("settings.offerAria")}
             className="num"
           />
-          meanings (plus “something else”)
+          {t("settings.offerSuffix")}
         </label>
       </fieldset>
 
       <fieldset className="choice">
-        <legend>Install all missing</legend>
+        <legend>{t("settings.installAll")}</legend>
         <label className="check">
-          Follow prerequisites up to
+          {t("settings.followUpTo")}
           <input
             type="number"
             min={1}
             max={10}
             value={installAll.maxDepth}
             onChange={(e) => setInstallAll({ ...installAll, maxDepth: Math.min(10, Math.max(1, Number(e.target.value) || 3)) })}
-            aria-label="Install depth limit"
+            aria-label={t("settings.depthAria")}
             className="num"
           />
-          levels deep, adding at most
+          {t("settings.levelsDeep")}
           <input
             type="number"
             min={1}
             max={100}
             value={installAll.maxNodes}
             onChange={(e) => setInstallAll({ ...installAll, maxNodes: Math.min(100, Math.max(1, Number(e.target.value) || 15)) })}
-            aria-label="Install concept limit"
+            aria-label={t("settings.nodesAria")}
             className="num"
           />
-          concepts
+          {t("settings.concepts")}
         </label>
       </fieldset>
 
       <fieldset className="choice">
-        <legend>AI answers</legend>
+        <legend>{t("settings.aiAnswers")}</legend>
         <label className="check">
-          Write in
+          {t("settings.writeIn")}
           <select
             value={customLanguage ? "custom" : language}
             onChange={(e) => {
@@ -304,37 +341,39 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               setCustomLanguage(custom);
               setLanguage(custom ? "" : e.target.value);
             }}
-            aria-label="AI answers in"
+            aria-label={t("settings.aiAnswersAria")}
           >
-            {LANGUAGES.map((l) => <option key={l.value} value={l.value}>{l.label}</option>)}
-            <option value="custom">Other…</option>
+            {LANGUAGES.map((l) => (
+              <option key={l.value} value={l.value}>{l.value === "auto" ? t("settings.aiAuto") : l.label}</option>
+            ))}
+            <option value="custom">{t("settings.aiOther")}</option>
           </select>
           {customLanguage && (
             <input
               value={language}
               onChange={(e) => setLanguage(e.target.value)}
               maxLength={40}
-              placeholder="e.g. Português"
-              aria-label="Custom answer language"
+              placeholder={t("settings.aiCustomPlaceholder")}
+              aria-label={t("settings.aiCustomAria")}
             />
           )}
         </label>
-        <span className="muted small">Names, definitions and relations are written in this language.</span>
+        <span className="muted small">{t("settings.aiLangHint")}</span>
         <label className="check">
-          Run at most
+          {t("settings.runAtMost")}
           <input
             type="number"
             min={1}
             max={10}
             value={aiConcurrency}
             onChange={(e) => setAiConcurrency(Math.min(10, Math.max(1, Number(e.target.value) || DEFAULT_CONCURRENCY)))}
-            aria-label="Concurrent AI requests"
+            aria-label={t("settings.concurrentAria")}
             className="num"
           />
-          AI requests at once (the rest wait in a queue)
+          {t("settings.concurrentSuffix")}
         </label>
         {connection === "browser" && tokens > 0 && (
-          <span className="muted small" data-testid="token-usage">This session: ~{formatTokens(tokens)} tokens</span>
+          <span className="muted small" data-testid="token-usage">{t("settings.tokens", { tokens: formatTokens(tokens) })}</span>
         )}
       </fieldset>
 
@@ -342,23 +381,21 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <div className="keynote">
           <label className="check">
             <input type="checkbox" checked={rememberKeys} onChange={(e) => setRememberKeys(e.target.checked)} />
-            Remember keys on this device
+            {t("settings.remember")}
           </label>
           <p className="muted small">
-            Your key is only sent to {meta.label}. {rememberKeys
-              ? "It's kept in this browser's local storage until you remove it — only do this on your own device."
-              : "It's kept for this tab only and forgotten when you close it."}{" "}
-            Use a separate key with a spending limit, which you can revoke any time.
+            {t("settings.keyOnlyTo", { provider: meta.label })} {t(rememberKeys ? "settings.keyLocal" : "settings.keyTab")}{" "}
+            {t("settings.keyAdvice")}
           </p>
           <button type="button" className="link small" onClick={() => { saved.forgetKeys(); setConfigs(useSettings.getState().configs); }}>
-            Forget all saved keys
+            {t("settings.forget")}
           </button>
         </div>
       )}
 
       <div className="form__actions">
-        <button type="button" onClick={onClose}>Cancel</button>
-        <button type="button" className="primary" onClick={save}>Save</button>
+        <button type="button" onClick={onClose}>{t("common.cancel")}</button>
+        <button type="button" className="primary" onClick={save}>{t("common.save")}</button>
       </div>
     </Modal>
   );

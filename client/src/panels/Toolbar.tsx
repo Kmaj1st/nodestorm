@@ -2,17 +2,23 @@ import { providerMeta } from "@nodestorm/shared";
 import { getNodesBounds, getViewportForBounds, useReactFlow } from "@xyflow/react";
 import { toPng } from "html-to-image";
 import { useEffect, useRef, useState } from "react";
+import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
-import { useTheme, type ThemePref } from "../lib/theme";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ProjectMenu } from "./ProjectMenu";
 import { ShareDialog } from "./ShareDialog";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 
+/**
+ * One row at ≥1200px: project · history · primary actions (Add, Mix, Derive) · canvas tools as icon buttons
+ * (Tidy, Find, Focus, View) · graph/sandbox · Settings and the File menu (import, export, share). Merge back and
+ * Discard live in the sandbox banner (App.tsx), and the theme and interface language in Settings.
+ */
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
+  const t = useT();
   const s = useGraphStore();
   const graph = useGraphStore(activeGraph);
   const undoable = useGraphStore(canUndo);
@@ -20,15 +26,13 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   // A shared graph opened from a link is read-only: only viewing, finding and exporting remain.
   const viewing = useGraphStore(isViewing);
   const settings = useSettings();
-  const fileRef = useRef<HTMLInputElement>(null);
-  const theme = useTheme();
   // On small screens the less-used groups fold away behind a menu button (see .toolbar__more in styles.css).
   const [moreOpen, setMoreOpen] = useState(false);
   const ready = isReady(settings);
   const meta = providerMeta(settings.provider);
   const model =
     (settings.connection === "browser" ? settings.configs[settings.provider]?.model : settings.serverModels[settings.provider]) ||
-    (settings.connection === "browser" ? meta.defaultModel : "server default");
+    (settings.connection === "browser" ? meta.defaultModel : t("toolbar.serverDefault"));
 
   const selected = graph.nodes.filter((n) => s.selection.includes(n.id));
   // Blocked (missing deps) and unclear (meaning not chosen) concepts can't be mixed or derived from yet.
@@ -36,56 +40,45 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   const busyMix = Object.keys(s.busy).some((k) => k.startsWith("mix:"));
   const canMix = selected.length === 2 && blocked.length === 0 && !busyMix;
   const canDerive = selected.length >= 1 && blocked.length === 0;
-  const blockReason = blocked.length
-    ? `Resolve ${blocked.map((n) => n.name).join(", ")} first (install missing dependencies / choose a meaning)`
-    : undefined;
+  const blockReason = blocked.length ? t("toolbar.blockReason", { names: blocked.map((n) => n.name).join(", ") }) : undefined;
 
   // The graph selector lists only the current project's graphs: its main graph, then its sandboxes.
   const [main, ...sandboxes] = projectGraphs(s, s.projects[s.projectId]);
 
-  const doImport = async (file: File) => {
-    try {
-      const { name, fixes } = s.importJson(await file.text());
-      const repairs = fixes.length ? ` Repairs: ${fixes.join("; ")}.` : "";
-      s.setToast(`Imported as a new project “${name}”. Your other projects are unchanged.${repairs}`, "info");
-    } catch (e) {
-      s.setToast(`Import failed: ${e instanceof Error ? e.message : e}`);
-    }
-  };
-
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
       <div className="toolbar__brand">NodeStorm</div>
-      {viewing ? <span className="toolbar__shared">Shared graph</span> : <ProjectMenu />}
+      {viewing ? <span className="toolbar__shared">{t("toolbar.sharedGraph")}</span> : <ProjectMenu />}
 
       {!viewing && (
         <div className="toolbar__group toolbar__history">
-          <button onClick={() => s.undo()} disabled={!undoable} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-          <button onClick={() => s.redo()} disabled={!redoable} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+          <button onClick={() => s.undo()} disabled={!undoable} title={t("toolbar.undoTitle")} aria-label={t("toolbar.undo")}>↶</button>
+          <button onClick={() => s.redo()} disabled={!redoable} title={t("toolbar.redoTitle")} aria-label={t("toolbar.redo")}>↷</button>
         </div>
       )}
 
       {!viewing && <div className="toolbar__group">
-        <button className="primary" onClick={onAdd}>+ Add concept</button>
+        <button className="primary" onClick={onAdd}>{t("toolbar.add")}</button>
         <button
           onClick={() => mix(selected[0].id, selected[1].id)}
           disabled={!canMix}
-          title={blockReason ?? (selected.length !== 2 ? "Select exactly two concepts (Shift-click)" : "Find how these two relate")}
+          title={blockReason ?? (selected.length !== 2 ? t("toolbar.mixSelectTwo") : t("toolbar.mixTitle"))}
         >
-          {busyMix ? "Mixing…" : "Mix ⇄"}
+          {busyMix ? t("toolbar.mixing") : t("toolbar.mix")}
         </button>
-        <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? "Propose new concepts from the selection"}>
-          Derive ✦
+        <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? t("toolbar.deriveTitle")}>
+          {t("toolbar.derive")}
         </button>
       </div>}
 
-      <div className="toolbar__group">
+      {/* Canvas tools: compact icon buttons, named by aria-label and explained by their tooltips. */}
+      <div className="toolbar__group toolbar__tools" role="group" aria-label={t("toolbar.tools")}>
         {!viewing && (
-          <button onClick={tidy} disabled={graph.nodes.length < 2} title="Arrange in layers: prerequisites above what depends on them">
-            Tidy
+          <button className="icon-btn" onClick={tidy} disabled={graph.nodes.length < 2} title={t("toolbar.tidyTitle")} aria-label={t("toolbar.tidy")}>
+            ⊞
           </button>
         )}
-        <button onClick={onFind} disabled={!graph.nodes.length} title="Find a concept (Ctrl+K)" aria-label="Find concept">
+        <button className="icon-btn" onClick={onFind} disabled={!graph.nodes.length} title={t("toolbar.findTitle")} aria-label={t("toolbar.find")}>
           🔍
         </button>
         <FocusButton />
@@ -94,7 +87,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
 
       <button
         className="toolbar__menu"
-        aria-label="More tools"
+        aria-label={t("toolbar.more")}
         aria-expanded={moreOpen}
         aria-controls="toolbar-more"
         onClick={() => setMoreOpen(!moreOpen)}
@@ -103,52 +96,30 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
       </button>
 
       <div className="toolbar__more" id="toolbar-more">
-        {!viewing && <div className="toolbar__group">
-          <select value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label="Graph">
-            <option value={main.id}>Main graph</option>
+        {!viewing && <div className="toolbar__group" role="group" aria-label={t("toolbar.sandbox")}>
+          <select className="graph-select" value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label={t("toolbar.graph")}>
+            <option value={main.id}>{t("toolbar.mainGraph")}</option>
             {sandboxes.map((g) => (
               <option key={g.id} value={g.id}>🧪 {g.name}</option>
             ))}
           </select>
-          <button onClick={s.forkActive} title="Copy the current graph into a sandbox">Fork sandbox</button>
-          {graph.parentId && (
-            <>
-              <button onClick={() => s.mergeSandbox(graph.id)} title="Merge this sandbox into the graph it was forked from">Merge back</button>
-              <button className="danger" onClick={() => confirm(`Discard ${graph.name}?`) && s.discardSandbox(graph.id)}>Discard</button>
-            </>
-          )}
+          <button className="icon-btn" onClick={s.forkActive} title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
+            🧪+
+          </button>
         </div>}
 
         <div className="toolbar__group toolbar__right">
-          {!viewing && (
-            <button
-              className={ready ? "ai-button" : "ai-button ai-button--warn"}
-              onClick={() => s.setSettingsOpen(true)}
-              title="AI settings"
-              aria-label="AI settings"
-            >
-              ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
-            </button>
-          )}
-          <ExportMenu />
-          {!viewing && <button onClick={() => fileRef.current?.click()}>Import</button>}
-          <input
-            ref={fileRef}
-            type="file"
-            accept="application/json"
-            hidden
-            onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
-          />
-          <select
-            value={theme.pref}
-            onChange={(e) => theme.setPref(e.target.value as ThemePref)}
-            aria-label="Theme"
-            title="Colour theme (Auto follows your system)"
+          {/* Settings: the AI status while editing; a plain gear in the read-only viewer, which never calls the AI. */}
+          <button
+            className={viewing ? "icon-btn" : ready ? "ai-button" : "ai-button ai-button--warn"}
+            onClick={() => s.setSettingsOpen(true)}
+            // The button shows just the model; the tooltip adds the provider.
+            title={`${ready && !viewing ? `${meta.label} · ${model}\n` : ""}${t("toolbar.settingsTitle")}`}
+            aria-label={t("toolbar.settings")}
           >
-            <option value="auto">◐ Auto</option>
-            <option value="light">☀ Light</option>
-            <option value="dark">☾ Dark</option>
-          </select>
+            ⚙{viewing ? null : ready ? <> {model.split("/").pop()}</> : <> {t("toolbar.setUpAi")}</>}
+          </button>
+          <FileMenu />
         </div>
       </div>
     </header>
@@ -165,13 +136,22 @@ function download(name: string, content: Blob | string) {
 
 const text = (s: string, type: string) => new Blob([s], { type: `${type};charset=utf-8` });
 
-/** Export dropdown: the current project as JSON, or the active graph as Markdown notes, Mermaid or a PNG image. */
-function ExportMenu() {
+/** A menu entry: `head` starts a labelled section of the menu. */
+type Item = { label: MessageKey; title: MessageKey; head?: MessageKey; action: () => void | Promise<void> };
+
+/**
+ * "File ▾": import a project from JSON; export the current project as JSON, or the active graph as Markdown notes,
+ * Mermaid or a PNG image; and share the graph as a link. In the read-only viewer only export and share remain.
+ */
+function FileMenu() {
+  const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const { getNodes } = useReactFlow();
   const setToast = useGraphStore((st) => st.setToast);
   const exportJson = useGraphStore((st) => st.exportJson);
+  const importJson = useGraphStore((st) => st.importJson);
   const graph = useGraphStore(activeGraph);
   const project = useGraphStore(currentProject);
   const view = useGraphStore((st) => (isViewing(st) ? st.view : null));
@@ -192,51 +172,56 @@ function ExportMenu() {
     };
   }, [open]);
 
+  const doImport = async (file: File) => {
+    try {
+      const { name, fixes } = importJson(await file.text());
+      const repairs = fixes.length ? ` ${tr("file.importRepairs", { fixes: fixes.join("; ") })}` : "";
+      setToast(tr("file.imported", { name }) + repairs, "info");
+    } catch (e) {
+      setToast(tr("file.importFailed", { error: e instanceof Error ? e.message : String(e) }));
+    }
+  };
+
   const base = exportFileName(graph);
   const run = (fn: () => void | Promise<void>) => async () => {
     setOpen(false);
     try {
       await fn();
     } catch (e) {
-      setToast(`Export failed: ${e instanceof Error ? e.message : e}`);
+      setToast(tr("file.exportFailed", { error: e instanceof Error ? e.message : String(e) }));
     }
   };
 
-  const items: { label: string; title: string; action: () => void | Promise<void> }[] = [
+  const items: Item[] = [
+    ...(view ? [] : [{ label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() } satisfies Item]),
     {
-      label: view ? "JSON (this graph)" : "JSON (this project)",
-      title: view
-        ? "The shared graph. Importing it later adds it as a new project."
-        : "This project's graphs, including sandboxes. Importing it later adds it as a new project.",
+      head: "file.exportHead",
+      label: view ? "file.jsonGraph" : "file.jsonProject",
+      title: view ? "file.jsonGraphTitle" : "file.jsonProjectTitle",
       action: () => download(`${exportFileName({ ...graph, name: projectName })}.json`, text(exportJson(), "application/json")),
     },
     {
-      label: "Share link…",
-      title: "A link that contains this graph (not its sandboxes). Nothing is uploaded: the graph travels inside the link.",
-      action: () => setSharing(true),
-    },
-    {
-      label: "Markdown notes",
-      title: "Study notes for this graph: concepts in study order, prerequisites and both directions of every relation",
+      label: "file.markdown",
+      title: "file.markdownTitle",
       action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
     },
     {
-      label: "Mermaid diagram",
-      title: "Flowchart text for Mermaid (GitHub, Notion, …): copied to the clipboard and downloaded",
+      label: "file.mermaid",
+      title: "file.mermaidTitle",
       action: async () => {
         const src = toMermaid(graph);
         download(`${base}.mmd`, text(src, "text/plain"));
         const copied = await navigator.clipboard?.writeText(src).then(() => true, () => false);
-        setToast(copied ? "Mermaid diagram copied to the clipboard and downloaded." : "Mermaid diagram downloaded (clipboard not available).", "info");
+        setToast(tr(copied ? "file.mermaidCopied" : "file.mermaidDownloaded"), "info");
       },
     },
     {
-      label: "PNG image",
-      title: "A picture of the whole graph",
+      label: "file.png",
+      title: "file.pngTitle",
       action: async () => {
         const nodes = getNodes();
         const viewportEl = document.querySelector<HTMLElement>(".react-flow__viewport");
-        if (!nodes.length || !viewportEl) return setToast("Nothing to capture yet: add a concept first.", "info");
+        if (!nodes.length || !viewportEl) return setToast(tr("file.nothingToCapture"), "info");
         // Render the full graph (not just what's on screen) at 1:1, as in React Flow's "download image" example.
         const bounds = getNodesBounds(nodes);
         const width = Math.min(4096, Math.ceil(bounds.width) + 160);
@@ -251,18 +236,31 @@ function ExportMenu() {
         download(`${base}.png`, url);
       },
     },
+    { head: "file.share", label: "file.share", title: "file.shareTitle", action: () => setSharing(true) },
   ];
 
   return (
     <div className="menu" ref={ref}>
-      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>Export ▾</button>
+      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{t("file.menu")}</button>
       {open && (
-        <div className="menu__list" role="menu" aria-label="Export">
-          {items.map((it) => (
-            <button key={it.label} role="menuitem" title={it.title} onClick={run(it.action)}>{it.label}</button>
+        <div className="menu__list" role="menu" aria-label={t("file.menuLabel")}>
+          {items.map((it, i) => (
+            <div key={it.label} role="none" className="menu__section">
+              {/* A heading for the export formats; a plain separator before Share. */}
+              {it.head && i > 0 && <hr className="menu__sep" />}
+              {it.head && it.head !== it.label && <div className="menu__head" role="presentation">{t(it.head)}</div>}
+              <button role="menuitem" title={t(it.title)} onClick={run(it.action)}>{t(it.label)}</button>
+            </div>
           ))}
         </div>
       )}
+      <input
+        ref={fileRef}
+        type="file"
+        accept="application/json"
+        hidden
+        onChange={(e) => { const f = e.target.files?.[0]; if (f) void doImport(f); e.target.value = ""; }}
+      />
       {sharing && (
         <ShareDialog
           graph={graph}

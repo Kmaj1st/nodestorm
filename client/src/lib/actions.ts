@@ -8,6 +8,7 @@ import {
   type NameCandidate,
   type Sense,
 } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
@@ -118,7 +119,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       bg((g) => ops.setNodeError(g, nodeId, msg));
       reportError(e, `${node.name}: `);
     },
-    onCancel: () => bg((g) => ops.setNodeError(g, nodeId, "Check cancelled. Retry to run it again.")),
+    onCancel: () => bg((g) => ops.setNodeError(g, nodeId, t("task.cancelled"))),
   };
   set({ status: "checking", error: undefined });
 
@@ -127,7 +128,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     const g = graph(graphId);
     const res = await withBusy(
       key,
-      `Working out what “${node.name}” means…`,
+      t("task.clarify", { name: node.name }),
       (signal) =>
         api.clarify(
           { name: node.name, hint, context: g.nodes.filter((n) => n.id !== nodeId).map(toBrief), count: clarify.options },
@@ -150,7 +151,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   const g = graph(graphId);
   const res = await withBusy(
     key,
-    `Checking prerequisites of ${current.name}…`,
+    t("task.deps", { name: current.name }),
     (signal) =>
       api.deps({ node: toBrief(current), existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief) }, signal),
     handlers,
@@ -160,7 +161,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   // A prerequisite that (transitively) needs this node back is almost always a wrong AI answer.
   const cycle = find() ? paths.cycleThrough(graph(graphId), nodeId) : null;
   if (cycle && !opts.quiet) {
-    store().setToast(`Dependency cycle: ${cycleText(graphId, cycle)}. One of these links is probably wrong — see the inspector.`);
+    store().setToast(t("toast.cycle", { chain: cycleText(graphId, cycle) }));
   }
 }
 
@@ -176,7 +177,7 @@ export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, 
   }, graphId);
   store().setClarifying(null);
   store().setInspect({ kind: "node", id });
-  if (merged) store().setToast(`“${sense.name}” is already in the graph — linked to the existing concept.`, "info");
+  if (merged) store().setToast(t("toast.senseMerged", { name: sense.name }), "info");
   else void analyzeNode(id, graphId);
 }
 
@@ -193,7 +194,7 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
     return r.graph;
   }, graphId);
   if (existed) {
-    store().setToast(`"${input.name}" is already in the graph`, "info");
+    store().setToast(t("toast.exists", { name: input.name }), "info");
   } else {
     void analyzeNode(id, graphId, hint);
   }
@@ -210,7 +211,7 @@ export function tidy() {
 
 export function suggestNames(description: string) {
   const g = graph(store().activeId);
-  return withBusy("name", "Finding a name…", (signal) =>
+  return withBusy("name", t("task.name"), (signal) =>
     api.name({ description, context: g.nodes.map(toBrief) }, signal).then((r) => r.candidates),
   );
 }
@@ -245,7 +246,7 @@ function placeDep(graphId: string, dependentId: string, depName: string, index?:
 export function installDep(dependentId: string, depName: string) {
   const graphId = store().activeId;
   const r = placeDep(graphId, dependentId, depName);
-  if (r.existed) store().setToast(`"${depName}" is already in the graph`, "info");
+  if (r.existed) store().setToast(t("toast.exists", { name: depName }), "info");
   else {
     viewport.reveal(r.id);
     void analyzeNode(r.id, graphId, r.hint);
@@ -288,7 +289,7 @@ export async function installAllMissing(rootId: string, graphId = store().active
   };
   const key = installAllKey(graphId, rootId);
   const label = () =>
-    `Installing prerequisites of ${root.name}: ${report.installed.length} added, level ${Math.max(report.depth, 1)}/${maxDepth}…`;
+    t("task.installAll", { name: root.name, n: report.installed.length, level: Math.max(report.depth, 1), max: maxDepth });
   const touched = new Set([rootId]);
   const inflight = new Set<string>();
 
@@ -366,19 +367,18 @@ export async function installAllMissing(rootId: string, graphId = store().active
 
 function installSummary(name: string, r: InstallReport, maxDepth: number): string {
   const n = r.installed.length;
-  const s = (k: number) => (k === 1 ? "" : "s");
   const parts = [
     r.cancelled
-      ? `Install-all cancelled after ${n} concept${s(n)}.`
+      ? t("install.cancelled", { n })
       : n
-        ? `Installed ${n} prerequisite${s(n)} of ${name} (${r.depth} level${s(r.depth)}).`
-        : `Nothing new to install for ${name}.`,
+        ? t("install.done", { n, name, depth: r.depth })
+        : t("install.nothing", { name }),
   ];
-  if (r.unclear.length) parts.push(`Pick a meaning for: ${r.unclear.join(", ")}.`);
-  if (r.failed.length) parts.push(`Check failed for: ${r.failed.join(", ")} (retry on the node).`);
-  if (r.limit === "depth") parts.push(`Stopped at depth ${maxDepth}; still missing: ${r.leftOver.join(", ")}.`);
-  if (r.limit === "nodes") parts.push(`Stopped at the ${n}-concept limit; not installed: ${r.leftOver.join(", ")}.`);
-  if (r.cycles.length) parts.push(`Dependency cycle: ${r.cycles.join("; ")}.`);
+  if (r.unclear.length) parts.push(t("install.unclear", { names: r.unclear.join(", ") }));
+  if (r.failed.length) parts.push(t("install.failed", { names: r.failed.join(", ") }));
+  if (r.limit === "depth") parts.push(t("install.depthLimit", { max: maxDepth, names: r.leftOver.join(", ") }));
+  if (r.limit === "nodes") parts.push(t("install.nodeLimit", { n, names: r.leftOver.join(", ") }));
+  if (r.cycles.length) parts.push(t("install.cycles", { cycles: r.cycles.join("; ") }));
   return parts.join(" ");
 }
 
@@ -388,7 +388,7 @@ export async function mix(aId: string, bId: string) {
   const a = g.nodes.find((n) => n.id === aId);
   const b = g.nodes.find((n) => n.id === bId);
   if (!a || !b) return;
-  const res = await withBusy(`mix:${aId}:${bId}`, `Relating ${a.name} ⇄ ${b.name}…`, (signal) =>
+  const res = await withBusy(`mix:${aId}:${bId}`, t("task.mix", { a: a.name, b: b.name }), (signal) =>
     api.relate({ a: toBrief(a), b: toBrief(b) }, signal),
   );
   if (!res) return;
@@ -417,7 +417,7 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
     return other ? [{ other, toOther: mine ? r.aToB : r.bToA, fromOther: mine ? r.bToA : r.aToB }] : [];
   });
   const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
-  const res = await withBusy(explainKey(graphId, nodeId), `Explaining ${node.name}…`, (signal) =>
+  const res = await withBusy(explainKey(graphId, nodeId), t("task.explain", { name: node.name }), (signal) =>
     api.explain({ node: toBrief(node), prerequisites, relations, level }, signal),
   );
   if (!res) return;
@@ -431,7 +431,7 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
 export function derive(selectedIds: string[], goal?: string) {
   const g = graph(store().activeId);
   const selected = g.nodes.filter((n) => selectedIds.includes(n.id));
-  return withBusy("derive", "Deriving…", (signal) =>
+  return withBusy("derive", t("task.derive"), (signal) =>
     api.derive({ selected: selected.map(toBrief), context: g.nodes.map(toBrief), goal }, signal).then((r) => r.proposals),
   );
 }

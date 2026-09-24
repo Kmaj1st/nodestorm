@@ -1,5 +1,6 @@
 import type { ConceptNode } from "@nodestorm/shared";
 import { useState } from "react";
+import { useT } from "../i18n";
 import { analyzeNode, chooseSense } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
@@ -21,6 +22,7 @@ export function SenseDialog() {
 }
 
 function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) {
+  const t = useT();
   const setClarifying = useGraphStore((s) => s.setClarifying);
   const mutate = useGraphStore((s) => s.mutate);
   const clarifying = { graphId, nodeId: node.id };
@@ -53,9 +55,9 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
   };
 
   return (
-    <Modal label="What do you mean?" onClose={close}>
-      <h3>What do you mean by “{node.name}”?</h3>
-      <p className="muted small">This name has several meanings. Pick the one you have in mind so the AI works with the right concept.</p>
+    <Modal label={t("sense.dialog")} onClose={close}>
+      <h3>{t("sense.title", { name: node.name })}</h3>
+      <p className="muted small">{t("sense.intro")}</p>
       <div className="senses" role="radiogroup">
         {senses.map((s, i) => (
           <label key={i} className={`sense${choice === String(i) ? " sense--on" : ""}`}>
@@ -71,22 +73,22 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
         <label className={`sense${choice === OTHER ? " sense--on" : ""}`}>
           <input type="radio" name="sense" checked={choice === OTHER} onChange={() => setChoice(OTHER)} />
           <span className="sense__other">
-            <b>Something else</b>
+            <b>{t("sense.other")}</b>
             {choice === OTHER && (
               <>
                 <input
                   value={otherName}
                   onChange={(e) => setOtherName(e.target.value)}
-                  placeholder={`Name (default: ${node.name})`}
-                  aria-label="Your name for it"
+                  placeholder={t("sense.otherName", { name: node.name })}
+                  aria-label={t("sense.otherNameAria")}
                 />
                 <textarea
                   autoFocus
                   rows={3}
                   value={otherDef}
                   onChange={(e) => setOtherDef(e.target.value)}
-                  placeholder="Describe what you mean"
-                  aria-label="Your meaning"
+                  placeholder={t("sense.otherDef")}
+                  aria-label={t("sense.otherDefAria")}
                 />
               </>
             )}
@@ -94,16 +96,16 @@ function SenseChoice({ graphId, node }: { graphId: string; node: ConceptNode }) 
         </label>
       </div>
       <div className="form__actions">
-        <button className="link small" onClick={remove}>Remove concept</button>
+        <button className="link small" onClick={remove}>{t("sense.remove")}</button>
         <span className="spacer" />
-        <button onClick={moreOptions} title={`Ask again (${optionCount} options — change in Settings)`}>Ask again</button>
-        <button onClick={close}>Later</button>
+        <button onClick={moreOptions} title={t("sense.askAgainTitle", { n: optionCount })}>{t("sense.askAgain")}</button>
+        <button onClick={close}>{t("sense.later")}</button>
         <button
           className="primary"
           onClick={confirm}
           disabled={choice === OTHER ? !otherDef.trim() : !picked}
         >
-          Use this meaning
+          {t("sense.use")}
         </button>
       </div>
     </Modal>

@@ -1,6 +1,7 @@
 import type { Graph } from "@nodestorm/shared";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { rich, useT } from "../i18n";
 import { encodeShare, LONG_LINK, shareUrl } from "../lib/share";
 import { Modal } from "./Modal";
 
@@ -9,6 +10,7 @@ import { Modal } from "./Modal";
  * <body> so it stays visible when the toolbar's small-screen menu that opened it folds away.
  */
 export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: string; onClose: () => void }) {
+  const t = useT();
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -32,14 +34,11 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
   };
 
   return createPortal(
-    <Modal label="Share link" onClose={onClose}>
-      <h3>Share link</h3>
-      <p className="muted small">
-        Anyone with this link can view <b>{graph.nodes.length}</b> concept{graph.nodes.length === 1 ? "" : "s"} of this graph
-        (not its sandboxes) and save a copy. The graph is packed into the link itself: nothing is uploaded.
-      </p>
-      {error && <p className="error small" role="alert">Couldn't create the link: {error}</p>}
-      {!link && !error && <p className="muted">Packing…</p>}
+    <Modal label={t("share.dialog")} onClose={onClose}>
+      <h3>{t("share.dialog")}</h3>
+      <p className="muted small">{rich("share.intro", { n: graph.nodes.length })}</p>
+      {error && <p className="error small" role="alert">{t("share.failed", { error })}</p>}
+      {!link && !error && <p className="muted">{t("share.packing")}</p>}
       {link && (
         <>
           <div className="row">
@@ -47,23 +46,20 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
               ref={field}
               readOnly
               value={link}
-              aria-label="Share link"
+              aria-label={t("share.dialog")}
               data-testid="share-link"
               onFocus={(e) => e.target.select()}
             />
-            <button className="primary" onClick={copy}>{copied ? "Copied" : "Copy"}</button>
+            <button className="primary" onClick={copy}>{t(copied ? "share.copied" : "share.copy")}</button>
           </div>
-          <p className="muted small" data-testid="share-size">{link.length.toLocaleString()} characters</p>
+          <p className="muted small" data-testid="share-size">{t("share.chars", { n: link.length.toLocaleString() })}</p>
           {link.length > LONG_LINK && (
-            <p className="warn-box small" role="status">
-              This link is long. Some chat apps and mail clients cut long links off, which breaks them. If that happens,
-              share the file from Export ▾ → JSON instead.
-            </p>
+            <p className="warn-box small" role="status">{t("share.long")}</p>
           )}
         </>
       )}
       <div className="form__actions">
-        <button onClick={onClose}>Close</button>
+        <button onClick={onClose}>{t("common.close")}</button>
       </div>
     </Modal>,
     document.body,

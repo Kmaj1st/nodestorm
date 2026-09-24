@@ -2,6 +2,7 @@ import type { Relation } from "@nodestorm/shared";
 import { useInternalNode, useStore, type Edge, type EdgeProps, type InternalNode, type ReactFlowState } from "@xyflow/react";
 import { memo, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { useT } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 import { useView } from "../store/viewStore";
 
@@ -86,6 +87,7 @@ function Arrow({ tip, ang, active, kind, onClick, testId, label }: {
 }
 
 function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlowEdge>) {
+  const tr = useT(); // `t` is the target node here
   const s = useInternalNode(source);
   const t = useInternalNode(target);
   // Only the direction of *this* relation that is open, so opening one relation doesn't re-render every edge.
@@ -121,11 +123,11 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
       <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${data.cycle ? " relation--cycle" : ""}`} />
       <Arrow
         tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")}
-        testId={`arrow-${rel.id}-aToB`} label={`What ${aName} does to ${bName}: ${rel.aToB.kind}`}
+        testId={`arrow-${rel.id}-aToB`} label={tr("edge.arrow", { a: aName, b: bName, kind: rel.aToB.kind })}
       />
       <Arrow
         tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")}
-        testId={`arrow-${rel.id}-bToA`} label={`What ${bName} does to ${aName}: ${rel.bToA.kind}`}
+        testId={`arrow-${rel.id}-bToA`} label={tr("edge.arrow", { a: bName, b: aName, kind: rel.bToA.kind })}
       />
       {labelLayer &&
         showLabels &&
@@ -140,7 +142,7 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
                 className={`edge-label nodrag nopan${activeDir === dir ? " edge-label--active" : ""}`}
                 style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
                 onClick={() => open(dir)}
-                title={dir === "aToB" ? "What A does to B" : "What B does to A"}
+                title={tr(dir === "aToB" ? "edge.aToB" : "edge.bToA")}
                 tabIndex={-1} // the arrowheads are the keyboard stops; these just repeat them for the mouse
               >
                 {kind}

@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { useT } from "../i18n";
 import { projectList } from "../lib/projects";
 import { currentProject, useGraphStore } from "../store/graphStore";
 
@@ -7,6 +8,7 @@ import { currentProject, useGraphStore } from "../store/graphStore";
  * projects or create, rename, duplicate or delete one. Renaming edits the name in place.
  */
 export function ProjectMenu() {
+  const t = useT();
   const s = useGraphStore();
   const project = useGraphStore(currentProject);
   const projects = projectList(s);
@@ -40,7 +42,7 @@ export function ProjectMenu() {
     return (
       <input
         className="project-name-input"
-        aria-label="Project name"
+        aria-label={t("project.name")}
         defaultValue={project.name}
         autoFocus
         onFocus={(e) => e.target.select()}
@@ -62,14 +64,14 @@ export function ProjectMenu() {
         className="project-button"
         aria-haspopup="menu"
         aria-expanded={open}
-        aria-label={`Project: ${project.name}`}
-        title="Switch or manage projects"
+        aria-label={t("project.label", { name: project.name })}
+        title={t("project.title")}
         onClick={() => setOpen(!open)}
       >
         <span className="project-button__name">{project.name}</span> ▾
       </button>
       {open && (
-        <div className="menu__list menu__list--left" role="menu" aria-label="Projects">
+        <div className="menu__list menu__list--left" role="menu" aria-label={t("project.menu")}>
           {projects.map((p) => (
             <button
               key={p.id}
@@ -83,19 +85,19 @@ export function ProjectMenu() {
           ))}
           <hr className="menu__sep" />
           {/* A new project starts with its name selected for editing. */}
-          <button role="menuitem" onClick={act(() => { s.newProject(); setRenaming(true); })}>New project</button>
-          <button role="menuitem" onClick={act(() => setRenaming(true))}>Rename…</button>
-          <button role="menuitem" title="Copy this project, including its sandboxes" onClick={act(() => s.duplicateProject(project.id))}>
-            Duplicate
+          <button role="menuitem" onClick={act(() => { s.newProject(); setRenaming(true); })}>{t("project.new")}</button>
+          <button role="menuitem" onClick={act(() => setRenaming(true))}>{t("project.rename")}</button>
+          <button role="menuitem" title={t("project.duplicateTitle")} onClick={act(() => s.duplicateProject(project.id))}>
+            {t("project.duplicate")}
           </button>
           <button
             role="menuitem"
             className="danger"
             onClick={act(() => {
-              if (confirm(`Delete the project “${project.name}” and all its graphs? This can't be undone.`)) s.deleteProject(project.id);
+              if (confirm(t("project.deleteConfirm", { name: project.name }))) s.deleteProject(project.id);
             })}
           >
-            Delete…
+            {t("project.delete")}
           </button>
         </div>
       )}

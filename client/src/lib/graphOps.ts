@@ -9,6 +9,7 @@ import {
   type Relation,
   type RelationOrigin,
 } from "@nodestorm/shared";
+import { t } from "../i18n";
 
 /** Pure graph operations. Every function returns a new Graph and never mutates its input. */
 
@@ -310,10 +311,10 @@ export function renameNode(g: Graph, nodeId: string, rawName: string): { graph: 
   const node = g.nodes.find((n) => n.id === nodeId);
   if (!node) return { graph: g };
   const name = rawName.trim();
-  if (!name) return { graph: g, error: "The name can't be empty." };
+  if (!name) return { graph: g, error: t("node.renameEmpty") };
   if (name === node.name) return { graph: g };
   const dup = findByName(g.nodes.filter((n) => n.id !== nodeId), name);
-  if (dup) return { graph: g, error: `“${dup.name}” is already in the graph.` };
+  if (dup) return { graph: g, error: t("node.renameDuplicate", { name: dup.name }) };
   // Old name becomes an alias; the new name itself is never an alias, and aliases stay unique.
   const aliases: string[] = [];
   for (const a of [...node.aliases, node.name]) {
@@ -337,7 +338,7 @@ export function fork(g: Graph, name: string): Graph {
   // A check still running for the original only ever updates the original; the copy must not wait for it.
   const nodes = copy.nodes.map((n) =>
     n.status === "checking"
-      ? { ...n, status: "error" as const, error: "This check was still running when the sandbox was forked. Retry to run it here." }
+      ? { ...n, status: "error" as const, error: t("task.forkInterrupted") }
       : n,
   );
   return { ...copy, nodes, id: uid("g"), name, parentId: g.id, forkedAt: Date.now() };
@@ -361,7 +362,7 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
   for (const n of sb.nodes) {
     // The sandbox is discarded after merging, so a check still running there would never report back.
     if (n.status === "checking") {
-      if (!nodes.has(n.id)) nodes.set(n.id, { ...n, status: "error", error: "The check was interrupted by the merge. Retry to run it again." });
+      if (!nodes.has(n.id)) nodes.set(n.id, { ...n, status: "error", error: t("task.mergeInterrupted") });
       continue;
     }
     nodes.set(n.id, n);

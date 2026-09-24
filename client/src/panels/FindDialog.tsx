@@ -1,4 +1,5 @@
 import { useMemo, useState, type KeyboardEvent } from "react";
+import { useT } from "../i18n";
 import { noteMatch, searchNodes } from "../lib/fuzzy";
 import { viewport } from "../lib/viewport";
 import { activeGraph, useGraphStore } from "../store/graphStore";
@@ -13,6 +14,7 @@ function snippet(text: string, at: number, len: number, around = 24): string {
 
 /** Command-palette style "find concept" (Ctrl/Cmd+K): fuzzy search over names and aliases, then notes. */
 export function FindDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const graph = useGraphStore(activeGraph);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -34,14 +36,14 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal label="Find concept" onClose={onClose} className="palette" top>
+    <Modal label={t("find.dialog")} onClose={onClose} className="palette" top>
       <input
         autoFocus
         value={query}
         onChange={(e) => { setQuery(e.target.value); setActive(0); }}
         onKeyDown={onKey}
-        placeholder="Find a concept by name, alias or note…"
-        aria-label="Find concept"
+        placeholder={t("find.placeholder")}
+        aria-label={t("find.dialog")}
         role="combobox"
         aria-expanded={hits.length > 0}
         aria-controls="palette-results"
@@ -66,14 +68,14 @@ export function FindDialog({ onClose }: { onClose: () => void }) {
                 onClick={() => pick(n.id)}
               >
                 <span>{n.name}</span>
-                {alias && <span className="muted small">also: {alias}</span>}
-                {note && <span className="muted small">note: {note}</span>}
+                {alias && <span className="muted small">{t("find.also", { alias })}</span>}
+                {note && <span className="muted small">{t("find.note", { note })}</span>}
               </li>
             );
           })}
         </ul>
       ) : (
-        <p className="muted small">{graph.nodes.length ? "No matching concept." : "This graph is empty."}</p>
+        <p className="muted small">{t(graph.nodes.length ? "find.none" : "find.empty")}</p>
       )}
     </Modal>
   );

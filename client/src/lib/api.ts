@@ -18,6 +18,7 @@ import {
   type RelateRequest,
   type TaskName,
 } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, useSettings } from "../store/settingsStore";
 import { addUsage } from "../store/usageStore";
@@ -28,7 +29,7 @@ export class NeedsSetupError extends Error {}
 
 function browserProvider(kind: ProviderKind, cfg: ProviderConfig): Provider {
   if (providerMeta(kind).needsKey && !cfg.apiKey) {
-    throw new NeedsSetupError(`Add your ${providerMeta(kind).label} API key in Settings to use AI features.`);
+    throw new NeedsSetupError(t("api.needsKey", { provider: providerMeta(kind).label }));
   }
   return createProvider(kind, cfg);
 }
@@ -40,11 +41,11 @@ async function serverFetch<T>(path: string, init: RequestInit = {}, signal?: Abo
       res = await fetch(`/api/${path}`, { ...init, signal: sig });
     } catch (e) {
       if (sig.aborted) throw e;
-      throw new Error("Can't reach the NodeStorm server. Start it with `npm run dev`, or switch Settings to 'Directly from browser'.");
+      throw new Error(t("api.noServer"));
     }
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
-      const fallback = res.status === 404 || res.status >= 500 ? "NodeStorm server is not running" : `Request failed (${res.status})`;
+      const fallback = res.status === 404 || res.status >= 500 ? t("api.serverDown") : t("api.requestFailed", { status: res.status });
       throw new Error((data as { error?: string }).error ?? fallback);
     }
     return data as T;
@@ -58,7 +59,7 @@ const queue = createLimiter(() => useSettings.getState().aiConcurrency ?? DEFAUL
 
 function run<N extends TaskName>(name: N, req: unknown, signal?: AbortSignal): Promise<TaskResult<N>> {
   // The shared-graph viewer never calls the AI (the link's recipient may not have, or want to spend, a key).
-  if (isViewing(useGraphStore.getState())) return Promise.reject(new Error("Save a copy of the shared graph to use AI features."));
+  if (isViewing(useGraphStore.getState())) return Promise.reject(new Error(t("api.viewer")));
   return queue.run(() => runNow(name, req, signal), {
     signal,
     onState: (state) => useGraphStore.getState().setBusyState(signal, state),

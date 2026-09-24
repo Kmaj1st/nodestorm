@@ -1,10 +1,12 @@
 import type { NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
+import { useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
 import { useGraphStore } from "../store/graphStore";
 import { Modal } from "./Modal";
 
 export function AddNodeDialog({ onClose }: { onClose: () => void }) {
+  const t = useT();
   const [mode, setMode] = useState<"name" | "describe">("name");
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState("");
@@ -27,58 +29,64 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
   };
 
   return (
-    <Modal label="Add concept" onClose={onClose}>
+    <Modal label={t("add.title")} onClose={onClose}>
       <div className="tabs">
         <button className={mode === "name" ? "tab tab--on" : "tab"} aria-pressed={mode === "name"} onClick={() => setMode("name")}>
-          I know the name
+          {t("add.byName")}
         </button>
         <button className={mode === "describe" ? "tab tab--on" : "tab"} aria-pressed={mode === "describe"} onClick={() => setMode("describe")}>
-          Describe it
+          {t("add.describe")}
         </button>
       </div>
 
       {mode === "name" ? (
         <form onSubmit={submitName} className="form">
           <label>
-            Name
-            <input autoFocus value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. First Isomorphism Theorem" aria-label="Concept name" />
+            {t("add.name")}
+            <input
+              autoFocus
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              placeholder={t("add.namePlaceholder")}
+              aria-label={t("add.nameAria")}
+            />
           </label>
           <label>
-            Definition <span className="muted">(optional)</span>
+            {t("add.definition")} <span className="muted">{t("add.optional")}</span>
             <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={3} />
           </label>
           <div className="form__actions">
-            <button type="button" onClick={onClose}>Cancel</button>
-            <button type="submit" className="primary" disabled={!name.trim()}>Add</button>
+            <button type="button" onClick={onClose}>{t("common.cancel")}</button>
+            <button type="submit" className="primary" disabled={!name.trim()}>{t("common.add")}</button>
           </div>
         </form>
       ) : (
         <form onSubmit={search} className="form">
           <label>
-            Describe the thing you can't name
+            {t("add.describeLabel")}
             <textarea
               autoFocus
               value={description}
               onChange={(e) => setDescription(e.target.value)}
               rows={4}
-              placeholder="e.g. a map between two groups that keeps the multiplication structure"
-              aria-label="Concept description"
+              placeholder={t("add.describePlaceholder")}
+              aria-label={t("add.describeAria")}
             />
           </label>
           <div className="form__actions">
-            <button type="button" onClick={onClose}>Cancel</button>
+            <button type="button" onClick={onClose}>{t("common.cancel")}</button>
             {searching && (
               <button type="button" className="link" onClick={() => cancelTask("name")}>
-                Stop
+                {t("add.stop")}
               </button>
             )}
             <button type="submit" className="primary" disabled={!description.trim() || searching}>
-              {searching ? "Searching…" : "Find a name"}
+              {searching ? t("add.searching") : t("add.findName")}
             </button>
           </div>
           {candidates && (
             <ul className="candidates">
-              {candidates.length === 0 && <li className="muted">No suggestions.</li>}
+              {candidates.length === 0 && <li className="muted">{t("add.none")}</li>}
               {candidates.map((c) => (
                 <li key={c.name}>
                   <div>
@@ -86,7 +94,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                     {c.aliases.length > 0 && <span className="muted"> · {c.aliases.join(", ")}</span>}
                     <div className="muted small">{c.definition}</div>
                   </div>
-                  <button type="button" onClick={() => { addCandidate(c); onClose(); }}>Use</button>
+                  <button type="button" onClick={() => { addCandidate(c); onClose(); }}>{t("add.use")}</button>
                 </li>
               ))}
             </ul>

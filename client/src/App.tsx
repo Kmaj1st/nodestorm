@@ -1,6 +1,7 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
+import { rich, t, useT } from "./i18n";
 import { removeNode, removeRelation } from "./lib/graphOps";
 import { decodeShare, shareToken } from "./lib/share";
 import { AddNodeDialog } from "./panels/AddNodeDialog";
@@ -15,6 +16,7 @@ import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 import { toggleFocus, useView, visibleNow } from "./store/viewStore";
 
 export function App() {
+  useT(); // re-render the shell (banners, toasts) when the interface language changes
   const [adding, setAdding] = useState(false);
   const [deriveFrom, setDeriveFrom] = useState<string[] | null>(null);
   const [finding, setFinding] = useState(false);
@@ -101,11 +103,7 @@ export function App() {
       <div className={`app${viewing ? " app--viewing" : ""}`}>
         <Toolbar onAdd={() => setAdding(true)} onDerive={() => setDeriveFrom(selection)} onFind={() => setFinding(true)} />
         {viewing && <ViewerBanner />}
-        {graph.parentId && (
-          <div className="sandbox-banner" data-testid="sandbox-banner">
-            🧪 Sandbox mode — <b>{graph.name}</b>. Changes here don't affect the original graph until you merge back.
-          </div>
-        )}
+        {graph.parentId && <SandboxBanner />}
         <main className="main">
           <GraphCanvas />
           <InspectorSheet />
@@ -118,7 +116,7 @@ export function App() {
             onClick={() => setToast(null)}
           >
             <span>{toast}</span>
-            <button className="toast__close" aria-label="Dismiss">✕</button>
+            <button className="toast__close" aria-label={t("common.dismiss")}>✕</button>
           </div>
         )}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
@@ -147,21 +145,22 @@ async function openShareLink() {
     if (shareToken(location.hash) !== token) return;
     s.openView(graph, name);
     // Replaces any earlier message (e.g. about a broken link opened before this one).
-    s.setToast(fixes.length ? `The shared graph was repaired: ${fixes.join("; ")}.` : null, "info");
+    s.setToast(fixes.length ? t("viewer.repaired", { fixes: fixes.join("; ") }) : null, "info");
   } catch (e) {
     clearShareHash();
-    s.setToast(`Couldn't open the shared link. ${e instanceof Error ? e.message : e} Your own projects are unchanged.`);
+    s.setToast(t("viewer.openFailed", { error: e instanceof Error ? e.message : String(e) }));
   }
 }
 
 /** Shown while a shared graph is open read-only: save it as a project of your own, or go back to your work. */
 function ViewerBanner() {
+  const t = useT();
   const view = useGraphStore((s) => s.view);
   const saveCopy = () => {
     const s = useGraphStore.getState();
     const name = s.saveViewCopy();
     clearShareHash();
-    if (name) s.setToast(`Saved as a new project “${name}”. Your other projects are unchanged.`, "info");
+    if (name) s.setToast(t("viewer.saved", { name }), "info");
   };
   const close = () => {
     useGraphStore.getState().closeView();
@@ -169,12 +168,33 @@ function ViewerBanner() {
   };
   return (
     <div className="viewer-banner" data-testid="viewer-banner" role="status">
-      <span>
-        👁 Viewing a shared graph{view?.name ? <> — <b>{view.name}</b></> : null}. Save a copy to edit.
-      </span>
+      <span>{view?.name ? rich("viewer.bannerNamed", { name: view.name }) : t("viewer.banner")}</span>
       <span className="viewer-banner__actions">
-        <button className="primary" onClick={saveCopy}>Save a copy</button>
-        <button onClick={close} title="Close the shared graph and go back to your own projects">Close</button>
+        <button className="primary" onClick={saveCopy}>{t("viewer.saveCopy")}</button>
+        <button onClick={close} title={t("viewer.closeTitle")}>{t("common.close")}</button>
+      </span>
+    </div>
+  );
+}
+
+/** Shown while a sandbox is active, with its actions: merge it back into its parent graph, or discard it. */
+function SandboxBanner() {
+  const t = useT();
+  const graph = useGraphStore(activeGraph);
+  const mergeSandbox = useGraphStore((s) => s.mergeSandbox);
+  const discardSandbox = useGraphStore((s) => s.discardSandbox);
+  return (
+    <div className="sandbox-banner" data-testid="sandbox-banner">
+      <span>{rich("sandbox.banner", { name: graph.name })}</span>
+      <span className="sandbox-banner__actions">
+        <button onClick={() => mergeSandbox(graph.id)} title={t("sandbox.mergeTitle")}>{t("sandbox.merge")}</button>
+        <button
+          className="danger"
+          onClick={() => confirm(t("sandbox.discardConfirm", { name: graph.name })) && discardSandbox(graph.id)}
+          title={t("sandbox.discardTitle")}
+        >
+          {t("sandbox.discard")}
+        </button>
       </span>
     </div>
   );
@@ -187,6 +207,7 @@ const SMALL_SCREEN = "(max-width: 800px)";
  * collapsed; it starts collapsed there and opens whenever something is selected.
  */
 function InspectorSheet() {
+  const t = useT();
   const inspect = useGraphStore((s) => s.inspect);
   const [open, setOpen] = useState(() => !window.matchMedia?.(SMALL_SCREEN).matches);
   useEffect(() => {
@@ -195,7 +216,7 @@ function InspectorSheet() {
   return (
     <div className={`sheet${open ? "" : " sheet--closed"}`}>
       <button className="sheet__toggle" aria-expanded={open} aria-controls="inspector-sheet" onClick={() => setOpen(!open)}>
-        {open ? "▾ Hide details" : "▴ Show details"}
+        {t(open ? "sheet.hide" : "sheet.show")}
       </button>
       <div className="sheet__content" id="inspector-sheet">
         <Inspector />

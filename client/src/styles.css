@@ -105,13 +105,25 @@ textarea { resize: vertical; width: 100%; }
 
 .app { display: flex; flex-direction: column; height: 100%; }
 .toolbar {
-  display: flex; flex-wrap: wrap; gap: 12px; align-items: center; padding: 8px 12px;
+  display: flex; flex-wrap: wrap; gap: 10px; align-items: center; padding: 8px 12px;
   background: var(--panel); border-bottom: 1px solid var(--border);
 }
 .toolbar__brand { font-weight: 700; letter-spacing: 0.02em; color: var(--accent); }
 .toolbar__group { display: flex; gap: 6px; align-items: center; }
 .toolbar__right { margin-left: auto; }
-.sandbox-banner { background: var(--sandbox-soft); color: var(--sandbox); padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--sandbox-border); }
+/* A slightly smaller toolbar type keeps every group on one row from 1200px up. */
+.toolbar button, .toolbar select { font-size: 14px; }
+.toolbar button { padding: 5px 10px; }
+.toolbar__group > button, .toolbar__group > .menu > button { white-space: nowrap; }
+/* Icon-only buttons (canvas tools, fork): named by aria-label, explained by their tooltip. */
+.toolbar button.icon-btn { padding: 5px 8px; min-width: 34px; }
+.graph-select { max-width: 130px; }
+.sandbox-banner {
+  display: flex; flex-wrap: wrap; gap: 6px 12px; align-items: center; justify-content: space-between;
+  background: var(--sandbox-soft); color: var(--sandbox); padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--sandbox-border);
+}
+.sandbox-banner__actions { display: flex; gap: 6px; }
+.sandbox-banner__actions button { padding: 3px 10px; font-size: 13px; }
 .viewer-banner {
   display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
   background: var(--accent-soft); color: var(--text); padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--border);
@@ -140,7 +152,7 @@ textarea { resize: vertical; width: 100%; }
 .canvas__example button { pointer-events: auto; }
 
 /* Project switcher */
-.project-button { font-weight: 600; max-width: 240px; display: flex; gap: 6px; align-items: center; }
+.project-button { font-weight: 600; max-width: 200px; display: flex; gap: 6px; align-items: center; }
 .project-button__name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .project-name-input { width: 200px; font-weight: 600; }
 .menu__list--left { left: 0; right: auto; max-height: 60vh; overflow-y: auto; }
@@ -261,6 +273,9 @@ textarea { resize: vertical; width: 100%; }
 
 /* Settings */
 .settings { width: min(620px, calc(100vw - 32px)); }
+.settings__row { display: flex; flex-wrap: wrap; gap: 8px 16px; }
+.settings__row .field { flex: 1; min-width: 180px; }
+.settings__head { margin: 4px 0 -4px; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
 .choice { border: 1px solid var(--border); border-radius: 8px; padding: 8px 12px; display: flex; flex-direction: column; gap: 8px; margin: 0; }
 .choice legend { font-size: 13px; color: var(--muted); padding: 0 4px; }
 .choice label { display: flex; gap: 10px; align-items: flex-start; cursor: pointer; }
@@ -278,7 +293,7 @@ textarea { resize: vertical; width: 100%; }
 .model--on { background: var(--accent-soft); color: var(--accent); }
 .keynote { background: var(--bg); border-radius: 8px; padding: 10px 12px; display: flex; flex-direction: column; gap: 4px; }
 .keynote p { margin: 0; }
-.ai-button { max-width: 320px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ai-button { max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ai-button--warn { border-color: var(--checking); color: var(--checking); background: var(--warn-soft); }
 code { font-size: 12px; background: var(--bg); padding: 0 3px; border-radius: 3px; }
 
@@ -330,6 +345,9 @@ input.num { width: 64px; }
 }
 .menu__list button { border-color: transparent; text-align: left; white-space: nowrap; }
 .menu__list button:hover { background: var(--accent-soft); }
+.menu__section { display: flex; flex-direction: column; }
+.menu__section button { width: 100%; }
+.menu__head { font-size: 11px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; padding: 4px 12px 2px; }
 
 /* Dependency tools: install-all popover, learning path, cycles */
 .section-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
@@ -435,4 +453,8 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
 /* The minimap covers part of the graph on mid-size screens; show it only where there's room. */
 @media (max-width: 1200px) {
   .react-flow__minimap { display: none; }
+}
+/* Below this width the brand gives way, so all toolbar groups still fit on one row down to 1200px. */
+@media (max-width: 1359px) {
+  .toolbar__brand { display: none; }
 }
