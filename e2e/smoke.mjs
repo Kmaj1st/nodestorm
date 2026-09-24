@@ -48,6 +48,8 @@ try {
   const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(`http://localhost:${WEB_PORT}/`);
+  // A first visit shows the welcome card (the Onboarding section below tests it); it doesn't block the toolbar.
+  await page.getByTestId("welcome").waitFor();
 
   const node = (name) => page.getByTestId(`node-${name}`);
   const addByName = async (name) => {
@@ -894,6 +896,139 @@ try {
   await page.keyboard.press("Control+z");
   await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 2);
   assert((await node("Kernel").count()) === 0 && (await node("Widget Morphism").count()) === 0, "one Ctrl+Z removes the whole extraction");
+
+  console.log("Onboarding");
+  // Fresh browser contexts: a first visit, with nothing in localStorage but the interface language.
+  const firstVisit = async (lang, viewport = { width: 1400, height: 900 }) => {
+    const ctx = await browser.newContext({ viewport, locale: lang === "zh" ? "zh-CN" : "en-US" });
+    await ctx.addInitScript((l) => {
+      try {
+        if (!localStorage.getItem("nodestorm-ui-language")) localStorage.setItem("nodestorm-ui-language", l);
+      } catch {}
+    }, lang);
+    const p = await ctx.newPage();
+    p.on("pageerror", (e) => console.error("pageerror:", e.message));
+    await p.goto(`http://localhost:${WEB_PORT}/`);
+    return { ctx, p };
+  };
+  const onboardingState = (p) => p.evaluate(() => JSON.parse(localStorage.getItem("nodestorm-onboarding") ?? "null"));
+  // The popover is hidden while it waits for its anchor; wait until it is placed.
+  const placed = (p) => p.locator('[data-testid="tour"]:not([style*="hidden"])').waitFor();
+
+  {
+    const { ctx, p } = await firstVisit("en");
+    const welcome = p.getByTestId("welcome");
+    await welcome.waitFor();
+    assert(
+      (await welcome.getByRole("heading", { name: "Welcome to NodeStorm" }).isVisible()) &&
+        (await welcome.getByRole("button").allTextContents()).join("|") ===
+          "Take the 1-minute tour|Load the Group theory example|Start empty|⚙ Settings",
+      "a first visit shows the welcome card: tour, example, start empty, and where to add an AI key",
+    );
+    await p.screenshot({ path: `${shots}17-welcome.png` });
+    await welcome.getByRole("button", { name: "Take the 1-minute tour" }).click();
+    const intro = p.getByRole("dialog", { name: "A quick tour" });
+    await intro.waitFor();
+    assert((await welcome.count()) === 0, "starting the tour closes the welcome card");
+    await intro.getByRole("button", { name: "Load the example" }).click();
+    await p.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+    const tour = p.getByTestId("tour");
+    const count = p.getByTestId("tour-count");
+    const titles = [];
+    for (let i = 1; i <= 7; i++) {
+      await count.filter({ hasText: `Step ${i} of 7` }).waitFor();
+      await placed(p);
+      titles.push(await tour.locator("h3").textContent());
+      const next = tour.getByRole("button", { name: i === 7 ? "Finish" : "Next" });
+      if (i === 1) {
+        assert(await next.evaluate((b) => b === document.activeElement), "the tour focuses its Next button");
+        assert((await tour.getByRole("button", { name: "Back" }).isDisabled()), "…and Back is off on the first step");
+      }
+      if (i === 2) {
+        // Points at the Install button of the blocked concept, which the tour selected.
+        const [ring, btn] = await Promise.all([p.locator(".tour-ring").boundingBox(), p.getByTestId("install-Isomorphism").boundingBox()]);
+        assert(ring && btn && Math.abs(ring.x + 4 - btn.x) < 2 && Math.abs(ring.y + 4 - btn.y) < 2, "step 2 highlights the blocked concept's Install button");
+        await p.screenshot({ path: `${shots}17-tour-install.png` });
+        // Back and forth.
+        await tour.getByRole("button", { name: "Back" }).click();
+        await count.filter({ hasText: "Step 1 of 7" }).waitFor();
+        await tour.getByRole("button", { name: "Next" }).click();
+        await count.filter({ hasText: "Step 2 of 7" }).waitFor();
+        await placed(p);
+      }
+      await next.click();
+    }
+    assert(
+      JSON.stringify(titles) ===
+        JSON.stringify(["Add concepts", "Install what's missing", "Relations go both ways", "Mix two concepts", "Experiment in a sandbox", "Import, export, share", "Connect an AI"]),
+      "Next walks through all 7 steps: add, install, arrowheads, Mix, sandbox, File, Settings",
+    );
+    await tour.waitFor({ state: "detached" });
+    assert((await onboardingState(p))?.tour === "done", "finishing the tour is remembered");
+    await p.reload();
+    await p.getByTestId("node-Group").waitFor();
+    assert((await welcome.count()) === 0 && (await tour.count()) === 0 && (await onboardingState(p))?.tour === "done", "…and after a reload neither the card nor the tour comes back");
+
+    // Show tour again from the ? dialog; the keyboard drives it, Escape skips it.
+    await p.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+    await p.keyboard.press("?");
+    await p.getByRole("dialog", { name: "Keyboard shortcuts" }).getByRole("button", { name: "Show tour again" }).click();
+    await count.filter({ hasText: "Step 1 of 7" }).waitFor();
+    await placed(p);
+    await p.keyboard.press("Enter");
+    await count.filter({ hasText: "Step 2 of 7" }).waitFor();
+    await placed(p);
+    await p.keyboard.press("Escape");
+    await tour.waitFor({ state: "detached" });
+    assert((await onboardingState(p))?.tour === "skipped", "Show tour again (in ?) restarts it; Enter goes on and Escape skips it");
+    await ctx.close();
+  }
+  {
+    // Start empty: the card goes, the canvas hint stays, and focus moves to Add concept.
+    const { ctx, p } = await firstVisit("en");
+    await p.getByTestId("welcome").getByRole("button", { name: "Start empty" }).click();
+    await p.locator(".canvas__empty").waitFor();
+    assert(
+      (await p.getByTestId("welcome").count()) === 0 &&
+        (await p.getByRole("button", { name: "+ Add concept" }).evaluate((b) => b === document.activeElement)),
+      "Start empty closes the card and focuses Add concept",
+    );
+    await p.reload();
+    await p.locator(".canvas__empty").waitFor();
+    assert((await p.getByTestId("welcome").count()) === 0, "…for good (still no card after a reload)");
+    await ctx.close();
+  }
+  {
+    // 中文 on a phone: the card is in Chinese, and the tour points at ☰ instead of the folded buttons.
+    const { ctx, p } = await firstVisit("zh", { width: 390, height: 844 });
+    const welcome = p.getByTestId("welcome");
+    await welcome.waitFor();
+    assert(
+      (await welcome.getByRole("heading", { name: "欢迎使用 NodeStorm" }).isVisible()) &&
+        (await welcome.getByRole("button", { name: "花 1 分钟看看导览" }).isVisible()) &&
+        (await welcome.getByRole("button", { name: "载入群论示例" }).isVisible()),
+      "in 中文 the welcome card is Chinese",
+    );
+    await p.screenshot({ path: `${shots}17-welcome-zh-mobile.png` });
+    await welcome.getByRole("button", { name: "花 1 分钟看看导览" }).click();
+    await p.getByRole("dialog", { name: "快速导览" }).getByRole("button", { name: "载入示例" }).click();
+    const tour = p.getByTestId("tour");
+    const titles = [];
+    for (let i = 1; i <= 5; i++) {
+      await p.getByTestId("tour-count").filter({ hasText: `第 ${i} 步，共 5 步` }).waitFor();
+      await placed(p);
+      titles.push(await tour.locator("h3").textContent());
+      if (i < 5) await tour.getByRole("button", { name: "下一步" }).click();
+    }
+    assert(titles.at(-1) === "更多工具" && titles[1] === "安装缺少的前置知识", "on a phone the tour has 5 steps, ending at ☰ (Fork, File and Settings are folded away)");
+    await p.screenshot({ path: `${shots}17-tour-zh-mobile.png` });
+    await tour.getByRole("button", { name: "跳过导览" }).click();
+    await tour.waitFor({ state: "detached" });
+    await p.reload();
+    await p.getByTestId("node-Group").waitFor();
+    assert((await onboardingState(p))?.tour === "skipped" && (await welcome.count()) === 0 && (await tour.count()) === 0, "Skip ends the tour and is remembered");
+    await ctx.close();
+  }
 
   console.log("\nE2E passed");
 } catch (e) {

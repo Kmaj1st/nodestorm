@@ -9,6 +9,7 @@ import { DeriveDialog } from "./panels/DeriveDialog";
 import { FindDialog } from "./panels/FindDialog";
 import { Inspector } from "./panels/Inspector";
 import { OfflineBanner } from "./panels/OfflineBanner";
+import { Onboarding } from "./panels/Onboarding";
 import { SenseDialog } from "./panels/SenseDialog";
 import { SettingsDialog } from "./panels/SettingsDialog";
 import { ShortcutsHelp } from "./panels/ShortcutsHelp";
@@ -111,6 +112,7 @@ export function App() {
         <main className="main">
           <GraphCanvas />
           <InspectorSheet />
+          <Onboarding />
         </main>
         <StatusBar />
         {toast && (

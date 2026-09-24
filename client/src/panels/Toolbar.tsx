@@ -59,8 +59,9 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
       )}
 
       {!viewing && <div className="toolbar__group">
-        <button className="primary" onClick={onAdd}>{t("toolbar.add")}</button>
+        <button className="primary" onClick={onAdd} data-tour="add">{t("toolbar.add")}</button>
         <button
+          data-tour="mix" // data-tour: what the guided tour points at (panels/Onboarding.tsx)
           onClick={() => mix(selected[0].id, selected[1].id)}
           disabled={!canMix}
           title={blockReason ?? (selected.length !== 2 ? t("toolbar.mixSelectTwo") : t("toolbar.mixTitle"))}
@@ -104,7 +105,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
               <option key={g.id} value={g.id}>🧪 {g.name}</option>
             ))}
           </select>
-          <button className="icon-btn" onClick={s.forkActive} title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
+          <button className="icon-btn" onClick={s.forkActive} data-tour="fork" title={t("toolbar.forkTitle")} aria-label={t("toolbar.fork")}>
             🧪+
           </button>
         </div>}
@@ -114,6 +115,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
           <button
             className={viewing ? "icon-btn" : ready ? "ai-button" : "ai-button ai-button--warn"}
             onClick={() => s.setSettingsOpen(true)}
+            data-tour="settings"
             // The button shows just the model; the tooltip adds the provider.
             title={`${ready && !viewing ? `${meta.label} · ${model}\n` : ""}${t("toolbar.settingsTitle")}`}
             aria-label={t("toolbar.settings")}
@@ -248,7 +250,7 @@ function FileMenu() {
 
   return (
     <div className="menu" ref={ref}>
-      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)}>{t("file.menu")}</button>
+      <button aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">{t("file.menu")}</button>
       {open && (
         <div className="menu__list" role="menu" aria-label={t("file.menuLabel")}>
           {items.map((it, i) => (

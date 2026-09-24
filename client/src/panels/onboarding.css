@@ -1,0 +1,37 @@
+/* First-run onboarding (Onboarding.tsx): the welcome card over the empty canvas, and the tour's popovers. */
+
+/* The card is laid over the canvas without blocking it: only the card itself takes clicks. */
+.main:has(> .welcome-layer) { position: relative; }
+.main:has(> .welcome-layer) .canvas__empty { display: none; }
+.welcome-layer {
+  position: absolute; inset: 0; display: grid; place-items: center; padding: 16px; pointer-events: none; z-index: 4;
+}
+.welcome {
+  pointer-events: auto; width: min(460px, 100%); background: var(--panel); color: var(--text);
+  border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 8px 28px var(--shadow);
+  padding: 20px; display: flex; flex-direction: column; gap: 12px;
+}
+.welcome h2 { margin: 0; font-size: 20px; color: var(--accent); }
+.welcome p { margin: 0; line-height: 1.5; }
+.welcome__choices { display: flex; flex-direction: column; gap: 8px; }
+.welcome__choices button { text-align: left; padding: 8px 12px; }
+.welcome__note button.link { display: inline; font-size: inherit; text-decoration: underline; }
+
+/* Tour popover: fixed, placed next to its anchor by placePopover (lib/onboarding.ts). Under dialogs and menus. */
+.tour {
+  position: fixed; z-index: 9; width: min(320px, calc(100vw - 16px)); background: var(--panel); color: var(--text);
+  border: 1px solid var(--accent); border-radius: 10px; box-shadow: 0 8px 28px var(--shadow);
+  padding: 12px 14px; display: flex; flex-direction: column; gap: 8px; font-size: 14px;
+}
+.tour:focus-visible { outline: none; }
+.tour h3 { margin: 2px 0 4px; font-size: 15px; }
+.tour p { margin: 0; line-height: 1.45; }
+.tour__actions { display: flex; align-items: center; justify-content: space-between; gap: 8px; flex-wrap: wrap; }
+.tour__nav { display: flex; gap: 6px; margin-left: auto; }
+.tour-ring {
+  position: fixed; z-index: 8; pointer-events: none; border: 2px solid var(--accent); border-radius: 8px;
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .tour-ring { transition: left 0.15s, top 0.15s, width 0.15s, height 0.15s; }
+}

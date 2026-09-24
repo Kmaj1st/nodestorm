@@ -3,6 +3,7 @@ import { Fragment, useEffect, useMemo } from "react";
 import { create } from "zustand";
 import { t as translate, useT } from "../i18n";
 import { comboLabel, currentIsMac, SHORTCUTS, type Combo } from "../lib/shortcuts";
+import { startTour } from "../store/onboardingStore";
 import { Modal } from "./Modal";
 
 /** Key names are shown as they are, except the words for mouse actions ("click", "drag"). */
@@ -66,6 +67,7 @@ function ShortcutsDialog({ onClose }: { onClose: () => void }) {
         </section>
       ))}
       <div className="form__actions">
+        <button onClick={() => { onClose(); startTour(); }}>{t("tour.showAgain")}</button>
         <button onClick={onClose}>{t("common.close")}</button>
       </div>
     </Modal>
