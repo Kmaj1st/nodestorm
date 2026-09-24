@@ -312,6 +312,8 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `importRepair.ts` | `repairImport(raw)`: accepts anything graph-like, fills defaults, drops dangling references, resets unknown enum values, and returns human-readable `fixes`. |
 | `share.ts` | `packGraph`, `encodeShare`/`decodeShare` (deflate + base64url in the URL hash), size limits. |
 | `export.ts` | `toMarkdown`, `toMermaid`, `exportFileName` (and its own `studyOrder`). PNG export is in `Toolbar.tsx`. |
+| `flashcards.ts` | `buildCards` (definition / prerequisite / relation cards in study order, or one learning path), `toAnki` (tab-separated with Anki's `#` header lines, HTML-escaped, `$…$` → `\(…\)` via `splitMath`), `toCsv` (RFC 4180). Used by `FlashcardsDialog`. |
+| `math.ts` | `splitMath`/`hasMath`: the LaTeX delimiter parser behind `MathText`, the Markdown export and `ankiMath` (see *Math* in section 8). |
 | `projects.ts` | Workspace operations, `cloneGraphs` (fresh ids with one shared map), `normalizeWorkspace`, `migrateWorkspace`. |
 | `history.ts` | `record`, `undo`, `redo`, `rebase`. |
 | `fuzzy.ts`, `examples.ts`, `shortcuts.ts`, `onboarding.ts` | Find (`searchNodes`), the offline Group theory example (`client/src/data/groupTheory.json`), the shortcut list for the `?` dialog, tour logic. |
@@ -403,8 +405,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
 - `client/src/panels/Inspector.tsx`: node view (dependency flow, install, rename, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
-- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Sense, Settings, Share, Shortcuts,
-  Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
+- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Flashcards, Sense, Settings, Share,
+  Shortcuts, Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
@@ -450,7 +452,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   sandbox, server mode, persistence, export, undo & editing, layout, ambiguous names, failures, dependency tools,
   theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
-  中文), quiz, versions, math (KaTeX on a card and in the inspector, both themes). The run is **pinned to English** (an init script sets `nodestorm-ui-language`) because the
+  中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes). The run is **pinned
+  to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
 - **PWA e2e** (`npm run e2e:pwa` → build + `e2e/pwa.mjs`): serves `client/dist` with `vite preview` (port

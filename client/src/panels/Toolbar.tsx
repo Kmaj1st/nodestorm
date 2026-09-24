@@ -8,7 +8,7 @@ import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
 import { isReady, useSettings } from "../store/settingsStore";
-import { ExtractDialog, ShareDialog, VersionsDialog } from "./lazy";
+import { ExtractDialog, FlashcardsDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, ViewMenu } from "./ViewMenu";
 
@@ -142,13 +142,19 @@ function download(name: string, content: Blob | string) {
 
 const text = (s: string, type: string) => new Blob([s], { type: `${type};charset=utf-8` });
 
+/** The concept open in the inspector, else the only selected one (as "Quiz me…" picks its learning path). */
+function selectedId() {
+  const s = useGraphStore.getState();
+  return s.inspect?.kind === "node" ? s.inspect.id : s.selection.length === 1 ? s.selection[0] : undefined;
+}
+
 /** A menu entry: `head` starts a labelled section of the menu. */
 type Item = { label: MessageKey; title: MessageKey; head?: MessageKey; action: () => void | Promise<void> };
 
 /**
  * "File ▾": import a project from JSON, or concepts from a text (Extract from text); save and restore versions of the
- * project (Versions); export the current project as JSON, or the active graph as Markdown notes, Mermaid or a PNG
- * image; and share the graph as a link. In the read-only viewer only export and share remain.
+ * project (Versions); export the current project as JSON, or the active graph as Markdown notes, Mermaid, a PNG
+ * image or flashcards; and share the graph as a link. In the read-only viewer only export and share remain.
  */
 function FileMenu() {
   const t = useT();
@@ -166,6 +172,8 @@ function FileMenu() {
   const projectName = view?.name ?? project.name;
   const [sharing, setSharing] = useState(false);
   const [extracting, setExtracting] = useState(false);
+  // "Flashcards (Anki)…" remembers the concept selected when it was opened, for its learning-path option.
+  const [flashcards, setFlashcards] = useState<{ rootId?: string } | null>(null);
   // "Versions…" opens the list; "Save snapshot…" the same dialog with its label field focused.
   const [versions, setVersions] = useState<"list" | "save" | null>(null);
 
@@ -255,6 +263,7 @@ function FileMenu() {
         download(`${base}.png`, url);
       },
     },
+    { label: "flash.menu", title: "flash.menuTitle", action: () => setFlashcards({ rootId: selectedId() }) },
     { head: "file.share", label: "file.share", title: "file.shareTitle", action: () => setSharing(true) },
   ];
 
@@ -282,6 +291,9 @@ function FileMenu() {
       />
       {extracting && !view && <ExtractDialog onClose={() => setExtracting(false)} />}
       {versions && !view && <VersionsDialog focusSave={versions === "save"} onClose={() => setVersions(null)} />}
+      {flashcards && (
+        <FlashcardsDialog graph={graph} project={projectName} rootId={flashcards.rootId} onClose={() => setFlashcards(null)} />
+      )}
       {sharing && (
         <ShareDialog
           graph={graph}
