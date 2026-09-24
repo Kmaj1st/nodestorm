@@ -19,6 +19,7 @@ const loaders = {
   shortcuts: () => import("./ShortcutsDialog"),
   quiz: () => import("./QuizDialog"),
   versions: () => import("./VersionsDialog"),
+  walkthrough: () => import("./WalkthroughDialog"),
 };
 
 /** Shown for the moment a dialog's chunk takes to load (normally from the cache). */
@@ -92,6 +93,7 @@ export const ShareDialog = lazyDialog(() => loaders.share().then((m) => m.ShareD
 export const ShortcutsDialog = lazyDialog(() => loaders.shortcuts().then((m) => m.ShortcutsDialog));
 export const QuizDialog = lazyDialog(() => loaders.quiz().then((m) => m.QuizDialog));
 export const VersionsDialog = lazyDialog(() => loaders.versions().then((m) => m.VersionsDialog));
+export const WalkthroughDialog = lazyDialog(() => loaders.walkthrough().then((m) => m.WalkthroughDialog));
 
 // Closing after a failed load leaves the concept "unclear"; its badge reopens the dialog.
 const SenseDialogLazy = lazyDialog(

@@ -8,6 +8,7 @@ import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
+import { useWalkthrough } from "../store/walkthroughStore";
 import { MathText } from "./MathText";
 
 /**
@@ -435,6 +436,10 @@ function LearningPath({ node, graph }: { node: ConceptNode; graph: Graph }) {
           {t("path.highlight")}
         </button>
       </div>
+      {/* Read-only, so it stays available in the share viewer (unlike the actions at the bottom). */}
+      <button className="small-btn path__walk" onClick={() => useWalkthrough.getState().openWalkthrough(node.id)} data-testid="walk-node">
+        {t("walk.fromNode")}
+      </button>
       <ol className="path" data-testid="learning-path">
         {steps.map((s) =>
           s.kind === "missing" ? (

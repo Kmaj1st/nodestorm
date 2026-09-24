@@ -7,6 +7,7 @@ import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useQuiz } from "../store/quizStore";
+import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ExtractDialog, FlashcardsDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
@@ -220,6 +221,8 @@ function FileMenu() {
           { label: "file.snapshot", title: "file.snapshotTitle", action: () => setVersions("save") },
           { label: "file.versions", title: "file.versionsTitle", action: () => setVersions("list") },
         ] satisfies Item[])),
+    // Read-only, so the share viewer has it too: presenting a shared graph is a main use.
+    { label: "file.walkthrough", title: "file.walkthroughTitle", action: () => useWalkthrough.getState().openWalkthrough() },
     {
       head: "file.exportHead",
       label: view ? "file.jsonGraph" : "file.jsonProject",

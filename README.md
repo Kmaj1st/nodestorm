@@ -81,6 +81,8 @@ no key needed) or an empty graph.
   unclear concepts are skipped and listed with the reason, and a summary ends the quiz. Grades are never undo steps.
   Mastery is kept in JSON exports and imports but left out of share links (it is your own progress, like notes and
   explanations); the share viewer has no quiz.
+- **Walkthrough** (**File ▾ → Walkthrough…**, or the inspector's **Walk through the learning path**): a full-screen,
+  read-only presentation, one concept per slide in study order (←/→, Space, Home/End); it works in the share viewer too.
 
 ### Organising
 

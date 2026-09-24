@@ -377,6 +377,7 @@ input.num { width: 64px; }
 .section-head h4 { margin: 8px 0 4px; }
 button.small-btn { font-size: 12px; padding: 2px 8px; }
 button.small-btn--on { background: var(--accent-soft); border-color: var(--accent); color: var(--accent); }
+button.path__walk { margin-bottom: 6px; }
 .popover-anchor { position: relative; }
 .popover {
   position: absolute; right: 0; top: calc(100% + 6px); z-index: 6; width: 260px; background: var(--panel);

@@ -818,7 +818,7 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…",
+        "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…", "Walkthrough…",
         "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File ▾ holds import, Extract from text, Quiz me, Versions, every export format and the share link",
@@ -1388,6 +1388,76 @@ try {
     await audit("math on a card and in the inspector (dark)");
     await setTheme("light");
     await audit("math on a card and in the inspector (light)");
+  }
+
+  console.log("Walkthrough");
+  {
+    // Still the offline demo in browser mode: Group ← Subgroup ← Normal Subgroup.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    for (const name of ["Group", "Subgroup", "Normal Subgroup"]) {
+      await addByName(name);
+      await waitBadge(name, "ready");
+    }
+    await node("Normal Subgroup").click();
+    const opener = page.getByTestId("walk-node");
+    await opener.click();
+    const walk = page.getByRole("dialog", { name: "Walkthrough: learning path of Normal Subgroup" });
+    await walk.waitFor();
+    const slideName = () => walk.getByTestId("walk-name").textContent();
+    assert(
+      (await slideName()) === "Group" && (await walk.getByTestId("walk-progress").textContent()) === "1 / 3",
+      "the inspector's walkthrough starts with the deepest prerequisite (1 / 3)",
+    );
+    await page.keyboard.press("ArrowRight");
+    assert((await slideName()) === "Subgroup", "→ advances to the next concept");
+    assert((await walk.getByRole("button", { name: "Group", exact: true }).count()) === 1, "…which lists what it builds on");
+    await page.keyboard.press("End");
+    assert((await slideName()) === "Normal Subgroup" && (await walk.getByTestId("walk-next").isDisabled()), "End jumps to the concept itself");
+    await walk.getByTestId("walk-prev").click();
+    assert((await slideName()) === "Subgroup", "the Previous button goes back");
+    await audit("walkthrough slide (light)");
+    await page.setViewportSize({ width: 390, height: 800 });
+    const [scrollW, clientW] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
+    assert(scrollW <= clientW && (await walk.getByTestId("walk-next").isVisible()), "the slide fits a 390px-wide phone");
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await page.keyboard.press("Escape");
+    await walk.waitFor({ state: "detached" });
+    assert(await opener.evaluate((el) => el === document.activeElement), "Escape closes it and focus returns to the button");
+
+    await setTheme("dark");
+    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("menuitem", { name: "Walkthrough…" }).click();
+    const whole = page.getByRole("dialog", { name: "Walkthrough" });
+    await whole.waitFor();
+    await audit("walkthrough slide (dark)");
+    assert((await whole.getByTestId("walk-progress").textContent()) === "1 / 3", "File ▾ Walkthrough… covers the whole graph");
+    await whole.getByTestId("walk-show").click();
+    await whole.waitFor({ state: "detached" });
+    const shown = await page
+      .waitForFunction(() => document.querySelector('[data-testid="node-panel"] [aria-label="Rename concept"]')?.value === "Group", null, { timeout: 3000 })
+      .then(() => true, () => false);
+    const shownName = await page.getByTestId("node-panel").getByLabel("Rename concept").inputValue().catch(() => "(no inspector)");
+    assert(shown, `Show on canvas closes it and selects the concept (${shownName})`);
+    await setTheme("light");
+
+    // Presenting a shared graph: the read-only viewer has the walkthrough too.
+    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("menuitem", { name: "Share link…" }).click();
+    const link = await page.getByTestId("share-link").inputValue();
+    await page.keyboard.press("Escape");
+    const viewer = await context.newPage();
+    viewer.on("pageerror", (e) => console.error("pageerror:", e.message));
+    await viewer.goto(link);
+    await viewer.getByTestId("viewer-banner").waitFor();
+    await viewer.getByTestId("node-Normal Subgroup").click();
+    await viewer.getByTestId("walk-node").click();
+    const shared = viewer.getByRole("dialog", { name: "Walkthrough: learning path of Normal Subgroup" });
+    await shared.waitFor();
+    await viewer.keyboard.press("Space");
+    assert((await shared.getByTestId("walk-name").textContent()) === "Subgroup", "the share viewer walks through a learning path too");
+    await viewer.close();
   }
 
   console.log("\nE2E passed");

@@ -9,6 +9,7 @@ import { Inspector } from "./panels/Inspector";
 import { AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
 import { OfflineBanner } from "./panels/OfflineBanner";
 import { QuizHost } from "./panels/QuizHost";
+import { WalkthroughHost } from "./panels/WalkthroughHost";
 import { Onboarding } from "./panels/Onboarding";
 import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
@@ -132,6 +133,7 @@ export function App() {
         {finding && <FindDialog onClose={() => setFinding(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
         <QuizHost />
+        <WalkthroughHost />
       </div>
     </ReactFlowProvider>
   );
