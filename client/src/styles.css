@@ -391,3 +391,6 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
   .modal--top { padding-top: 8vh; }
   .candidates li { flex-wrap: wrap; }
 }
+
+/* Informational notices (copied, imported, install summary) use the neutral status colours, not error red. */
+.toast--info { background: var(--status-bg); color: var(--status-text); }

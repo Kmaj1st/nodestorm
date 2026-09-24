@@ -162,7 +162,7 @@ export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, 
   }, graphId);
   store().setClarifying(null);
   store().setInspect({ kind: "node", id });
-  if (merged) store().setToast(`“${sense.name}” is already in the graph — linked to the existing concept.`);
+  if (merged) store().setToast(`“${sense.name}” is already in the graph — linked to the existing concept.`, "info");
   else void analyzeNode(id, graphId);
 }
 
@@ -179,7 +179,7 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
     return r.graph;
   }, graphId);
   if (existed) {
-    store().setToast(`"${input.name}" is already in the graph`);
+    store().setToast(`"${input.name}" is already in the graph`, "info");
   } else {
     void analyzeNode(id, graphId, hint);
   }
@@ -231,7 +231,7 @@ function placeDep(graphId: string, dependentId: string, depName: string, index?:
 export function installDep(dependentId: string, depName: string) {
   const graphId = store().activeId;
   const r = placeDep(graphId, dependentId, depName);
-  if (r.existed) store().setToast(`"${depName}" is already in the graph`);
+  if (r.existed) store().setToast(`"${depName}" is already in the graph`, "info");
   else {
     viewport.reveal(r.id);
     void analyzeNode(r.id, graphId, r.hint);
@@ -346,7 +346,7 @@ export async function installAllMissing(rootId: string, graphId = store().active
     cycle.forEach((c) => seen.add(c));
     report.cycles.push(cycleText(graphId, cycle));
   }
-  store().setToast(installSummary(root.name, report, maxDepth));
+  store().setToast(installSummary(root.name, report, maxDepth), report.failed.length ? "error" : "info");
   return report;
 }
 

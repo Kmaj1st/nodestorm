@@ -43,7 +43,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
     try {
       const { name, fixes } = s.importJson(await file.text());
       const repairs = fixes.length ? ` Repairs: ${fixes.join("; ")}.` : "";
-      s.setToast(`Imported as a new project “${name}”. Your other projects are unchanged.${repairs}`);
+      s.setToast(`Imported as a new project “${name}”. Your other projects are unchanged.${repairs}`, "info");
     } catch (e) {
       s.setToast(`Import failed: ${e instanceof Error ? e.message : e}`);
     }
@@ -204,7 +204,7 @@ function ExportMenu() {
         const src = toMermaid(graph);
         download(`${base}.mmd`, text(src, "text/plain"));
         const copied = await navigator.clipboard?.writeText(src).then(() => true, () => false);
-        setToast(copied ? "Mermaid diagram copied to the clipboard and downloaded." : "Mermaid diagram downloaded (clipboard not available).");
+        setToast(copied ? "Mermaid diagram copied to the clipboard and downloaded." : "Mermaid diagram downloaded (clipboard not available).", "info");
       },
     },
     {
@@ -213,7 +213,7 @@ function ExportMenu() {
       action: async () => {
         const nodes = getNodes();
         const viewportEl = document.querySelector<HTMLElement>(".react-flow__viewport");
-        if (!nodes.length || !viewportEl) return setToast("Nothing to capture yet: add a concept first.");
+        if (!nodes.length || !viewportEl) return setToast("Nothing to capture yet: add a concept first.", "info");
         // Render the full graph (not just what's on screen) at 1:1, as in React Flow's "download image" example.
         const bounds = getNodesBounds(nodes);
         const width = Math.min(4096, Math.ceil(bounds.width) + 160);

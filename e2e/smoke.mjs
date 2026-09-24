@@ -194,6 +194,7 @@ try {
   );
   const mmd = await exportAs("Mermaid diagram");
   assert(mmd.data.toString("utf8").startsWith("flowchart"), "Mermaid export is a flowchart");
+  assert((await page.locator(".toast").getAttribute("class")).includes("toast--info"), "confirmations use the neutral notice style, not error red");
   await page.locator(".toast").click(); // "copied/downloaded" notice
   const png = await exportAs("PNG image");
   writeFileSync(`${shots}8-export.png`, png.data);

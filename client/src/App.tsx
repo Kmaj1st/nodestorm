@@ -19,6 +19,7 @@ export function App() {
   const graph = useGraphStore(activeGraph);
   const selection = useGraphStore((s) => s.selection);
   const toast = useGraphStore((s) => s.toast);
+  const toastKind = useGraphStore((s) => s.toastKind);
   const setToast = useGraphStore((s) => s.setToast);
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
@@ -84,7 +85,11 @@ export function App() {
         </main>
         <StatusBar />
         {toast && (
-          <div className="toast" role="alert" onClick={() => setToast(null)}>
+          <div
+            className={`toast toast--${toastKind}`}
+            role={toastKind === "error" ? "alert" : "status"}
+            onClick={() => setToast(null)}
+          >
             <span>{toast}</span>
             <button className="toast__close" aria-label="Dismiss">✕</button>
           </div>

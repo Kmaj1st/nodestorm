@@ -24,6 +24,8 @@ interface State {
   inspect: Inspect;
   busy: Record<string, BusyTask>; // running AI tasks by key
   toast: string | null;
+  /** "info" for confirmations and summaries; "error" (default) for failures. */
+  toastKind: ToastKind;
   settingsOpen: boolean;
   /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
   clarifying: { graphId: string; nodeId: string } | null;
@@ -44,6 +46,8 @@ export interface MutateOptions {
   history?: "step" | "merge" | "background";
   key?: string;
 }
+
+export type ToastKind = "error" | "info";
 
 export interface BusyTask {
   label: string;
@@ -69,7 +73,7 @@ interface Actions {
   /** Mark the busy task that owns `signal` as queued or running. */
   setBusyState(signal: AbortSignal | undefined, state: "queued" | "running"): void;
   setHighlight(h: State["highlight"]): void;
-  setToast(msg: string | null): void;
+  setToast(msg: string | null, kind?: ToastKind): void;
   switchTo(graphId: string): void;
   newProject(name?: string): void;
   switchProject(projectId: string): void;
@@ -121,6 +125,7 @@ export const useGraphStore = create<GraphStore>()(
       inspect: null,
       busy: {},
       toast: null,
+      toastKind: "error",
       settingsOpen: false,
       clarifying: null,
       history: {},
@@ -167,7 +172,7 @@ export const useGraphStore = create<GraphStore>()(
         const startedAt = state === "running" ? Date.now() : task.startedAt;
         set({ busy: { ...get().busy, [key]: { ...task, state, startedAt } } });
       },
-      setToast: (toast) => set({ toast }),
+      setToast: (toast, toastKind = "error") => set({ toast, toastKind }),
       setHighlight: (highlight) => set({ highlight }),
       switchTo: (activeId) => set({ activeId, selection: [], inspect: null }),
 
