@@ -516,6 +516,30 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
   );
 }
 
+export const anatomyKey = (graphId: string, nodeId: string) => `anatomy:${graphId}:${nodeId}`;
+
+/**
+ * "Theorem anatomy": ask the AI to take a theorem-like concept apart (hypotheses and why each is needed, conclusion,
+ * proof idea, examples and non-examples). Like "Explain more", the answer is stored on the node as a background change
+ * (not an undo step); cancelling it from the status bar leaves the node as it was.
+ */
+export async function anatomyNode(nodeId: string, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const res = await withBusy(anatomyKey(graphId, nodeId), t("task.anatomy", { name: node.name }), (signal) =>
+    api.anatomy({ node: { ...toBrief(node), kind: node.kind }, prerequisites }, signal),
+  );
+  if (!res) return;
+  store().mutate(
+    (g) => ops.updateNode(g, nodeId, { anatomy: { ...res, createdAt: Date.now() } }),
+    graphId,
+    { history: "background" },
+  );
+}
+
 export const quizKey = (graphId: string) => `quiz:${graphId}`;
 
 /** "Quiz me": one question about a concept, given its prerequisites in the graph (see panels/QuizDialog.tsx). */

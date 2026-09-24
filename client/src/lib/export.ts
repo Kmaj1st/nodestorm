@@ -1,4 +1,4 @@
-import type { ConceptNode, Graph, NodeExplanation, SourceRef } from "@nodestorm/shared";
+import type { ConceptNode, Graph, NodeAnatomy, NodeExplanation, SourceRef } from "@nodestorm/shared";
 import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
 
@@ -77,6 +77,7 @@ export function toMarkdown(g: Graph): string {
       lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
     if (n.source) lines.push(`*Source:* ${mdEscape(sourceLabel(n.source))}`, "");
+    if (n.anatomy) lines.push(...anatomyMd(n.anatomy));
     if (n.explanation) lines.push(...explanationMd(n.explanation));
     if (n.notes?.trim()) {
       // The user's notes are Markdown-ish already: keep them as written, quoted so their headings stay inside.
@@ -97,6 +98,25 @@ export function toMarkdown(g: Graph): string {
     lines.push("");
   }
   return lines.join("\n");
+}
+
+/** A stored "Theorem anatomy" as a sub-section of its concept. */
+function anatomyMd(an: NodeAnatomy): string[] {
+  const out = ["#### Anatomy", ""];
+  if (an.hypotheses.length) {
+    out.push("**Hypotheses:**", "");
+    an.hypotheses.forEach((h, i) => {
+      out.push(`${i + 1}. ${mdEscape(h.text)}`);
+      if (h.whyNeeded.trim()) out.push(`   *Why needed:* ${mdEscape(h.whyNeeded)}`);
+      if (h.counterexampleIfDropped.trim()) out.push(`   *Without it:* ${mdEscape(h.counterexampleIfDropped)}`);
+    });
+    out.push("");
+  }
+  out.push(`**Conclusion:** ${mdEscape(an.conclusion)}`, "");
+  if (an.proofIdea.trim()) out.push(`**Proof idea:** ${mdEscape(an.proofIdea)}`, "");
+  if (an.examples.length) out.push("**Examples:**", "", ...an.examples.map((x) => `- ${mdEscape(x)}`), "");
+  if (an.nonExamples.length) out.push("**Non-examples:**", "", ...an.nonExamples.map((x) => `- ${mdEscape(x)}`), "");
+  return out;
 }
 
 /** A stored "Explain more" answer as a sub-section of its concept. */

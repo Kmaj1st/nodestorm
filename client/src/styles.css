@@ -630,6 +630,11 @@ textarea.title-input { resize: none; field-sizing: content; min-height: 0; line-
 .explain__summary { font-weight: 500; }
 .explain__list { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 3px; }
 .explain .form__actions { margin-top: var(--space-2); }
+/* Theorem anatomy: numbered hypotheses, each with why it is needed and what fails without it. */
+.anatomy__hyps { margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: var(--space-2); }
+.anatomy__hyps li::marker { color: var(--muted); font-variant-numeric: tabular-nums; }
+.anatomy__hyps .small { color: var(--muted); margin-top: 2px; }
+.anatomy__label { font-weight: 600; color: var(--text); }
 
 /* Install-all popover, learning path */
 .popover-anchor { position: relative; }
