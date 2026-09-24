@@ -4,6 +4,7 @@ import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
+import { MasteryDot } from "./MasteryDot";
 
 export type ConceptFlowNode = Node<{ concept: CN; inCycle?: boolean }, "concept">;
 
@@ -39,7 +40,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       <Handle type="target" position={Position.Top} className="concept__handle" isConnectable={false} />
       <Handle type="source" position={Position.Bottom} className="concept__handle" isConnectable={false} />
       <div className="concept__head">
-        <span className="concept__name">{c.name}</span>
+        <span className="concept__name">{c.name}{c.mastery && <MasteryDot mastery={c.mastery} name={c.name} />}</span>
         {action ? (
           <button
             className={`concept__badge concept__badge--${c.status} nodrag`}

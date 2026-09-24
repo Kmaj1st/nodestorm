@@ -1,0 +1,35 @@
+/* "Quiz me" dialog (panels/QuizDialog.tsx) */
+.quiz { width: min(600px, calc(100vw - 32px)); }
+.quiz__card, .quiz__summary { display: flex; flex-direction: column; gap: 10px; }
+.quiz__progress { display: flex; justify-content: space-between; gap: 8px; }
+.quiz__tag { font-size: 11px; background: var(--accent-soft); color: var(--accent); border-radius: 4px; padding: 1px 6px; }
+.quiz__concept { margin: 0; color: var(--accent); }
+.quiz__question { font-size: 16px; line-height: 1.45; white-space: pre-wrap; border-radius: 6px; }
+.quiz__question:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.quiz__choices { border: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 6px; }
+.quiz__choices legend { padding: 0; margin-bottom: 4px; }
+.quiz__choice { text-align: left; padding: 8px 10px; }
+.quiz__choice:disabled { opacity: 1; cursor: default; }
+.quiz__choice--right { border-color: var(--ok); background: var(--ok-soft); color: var(--text); }
+.quiz__choice--wrong { border-color: var(--error-text); background: var(--error-soft); color: var(--text); }
+.quiz__hints { margin: 0; padding-left: 20px; font-size: 13px; color: var(--muted); display: flex; flex-direction: column; gap: 2px; }
+.quiz__row { display: flex; gap: 8px; flex-wrap: wrap; }
+.quiz__answer {
+  border-left: 3px solid var(--accent); background: var(--accent-soft); color: var(--text);
+  padding: 8px 10px; border-radius: 0 6px 6px 0; white-space: pre-wrap;
+}
+.quiz__grades { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.quiz__gradeBtn--knew { border-color: var(--ok); }
+.quiz__gradeBtn--partly { border-color: var(--checking); }
+.quiz__gradeBtn--didnt { border-color: var(--error-text); }
+.quiz__footer { justify-content: space-between; border-top: 1px solid var(--border); padding-top: 10px; }
+.quiz__summary h4 { margin: 0; }
+.quiz__counts { list-style: none; margin: 0; padding: 0; display: flex; gap: 8px 16px; flex-wrap: wrap; }
+.quiz__count strong { font-size: 18px; }
+.quiz__results { margin: 0; padding-left: 20px; font-size: 14px; display: flex; flex-direction: column; gap: 2px; }
+.quiz__grade { font-size: 11px; border-radius: 4px; padding: 1px 5px; background: var(--accent-soft); color: var(--text); }
+.quiz__grade--knew { background: var(--ok-soft); color: var(--ok); }
+.quiz__grade--partly { background: var(--checking-soft); color: var(--checking); }
+.quiz__grade--didnt { background: var(--error-badge); color: var(--error-text); }
+.quiz__skipped ul { margin: 4px 0 0; padding-left: 20px; color: var(--muted); }
+.quiz__skipped p { margin: 0; }

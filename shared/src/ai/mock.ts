@@ -148,6 +148,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")));
       case "extract":
         return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? []));
+      case "quiz":
+        return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
       default:
         return "{}";
     }
@@ -238,6 +240,47 @@ export class MockProvider implements Provider {
       pitfalls: [],
       furtherReading: [{ title: `An introductory text on ${node.name}`, hint: "Look for its definition and a first example." }],
     };
+  }
+
+  /**
+   * A question built from the concept's definition (or KB entry), its KB dependency reasons and examples. Multiple
+   * choice takes three other KB definitions as the wrong options; the right one's position depends on the name only.
+   */
+  private quiz(node: { name: string; definition?: string }, prereqs: { name: string }[], style: string, choice: boolean) {
+    const entry = kbGet(node.name);
+    const name = node.name;
+    const definition = node.definition?.trim() || entry?.definition || `${name}, as described in your graph.`;
+    const pre = prereqs[0];
+    let question: string;
+    let answer: string;
+    let hints: string[];
+    if (style === "connect" && pre) {
+      const dep = entry?.deps.find((d) => normalizeName(d.name) === normalizeName(pre.name));
+      question = `How does ${name} build on ${pre.name}?`;
+      answer = dep?.reason ?? `${name} relies on ${pre.name}: ${definition}`;
+      hints = [`Recall what ${pre.name} is.`, `Look for ${pre.name} in the definition of ${name}.`];
+    } else if (style === "apply") {
+      const ex = entry && EXPLAIN[entry.key]?.examples[0];
+      question = `Give a concrete example of ${name} and check it against the definition.`;
+      answer = ex ? `${ex.title}: ${ex.body}` : `Anything that satisfies the definition: ${definition}`;
+      hints = [`Start from the definition of ${name}.`, ...(pre ? [`Build it from an example of ${pre.name}.`] : [])];
+    } else {
+      question = choice ? `Which statement defines ${name}?` : `What is ${name}?`;
+      answer = definition;
+      hints = [
+        pre ? `It builds on ${pre.name}.` : "It is one of the basic notions of its field.",
+        `It starts with “${definition.split(/\s+/).slice(0, 3).join(" ")}…”`,
+      ];
+    }
+    if (!choice) return { question, answer, hints };
+    const wrong = Object.entries(KB)
+      .filter(([k, v]) => k !== entry?.key && normalizeName(v.definition) !== normalizeName(answer))
+      .map(([, v]) => v.definition)
+      .slice(0, 3);
+    const correctIndex = name.length % 4;
+    const choices = [...wrong];
+    choices.splice(correctIndex, 0, answer);
+    return { question, answer, hints, choices, correctIndex };
   }
 
   /**

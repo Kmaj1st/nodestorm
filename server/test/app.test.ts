@@ -127,3 +127,30 @@ describe("server: extract", () => {
     expect(JSON.stringify(await res.json())).toMatch(/too long/);
   });
 });
+
+describe("server: quiz", () => {
+  const registry = { get: () => new MockProvider(), info: () => ({ default: "mock", providers: [] }) } as unknown as Registry;
+  let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let base = "";
+  beforeAll(async () => {
+    server = createApp(registry).listen(0);
+    await new Promise((r) => server.once("listening", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => server.close());
+  const quiz = (body: unknown) =>
+    fetch(`${base}/api/quiz`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+
+  it("is exposed through the tasks map", async () => {
+    const res = await quiz({ node: { name: "Isomorphism" }, prerequisites: [{ name: "Homomorphism" }], style: "connect", multipleChoice: true });
+    expect(res.status).toBe(200);
+    const data = await res.json();
+    expect(data.question).toContain("Homomorphism");
+    expect(data.choices).toHaveLength(4);
+    expect(data.choices[data.correctIndex]).toBe(data.answer);
+  });
+
+  it("rejects an unknown question style with a 400", async () => {
+    expect((await quiz({ node: { name: "Group" }, style: "trick" })).status).toBe(400);
+  });
+});

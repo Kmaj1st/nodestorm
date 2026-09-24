@@ -34,6 +34,7 @@ const inputs: Partial<Record<TaskName, unknown>> = {
     text: "A homomorphism between groups preserves the operation. Its kernel is a normal subgroup, and the first isomorphism theorem says G/ker φ is isomorphic to the image.",
     existing: [hom],
   },
+  quiz: { node: thm, prerequisites: [hom], style: "connect", multipleChoice: true },
 };
 
 console.log(`Provider: ${provider.label} · model ${provider.model}${language ? ` · language ${language}` : ""}\n`);

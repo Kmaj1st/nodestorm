@@ -6,6 +6,7 @@ import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
+import { useQuiz } from "../store/quizStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ExtractDialog, ShareDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
@@ -200,6 +201,7 @@ function FileMenu() {
       : ([
           { label: "file.import", title: "file.importTitle", action: () => fileRef.current?.click() },
           { label: "file.extract", title: "file.extractTitle", action: () => setExtracting(true) },
+          { label: "file.quiz", title: "file.quizTitle", action: () => useQuiz.getState().openQuiz() },
         ] satisfies Item[])),
     {
       head: "file.exportHead",

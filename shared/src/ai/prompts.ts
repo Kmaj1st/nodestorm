@@ -7,11 +7,13 @@ import type {
   ExtractRequest,
   NameRequest,
   NodeBrief,
+  QuizRequest,
+  QuizStyle,
   RelateRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract";
+export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz";
 
 const BASE = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -45,7 +47,7 @@ export function languageInstruction(language: string | undefined): string {
   if (!lang) return "";
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
-  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints) in ${target}.
+  return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices) in ${target}.
 Keep the JSON keys, the "role" values and the kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
@@ -176,6 +178,39 @@ Schema: {"concepts":[{"name":string,"definition":string,"aliases":string[],"quot
     input(
       req,
       `${contextBlock(req.existing)}${req.focus ? `\n\nFocus: ${req.focus}` : ""}\n\nExtract from the "text" field of the INPUT below.`,
+    ),
+  ];
+}
+
+const QUIZ_GUIDE: Record<QuizStyle, string> = {
+  recall: "Ask the learner to recall what the concept is: its definition, statement or defining property.",
+  apply:
+    "Ask the learner to apply the concept to a small concrete case (decide, compute or give an instance), answerable in a few lines.",
+  connect:
+    "Ask how the concept relates to ONE of its prerequisites (name it in the question): how it builds on it, uses it or produces it.",
+};
+
+export function quizPrompt(req: QuizRequest): ChatMessage[] {
+  const prereqs = req.prerequisites.length
+    ? `Its prerequisites (the learner has studied these):\n${req.prerequisites.map(brief).join("\n")}`
+    : "It has no prerequisites in the graph.";
+  // Without prerequisites there is nothing to connect to; ask a recall question instead.
+  const style = req.style === "connect" && !req.prerequisites.length ? "recall" : req.style;
+  const format = req.multipleChoice
+    ? `Make it multiple choice: "choices" = exactly 4 short options, one correct and three plausible but wrong ones (typical misconceptions), in random order; "correctIndex" = the index (0-3) of the correct one. The question must not give the answer away.`
+    : `It is a free-recall question: leave out "choices" and "correctIndex".`;
+  return [
+    sys(
+      "quiz",
+      `Write one study question about a concept, to check whether the learner really knows it. ${QUIZ_GUIDE[style]}
+Base it on the concept's definition and the learner's notes; standard facts of the field are fine, obscure details are not.
+${format}
+"answer": the model answer in 1-3 sentences (for multiple choice: the correct option and why). "hints": 1-3 hints, from gentle to strong, none of which gives the answer away.
+Schema: {"question":string,"answer":string,"hints":string[],"choices":string[],"correctIndex":number}`,
+    ),
+    input(
+      req,
+      [`Concept:\n${brief(req.node)}${req.node.notes ? `\nLearner's notes: ${req.node.notes}` : ""}`, prereqs, `Style: ${style}`].join("\n\n"),
     ),
   ];
 }

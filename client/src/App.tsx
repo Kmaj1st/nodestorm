@@ -8,6 +8,7 @@ import { Inspector } from "./panels/Inspector";
 // Dialogs load on demand (their own chunks), see panels/lazy.tsx.
 import { AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
 import { OfflineBanner } from "./panels/OfflineBanner";
+import { QuizHost } from "./panels/QuizHost";
 import { Onboarding } from "./panels/Onboarding";
 import { ShortcutsHelp } from "./panels/ShortcutsHelp";
 import { StatusBar } from "./panels/StatusBar";
@@ -127,6 +128,7 @@ export function App() {
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
         {finding && <FindDialog onClose={() => setFinding(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
+        <QuizHost />
       </div>
     </ReactFlowProvider>
   );
