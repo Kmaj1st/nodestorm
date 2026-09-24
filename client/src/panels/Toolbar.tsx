@@ -9,6 +9,7 @@ import { useTheme, type ThemePref } from "../lib/theme";
 import { activeGraph, canRedo, canUndo, currentProject, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ProjectMenu } from "./ProjectMenu";
+import { FocusButton, ViewMenu } from "./ViewMenu";
 
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
   const s = useGraphStore();
@@ -80,6 +81,8 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         <button onClick={onFind} disabled={!graph.nodes.length} title="Find a concept (Ctrl+K)" aria-label="Find concept">
           🔍
         </button>
+        <FocusButton />
+        <ViewMenu />
       </div>
 
       <button

@@ -346,6 +346,18 @@ button.small-btn--on { background: var(--accent-soft); border-color: var(--accen
 .react-flow__edge.path-on .relation { stroke: var(--accent); stroke-width: 3; }
 .react-flow__edge.path-on .arrow__head { fill: var(--accent); }
 
+/* Focus mode control (floats over the canvas) and the View popover */
+.focus-bar {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%); z-index: 5; display: flex; gap: 8px;
+  align-items: center; padding: 4px 6px 4px 12px; background: var(--panel); border: 1px solid var(--accent);
+  border-radius: 8px; box-shadow: 0 4px 14px var(--shadow); font-size: 13px; max-width: calc(100% - 24px);
+}
+.focus-bar__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.focus-bar select { padding: 2px 4px; }
+.focus-bar__close { padding: 2px 8px; }
+.view-menu { min-width: 240px; padding: 8px 10px; gap: 6px; }
+.view-menu__head { font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+
 /* React Flow: match its canvas, controls and minimap to our tokens (colorMode handles the rest). */
 .react-flow {
   --xy-background-color: var(--bg);

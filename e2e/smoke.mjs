@@ -536,6 +536,75 @@ try {
   assert(JSON.stringify(left) === JSON.stringify(["✓ Algebra notes"]), "deleting the example project leaves only the first one, now current");
   await page.keyboard.press("Escape");
 
+  console.log("Focus & filters");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  await projectMenu("New project");
+  await page.getByLabel("Project name").press("Enter");
+  await page.getByRole("button", { name: "Load example: Group theory" }).click();
+  // Group theory: 7 concepts, 9 dependency links + 2 mixed relations; only First Isomorphism Theorem isn't ready.
+  const waitCounts = (want) => page.waitForFunction((w) =>
+    [".react-flow__node", ".react-flow__edge"].map((s) => document.querySelectorAll(s).length).join("/") === w, want, { timeout: 5000 });
+  await waitCounts("7/11");
+  const focusButton = page.getByRole("button", { name: "Focus", exact: true });
+  assert(await focusButton.isDisabled(), "Focus needs a selected concept");
+  await node("Kernel").click();
+  await page.keyboard.press("f");
+  await page.getByTestId("focus-bar").waitFor();
+  await waitCounts("4/4");
+  assert((await node("Group").count()) === 0 && (await node("Normal subgroup").isVisible()),
+    "F focuses on Kernel: 1 hop shows its neighbours (via any relation) and hides a far concept (Group)");
+  await page.screenshot({ path: `${shots}11-focus.png` });
+  await node("Homomorphism").click();
+  await page.waitForFunction(() => document.querySelector(".focus-bar")?.textContent.includes("Homomorphism"));
+  await node("Group").waitFor();
+  assert((await node("Normal subgroup").count()) === 0, "selecting another concept re-centres the focus on it");
+  await page.getByLabel("Focus radius").selectOption("2");
+  await waitCounts("7/11");
+  assert(await node("Normal subgroup").isVisible(), "2 hops from Homomorphism reach the whole example");
+  await page.getByLabel("Focus radius").selectOption("1");
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Escape");
+  await waitCounts("7/11");
+  assert((await page.getByTestId("focus-bar").count()) === 0, "Esc leaves focus mode and shows everything again");
+  await node("Kernel").click();
+  await focusButton.click();
+  await waitCounts("4/4");
+  await page.getByRole("button", { name: "Leave focus mode" }).click();
+  await waitCounts("7/11");
+  assert(true, "the toolbar button and the ✕ of the focus control do the same");
+
+  const viewMenu = async () => {
+    if (!(await page.getByRole("dialog", { name: "View" }).isVisible())) await page.getByRole("button", { name: /^View/ }).click();
+    return page.getByRole("dialog", { name: "View" });
+  };
+  await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).uncheck();
+  await waitCounts("7/2");
+  assert((await page.locator(".relation--dependency").count()) === 0, "the View filter hides dependency links (concepts stay)");
+  assert((await page.getByRole("button", { name: /^View/ }).textContent()).includes("•"), "the View button shows that a filter is on");
+  await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).check();
+  await page.keyboard.press("Escape"); // the popover would cover Group
+  // Group is selected and ready: the to-do view hides it, and then Delete must not remove it.
+  await node("Group").click();
+  await (await viewMenu()).getByRole("checkbox", { name: /To-do only/ }).check();
+  await waitCounts("1/0");
+  assert(await node("First Isomorphism Theorem").isVisible(), "the to-do view shows only the concept that isn't ready");
+  await page.keyboard.press("Escape"); // closes the popover
+  // Nothing has focus now, so Delete reaches the app's handler (as on the canvas).
+  const deleteReachesApp = await page.evaluate(() => document.activeElement === document.body);
+  await page.keyboard.press("Delete");
+  await (await viewMenu()).getByRole("checkbox", { name: /To-do only/ }).uncheck();
+  await waitCounts("7/11");
+  assert(deleteReachesApp, "Delete doesn't remove a selected concept the to-do view hid");
+  await (await viewMenu()).getByRole("checkbox", { name: "Relation labels" }).uncheck();
+  await page.keyboard.press("Escape");
+  await page.reload();
+  await waitCounts("7/11");
+  assert((await page.locator(".edge-label").count()) === 0 && !(await (await viewMenu()).getByRole("checkbox", { name: "Relation labels" }).isChecked()),
+    "view preferences survive a reload");
+  await (await viewMenu()).getByRole("checkbox", { name: "Relation labels" }).check();
+  await page.keyboard.press("Escape");
+  await page.locator(".edge-label").first().waitFor();
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);
