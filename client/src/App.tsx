@@ -80,10 +80,15 @@ export function App() {
         )}
         <main className="main">
           <GraphCanvas />
-          <Inspector />
+          <InspectorSheet />
         </main>
         <StatusBar />
-        {toast && <div className="toast" onClick={() => setToast(null)}>{toast}</div>}
+        {toast && (
+          <div className="toast" role="alert" onClick={() => setToast(null)}>
+            <span>{toast}</span>
+            <button className="toast__close" aria-label="Dismiss">✕</button>
+          </div>
+        )}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
         <SenseDialog />
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
@@ -91,5 +96,29 @@ export function App() {
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
       </div>
     </ReactFlowProvider>
+  );
+}
+
+const SMALL_SCREEN = "(max-width: 800px)";
+
+/**
+ * The inspector. On small screens (see styles.css) it is a bottom sheet under the canvas that can be
+ * collapsed; it starts collapsed there and opens whenever something is selected.
+ */
+function InspectorSheet() {
+  const inspect = useGraphStore((s) => s.inspect);
+  const [open, setOpen] = useState(() => !window.matchMedia?.(SMALL_SCREEN).matches);
+  useEffect(() => {
+    if (inspect) setOpen(true);
+  }, [inspect]);
+  return (
+    <div className={`sheet${open ? "" : " sheet--closed"}`}>
+      <button className="sheet__toggle" aria-expanded={open} aria-controls="inspector-sheet" onClick={() => setOpen(!open)}>
+        {open ? "▾ Hide details" : "▴ Show details"}
+      </button>
+      <div className="sheet__content" id="inspector-sheet">
+        <Inspector />
+      </div>
+    </div>
   );
 }

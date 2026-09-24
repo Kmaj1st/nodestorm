@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings, type Connection } from "../store/settingsStore";
+import { Modal } from "./Modal";
 
 type ModelsState =
   | { status: "idle" }
@@ -88,196 +89,194 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     models.status !== "ok" ? [] : modelKnown ? models.models : models.models.filter((m) => `${m.id} ${m.label ?? ""}`.toLowerCase().includes(q));
 
   return (
-    <div className="modal" onClick={onClose}>
-      <div className="modal__body settings" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Settings">
-        <h3>AI settings</h3>
+    <Modal label="Settings" onClose={onClose} className="settings">
+      <h3>AI settings</h3>
 
-        <fieldset className="choice">
-          <legend>Connection</legend>
-          <label>
-            <input type="radio" checked={connection === "browser"} onChange={() => setConnection("browser")} />
-            <span>
-              <b>Directly from this browser</b>
-              <span className="muted small">Paste your own API key. No server needed.</span>
-            </span>
-          </label>
-          <label>
-            <input type="radio" checked={connection === "server"} onChange={() => setConnection("server")} />
-            <span>
-              <b>Through the local NodeStorm server</b>
-              <span className="muted small">Keys stay in <code>server/.env</code>; run <code>npm run dev</code>.</span>
-            </span>
-          </label>
-        </fieldset>
-
-        <label className="field">
-          Provider
-          <select value={provider} onChange={(e) => setProvider(e.target.value as ProviderKind)} aria-label="Provider">
-            {PROVIDERS.map((p) => {
-              const s = server && "providers" in server ? server.providers.find((x) => x.id === p.kind) : undefined;
-              const off = connection === "server" && s !== undefined && !s.configured;
-              return (
-                <option key={p.kind} value={p.kind}>
-                  {p.label}{off ? " (no key on server)" : ""}
-                </option>
-              );
-            })}
-          </select>
-        </label>
-
-        {connection === "server" && server && "error" in server && <p className="error small">{server.error}</p>}
-        {connection === "server" && serverInfo && !serverInfo.configured && (
-          <p className="error small">The server has no key for {meta.label}. Add it to server/.env and restart, or use browser mode.</p>
-        )}
-
-        {connection === "browser" && meta.needsKey && (
-          <>
-            <label className="field">
-              <span>
-                API key
-                {meta.keyUrl && (
-                  <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">get one</a></>
-                )}
-              </span>
-              <div className="row">
-                <input
-                  type={showKey ? "text" : "password"}
-                  value={cfg.apiKey ?? ""}
-                  onChange={(e) => setCfg({ apiKey: e.target.value.trim() || undefined })}
-                  placeholder="sk-…"
-                  autoComplete="off"
-                  spellCheck={false}
-                  aria-label="API key"
-                />
-                <button type="button" onClick={() => setShowKey(!showKey)}>{showKey ? "Hide" : "Show"}</button>
-              </div>
-            </label>
-            {meta.defaultBaseURL && (
-              <label className="field">
-                Base URL
-                <input
-                  value={cfg.baseURL ?? ""}
-                  onChange={(e) => setCfg({ baseURL: e.target.value.trim() || undefined })}
-                  placeholder={meta.defaultBaseURL}
-                  aria-label="Base URL"
-                />
-              </label>
-            )}
-            {provider === "anthropic" && (
-              <label className="check">
-                <input type="checkbox" checked={Boolean(cfg.webSearch)} onChange={(e) => setCfg({ webSearch: e.target.checked })} />
-                Let Claude search the web when naming and relating concepts
-              </label>
-            )}
-          </>
-        )}
-
-        <label className="field">
+      <fieldset className="choice">
+        <legend>Connection</legend>
+        <label>
+          <input type="radio" checked={connection === "browser"} onChange={() => setConnection("browser")} />
           <span>
-            Model
-            {models.status === "ok" && <span className="muted"> · {models.models.length} available</span>}
+            <b>Directly from this browser</b>
+            <span className="muted small">Paste your own API key. No server needed.</span>
           </span>
-          <div className="row">
-            <input
-              list="model-options"
-              value={model}
-              onChange={(e) => setModel(e.target.value.trim())}
-              placeholder={`${defaultModel} (default)`}
-              aria-label="Model"
-              spellCheck={false}
-            />
-            <button type="button" onClick={discover} disabled={!canDiscover || models.status === "loading"}>
-              {models.status === "loading" ? "Loading…" : "Refresh"}
-            </button>
-          </div>
-          <datalist id="model-options">
-            {models.status === "ok" && models.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
-          </datalist>
-          {models.status === "error" && <span className="error small" data-testid="models-error">{models.message}</span>}
-          {models.status === "ok" && <span className="ok small" data-testid="models-ok">✓ Connected — type to filter, or pick from the list.</span>}
-          {!modelKnown && shown.length === 0 && <span className="warn small">This model isn't in the provider's list; check the spelling.</span>}
-          {!canDiscover && connection === "browser" && <span className="muted small">Enter a key to load the model list.</span>}
         </label>
+        <label>
+          <input type="radio" checked={connection === "server"} onChange={() => setConnection("server")} />
+          <span>
+            <b>Through the local NodeStorm server</b>
+            <span className="muted small">Keys stay in <code>server/.env</code>; run <code>npm run dev</code>.</span>
+          </span>
+        </label>
+      </fieldset>
 
-        {shown.length > 0 && (
-          <ul className="model-list" aria-label="Available models">
-            {shown.map((m) => (
-              <li key={m.id}>
-                <button type="button" className={m.id === (model || defaultModel) ? "model model--on" : "model"} onClick={() => setModel(m.id)}>
-                  {m.label && m.label !== m.id ? <><b>{m.label}</b> <span className="muted">{m.id}</span></> : m.id}
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
+      <label className="field">
+        Provider
+        <select value={provider} onChange={(e) => setProvider(e.target.value as ProviderKind)} aria-label="Provider">
+          {PROVIDERS.map((p) => {
+            const s = server && "providers" in server ? server.providers.find((x) => x.id === p.kind) : undefined;
+            const off = connection === "server" && s !== undefined && !s.configured;
+            return (
+              <option key={p.kind} value={p.kind}>
+                {p.label}{off ? " (no key on server)" : ""}
+              </option>
+            );
+          })}
+        </select>
+      </label>
 
-        {provider !== "mock" && (
+      {connection === "server" && server && "error" in server && <p className="error small">{server.error}</p>}
+      {connection === "server" && serverInfo && !serverInfo.configured && (
+        <p className="error small">The server has no key for {meta.label}. Add it to server/.env and restart, or use browser mode.</p>
+      )}
+
+      {connection === "browser" && meta.needsKey && (
+        <>
           <label className="field">
-            Request timeout (seconds)
-            <input
-              type="number"
-              min={10}
-              max={600}
-              value={Math.round((cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}
-              onChange={(e) => {
-                const secs = Math.min(600, Math.max(10, Number(e.target.value) || DEFAULT_TIMEOUT_MS / 1000));
-                setCfg({ timeoutMs: secs * 1000 });
-              }}
-              aria-label="Request timeout (seconds)"
-            />
-            <span className="muted small">If the AI hasn't answered by then, the request fails with an error you can retry.</span>
+            <span>
+              API key
+              {meta.keyUrl && (
+                <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">get one</a></>
+              )}
+            </span>
+            <div className="row">
+              <input
+                type={showKey ? "text" : "password"}
+                value={cfg.apiKey ?? ""}
+                onChange={(e) => setCfg({ apiKey: e.target.value.trim() || undefined })}
+                placeholder="sk-…"
+                autoComplete="off"
+                spellCheck={false}
+                aria-label="API key"
+              />
+              <button type="button" onClick={() => setShowKey(!showKey)}>{showKey ? "Hide" : "Show"}</button>
+            </div>
           </label>
-        )}
-
-        <fieldset className="choice">
-          <legend>Ambiguous names</legend>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={clarify.enabled}
-              onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
-            />
-            Ask what I mean when a name has several meanings
-          </label>
-          <label className="check">
-            Offer
-            <input
-              type="number"
-              min={2}
-              max={10}
-              value={clarify.options}
-              disabled={!clarify.enabled}
-              onChange={(e) => setClarify({ ...clarify, options: Math.min(10, Math.max(2, Number(e.target.value) || 3)) })}
-              aria-label="Number of meanings to offer"
-              className="num"
-            />
-            meanings (plus “something else”)
-          </label>
-        </fieldset>
-
-        {connection === "browser" && meta.needsKey && (
-          <div className="keynote">
-            <label className="check">
-              <input type="checkbox" checked={rememberKeys} onChange={(e) => setRememberKeys(e.target.checked)} />
-              Remember keys on this device
+          {meta.defaultBaseURL && (
+            <label className="field">
+              Base URL
+              <input
+                value={cfg.baseURL ?? ""}
+                onChange={(e) => setCfg({ baseURL: e.target.value.trim() || undefined })}
+                placeholder={meta.defaultBaseURL}
+                aria-label="Base URL"
+              />
             </label>
-            <p className="muted small">
-              Your key is only sent to {meta.label}. {rememberKeys
-                ? "It's kept in this browser's local storage until you remove it — only do this on your own device."
-                : "It's kept for this tab only and forgotten when you close it."}{" "}
-              Use a separate key with a spending limit, which you can revoke any time.
-            </p>
-            <button type="button" className="link small" onClick={() => { saved.forgetKeys(); setConfigs(useSettings.getState().configs); }}>
-              Forget all saved keys
-            </button>
-          </div>
-        )}
+          )}
+          {provider === "anthropic" && (
+            <label className="check">
+              <input type="checkbox" checked={Boolean(cfg.webSearch)} onChange={(e) => setCfg({ webSearch: e.target.checked })} />
+              Let Claude search the web when naming and relating concepts
+            </label>
+          )}
+        </>
+      )}
 
-        <div className="form__actions">
-          <button type="button" onClick={onClose}>Cancel</button>
-          <button type="button" className="primary" onClick={save}>Save</button>
+      <label className="field">
+        <span>
+          Model
+          {models.status === "ok" && <span className="muted"> · {models.models.length} available</span>}
+        </span>
+        <div className="row">
+          <input
+            list="model-options"
+            value={model}
+            onChange={(e) => setModel(e.target.value.trim())}
+            placeholder={`${defaultModel} (default)`}
+            aria-label="Model"
+            spellCheck={false}
+          />
+          <button type="button" onClick={discover} disabled={!canDiscover || models.status === "loading"}>
+            {models.status === "loading" ? "Loading…" : "Refresh"}
+          </button>
         </div>
+        <datalist id="model-options">
+          {models.status === "ok" && models.models.map((m) => <option key={m.id} value={m.id}>{m.label}</option>)}
+        </datalist>
+        {models.status === "error" && <span className="error small" data-testid="models-error">{models.message}</span>}
+        {models.status === "ok" && <span className="ok small" data-testid="models-ok">✓ Connected — type to filter, or pick from the list.</span>}
+        {!modelKnown && shown.length === 0 && <span className="warn small">This model isn't in the provider's list; check the spelling.</span>}
+        {!canDiscover && connection === "browser" && <span className="muted small">Enter a key to load the model list.</span>}
+      </label>
+
+      {shown.length > 0 && (
+        <ul className="model-list" aria-label="Available models">
+          {shown.map((m) => (
+            <li key={m.id}>
+              <button type="button" className={m.id === (model || defaultModel) ? "model model--on" : "model"} onClick={() => setModel(m.id)}>
+                {m.label && m.label !== m.id ? <><b>{m.label}</b> <span className="muted">{m.id}</span></> : m.id}
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      {provider !== "mock" && (
+        <label className="field">
+          Request timeout (seconds)
+          <input
+            type="number"
+            min={10}
+            max={600}
+            value={Math.round((cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS) / 1000)}
+            onChange={(e) => {
+              const secs = Math.min(600, Math.max(10, Number(e.target.value) || DEFAULT_TIMEOUT_MS / 1000));
+              setCfg({ timeoutMs: secs * 1000 });
+            }}
+            aria-label="Request timeout (seconds)"
+          />
+          <span className="muted small">If the AI hasn't answered by then, the request fails with an error you can retry.</span>
+        </label>
+      )}
+
+      <fieldset className="choice">
+        <legend>Ambiguous names</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={clarify.enabled}
+            onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
+          />
+          Ask what I mean when a name has several meanings
+        </label>
+        <label className="check">
+          Offer
+          <input
+            type="number"
+            min={2}
+            max={10}
+            value={clarify.options}
+            disabled={!clarify.enabled}
+            onChange={(e) => setClarify({ ...clarify, options: Math.min(10, Math.max(2, Number(e.target.value) || 3)) })}
+            aria-label="Number of meanings to offer"
+            className="num"
+          />
+          meanings (plus “something else”)
+        </label>
+      </fieldset>
+
+      {connection === "browser" && meta.needsKey && (
+        <div className="keynote">
+          <label className="check">
+            <input type="checkbox" checked={rememberKeys} onChange={(e) => setRememberKeys(e.target.checked)} />
+            Remember keys on this device
+          </label>
+          <p className="muted small">
+            Your key is only sent to {meta.label}. {rememberKeys
+              ? "It's kept in this browser's local storage until you remove it — only do this on your own device."
+              : "It's kept for this tab only and forgotten when you close it."}{" "}
+            Use a separate key with a spending limit, which you can revoke any time.
+          </p>
+          <button type="button" className="link small" onClick={() => { saved.forgetKeys(); setConfigs(useSettings.getState().configs); }}>
+            Forget all saved keys
+          </button>
+        </div>
+      )}
+
+      <div className="form__actions">
+        <button type="button" onClick={onClose}>Cancel</button>
+        <button type="button" className="primary" onClick={save}>Save</button>
       </div>
-    </div>
+    </Modal>
   );
 }
