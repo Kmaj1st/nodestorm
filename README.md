@@ -209,6 +209,9 @@ npm run dev                          # server on :8787 + UI on :5173
 npm run dev:mock                     # the same with the offline demo AI (no keys)
 ```
 
+The server has no login and spends the keys in `server/.env`, so it only listens on this computer (127.0.0.1). Set
+`HOST` (e.g. `HOST=0.0.0.0`) only if you put your own authentication in front of it.
+
 Providers are configured by env vars named `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL` and `<PROVIDER>_MODEL` (e.g.
 `SILICONFLOW_API_KEY`, `DEEPSEEK_MODEL`), plus `AI_PROVIDER` (the default) and `ANTHROPIC_WEB_SEARCH=1`; see
 `server/.env.example`. The browser may choose the provider and model, never the key. The server has no

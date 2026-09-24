@@ -116,7 +116,8 @@ classDiagram
 - **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
   `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
   `QuizRequest/Response`. Requests carry `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`.
-- **Name matching.** `normalizeName` (lowercase, strip accents and punctuation, crude plural folding) and
+- **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
+  crude plural folding for Latin words) and
   `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
   prerequisites, install, extract and merge.
 
@@ -403,9 +404,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - `client/src/panels/Inspector.tsx`: node view (dependency flow, install, rename, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
 - **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Sense, Settings, Share, Shortcuts,
-  Versions are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`) that shows
-  "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle, and the
-  service worker precaches them. The quiz dialog is lazy-loaded separately by `client/src/panels/QuizHost.tsx`.
+  Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
+  that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
+  and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
   Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
 - **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
@@ -531,14 +532,10 @@ and server-binding items are real problems worth fixing.
 - **Re-check is additive**: `applyDeps` replaces `missingDeps` but never removes existing `dependsOn` links the AI no
   longer lists.
 - **Token usage** is only counted in browser mode.
-- **Server mode has no auth** and is meant for your own machine only. Note that `server/src/index.ts` calls
-  `listen(port)` without a host, so it binds every interface: anyone on the same network can reach it and spend the keys
-  in `server/.env`.
-- **Name matching is crude** (`normalizeName`): plural folding strips a trailing "s" from every word, and only
-  Latin letters, digits and CJK ideographs survive normalisation. A name written only in Cyrillic, Greek, kana or
-  Hangul normalises to `""`, so such concepts are never matched as duplicates, `applyDeps` skips every prerequisite of
-  such a concept (its empty key equals the concept's own), and `cleanExtraction` drops them. This matters because the
-  answer-language picker offers Русский and 日本語.
+- **Server mode has no auth** and is meant for your own machine only. `server/src/index.ts` therefore binds to
+  127.0.0.1 unless `HOST` is set (it warns when it isn't loopback); only expose it behind your own authentication.
+- **Name matching is crude** (`normalizeName`): plural folding strips a trailing "s" from Latin words only, and there
+  is no stemming or synonym handling beyond aliases (the AI's `matchesExisting` covers the rest).
 - **Two `studyOrder`s**: `client/src/lib/export.ts` (Kahn-style, for Markdown) and `client/src/lib/quiz.ts` (DFS
   post-order, for quizzes) are separate implementations.
 - **Periodic snapshots** only cover the current project, and any graph change (even a late AI result for another
