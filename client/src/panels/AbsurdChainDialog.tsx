@@ -1,4 +1,4 @@
-import { normalizeName, type AbsurdChainResponse, type AbsurdStyle } from "@nodestorm/shared";
+import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle } from "@nodestorm/shared";
 import { ArrowLeftRight, ArrowRight, Copy, Dices, FlaskConical, ShieldCheck } from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
@@ -35,7 +35,9 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
 
   const ends = `${normalizeName(from)}\u0000${normalizeName(to)}`;
   const named = Boolean(normalizeName(from) && normalizeName(to));
-  const same = named && normalizeName(from) === normalizeName(to);
+  // The same concept at both ends, also when one end is typed as the other's alias.
+  const resolve = (x: string) => findByName(graph.nodes, x)?.id ?? `name:${normalizeName(x)}`;
+  const same = named && resolve(from) === resolve(to);
   const again = Boolean(res && rolled?.ends === ends);
 
   const run = async () => {

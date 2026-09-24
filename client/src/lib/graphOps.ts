@@ -395,10 +395,24 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       if (!nodes.has(n.id)) nodes.set(n.id, { ...n, status: "error", error: t("task.mergeInterrupted") });
       continue;
     }
-    // Quiz progress isn't versioned: keep whichever side was reviewed last, not the sandbox's by default.
-    const mine = nodes.get(n.id)?.mastery;
-    const newer = !mine || (n.mastery && n.mastery.reviewedAt >= mine.reviewedAt) ? n.mastery : mine;
-    nodes.set(n.id, newer === n.mastery ? n : { ...n, mastery: newer });
+    // Quiz progress and stored AI results aren't versioned with the graph: for each, keep whichever side has the
+    // newer one (the parent may have got an explanation, anatomy or Mathlib result after the fork).
+    const p = nodes.get(n.id);
+    if (!p) {
+      nodes.set(n.id, n);
+      continue;
+    }
+    const pick = <T,>(mine: T | undefined, theirs: T | undefined, at: (x: T) => number) =>
+      !mine ? theirs : !theirs ? mine : at(theirs) >= at(mine) ? theirs : mine;
+    nodes.set(n.id, {
+      ...n,
+      mastery: pick(p.mastery, n.mastery, (m) => m.reviewedAt),
+      explanation: pick(p.explanation, n.explanation, (e) => e.createdAt),
+      anatomy: pick(p.anatomy, n.anatomy, (a) => a.createdAt),
+      formal: pick(p.formal, n.formal, (f) => f.checkedAt),
+      // A kind set on the parent after the fork survives a sandbox that never had one.
+      kind: n.kind ?? p.kind,
+    });
   }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));
   for (const r of sb.relations) {

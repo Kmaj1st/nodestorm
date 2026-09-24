@@ -35,5 +35,8 @@ export async function loogleDeclaration(name: string, opts: LookupOptions = {}):
   );
   const hit = r?.hits?.find((h) => h.name === q);
   if (!hit) return null;
-  return { name: hit.name, type: hit.type.trim(), module: hit.module, ...(hit.doc?.trim() ? { doc: hit.doc.trim() } : {}) };
+  // Within what a stored result may hold (FormalDecl), so it survives export and import.
+  const cut = (t: string, n: number) => (t.length > n ? `${t.slice(0, n - 1)}…` : t);
+  const doc = hit.doc?.trim();
+  return { name: hit.name, type: cut(hit.type.trim(), 4000), module: hit.module, ...(doc ? { doc: cut(doc, 4000) } : {}) };
 }

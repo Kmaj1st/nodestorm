@@ -43,14 +43,28 @@ export function pickSymbol(formulas: string[]): { symbol: string; formula?: stri
   return undefined;
 }
 
-/** Braces and \left/\right-free parentheses balance, so a cut-off left-hand side isn't shown broken. */
+/**
+ * Every opener has its closer: braces, \{…\}, parentheses, brackets, \langle…\rangle, \left…\right. So a left-hand
+ * side cut out of a set-builder or a presentation ("\{g \in G : g") isn't shown broken.
+ */
 function balanced(tex: string): boolean {
-  let depth = 0;
-  for (const c of tex.replace(/\\[{}]/g, "")) {
-    if (c === "{" || c === "(") depth++;
-    else if ((c === "}" || c === ")") && --depth < 0) return false;
+  const tokens = tex.match(/\\left|\\right|\\langle|\\rangle|\\[{}]|\\[A-Za-z]+|\\.|[{}()[\]]/g) ?? [];
+  const pairs: Record<string, string> = { "{": "}", "(": ")", "[": "]", "\\{": "\\}", "\\langle": "\\rangle", "\\left": "\\right" };
+  const closers = new Set(Object.values(pairs));
+  const stack: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const tok = tokens[i];
+    // \left( … \right) is one pair (\left … \right): the delimiter right after it isn't counted again.
+    if (tok === "\\left" || tok === "\\right") {
+      if (tok === "\\left") stack.push("\\right");
+      else if (stack.pop() !== "\\right") return false;
+      if (tokens[i + 1] && /^(\\[{}]|[()[\]]|\\langle|\\rangle)$/.test(tokens[i + 1])) i++;
+      continue;
+    }
+    if (tok in pairs) stack.push(pairs[tok]);
+    else if (closers.has(tok) && stack.pop() !== tok) return false;
   }
-  return depth === 0;
+  return stack.length === 0;
 }
 
 export function buildGlossary(g: Graph): GlossaryEntry[] {

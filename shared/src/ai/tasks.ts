@@ -317,7 +317,7 @@ export const tasks = {
     // Plausible Lean names only, each once, at most 6: every one costs a check.
     const seen = new Set<string>();
     const candidates = res.candidates
-      .map((c) => ({ name: c.name.trim().replace(/^`|`$/g, ""), why: c.why.trim() }))
+      .map((c) => ({ name: c.name.trim().replace(/^`|`$/g, ""), why: c.why.trim().slice(0, 300) }))
       .filter((c) => isLeanName(c.name) && !seen.has(c.name) && seen.add(c.name))
       .slice(0, 6);
     return { candidates };

@@ -128,3 +128,41 @@ describe("toLatex", () => {
     expect(zh).toContain("\\usepackage{xeCJK}");
   });
 });
+
+describe("toLatex: symbols, scripts and stale parts", () => {
+  const graphWith = (patch: Partial<ConceptNode>) => {
+    const r = ops.addNode(ops.emptyGraph("G"), { name: "X" });
+    return ops.updateNode(r.graph, r.id, patch);
+  };
+
+  it("writes Unicode symbols inside formulas as commands, and escapes % there", () => {
+    const tex = toLatex(graphWith({ definition: "A map $f: G → H$ with $a ≤ b$ and $x % y$ and $αx$." }));
+    expect(tex).toContain("$f: G \\to H$");
+    expect(tex).toContain("$a \\le b$");
+    expect(tex).toContain("$x \\% y$");
+    expect(tex).toContain("$\\alpha x$");
+  });
+
+  it("gives characters pdfLaTeX doesn't know a placeholder so the document compiles", () => {
+    const tex = toLatex(graphWith({ definition: "Snowman ☃ here." }));
+    expect(tex).toContain("\\DeclareUnicodeCharacter{2603}{\\ensuremath{\\square}}");
+  });
+
+  it("asks for xelatex when any part has CJK text, not only the definition", () => {
+    const tex = toLatex(graphWith({ aliases: ["群"] }));
+    expect(tex).toContain("compile with xelatex");
+    expect(tex).toContain("\\usepackage{xeCJK}");
+  });
+
+  it("writes display maths in a name inline, and leaves out a proof idea once the kind isn't theorem-like", () => {
+    const tex = toLatex(
+      graphWith({
+        name: "Map $$f$$",
+        kind: "definition",
+        anatomy: { hypotheses: [], conclusion: "c", proofIdea: "stale", examples: [], nonExamples: [], createdAt: 1 },
+      }),
+    );
+    expect(tex).toContain("[{Map $f$}]");
+    expect(tex).not.toContain("stale");
+  });
+});

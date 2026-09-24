@@ -72,7 +72,10 @@ export function goToConcept(id: string) {
   const view = useView.getState();
   const node = s.graphs[s.activeId]?.nodes.find((n) => n.id === id);
   const kindHidden = node && !view.kinds[kindFilterOf(node)];
-  if (!visibleNow().nodes.has(id) && (view.todoOnly || kindHidden) && !view.focus) {
+  const graph = s.graphs[s.activeId];
+  // Focus mode on another graph doesn't count: only this graph's focus moves to the selected concept.
+  const focused = graph ? activeFocus(view, graph) : null;
+  if (!visibleNow().nodes.has(id) && (view.todoOnly || kindHidden) && !focused) {
     view.setPrefs({ todoOnly: false, ...(node && kindHidden ? { kinds: { ...view.kinds, [kindFilterOf(node)]: true } } : {}) });
     s.setToast(t("find.revealed"), "info");
   }

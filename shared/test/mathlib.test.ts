@@ -44,8 +44,10 @@ describe("Mathlib names", () => {
 describe("Loogle", () => {
   it("returns the declaration of exactly that name", async () => {
     const urls: string[] = [];
-    const f = (async (u: string) => {
+    const sent: Record<string, string>[] = [];
+    const f = (async (u: string, init?: RequestInit) => {
       urls.push(u);
+      sent.push((init?.headers ?? {}) as Record<string, string>);
       return json({
         count: 3,
         hits: [
@@ -57,6 +59,8 @@ describe("Loogle", () => {
     const d = await loogleDeclaration("MonoidHom.ker", { fetch: f });
     expect(d).toEqual({ name: "MonoidHom.ker", type: "{G : Type u_1} [Group G] (f : G →* M) : Subgroup G", module: "Mathlib.Algebra.Group.Subgroup.Ker", doc: "The kernel." });
     expect(urls[0]).toBe("https://loogle.lean-lang.org/json?q=MonoidHom.ker");
+    // Loogle's CORS allows only User-Agent and X-Loogle-Client: any other custom header fails in a browser.
+    expect(Object.keys(sent[0]).filter((h) => h.toLowerCase() !== "accept")).toEqual(["X-Loogle-Client"]);
     expect(mathlibDocUrl(d!)).toBe("https://leanprover-community.github.io/mathlib4_docs/Mathlib/Algebra/Group/Subgroup/Ker.html#MonoidHom.ker");
   });
 

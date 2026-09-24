@@ -87,7 +87,8 @@ describe("lookupConcept", () => {
       source: { site: "ProofWiki", title: "Definition:Kernel of Group Homomorphism", url: "https://proofwiki.org/wiki/Definition:Kernel_of_Group_Homomorphism" },
     });
     expect(r.senses[0].definition).toContain("The kernel of $\\phi$ is the set");
-    expect(calls[0].headers["Api-User-Agent"]).toMatch(/^NodeStorm/);
+    // ProofWiki gets no custom header (its request stays a CORS "simple" one); Wikimedia gets Api-User-Agent.
+    expect(Object.keys(calls[0].headers)).toEqual(["accept"]);
     expect(calls.every((c) => !c.url.includes("wikipedia"))).toBe(true);
   });
 
@@ -140,7 +141,7 @@ describe("lookupConcept", () => {
   });
 
   it("offers Wikidata's meanings when Wikipedia's page is a disambiguation", async () => {
-    const { f } = fakeFetch([
+    const { f, calls } = fakeFetch([
       [/titles=Expectation&/, () => wp({ title: "Expectation", pageprops: { disambiguation: "" }, extract: "Expectation may refer to:" })],
       [/wbsearchentities/, () => json({ search: [
         { id: "Q200125", label: "expected value", description: "long-run average value of a random variable" },
@@ -156,6 +157,7 @@ describe("lookupConcept", () => {
       ["expectation", "belief about the future", "Wikidata"],
     ]);
     expect(r.senses[0].definition).toMatch(/^In probability theory/);
+    expect(calls.every((c) => c.headers["Api-User-Agent"]?.startsWith("NodeStorm"))).toBe(true);
     expect(r.senses.map((s) => s.exact)).toEqual([false, true]); // "expected value" ≠ "Expectation"; "expectation" = it
   });
 

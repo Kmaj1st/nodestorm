@@ -333,11 +333,18 @@ export async function findInMathlib(nodeId: string, graphId = store().activeId) 
     const { candidates } = await api.mathlib({ node: toBrief(node), context: g.nodes.filter((n) => n.id !== nodeId).slice(0, 80).map(toBrief) }, signal);
     const decls: FormalDecl[] = [];
     const unverified: string[] = [];
+    let failed = 0;
     for (const c of candidates) {
-      const d = await loogleDeclaration(c.name, { signal });
+      // One name that can't be checked (timeout, Loogle down) doesn't throw away the others.
+      const d = await loogleDeclaration(c.name, { signal }).catch((e) => {
+        if (signal.aborted) throw e;
+        failed++;
+        return undefined;
+      });
       if (d) decls.push({ ...d, ...(c.why ? { why: c.why } : {}) });
-      else unverified.push(c.name);
+      else if (d === null) unverified.push(c.name);
     }
+    if (failed && failed === candidates.length) throw new Error(t("formal.unreachable"));
     return { decls, unverified, checkedAt: Date.now() };
   });
   if (!res) return;

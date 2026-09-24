@@ -911,6 +911,7 @@ export const en = {
   "formal.again": "Search again",
   "formal.running": "Checking…",
   "formal.empty": "Find the declarations in Lean's Mathlib that formalise this concept. The AI suggests names and each is checked against Mathlib, so only real ones are listed.",
+  "formal.unreachable": "Loogle (the Mathlib search) could not be reached. Try again later.",
   "formal.none": "No Mathlib declaration found for “{name}”.",
   "formal.unverified": "Not in Mathlib (dropped): {names}.",
   "formal.searchYourself": "Search Loogle yourself",

@@ -6,7 +6,7 @@ export interface LookupOptions {
   /** Per request (default 10 s). */
   timeoutMs?: number;
   fetch?: typeof fetch;
-  /** Identifies the app to the sites, as Wikimedia's API rules ask (browsers can't set User-Agent). */
+  /** Identifies the app to Wikipedia and Wikidata, as Wikimedia's API rules ask (browsers can't set User-Agent). */
   userAgent?: string;
 }
 
@@ -20,6 +20,17 @@ export class SiteBlockedError extends Error {
   }
 }
 
+/**
+ * The header that identifies the app, per site: what each site's CORS allows (any other custom header makes the
+ * browser's preflight fail). Wikimedia asks for `Api-User-Agent`; Loogle allows `X-Loogle-Client`; ProofWiki gets
+ * none, so its request stays a "simple" one.
+ */
+function identify(site: string, opts: LookupOptions): Record<string, string> {
+  if (site === "Wikipedia" || site === "Wikidata") return { "Api-User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT };
+  if (site === "Loogle") return { "X-Loogle-Client": "NodeStorm" };
+  return {};
+}
+
 /** GET a JSON API. 404 is `null` (nothing there); a bot check or a refusal is `SiteBlockedError`. */
 export async function getJson<T>(site: string, url: string, opts: LookupOptions = {}): Promise<T | null> {
   const f = opts.fetch ?? globalThis.fetch;
@@ -28,7 +39,7 @@ export async function getJson<T>(site: string, url: string, opts: LookupOptions 
     try {
       res = await f(url, {
         signal,
-        headers: { accept: "application/json", "Api-User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT },
+        headers: { accept: "application/json", ...identify(site, opts) },
       });
     } catch (e) {
       if (signal.aborted) throw new CancelledError();

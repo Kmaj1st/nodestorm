@@ -150,3 +150,24 @@ describe("choosing a meaning", () => {
     expect(r.graph.relations).toHaveLength(1); // the moved link collapsed onto the existing one
   });
 });
+
+describe("merge keeps the newer stored AI results", () => {
+  it("doesn't drop what the parent got after the fork", () => {
+    const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel" });
+    const sb = ops.fork(r.graph, "Sandbox");
+    const formal = { decls: [{ name: "MonoidHom.ker", type: "T", module: "M" }], unverified: [], checkedAt: 5 };
+    const parent = ops.updateNode(r.graph, r.id, { formal, kind: "definition" });
+    const merged = ops.merge(parent, sb);
+    const n = merged.nodes.find((x) => x.id === r.id)!;
+    expect(n.formal).toEqual(formal);
+    expect(n.kind).toBe("definition");
+  });
+
+  it("takes the sandbox's result when it is newer", () => {
+    const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel" });
+    const old = { decls: [], unverified: [], checkedAt: 1 };
+    const parent = ops.updateNode(r.graph, r.id, { formal: old });
+    const sb = ops.updateNode(ops.fork(parent, "Sandbox"), r.id, { formal: { decls: [], unverified: ["X.y"], checkedAt: 9 } });
+    expect(ops.merge(parent, sb).nodes.find((x) => x.id === r.id)!.formal?.checkedAt).toBe(9);
+  });
+});

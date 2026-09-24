@@ -1,4 +1,4 @@
-import type { ConceptKind, ConceptNode, Graph } from "@nodestorm/shared";
+import { isTheoremLike, type ConceptKind, type ConceptNode, type Graph } from "@nodestorm/shared";
 import { sourceLabel, studyOrder } from "./export";
 import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
@@ -49,6 +49,39 @@ const GREEK_NAMES = ["alpha", "beta", "gamma", "delta", "epsilon", "zeta", "eta"
 });
 Object.assign(UNICODE, { "ϕ": "\\ensuremath{\\phi}", "Γ": "\\ensuremath{\\Gamma}", "Δ": "\\ensuremath{\\Delta}", "Θ": "\\ensuremath{\\Theta}", "Λ": "\\ensuremath{\\Lambda}", "Π": "\\ensuremath{\\Pi}", "Σ": "\\ensuremath{\\Sigma}", "Φ": "\\ensuremath{\\Phi}", "Ψ": "\\ensuremath{\\Psi}", "Ω": "\\ensuremath{\\Omega}" });
 
+// More symbols that turn up in definitions (encyclopedias especially), and capital Greek letters that look Latin.
+Object.assign(UNICODE, Object.fromEntries(
+  (
+    [
+      ["⊕", "\\oplus"], ["⊗", "\\otimes"], ["ℓ", "\\ell"], ["⟨", "\\langle"], ["⟩", "\\rangle"], ["∼", "\\sim"],
+      ["′", "{}^{\\prime}"], ["ς", "\\varsigma"], ["⋯", "\\cdots"], ["…", "\\ldots"], ["≺", "\\prec"], ["≼", "\\preceq"],
+      ["⊥", "\\perp"], ["⊤", "\\top"], ["∥", "\\parallel"], ["◃", "\\triangleleft"], ["⊲", "\\triangleleft"],
+      ["⊴", "\\trianglelefteq"], ["⋊", "\\rtimes"], ["⋉", "\\ltimes"], ["⊢", "\\vdash"], ["⊨", "\\models"],
+      ["↪", "\\hookrightarrow"], ["↠", "\\twoheadrightarrow"], ["∖", "\\setminus"], ["∣", "\\mid"], ["≃", "\\simeq"],
+      ["∝", "\\propto"], ["⊊", "\\subsetneq"], ["⊇", "\\supseteq"], ["⊃", "\\supset"], ["∗", "\\ast"], ["†", "\\dagger"],
+      ["‖", "\\|"], ["ℵ", "\\aleph"], ["ℏ", "\\hbar"], ["∮", "\\oint"], ["⊔", "\\sqcup"], ["⊓", "\\sqcap"],
+      ["≪", "\\ll"], ["≫", "\\gg"], ["⌊", "\\lfloor"], ["⌋", "\\rfloor"], ["⌈", "\\lceil"], ["⌉", "\\rceil"],
+      ["Ξ", "\\Xi"], ["Υ", "\\Upsilon"], ["ϵ", "\\epsilon"], ["ϑ", "\\vartheta"], ["ϱ", "\\varrho"], ["ϖ", "\\varpi"],
+      ["ℑ", "\\Im"], ["ℜ", "\\Re"], ["℘", "\\wp"], ["⧸", "/"], ["∕", "/"],
+    ] as const
+  ).map(([c, cmd]) => [c, `\\ensuremath{${cmd}}`]),
+));
+for (const [c, latin] of Object.entries({ "Α": "A", "Β": "B", "Ε": "E", "Ζ": "Z", "Η": "H", "Ι": "I", "Κ": "K", "Μ": "M", "Ν": "N", "Ο": "O", "Ρ": "P", "Τ": "T", "Χ": "X" })) {
+  UNICODE[c] = `\\ensuremath{\\mathrm{${latin}}}`;
+}
+
+/** A formula with its Unicode symbols written as LaTeX commands (as they would be in text, minus \\ensuremath). */
+function mathUnicode(tex: string): string {
+  return tex
+    .replace(/(?<!\\)%/g, "\\%") // a bare % would comment out the rest of the line
+    .replace(/[^\x00-\xff]/g, (c, at: number) => {
+      const m = UNICODE[c] && /^\\ensuremath\{(.*)\}$/.exec(UNICODE[c]);
+      if (!m) return c;
+      // A command followed by a letter needs a space: "\\in x", not "\\inx".
+      return /[A-Za-z]/.test(tex[at + 1] ?? "") ? `${m[1]} ` : m[1];
+    });
+}
+
 const SPECIAL: Record<string, string> = {
   "\\": "\\textbackslash{}",
   "{": "\\{",
@@ -74,9 +107,15 @@ export function texEscapeText(s: string): string {
  * Escape a text for LaTeX but keep its formulas: text between them is escaped, each formula is written back as
  * `$…$` (inline) or `\[…\]` (display). Unbalanced dollars are text, as lib/math.ts reads them.
  */
-export function texEscape(s: string): string {
+export function texEscape(s: string, opts: { inline?: boolean } = {}): string {
   return splitMath(s)
-    .map((seg) => (seg.kind === "math" ? (seg.display ? `\\[ ${seg.tex} \\]` : `$${seg.tex}$`) : texEscapeText(seg.text)))
+    .map((seg) =>
+      seg.kind === "math"
+        ? seg.display && !opts.inline
+          ? `\\[ ${mathUnicode(seg.tex)} \\]`
+          : `$${mathUnicode(seg.tex)}$`
+        : texEscapeText(seg.text),
+    )
     .join("");
 }
 
@@ -125,8 +164,48 @@ export function toLatex(g: Graph, opts: LatexOptions = {}): string {
   const label = labels(ordered);
   const title = opts.title?.trim() || g.name || "NodeStorm graph";
   const date = (opts.date ?? new Date()).toISOString().slice(0, 10);
-  const everything = JSON.stringify(g.nodes.map((n) => [n.name, n.definition, n.notes ?? ""]));
-  const cjk = CJK.test(everything) || CJK.test(title);
+  const body: string[] = [];
+  if (!ordered.length) body.push("This graph has no concepts yet.", "");
+
+  for (const n of ordered) {
+    const env = envOf(n);
+    // The name is braced so a "]" in it can't end the optional argument early; display maths there would break it.
+    body.push(`\\begin{${env}}[{${texEscape(n.name.replace(/\s+/g, " ").trim(), { inline: true })}}]\\label{${label.get(n.id)}}`);
+    body.push(n.definition.trim() ? texParagraphs(n.definition) : "\\emph{No statement yet.}");
+    const extra: string[] = [];
+    if (n.aliases.length) extra.push(`\\emph{Also called:} ${n.aliases.map((a) => texEscape(a, { inline: true })).join(", ")}.`);
+    const prereqs = n.dependsOn
+      .map((id) => byId.get(id))
+      .filter((p): p is ConceptNode => !!p && p.id !== n.id)
+      .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
+    if (prereqs.length) {
+      extra.push(`\\emph{Uses:} ${prereqs.map((p) => `${wordOf(p)}~\\ref{${label.get(p.id)}} (${texEscape(p.name, { inline: true })})`).join(", ")}.`);
+    }
+    if (n.missingDeps.length) {
+      extra.push(`\\emph{Also needs (not in this graph):} ${n.missingDeps.map((d) => texEscape(d.name, { inline: true })).join(", ")}.`);
+    }
+    if (n.source) extra.push(`\\emph{Source:} ${texEscape(sourceLabel(n.source), { inline: true })}.`);
+    if (extra.length) body.push("", ...extra.map((e, i) => (i ? `\\\\ ${e}` : `\\smallskip\\noindent ${e}`)));
+    body.push(`\\end{${env}}`, "");
+
+    // A stored anatomy belongs to a theorem-like concept; after a change of kind it isn't exported as a proof.
+    const an = n.anatomy;
+    if (an?.proofIdea.trim() && isTheoremLike(n.kind)) {
+      if (n.kind === "conjecture") body.push("\\begin{remark}[Evidence]", texParagraphs(an.proofIdea), "\\end{remark}", "");
+      else body.push("\\begin{proof}[Proof idea]", texParagraphs(an.proofIdea), "\\end{proof}", "");
+    }
+    if (n.notes?.trim()) body.push("\\begin{remark}[Notes]", texParagraphs(n.notes), "\\end{remark}", "");
+  }
+  body.push("\\end{document}", "");
+
+  const titleTex = texEscape(title, { inline: true });
+  const text = `${titleTex}\n${body.join("\n")}`;
+  // Decided on everything written (aliases, sources, missing prerequisites, proof ideas too), not a few fields.
+  const cjk = CJK.test(text);
+  // Characters pdfLaTeX's utf8 input has no definition for (outside Latin-1, not mapped above) get a visible
+  // placeholder there, so the document still compiles; xelatex and lualatex print them as they are.
+  const unknown = [...new Set(text.match(/[^\x00-\xff]/gu) ?? [])].filter((c) => !CJK.test(c));
+  const fallbacks = unknown.map((c) => `  \\DeclareUnicodeCharacter{${c.codePointAt(0)!.toString(16).toUpperCase().padStart(4, "0")}}{\\ensuremath{\\square}}`);
 
   const out: string[] = [
     "% Generated by NodeStorm. Concepts are in study order: prerequisites come first.",
@@ -138,6 +217,7 @@ export function toLatex(g: Graph, opts: LatexOptions = {}): string {
     "\\ifPDFTeX",
     "  \\usepackage[utf8]{inputenc}",
     "  \\usepackage[T1]{fontenc}",
+    ...fallbacks,
     "\\else",
     "  \\usepackage{fontspec}",
     "\\fi",
@@ -160,44 +240,13 @@ export function toLatex(g: Graph, opts: LatexOptions = {}): string {
     "\\theoremstyle{remark}",
     "\\newtheorem*{remark}{Remark}",
     "",
-    `\\title{${texEscape(title)}}`,
+    `\\title{${titleTex}}`,
     `\\date{${date}}`,
     "",
     "\\begin{document}",
     "\\maketitle",
     "",
   ];
-  if (!ordered.length) out.push("This graph has no concepts yet.", "");
-
-  for (const n of ordered) {
-    const env = envOf(n);
-    // The name is braced so a "]" in it can't end the optional argument early.
-    out.push(`\\begin{${env}}[{${texEscape(n.name.replace(/\s+/g, " ").trim())}}]\\label{${label.get(n.id)}}`);
-    out.push(n.definition.trim() ? texParagraphs(n.definition) : "\\emph{No statement yet.}");
-    const extra: string[] = [];
-    if (n.aliases.length) extra.push(`\\emph{Also called:} ${n.aliases.map(texEscape).join(", ")}.`);
-    const prereqs = n.dependsOn
-      .map((id) => byId.get(id))
-      .filter((p): p is ConceptNode => !!p && p.id !== n.id)
-      .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
-    if (prereqs.length) {
-      extra.push(`\\emph{Uses:} ${prereqs.map((p) => `${wordOf(p)}~\\ref{${label.get(p.id)}} (${texEscape(p.name)})`).join(", ")}.`);
-    }
-    if (n.missingDeps.length) {
-      extra.push(`\\emph{Also needs (not in this graph):} ${n.missingDeps.map((d) => texEscape(d.name)).join(", ")}.`);
-    }
-    if (n.source) extra.push(`\\emph{Source:} ${texEscape(sourceLabel(n.source))}.`);
-    if (extra.length) out.push("", ...extra.map((e, i) => (i ? `\\\\ ${e}` : `\\smallskip\\noindent ${e}`)));
-    out.push(`\\end{${env}}`, "");
-
-    const an = n.anatomy;
-    if (an?.proofIdea.trim()) {
-      if (n.kind === "conjecture") out.push("\\begin{remark}[Evidence]", texParagraphs(an.proofIdea), "\\end{remark}", "");
-      else out.push("\\begin{proof}[Proof idea]", texParagraphs(an.proofIdea), "\\end{proof}", "");
-    }
-    if (n.notes?.trim()) out.push("\\begin{remark}[Notes]", texParagraphs(n.notes), "\\end{remark}", "");
-  }
-
-  out.push("\\end{document}", "");
+  out.push(...body);
   return out.join("\n");
 }

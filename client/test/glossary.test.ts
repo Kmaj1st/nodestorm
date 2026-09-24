@@ -57,3 +57,13 @@ describe("buildGlossary", () => {
     expect(buildGlossary(g)).toEqual([{ nodeId: "a", name: "Big O", kind: "notation", symbol: "f = O(g)" }]);
   });
 });
+
+describe("glossary: cut-off left-hand sides", () => {
+  it("never shows half of a set-builder, presentation or \\left…\\right group", () => {
+  expect(pickSymbol(["\\{g \\in G : g = e\\}"])?.symbol).not.toBe("\\{g \\in G : g");
+  expect(pickSymbol(["\\left\\{ x : x = 1 \\right\\}"])?.symbol).not.toBe("\\left\\{ x : x");
+  expect(pickSymbol(["\\langle a,b \\mid a=b\\rangle"])?.symbol).not.toBe("\\langle a,b \\mid a");
+  expect(pickSymbol(["\\ker\\varphi = \\{g : \\varphi(g)=e\\}"])?.symbol).toBe("\\ker\\varphi");
+  expect(pickSymbol(["\\left( a \\right) = b"])?.symbol).toBe("\\left( a \\right)");
+  });
+});
