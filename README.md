@@ -25,6 +25,8 @@ Projects autosave to your browser's localStorage. Data saved by earlier versions
 - **Mermaid diagram**: flowchart text for GitHub, Notion, etc. It is copied to the clipboard and also downloaded.
 - **PNG image**: a picture of the whole current graph.
 
+**Share link…** (in **Export ▾**) packs the current graph into a link, without its sandboxes. No account or server is involved: the graph is compressed into the part of the URL after `#`, which browsers never send to a server, so it works on the static GitHub Pages site too. The dialog shows the link's length. Some chat apps and mail clients cut off links longer than about 8,000 characters, so for big graphs send the JSON export instead. Opening a link shows the graph **read-only**: a banner says *Viewing a shared graph*, editing and AI controls are hidden, and export still works. **Save a copy** adds it as a new project (your existing projects are never overwritten), and **Close** goes back to your own work. Damaged or oversized links show an error and open the normal app.
+
 **Import** repairs files from older or newer versions and hand-edited files instead of rejecting them. It fills in missing fields and drops relations or prerequisite links that point to concepts that aren't in the file. A notice lists what was fixed.
 
 ## Setup
@@ -92,7 +94,7 @@ e2e/      Playwright smoke test (runs against the mock provider)
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings
 ```
 

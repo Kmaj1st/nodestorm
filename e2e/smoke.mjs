@@ -36,7 +36,9 @@ try {
   await waitFor(`http://localhost:${SERVER_PORT}/api/providers`);
   await waitFor(`http://localhost:${WEB_PORT}/`);
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  // A context (not browser.newPage) so the share-link section can open a second page with the same storage.
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 } });
+  const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(`http://localhost:${WEB_PORT}/`);
 
@@ -535,6 +537,53 @@ try {
   const left = await page.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio").allTextContents();
   assert(JSON.stringify(left) === JSON.stringify(["✓ Algebra notes"]), "deleting the example project leaves only the first one, now current");
   await page.keyboard.press("Escape");
+
+  console.log("Share link");
+  await page.setViewportSize({ width: 1400, height: 900 });
+  const sharedCount = await nodeCount();
+  await page.getByRole("button", { name: "Export ▾" }).click();
+  await page.getByRole("menuitem", { name: "Share link…" }).click();
+  const link = await page.getByTestId("share-link").inputValue();
+  assert(link.includes("#share=1.") && /[\d,]+ characters/.test(await page.getByTestId("share-size").textContent()), "Share link… shows the link and its length");
+  await page.keyboard.press("Escape");
+  {
+    // Same browser context, so the recipient here has this browser's projects too: they must stay untouched.
+    const viewer = await context.newPage();
+    viewer.on("pageerror", (e) => console.error("pageerror:", e.message));
+    await viewer.goto(`http://localhost:${WEB_PORT}/#share=1.not-a-real-link`);
+    await viewer.locator(".toast").waitFor();
+    assert(
+      (await viewer.locator(".toast").textContent()).includes("Couldn't open the shared link") &&
+        (await viewer.getByRole("button", { name: "+ Add concept" }).isVisible()),
+      "a corrupt link shows an error and the normal app",
+    );
+    await viewer.goto(link); // only the hash changes: opened via hashchange
+    await viewer.getByTestId("viewer-banner").waitFor();
+    assert((await viewer.getByTestId("viewer-banner").textContent()).includes("Viewing a shared graph"), "opening the link shows the viewer banner");
+    await viewer.waitForFunction((n) => document.querySelectorAll(".react-flow__node").length === n, sharedCount);
+    assert(true, `the shared graph has the same ${sharedCount} concepts`);
+    assert((await viewer.getByRole("button", { name: "+ Add concept" }).count()) === 0 && !(await viewer.getByRole("button", { name: /^Project: / }).count()), "editing controls and the project menu are hidden");
+    await viewer.getByTestId("node-Quotient Group").click();
+    await viewer.getByTestId("node-panel").waitFor();
+    assert(
+      (await viewer.getByLabel("Rename concept").getAttribute("readonly")) !== null &&
+        !(await viewer.getByTestId("node-panel").getByRole("button", { name: "Delete", exact: true }).isVisible()),
+      "the inspector is read-only",
+    );
+    await viewer.screenshot({ path: `${shots}11-shared-viewer.png` });
+    await viewer.getByRole("button", { name: "Save a copy" }).click();
+    await viewer.getByTestId("viewer-banner").waitFor({ state: "detached" });
+    const viewerProject = viewer.getByRole("button", { name: /^Project: / });
+    assert(
+      (await viewerProject.getAttribute("aria-label")) === "Project: Algebra notes 2" && (await viewer.locator(".react-flow__node").count()) === sharedCount,
+      "Save a copy adds a new project with those concepts",
+    );
+    assert(!new URL(viewer.url()).hash && (await viewer.getByRole("button", { name: "+ Add concept" }).isEnabled()), "the link is cleared from the address bar and the copy is editable");
+    await viewerProject.click();
+    const all = await viewer.getByRole("menu", { name: "Projects" }).getByRole("menuitemradio").allTextContents();
+    assert(JSON.stringify(all) === JSON.stringify(["Algebra notes", "✓ Algebra notes 2"]), "the original project is still there");
+    await viewer.close();
+  }
 
   console.log("\nE2E passed");
 } catch (e) {

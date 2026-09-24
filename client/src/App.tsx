@@ -2,6 +2,7 @@ import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
 import { removeNode, removeRelation } from "./lib/graphOps";
+import { decodeShare, shareToken } from "./lib/share";
 import { AddNodeDialog } from "./panels/AddNodeDialog";
 import { DeriveDialog } from "./panels/DeriveDialog";
 import { FindDialog } from "./panels/FindDialog";
@@ -10,7 +11,7 @@ import { SenseDialog } from "./panels/SenseDialog";
 import { SettingsDialog } from "./panels/SettingsDialog";
 import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
-import { activeGraph, useGraphStore } from "./store/graphStore";
+import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 
 export function App() {
   const [adding, setAdding] = useState(false);
@@ -23,6 +24,15 @@ export function App() {
   const setToast = useGraphStore((s) => s.setToast);
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
+  const viewing = useGraphStore(isViewing);
+
+  // A share link (#share=…) opens its graph read-only, on load and when a link is pasted into this tab.
+  useEffect(() => {
+    const open = () => void openShareLink();
+    open();
+    window.addEventListener("hashchange", open);
+    return () => window.removeEventListener("hashchange", open);
+  }, []);
 
   // Undo/redo and Delete. React Flow's own delete key is off (GraphCanvas) so deletions go through history.
   useEffect(() => {
@@ -74,8 +84,9 @@ export function App() {
 
   return (
     <ReactFlowProvider>
-      <div className="app">
+      <div className={`app${viewing ? " app--viewing" : ""}`}>
         <Toolbar onAdd={() => setAdding(true)} onDerive={() => setDeriveFrom(selection)} onFind={() => setFinding(true)} />
+        {viewing && <ViewerBanner />}
         {graph.parentId && (
           <div className="sandbox-banner" data-testid="sandbox-banner">
             🧪 Sandbox mode — <b>{graph.name}</b>. Changes here don't affect the original graph until you merge back.
@@ -103,6 +114,55 @@ export function App() {
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
       </div>
     </ReactFlowProvider>
+  );
+}
+
+/** Remove the share link from the address bar (without a reload or a new history entry). */
+function clearShareHash() {
+  if (shareToken(location.hash) !== null) history.replaceState(null, "", location.pathname + location.search);
+}
+
+/** Open the graph in the page's #share= link, if any. A bad link leaves the user's own work on screen. */
+async function openShareLink() {
+  const token = shareToken(location.hash);
+  if (token === null) return;
+  const s = useGraphStore.getState();
+  try {
+    const { graph, name, fixes } = await decodeShare(token);
+    // The hash may have changed while decoding (another link pasted): the newer one wins.
+    if (shareToken(location.hash) !== token) return;
+    s.openView(graph, name);
+    // Replaces any earlier message (e.g. about a broken link opened before this one).
+    s.setToast(fixes.length ? `The shared graph was repaired: ${fixes.join("; ")}.` : null, "info");
+  } catch (e) {
+    clearShareHash();
+    s.setToast(`Couldn't open the shared link. ${e instanceof Error ? e.message : e} Your own projects are unchanged.`);
+  }
+}
+
+/** Shown while a shared graph is open read-only: save it as a project of your own, or go back to your work. */
+function ViewerBanner() {
+  const view = useGraphStore((s) => s.view);
+  const saveCopy = () => {
+    const s = useGraphStore.getState();
+    const name = s.saveViewCopy();
+    clearShareHash();
+    if (name) s.setToast(`Saved as a new project “${name}”. Your other projects are unchanged.`, "info");
+  };
+  const close = () => {
+    useGraphStore.getState().closeView();
+    clearShareHash();
+  };
+  return (
+    <div className="viewer-banner" data-testid="viewer-banner" role="status">
+      <span>
+        👁 Viewing a shared graph{view?.name ? <> — <b>{view.name}</b></> : null}. Save a copy to edit.
+      </span>
+      <span className="viewer-banner__actions">
+        <button className="primary" onClick={saveCopy}>Save a copy</button>
+        <button onClick={close} title="Close the shared graph and go back to your own projects">Close</button>
+      </span>
+    </div>
   );
 }
 

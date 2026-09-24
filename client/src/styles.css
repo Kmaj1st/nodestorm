@@ -112,6 +112,21 @@ textarea { resize: vertical; width: 100%; }
 .toolbar__group { display: flex; gap: 6px; align-items: center; }
 .toolbar__right { margin-left: auto; }
 .sandbox-banner { background: var(--sandbox-soft); color: var(--sandbox); padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--sandbox-border); }
+.viewer-banner {
+  display: flex; flex-wrap: wrap; gap: 8px 12px; align-items: center; justify-content: space-between;
+  background: var(--accent-soft); color: var(--text); padding: 6px 12px; font-size: 13px; border-bottom: 1px solid var(--border);
+}
+.viewer-banner__actions { display: flex; gap: 6px; }
+.viewer-banner__actions button { padding: 3px 10px; }
+.toolbar__shared { color: var(--muted); font-size: 13px; }
+/* Read-only viewer (a shared graph): editing and AI actions go away; navigation links stay. */
+.app--viewing .inspector .form__actions,
+.app--viewing .inspector .popover-anchor,
+.app--viewing .inspector .deps__missing button,
+.app--viewing .inspector .error-box button,
+.app--viewing .inspector .warn-box__link button,
+.app--viewing .canvas__example { display: none; }
+.app--viewing .concept__badge { pointer-events: none; }
 .main { flex: 1; display: flex; min-height: 0; }
 
 .canvas { flex: 1; position: relative; }

@@ -2,7 +2,7 @@ import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { buildExample, EXAMPLES } from "../lib/examples";
-import { fork, merge } from "../lib/graphOps";
+import { fork, merge, uid } from "../lib/graphOps";
 import { repairImport } from "../lib/importRepair";
 import * as hist from "../lib/history";
 import * as proj from "../lib/projects";
@@ -33,6 +33,11 @@ interface State {
   highlight: { graphId: string; nodeId: string } | null;
   /** Undo/redo stacks per graph id (in memory only). */
   history: Record<string, hist.History<Graph>>;
+  /**
+   * A shared graph opened from a link (read-only viewer mode). It is shown as the active graph `id` in `graphs`
+   * but is never persisted and can't be edited; `returnId` is the user's own graph to go back to.
+   */
+  view: { id: string; name: string; returnId: string } | null;
 }
 
 /**
@@ -89,6 +94,12 @@ interface Actions {
   exportJson(): string;
   /** Add a file's graphs as a new project and switch to it, repairing what it can. */
   importJson(text: string): { name: string; fixes: string[] };
+  /** Show a shared graph read-only (see `view`). Replaces a shared graph that is already open. */
+  openView(graph: Graph, name: string): void;
+  /** Leave the viewer, back to the user's own graph. */
+  closeView(): void;
+  /** Add the shared graph as a new project (fresh ids) and switch to it. Returns the project's name. */
+  saveViewCopy(): string | null;
   reset(): void;
 }
 
@@ -100,9 +111,16 @@ function initial(): Workspace {
   return proj.createProject({ graphs: {}, projects: {}, projectId: "", activeId: "" }, "My brainstorm");
 }
 
-const workspace = (s: Workspace): Workspace => ({ graphs: s.graphs, projects: s.projects, projectId: s.projectId, activeId: s.activeId });
-/** Fresh UI state after switching projects. */
-const cleared = { selection: [], inspect: null, highlight: null } satisfies Partial<State>;
+/** The user's own data: without a shared graph that is open in the viewer (so it's never saved or exported). */
+function workspace(s: Workspace & Partial<Pick<State, "view">>): Workspace {
+  const v = s.view;
+  if (!v) return { graphs: s.graphs, projects: s.projects, projectId: s.projectId, activeId: s.activeId };
+  const graphs = { ...s.graphs };
+  delete graphs[v.id];
+  return { graphs, projects: s.projects, projectId: s.projectId, activeId: s.activeId === v.id ? v.returnId : s.activeId };
+}
+/** Fresh UI state after switching projects (which also leaves the viewer: `workspace` drops the shared graph). */
+const cleared = { selection: [], inspect: null, highlight: null, view: null } satisfies Partial<State>;
 
 /** Move through a graph's history. A check restored as "checking" with no task running is marked failed. */
 function travel(s: State, id: string, step: typeof hist.undo<Graph>): Pick<State, "graphs" | "history"> | null {
@@ -130,11 +148,13 @@ export const useGraphStore = create<GraphStore>()(
       clarifying: null,
       history: {},
       highlight: null,
+      view: null,
 
       mutate(fn, graphId, opts = {}) {
         const id = graphId ?? get().activeId;
         const g = get().graphs[id];
         if (!g) return; // graph was discarded while an AI call was in flight
+        if (id === get().view?.id) return; // a shared graph is read-only
         const next = fn(g);
         const mode = opts.history ?? "step";
         // A background change still reaches the snapshots when it is a no-op now (e.g. its node was deleted).
@@ -199,6 +219,7 @@ export const useGraphStore = create<GraphStore>()(
       },
 
       forkActive() {
+        if (isViewing(get())) return;
         const { graphs, activeId, projects, projectId } = get();
         const src = graphs[activeId];
         const n = proj.projectGraphs(get(), projects[projectId]).filter((g) => g.parentId).length + 1;
@@ -234,6 +255,11 @@ export const useGraphStore = create<GraphStore>()(
       },
 
       exportJson() {
+        const { view, graphs: all } = get();
+        if (isViewing(get())) {
+          const { parentId: _p, forkedAt: _f, ...graph } = all[view!.id];
+          return JSON.stringify({ format: "nodestorm/v1", project: { name: view!.name }, graphs: [graph] } satisfies GraphExport, null, 2);
+        }
         const project = get().projects[get().projectId];
         // Main graph first (projectGraphs' order) so import knows which one is the root.
         const graphs = proj.projectGraphs(get(), project);
@@ -246,6 +272,28 @@ export const useGraphStore = create<GraphStore>()(
         const next = proj.importProject(workspace(get()), doc.graphs, doc.project?.name);
         set({ ...next, ...cleared });
         return { name: next.projects[next.projectId].name, fixes };
+      },
+      openView(graph, name) {
+        const ws = workspace(get());
+        const id = uid("g"); // a fresh id, so the canvas starts anew (fit view)
+        set({
+          graphs: { ...ws.graphs, [id]: { ...graph, id } },
+          activeId: id,
+          view: { id, name, returnId: ws.activeId },
+          selection: [],
+          inspect: null,
+          highlight: null,
+        });
+      },
+      closeView() {
+        if (get().view) set({ ...workspace(get()), ...cleared });
+      },
+      saveViewCopy() {
+        const { view, graphs } = get();
+        if (!isViewing(get())) return null;
+        const next = proj.importProject(workspace(get()), [graphs[view!.id]], view!.name);
+        set({ ...next, ...cleared });
+        return next.projects[next.projectId].name;
       },
       reset: () => set({ ...initial(), ...cleared, history: {} }),
     }),
@@ -277,6 +325,9 @@ export const useGraphStore = create<GraphStore>()(
 );
 
 export const activeGraph = (s: GraphStore) => s.graphs[s.activeId];
+/** True while a shared graph is open in the read-only viewer. */
+export const isViewing = (s: Pick<GraphStore, "view" | "activeId" | "graphs">) =>
+  !!s.view && s.activeId === s.view.id && !!s.graphs[s.view.id];
 export const currentProject = (s: GraphStore) => s.projects[s.projectId];
 export const canUndo = (s: GraphStore) => !!s.history[s.activeId]?.past.length;
 export const canRedo = (s: GraphStore) => !!s.history[s.activeId]?.future.length;

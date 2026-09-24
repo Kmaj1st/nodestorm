@@ -6,15 +6,18 @@ import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { projectGraphs } from "../lib/projects";
 import { useTheme, type ThemePref } from "../lib/theme";
-import { activeGraph, canRedo, canUndo, currentProject, useGraphStore } from "../store/graphStore";
+import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { ProjectMenu } from "./ProjectMenu";
+import { ShareDialog } from "./ShareDialog";
 
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
   const s = useGraphStore();
   const graph = useGraphStore(activeGraph);
   const undoable = useGraphStore(canUndo);
   const redoable = useGraphStore(canRedo);
+  // A shared graph opened from a link is read-only: only viewing, finding and exporting remain.
+  const viewing = useGraphStore(isViewing);
   const settings = useSettings();
   const fileRef = useRef<HTMLInputElement>(null);
   const theme = useTheme();
@@ -52,14 +55,16 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   return (
     <header className={`toolbar${moreOpen ? " toolbar--open" : ""}`}>
       <div className="toolbar__brand">NodeStorm</div>
-      <ProjectMenu />
+      {viewing ? <span className="toolbar__shared">Shared graph</span> : <ProjectMenu />}
 
-      <div className="toolbar__group toolbar__history">
-        <button onClick={() => s.undo()} disabled={!undoable} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
-        <button onClick={() => s.redo()} disabled={!redoable} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
-      </div>
+      {!viewing && (
+        <div className="toolbar__group toolbar__history">
+          <button onClick={() => s.undo()} disabled={!undoable} title="Undo (Ctrl+Z)" aria-label="Undo">↶</button>
+          <button onClick={() => s.redo()} disabled={!redoable} title="Redo (Ctrl+Shift+Z)" aria-label="Redo">↷</button>
+        </div>
+      )}
 
-      <div className="toolbar__group">
+      {!viewing && <div className="toolbar__group">
         <button className="primary" onClick={onAdd}>+ Add concept</button>
         <button
           onClick={() => mix(selected[0].id, selected[1].id)}
@@ -71,12 +76,14 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? "Propose new concepts from the selection"}>
           Derive ✦
         </button>
-      </div>
+      </div>}
 
       <div className="toolbar__group">
-        <button onClick={tidy} disabled={graph.nodes.length < 2} title="Arrange in layers: prerequisites above what depends on them">
-          Tidy
-        </button>
+        {!viewing && (
+          <button onClick={tidy} disabled={graph.nodes.length < 2} title="Arrange in layers: prerequisites above what depends on them">
+            Tidy
+          </button>
+        )}
         <button onClick={onFind} disabled={!graph.nodes.length} title="Find a concept (Ctrl+K)" aria-label="Find concept">
           🔍
         </button>
@@ -93,7 +100,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
       </button>
 
       <div className="toolbar__more" id="toolbar-more">
-        <div className="toolbar__group">
+        {!viewing && <div className="toolbar__group">
           <select value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label="Graph">
             <option value={main.id}>Main graph</option>
             {sandboxes.map((g) => (
@@ -107,19 +114,21 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
               <button className="danger" onClick={() => confirm(`Discard ${graph.name}?`) && s.discardSandbox(graph.id)}>Discard</button>
             </>
           )}
-        </div>
+        </div>}
 
         <div className="toolbar__group toolbar__right">
-          <button
-            className={ready ? "ai-button" : "ai-button ai-button--warn"}
-            onClick={() => s.setSettingsOpen(true)}
-            title="AI settings"
-            aria-label="AI settings"
-          >
-            ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
-          </button>
+          {!viewing && (
+            <button
+              className={ready ? "ai-button" : "ai-button ai-button--warn"}
+              onClick={() => s.setSettingsOpen(true)}
+              title="AI settings"
+              aria-label="AI settings"
+            >
+              ⚙ {ready ? <>{meta.label} · <span className="muted">{model.split("/").pop()}</span></> : "Set up AI"}
+            </button>
+          )}
           <ExportMenu />
-          <button onClick={() => fileRef.current?.click()}>Import</button>
+          {!viewing && <button onClick={() => fileRef.current?.click()}>Import</button>}
           <input
             ref={fileRef}
             type="file"
@@ -162,6 +171,10 @@ function ExportMenu() {
   const exportJson = useGraphStore((st) => st.exportJson);
   const graph = useGraphStore(activeGraph);
   const project = useGraphStore(currentProject);
+  const view = useGraphStore((st) => (isViewing(st) ? st.view : null));
+  // Name of what's on screen: the shared graph's in the viewer, else the current project's.
+  const projectName = view?.name ?? project.name;
+  const [sharing, setSharing] = useState(false);
 
   useEffect(() => {
     if (!open) return;
@@ -188,9 +201,16 @@ function ExportMenu() {
 
   const items: { label: string; title: string; action: () => void | Promise<void> }[] = [
     {
-      label: "JSON (this project)",
-      title: "This project's graphs, including sandboxes. Importing it later adds it as a new project.",
-      action: () => download(`${exportFileName({ ...graph, name: project.name })}.json`, text(exportJson(), "application/json")),
+      label: view ? "JSON (this graph)" : "JSON (this project)",
+      title: view
+        ? "The shared graph. Importing it later adds it as a new project."
+        : "This project's graphs, including sandboxes. Importing it later adds it as a new project.",
+      action: () => download(`${exportFileName({ ...graph, name: projectName })}.json`, text(exportJson(), "application/json")),
+    },
+    {
+      label: "Share link…",
+      title: "A link that contains this graph (not its sandboxes). Nothing is uploaded: the graph travels inside the link.",
+      action: () => setSharing(true),
     },
     {
       label: "Markdown notes",
@@ -239,6 +259,14 @@ function ExportMenu() {
             <button key={it.label} role="menuitem" title={it.title} onClick={run(it.action)}>{it.label}</button>
           ))}
         </div>
+      )}
+      {sharing && (
+        <ShareDialog
+          graph={graph}
+          // A sandbox is shared on its own, so say which one.
+          name={graph.parentId ? `${projectName} – ${graph.name}` : projectName}
+          onClose={() => setSharing(false)}
+        />
       )}
     </div>
   );
