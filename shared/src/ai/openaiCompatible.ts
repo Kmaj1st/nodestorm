@@ -88,6 +88,8 @@ export class OpenAICompatibleProvider implements Provider {
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
     if (!this.model) throw new ProviderError(`${this.label}: no model selected`, 400);
+    // Both attempts (JSON mode, then plain if the model rejects it) share one deadline.
+    const deadlineAt = Date.now() + (opts.timeoutMs ?? this.timeoutMs);
     const send = (jsonMode: boolean) =>
       this.request(
         "/chat/completions",
@@ -102,7 +104,7 @@ export class OpenAICompatibleProvider implements Provider {
             ...(jsonMode ? { response_format: { type: "json_object" } } : {}),
           }),
         },
-        { signal: opts.signal, timeoutMs: opts.timeoutMs ?? this.timeoutMs },
+        { signal: opts.signal, timeoutMs: Math.max(1, deadlineAt - Date.now()) },
       );
     let data: unknown;
     const modelKey = `${this.baseURL} ${this.model}`;
@@ -110,12 +112,14 @@ export class OpenAICompatibleProvider implements Provider {
     try {
       data = await send(jsonMode);
     } catch (e) {
-      // Some models reject JSON mode outright; the prompts already ask for JSON, so retry without it (and remember).
-      if (!jsonMode || !(e instanceof ProviderError) || !/HTTP 400/.test(e.message) || !/response_format|json/i.test(e.message)) {
+      // Some models reject JSON mode outright; the prompts already ask for JSON, so retry without it. Only an error
+      // that names response_format counts (a 400 about the JSON *body* is something else), and it's remembered for
+      // this endpoint+model only once the plain request has worked.
+      if (!jsonMode || !(e instanceof ProviderError) || !/HTTP 400/.test(e.message) || !/response_format/i.test(e.message)) {
         throw e;
       }
-      noJsonMode.add(modelKey);
       data = await send(false);
+      noJsonMode.add(modelKey);
     }
     const reply = data as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
     const content = reply.choices?.[0]?.message?.content;

@@ -1,4 +1,4 @@
-import { lazy, Suspense, type ComponentType } from "react";
+import { Component, lazy, Suspense, useState, type ComponentType, type ReactNode } from "react";
 import { useT } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 
@@ -28,14 +28,53 @@ function Loading() {
   );
 }
 
-/** A lazily loaded dialog behind its own Suspense boundary, so the rest of the app stays on screen meanwhile. */
-function lazyDialog<P extends object>(load: () => Promise<ComponentType<P>>) {
+/**
+ * What a dialog shows when its chunk couldn't be fetched (e.g. a first visit that went offline). Browsers remember a
+ * failed module import for the rest of the page's life, so only a reload can fetch it again; the graph is saved.
+ */
+function LoadFailed({ onClose }: { onClose: () => void }) {
+  const t = useT();
+  return (
+    <div className="modal">
+      <div className="modal__loading" role="alert">
+        <p>{t("common.loadFailed")}</p>
+        <div className="form__actions">
+          <button onClick={onClose}>{t("common.close")}</button>
+          <button className="primary" onClick={() => location.reload()}>{t("common.reload")}</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Catches a failed chunk load so it can't unmount the whole app. */
+class LoadBoundary extends Component<{ fallback: ReactNode; children: ReactNode }, { failed: boolean }> {
+  state = { failed: false };
+  static getDerivedStateFromError() {
+    return { failed: true };
+  }
+  render() {
+    return this.state.failed ? this.props.fallback : this.props.children;
+  }
+}
+
+/** A lazily loaded dialog behind its own Suspense and error boundaries, so the rest of the app stays on screen. */
+function lazyDialog<P extends object>(load: () => Promise<ComponentType<P>>, closeDialog?: () => void) {
   const Inner = lazy(async () => ({ default: await load() }));
   return function LazyDialog(props: P) {
+    const [dismissed, setDismissed] = useState(false);
+    if (dismissed) return null;
+    const close = () => {
+      const onClose = closeDialog ?? (props as { onClose?: () => void }).onClose;
+      if (onClose) onClose();
+      else setDismissed(true);
+    };
     return (
-      <Suspense fallback={<Loading />}>
-        <Inner {...props} />
-      </Suspense>
+      <LoadBoundary fallback={<LoadFailed onClose={close} />}>
+        <Suspense fallback={<Loading />}>
+          <Inner {...props} />
+        </Suspense>
+      </LoadBoundary>
     );
   };
 }
@@ -48,14 +87,19 @@ export const SettingsDialog = lazyDialog(() => loaders.settings().then((m) => m.
 export const ShareDialog = lazyDialog(() => loaders.share().then((m) => m.ShareDialog));
 export const ShortcutsDialog = lazyDialog(() => loaders.shortcuts().then((m) => m.ShortcutsDialog));
 
-const SenseDialogLazy = lazyDialog(() => loaders.sense().then((m) => m.SenseDialog));
+// Closing after a failed load leaves the concept "unclear"; its badge reopens the dialog.
+const SenseDialogLazy = lazyDialog(
+  () => loaders.sense().then((m) => m.SenseDialog),
+  () => useGraphStore.getState().setClarifying(null),
+);
 /** "What do you mean?" is mounted all the time; its chunk is only needed once a concept turns out ambiguous. */
 export function SenseDialog() {
   const clarifying = useGraphStore((s) => s.clarifying !== null);
   return clarifying ? <SenseDialogLazy /> : null;
 }
 
-/** Fetch every dialog's chunk in the background, once the page has settled. Failures are ignored (retried on use). */
+/** Fetch every dialog's chunk in the background, once the page has settled. A failure here only means the dialog
+ * shows its "couldn't be loaded" notice (with Reload) when opened. */
 export function preloadDialogs() {
   const run = () => Object.values(loaders).forEach((load) => void load().catch(() => {}));
   if ("requestIdleCallback" in window) requestIdleCallback(run, { timeout: 3000 });

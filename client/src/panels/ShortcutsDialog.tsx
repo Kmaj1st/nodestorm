@@ -1,6 +1,7 @@
 import { Fragment, useMemo } from "react";
 import { t as translate, useT } from "../i18n";
 import { comboLabel, currentIsMac, SHORTCUTS, type Combo } from "../lib/shortcuts";
+import { isViewing, useGraphStore } from "../store/graphStore";
 import { startTour } from "../store/onboardingStore";
 import { Modal } from "./Modal";
 
@@ -12,6 +13,7 @@ const localCombo = (combo: Combo): Combo =>
 export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
   const mac = useMemo(currentIsMac, []);
+  const viewing = useGraphStore(isViewing);
   return (
     <Modal label={t("shortcuts.title")} onClose={onClose} className="shortcuts">
       <h3>{t("shortcuts.title")}</h3>
@@ -36,7 +38,8 @@ export function ShortcutsDialog({ onClose }: { onClose: () => void }) {
         </section>
       ))}
       <div className="form__actions">
-        <button onClick={() => { onClose(); startTour(); }}>{t("tour.showAgain")}</button>
+        {/* The tour is for your own graphs; in the share viewer it would only start later, unprompted. */}
+        {!viewing && <button onClick={() => { onClose(); startTour(); }}>{t("tour.showAgain")}</button>}
         <button onClick={onClose}>{t("common.close")}</button>
       </div>
     </Modal>

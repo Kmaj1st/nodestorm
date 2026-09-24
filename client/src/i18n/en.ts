@@ -15,6 +15,8 @@ export const en = {
   "common.install": "Install",
   "common.dismiss": "Dismiss",
   "common.loading": "Loading…",
+  "common.reload": "Reload",
+  "common.loadFailed": "This part of NodeStorm couldn't be loaded. Check your connection, then reload — your graph is saved.",
 
   // Toolbar
   "toolbar.sharedGraph": "Shared graph",

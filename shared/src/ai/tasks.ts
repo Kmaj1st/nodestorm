@@ -34,7 +34,9 @@ import {
  * reasoning models (e.g. DeepSeek-R1, Qwen3) may put before the answer; tries each "{" until one parses.
  */
 export function extractJson(text: string): unknown {
-  const answer = text.replace(/<think>[\s\S]*?<\/think>/gi, "").replace(/^[\s\S]*<\/think>/i, "");
+  // Only a leading reasoning block is removed (with or without its opening tag); a "<think>" inside the answer — e.g.
+  // quoted from the user's own text — is left alone.
+  const answer = text.replace(/^\s*(?:<think>[\s\S]*?<\/think>|[^{]*?<\/think>)/i, "");
   const fenced = answer.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const body = fenced ? fenced[1] : answer;
   let lastError: unknown = new Error("no JSON object in reply");
@@ -77,7 +79,7 @@ async function runStructured<S extends z.ZodTypeAny>(
   provider: Provider,
   messages: ChatMessage[],
   schema: S,
-  opts: RequestOptions & { search?: boolean } = {},
+  opts: RequestOptions & { search?: boolean; maxTokens?: number } = {},
 ): Promise<z.infer<S>> {
   let lastErr = "";
   messages = withLanguage(messages, opts.language);
@@ -140,7 +142,9 @@ export const tasks = {
     runStructured(p, explainPrompt(ExplainRequest.parse(body)), ExplainResponse, o),
   extract: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = ExtractRequest.parse(body);
-    return cleanExtraction(await runStructured(p, extractPrompt(req), ExtractResponse, o), req.existing);
+    // Up to 30 concepts with quotes plus their relations: more room than the default answer budget.
+    const out = await runStructured(p, extractPrompt(req), ExtractResponse, { ...o, maxTokens: 8192 });
+    return cleanExtraction(out, req.existing);
   },
 };
 export type TaskName = keyof typeof tasks;

@@ -144,3 +144,46 @@ describe("reasoning models and JSON mode", () => {
     );
   });
 });
+
+describe("third review: reasoning-model handling doesn't touch real content", () => {
+  it("keeps </think> and <think> text that is part of the answer", async () => {
+    const { extractJson } = await import("../src/ai/tasks");
+    const quoted = { concepts: [{ name: "Think tag", quote: "close the block with </think> before answering" }] };
+    expect(extractJson(JSON.stringify(quoted))).toEqual(quoted);
+    const wrapped = { quote: "wrap it in <think>scratch</think> tags" };
+    expect(extractJson(JSON.stringify(wrapped))).toEqual(wrapped);
+    // …while a leading reasoning block is still skipped.
+    expect(extractJson(`<think>{draft}</think>${JSON.stringify(wrapped)}`)).toEqual(wrapped);
+  });
+
+  it("a 400 about something else doesn't switch JSON mode off", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    stubFetch((_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return json({ error: { message: "Failed to deserialize the JSON body: max_tokens must be <= 2048" } }, 400);
+    });
+    const p = createProvider("siliconflow", { apiKey: "k", model: "some/other-model" });
+    await expect(p.complete([{ role: "user", content: "hi" }], { json: true })).rejects.toThrow(/HTTP 400/);
+    expect(bodies).toHaveLength(1); // no plain retry
+    await expect(p.complete([{ role: "user", content: "hi" }], { json: true })).rejects.toThrow();
+    expect(Boolean(bodies[1].response_format)).toBe(true); // still asks for JSON mode
+  });
+
+  it("the JSON-mode fallback is only remembered when the plain request works", async () => {
+    const bodies: Record<string, unknown>[] = [];
+    stubFetch((_url, init) => {
+      const body = JSON.parse(String(init?.body));
+      bodies.push(body);
+      return json({ message: body.response_format ? "response_format is not supported" : "server busy" }, body.response_format ? 400 : 500);
+    });
+    const p = createProvider("siliconflow", { apiKey: "k", model: "flaky/model", timeoutMs: 2000 });
+    await expect(p.complete([{ role: "user", content: "hi" }], { json: true })).rejects.toThrow();
+    const before = bodies.length;
+    stubFetch((_url, init) => {
+      bodies.push(JSON.parse(String(init?.body)));
+      return json({ choices: [{ message: { content: "{}" } }] });
+    });
+    await p.complete([{ role: "user", content: "hi" }], { json: true });
+    expect(Boolean(bodies[before].response_format)).toBe(true); // tried JSON mode again
+  });
+});

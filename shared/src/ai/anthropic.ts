@@ -97,7 +97,12 @@ export class AnthropicProvider implements Provider {
   }
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
-    const { client, Anthropic } = await this.api();
+    // Loading the SDK chunk is cancellable and time-limited too, so a stalled fetch can't hold a queue slot.
+    const { client, Anthropic } = await withDeadline(
+      this.label,
+      { signal: opts.signal, timeoutMs: opts.timeoutMs ?? this.timeoutMs },
+      () => this.api(),
+    );
     const system = messages
       .filter((m) => m.role === "system")
       .map((m) => m.content)
@@ -156,8 +161,8 @@ export class AnthropicProvider implements Provider {
   }
 
   async listModels(opts: RequestOptions = {}): Promise<ModelInfo[]> {
-    const { client, Anthropic } = await this.api();
     const timeoutMs = opts.timeoutMs ?? DISCOVERY_TIMEOUT_MS;
+    const { client, Anthropic } = await withDeadline(this.label, { signal: opts.signal, timeoutMs }, () => this.api());
     return withDeadline(this.label, { signal: opts.signal, timeoutMs }, async (signal) => {
       try {
         const out: ModelInfo[] = [];

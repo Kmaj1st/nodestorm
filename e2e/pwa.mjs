@@ -121,6 +121,34 @@ try {
   assert(after.controlled && after.keys.length === 1 && after.keys[0].endsWith("-next"), "Reload switches to the new version and drops the old cache");
   assert((await page.getByTestId("update-notice").count()) === 0, "…and the notice is gone");
 
+  console.log("Failed chunk load");
+  {
+    // A first visit before anything is precached (no service worker), with the Find dialog's chunk failing.
+    const ctx = await browser.newContext({ viewport: { width: 1280, height: 800 }, serviceWorkers: "block" });
+    const p = await ctx.newPage();
+    const errors = [];
+    p.on("pageerror", (e) => errors.push(e.message));
+    let fail = true;
+    await p.route(/FindDialog-.*\.js$/, (route) => (fail ? route.abort() : route.continue()));
+    await p.goto(base);
+    await p.getByRole("button", { name: "+ Add concept" }).waitFor();
+    await p.waitForTimeout(3500); // let the idle-time preload try (and fail) first
+    await p.keyboard.press("Control+k");
+    const alert = p.getByRole("alert").filter({ hasText: "couldn't be loaded" });
+    await alert.waitFor();
+    assert(
+      (await p.getByRole("button", { name: "+ Add concept" }).isVisible()) && !errors.length,
+      "a dialog whose chunk fails to load shows an error instead of blanking the app",
+    );
+    fail = false;
+    await Promise.all([p.waitForEvent("load"), alert.getByRole("button", { name: "Reload" }).click()]);
+    await p.getByRole("button", { name: "+ Add concept" }).waitFor();
+    await p.keyboard.press("Control+k");
+    await p.getByRole("dialog", { name: "Find concept" }).waitFor();
+    assert(true, "Reload fetches it again once the network is back");
+    await ctx.close();
+  }
+
   console.log("\nPWA check passed");
 } catch (e) {
   console.error(e);

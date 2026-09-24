@@ -14,6 +14,8 @@ export const zh: Record<MessageKey, string> = {
   "common.install": "安装",
   "common.dismiss": "关闭提示",
   "common.loading": "加载中…",
+  "common.reload": "重新加载",
+  "common.loadFailed": "无法加载 NodeStorm 的这一部分。请检查网络连接后重新加载页面——你的图已保存。",
 
   // 工具栏
   "toolbar.sharedGraph": "分享的图谱",
