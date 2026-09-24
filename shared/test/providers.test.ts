@@ -187,3 +187,27 @@ describe("third review: reasoning-model handling doesn't touch real content", ()
     expect(Boolean(bodies[before].response_format)).toBe(true); // tried JSON mode again
   });
 });
+
+describe("OpenAI-compatible presets", () => {
+  it.each([
+    ["deepseek", "https://api.deepseek.com/v1/chat/completions", "deepseek-chat"],
+    ["moonshot", "https://api.moonshot.cn/v1/chat/completions", "moonshot-v1-8k"],
+    ["zhipu", "https://open.bigmodel.cn/api/paas/v4/chat/completions", "glm-4-flash"],
+    ["dashscope", "https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions", "qwen-plus"],
+  ] as const)("%s talks to its own endpoint with its default model", async (kind, url, model) => {
+    const calls = stubFetch(() => json({ choices: [{ message: { content: "{}" } }] }));
+    await createProvider(kind, { apiKey: "k" }).complete([{ role: "user", content: "hi" }]);
+    expect(calls[0].url).toBe(url);
+    expect(JSON.parse(String(calls[0].init?.body)).model).toBe(model);
+  });
+
+  it("Ollama needs no key and is local", async () => {
+    const { providerMeta } = await import("../src/ai/factory");
+    const calls = stubFetch(() => json({ data: [{ id: "qwen2.5:7b" }] }));
+    const p = createProvider("ollama");
+    expect(p.configured).toBe(true);
+    expect((await p.listModels()).map((m) => m.id)).toEqual(["qwen2.5:7b"]);
+    expect(calls[0].url).toBe("http://localhost:11434/v1/models");
+    expect(providerMeta("ollama").local && providerMeta("mock").local && !providerMeta("deepseek").local).toBe(true);
+  });
+});

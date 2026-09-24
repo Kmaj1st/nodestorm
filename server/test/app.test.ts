@@ -154,3 +154,14 @@ describe("server: quiz", () => {
     expect((await quiz({ node: { name: "Group" }, style: "trick" })).status).toBe(400);
   });
 });
+
+describe("server: provider env config", () => {
+  it("reads <KIND>_API_KEY / _BASE_URL / _MODEL for every OpenAI-compatible preset", async () => {
+    const { envConfig } = await import("../src/providers/registry");
+    const env = { DEEPSEEK_API_KEY: "d", DEEPSEEK_MODEL: "deepseek-reasoner", ZHIPU_BASE_URL: "https://x/v4" };
+    expect(envConfig("deepseek", env)).toMatchObject({ apiKey: "d", model: "deepseek-reasoner" });
+    expect(envConfig("zhipu", env)).toMatchObject({ baseURL: "https://x/v4" });
+    expect(envConfig("anthropic", { ANTHROPIC_WEB_SEARCH: "1" })).toMatchObject({ webSearch: true });
+    expect(envConfig("mock", env)).toEqual({});
+  });
+});

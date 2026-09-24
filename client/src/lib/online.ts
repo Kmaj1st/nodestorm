@@ -1,4 +1,4 @@
-import type { ProviderKind } from "@nodestorm/shared";
+import { providerMeta, type ProviderKind } from "@nodestorm/shared";
 import { useSyncExternalStore } from "react";
 import { t } from "../i18n";
 
@@ -17,7 +17,7 @@ export class OfflineError extends Error {
  * network, so it keeps working; every other provider would only wait for its timeout.
  */
 export function offlineBlocks(provider: ProviderKind, online: boolean): boolean {
-  return !online && provider !== "mock";
+  return !online && !providerMeta(provider).local;
 }
 
 /** navigator.onLine, false only when the browser knows it has no network at all. */

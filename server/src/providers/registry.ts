@@ -9,18 +9,15 @@ import {
   type ProvidersResponse,
 } from "@nodestorm/shared";
 
-/** Server-side provider configuration comes from environment variables (server/.env). */
+/**
+ * Server-side provider configuration comes from environment variables (server/.env): <KIND>_API_KEY,
+ * <KIND>_BASE_URL and <KIND>_MODEL, e.g. SILICONFLOW_API_KEY or DEEPSEEK_MODEL.
+ */
 export function envConfig(kind: ProviderKind, env = process.env): ProviderConfig {
-  switch (kind) {
-    case "siliconflow":
-      return { apiKey: env.SILICONFLOW_API_KEY, baseURL: env.SILICONFLOW_BASE_URL, model: env.SILICONFLOW_MODEL };
-    case "anthropic":
-      return { apiKey: env.ANTHROPIC_API_KEY, model: env.ANTHROPIC_MODEL, webSearch: env.ANTHROPIC_WEB_SEARCH === "1" };
-    case "openai":
-      return { apiKey: env.OPENAI_API_KEY, baseURL: env.OPENAI_BASE_URL, model: env.OPENAI_MODEL };
-    case "mock":
-      return {};
-  }
+  if (kind === "mock") return {};
+  const p = kind.toUpperCase();
+  const cfg: ProviderConfig = { apiKey: env[`${p}_API_KEY`], baseURL: env[`${p}_BASE_URL`], model: env[`${p}_MODEL`] };
+  return kind === "anthropic" ? { ...cfg, webSearch: env.ANTHROPIC_WEB_SEARCH === "1" } : cfg;
 }
 
 export function createRegistry(env = process.env) {

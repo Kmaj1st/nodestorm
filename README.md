@@ -90,12 +90,17 @@ npm run dev                          # server on :8787 + UI on :5173
 |---|---|---|
 | SiliconFlow (default) | `GET /v1/models?type=text&sub_type=chat` | default model `deepseek-ai/DeepSeek-V3` |
 | Anthropic Claude | `GET /v1/models` | default `claude-opus-5`; optional web search when naming/relating |
-| OpenAI-compatible | `GET {baseURL}/models` (non-chat models hidden) | any compatible endpoint: OpenAI, Ollama, vLLM, DeepSeek… |
+| DeepSeek | `GET /v1/models` | default `deepseek-chat` |
+| Moonshot (Kimi) | `GET /v1/models` | default `moonshot-v1-8k` |
+| Zhipu (GLM) | `GET /api/paas/v4/models` | default `glm-4-flash` |
+| Alibaba Qwen (DashScope) | `GET /compatible-mode/v1/models` | default `qwen-plus` |
+| Ollama (local) | `GET {baseURL}/models` | no key, works offline; for browser mode start it with `OLLAMA_ORIGINS="*" ollama serve` |
+| OpenAI-compatible | `GET {baseURL}/models` (non-chat models hidden) | any other compatible endpoint: OpenAI, vLLM, LM Studio… |
 | Offline demo | built-in | no key; deterministic, used by tests |
 
 In Settings, **AI answers in** picks the language for names, definitions and relations: *Auto* matches the language of your concept names, or pick one (English, 中文, …) or type your own. Rate limits (HTTP 429) and brief provider outages (5xx, network errors) are retried up to twice with backoff, honouring `Retry-After`, within the request timeout. At most 3 AI requests run at once (configurable); the rest show as *queued* in the status bar and can be cancelled there. In browser mode Settings also shows roughly how many tokens this session used.
 
-In server mode the same providers are configured by env vars (`SILICONFLOW_API_KEY`, `SILICONFLOW_MODEL`, `ANTHROPIC_API_KEY`, `ANTHROPIC_WEB_SEARCH=1`, `OPENAI_API_KEY`, `OPENAI_BASE_URL`, …). See `server/.env.example`.
+In server mode the same providers are configured by env vars named `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL` and `<PROVIDER>_MODEL` (e.g. `SILICONFLOW_API_KEY`, `DEEPSEEK_MODEL`), plus `ANTHROPIC_WEB_SEARCH=1`. See `server/.env.example`. The default models are a starting point: Settings lists the models your key can actually use.
 
 The provider code lives in `shared/src/ai/`, so the browser and the server run the same prompts, JSON extraction, zod validation and retry. To add a provider:
 1. Implement the `Provider` interface: `complete(messages, opts)` and `listModels()`.

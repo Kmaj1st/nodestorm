@@ -178,28 +178,30 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <p className="error small">{t("settings.serverMissingKey", { provider: meta.label })}</p>
       )}
 
-      {connection === "browser" && meta.needsKey && (
+      {connection === "browser" && (meta.needsKey || meta.defaultBaseURL) && (
         <>
-          <label className="field">
-            <span>
-              {t("settings.apiKey")}
-              {meta.keyUrl && (
-                <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">{t("settings.getKey")}</a></>
-              )}
-            </span>
-            <div className="row">
-              <input
-                type={showKey ? "text" : "password"}
-                value={cfg.apiKey ?? ""}
-                onChange={(e) => setCfg({ apiKey: e.target.value.trim() || undefined })}
-                placeholder="sk-…"
-                autoComplete="off"
-                spellCheck={false}
-                aria-label={t("settings.apiKey")}
-              />
-              <button type="button" onClick={() => setShowKey(!showKey)}>{t(showKey ? "settings.hide" : "settings.show")}</button>
-            </div>
-          </label>
+          {meta.needsKey && (
+            <label className="field">
+              <span>
+                {t("settings.apiKey")}
+                {meta.keyUrl && (
+                  <> · <a href={meta.keyUrl} target="_blank" rel="noreferrer">{t("settings.getKey")}</a></>
+                )}
+              </span>
+              <div className="row">
+                <input
+                  type={showKey ? "text" : "password"}
+                  value={cfg.apiKey ?? ""}
+                  onChange={(e) => setCfg({ apiKey: e.target.value.trim() || undefined })}
+                  placeholder="sk-…"
+                  autoComplete="off"
+                  spellCheck={false}
+                  aria-label={t("settings.apiKey")}
+                />
+                <button type="button" onClick={() => setShowKey(!showKey)}>{t(showKey ? "settings.hide" : "settings.show")}</button>
+              </div>
+            </label>
+          )}
           {meta.defaultBaseURL && (
             <label className="field">
               {t("settings.baseUrl")}
@@ -211,6 +213,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
               />
             </label>
           )}
+          {provider === "ollama" && <p className="muted small">{t("settings.ollamaHint")}</p>}
           {provider === "anthropic" && (
             <label className="check">
               <input type="checkbox" checked={Boolean(cfg.webSearch)} onChange={(e) => setCfg({ webSearch: e.target.checked })} />

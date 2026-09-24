@@ -3,7 +3,16 @@ import { MockProvider } from "./mock";
 import { OpenAICompatibleProvider } from "./openaiCompatible";
 import type { Provider } from "./provider";
 
-export type ProviderKind = "siliconflow" | "anthropic" | "openai" | "mock";
+export type ProviderKind =
+  | "siliconflow"
+  | "anthropic"
+  | "deepseek"
+  | "moonshot"
+  | "zhipu"
+  | "dashscope"
+  | "ollama"
+  | "openai"
+  | "mock";
 
 export interface ProviderConfig {
   apiKey?: string;
@@ -14,6 +23,9 @@ export interface ProviderConfig {
   timeoutMs?: number;
 }
 
+/** Providers that speak the OpenAI chat-completions API; they only differ in endpoint, default model and key page. */
+const OPENAI_COMPATIBLE = new Set<ProviderKind>(["siliconflow", "deepseek", "moonshot", "zhipu", "dashscope", "ollama", "openai"]);
+
 export interface ProviderMeta {
   kind: ProviderKind;
   label: string;
@@ -21,6 +33,8 @@ export interface ProviderMeta {
   defaultBaseURL?: string;
   needsKey: boolean;
   keyUrl?: string;
+  /** Runs on this machine, so it keeps working without an internet connection. */
+  local?: boolean;
 }
 
 /** Everything the UI needs to render a provider picker. Add new providers here and in createProvider. */
@@ -40,6 +54,49 @@ export const PROVIDERS: ProviderMeta[] = [
     needsKey: true,
     keyUrl: "https://console.anthropic.com/settings/keys",
   },
+  // Presets for other OpenAI-compatible services. Default models are a starting point: Settings lists what the key can
+  // actually use (model discovery via GET /models).
+  {
+    kind: "deepseek",
+    label: "DeepSeek",
+    defaultModel: "deepseek-chat",
+    defaultBaseURL: "https://api.deepseek.com/v1",
+    needsKey: true,
+    keyUrl: "https://platform.deepseek.com/api_keys",
+  },
+  {
+    kind: "moonshot",
+    label: "Moonshot (Kimi)",
+    defaultModel: "moonshot-v1-8k",
+    defaultBaseURL: "https://api.moonshot.cn/v1",
+    needsKey: true,
+    keyUrl: "https://platform.moonshot.cn/console/api-keys",
+  },
+  {
+    kind: "zhipu",
+    label: "Zhipu (GLM)",
+    defaultModel: "glm-4-flash",
+    defaultBaseURL: "https://open.bigmodel.cn/api/paas/v4",
+    needsKey: true,
+    keyUrl: "https://open.bigmodel.cn/usercenter/apikeys",
+  },
+  {
+    kind: "dashscope",
+    label: "Alibaba Qwen (DashScope)",
+    defaultModel: "qwen-plus",
+    defaultBaseURL: "https://dashscope.aliyuncs.com/compatible-mode/v1",
+    needsKey: true,
+    keyUrl: "https://bailian.console.aliyun.com/?apiKey=1",
+  },
+  {
+    // Browser mode needs Ollama to allow the page's origin: start it with OLLAMA_ORIGINS set (see README).
+    kind: "ollama",
+    label: "Ollama (local)",
+    defaultModel: "qwen2.5:7b",
+    defaultBaseURL: "http://localhost:11434/v1",
+    needsKey: false,
+    local: true,
+  },
   {
     kind: "openai",
     label: "OpenAI-compatible",
@@ -47,7 +104,7 @@ export const PROVIDERS: ProviderMeta[] = [
     defaultBaseURL: "https://api.openai.com/v1",
     needsKey: true,
   },
-  { kind: "mock", label: "Offline demo", defaultModel: "mock-kb", needsKey: false },
+  { kind: "mock", label: "Offline demo", defaultModel: "mock-kb", needsKey: false, local: true },
 ];
 
 export const providerMeta = (kind: ProviderKind) => PROVIDERS.find((p) => p.kind === kind)!;
@@ -56,18 +113,25 @@ export function createProvider(kind: ProviderKind, cfg: ProviderConfig = {}): Pr
   const meta = providerMeta(kind);
   const model = cfg.model || meta.defaultModel;
   const baseURL = cfg.baseURL || meta.defaultBaseURL || "";
+  if (OPENAI_COMPATIBLE.has(kind)) {
+    return new OpenAICompatibleProvider({
+      id: kind,
+      label: meta.label,
+      baseURL,
+      // Ollama ignores the key but the client always sends one.
+      apiKey: cfg.apiKey || (meta.needsKey ? undefined : kind),
+      model,
+      timeoutMs: cfg.timeoutMs,
+      ...(kind === "siliconflow" ? { modelsQuery: "type=text&sub_type=chat" } : {}),
+    });
+  }
   switch (kind) {
-    case "siliconflow":
-      return new OpenAICompatibleProvider({
-        id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model, timeoutMs: cfg.timeoutMs,
-        modelsQuery: "type=text&sub_type=chat",
-      });
-    case "openai":
-      return new OpenAICompatibleProvider({ id: kind, label: meta.label, baseURL, apiKey: cfg.apiKey, model, timeoutMs: cfg.timeoutMs });
     case "anthropic":
       return new AnthropicProvider({ apiKey: cfg.apiKey, model, webSearch: cfg.webSearch, timeoutMs: cfg.timeoutMs });
     case "mock":
       return new MockProvider();
+    default:
+      throw new Error(`No client for provider "${kind}"`);
   }
 }
 

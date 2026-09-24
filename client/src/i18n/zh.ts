@@ -363,6 +363,7 @@ export const zh: Record<MessageKey, string> = {
   "settings.hide": "隐藏",
   "settings.show": "显示",
   "settings.baseUrl": "Base URL",
+  "settings.ollamaHint": "Ollama 在你的电脑上运行，不需要密钥。浏览器模式下需让它接受本页面的请求，例如用 OLLAMA_ORIGINS=\"*\" ollama serve 启动。",
   "settings.webSearch": "允许 Claude 在命名和分析关系时联网搜索",
   "settings.model": "模型",
   "settings.available": "共 {n} 个可用",

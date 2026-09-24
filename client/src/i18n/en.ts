@@ -371,6 +371,7 @@ export const en = {
   "settings.hide": "Hide",
   "settings.show": "Show",
   "settings.baseUrl": "Base URL",
+  "settings.ollamaHint": "Ollama runs on your computer and needs no key. For browser mode, start it so it accepts this page, e.g. OLLAMA_ORIGINS=\"*\" ollama serve.",
   "settings.webSearch": "Let Claude search the web when naming and relating concepts",
   "settings.model": "Model",
   "settings.available": "{n} available",
