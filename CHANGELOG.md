@@ -7,6 +7,16 @@ Everything below landed on `claude/hopeful-pascal-bc67up` in one day. Most featu
 axe accessibility audit green after each merge. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits
 together.
 
+### Guess the chain (`claude/feature-chain-game`)
+- **A game mode in the Absurd chain dialog**: *Guess the chain* builds a chain with the concepts between the two ends
+  hidden. Each link shows only its relation; type guesses in any order (checked leniently: case, plural, leading
+  article, aliases from the graph and small typos). 3 points for a concept found alone, 2 after a clue (the link's
+  narration with every hidden name blanked out), none when revealed. A summary gives the title, the score, a tally,
+  the moral and the best score for that pair of ends (localStorage); *Play again* takes another route. Copy and Add to
+  a sandbox wait until the game is over. Keyboard-only playable, feedback in a live region, fits a 390px phone, axe
+  clean in both themes. Pure logic in `client/src/lib/chainGame.ts` with unit tests over the offline demo's
+  Homomorphism → Toast chain.
+
 ### Parody voices and Reviewer 2 (`claude/feature-parody-voices`)
 - **Narrators for Explain more**: next to the level, pick the plain voice or a parody narrator (nature documentary,
   sports commentator, noir detective, medieval scholar, overexcited infomercial, Shakespearean). Only the telling

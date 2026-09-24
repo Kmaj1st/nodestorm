@@ -2067,6 +2067,142 @@ try {
     await dlg.getByRole("button", { name: "Close" }).click();
   }
 
+  console.log("Guess the chain");
+  {
+    // The offline demo's Homomorphism → Toast chain: Exponential function, Fourier transform, Heat equation, Heat and
+    // Maillard reaction are hidden between the ends.
+    const openChain = async () => {
+      await page.getByRole("button", { name: "File", exact: true }).click();
+      await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+      const d = page.getByRole("dialog", { name: "Absurd chain" });
+      await d.waitFor();
+      await d.getByLabel("From", { exact: true }).fill("Homomorphism");
+      await d.getByLabel("To", { exact: true }).fill("Toast");
+      await d.getByTestId("absurd-play").click();
+      await d.getByTestId("chain-game").waitFor();
+      return d;
+    };
+    const dlg = await openChain();
+    const board = dlg.getByTestId("chain-game");
+    const hops = board.getByRole("list", { name: "The chain" }).getByRole("listitem");
+    const score = board.getByTestId("chain-game-score");
+    const feedback = board.getByTestId("chain-game-feedback");
+    const guessField = board.getByLabel("Guess a hidden concept");
+    assert(
+      (await hops.count()) === 6 && (await score.textContent()) === "Score 0 / 15" &&
+        (await board.textContent()).includes("6 links, 5 hidden concepts") &&
+        (await hops.first().textContent()).includes("is exemplified by"),
+      "Guess the chain shows the two ends, six links with their relations and five hidden concepts",
+    );
+    const boardText = await board.textContent();
+    assert(
+      !["Exponential function", "Maillard reaction", "Joseph Fourier", "Nobody seems surprised"].some((x) => boardText.includes(x)),
+      "…while the concepts in between, the facts and the narration stay hidden",
+    );
+    await page.waitForFunction(() => document.activeElement?.closest(".chain-game__guess"));
+    assert(true, "the guess field has the focus");
+    assert((await feedback.getAttribute("role")) === "status", "feedback is announced to screen readers");
+    assert(
+      (await dlg.getByRole("button", { name: "Copy as text" }).count()) === 0 && (await dlg.getByRole("button", { name: "Add to a sandbox" }).count()) === 0,
+      "copying or adding the chain would give it away, so they wait for the end",
+    );
+
+    await guessField.fill("Pizza");
+    await guessField.press("Enter");
+    await feedback.filter({ hasText: "Not on this chain: Pizza." }).waitFor();
+    assert((await score.textContent()) === "Score 0 / 15", "a wrong guess is announced and costs nothing");
+    await guessField.fill("fourier transfrom");
+    await guessField.press("Enter");
+    await feedback.filter({ hasText: "Right: Fourier transform. +3 points, score 3 of 15." }).waitFor();
+    assert(
+      (await score.textContent()) === "Score 3 / 15" && (await hops.nth(1).textContent()).includes("Fourier transform") &&
+        (await guessField.inputValue()) === "",
+      "a right guess (typo forgiven, any order) reveals the concept and scores 3",
+    );
+
+    const clue = board.getByRole("button", { name: "Clue for hidden concept 3" });
+    await clue.focus();
+    await page.keyboard.press("Enter");
+    const clueText = hops.nth(2).locator(".chain-game__clue");
+    await clueText.waitFor();
+    assert(
+      (await clueText.textContent()).includes("From Fourier transform it is a short walk to [?]. We walked it."),
+      "a clue (from the keyboard) shows the link's narration with the hidden name blanked out",
+    );
+    await page.waitForFunction(() => document.activeElement?.closest(".chain-game__guess"));
+    assert(true, "…and hands the focus back to the guess field");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.waitForTimeout(200);
+    assert(
+      await page.evaluate(() => {
+        const body = document.querySelector(".modal__body");
+        return document.documentElement.scrollWidth <= 390 && body.scrollWidth <= body.clientWidth;
+      }),
+      "the game board fits a 390px-wide phone without sideways scrolling",
+    );
+    await audit("Guess the chain with a clue, 390px wide");
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await audit("Guess the chain with a clue");
+    await guessField.fill("the heat equations");
+    await guessField.press("Enter");
+    await feedback.filter({ hasText: "Right: Heat equation. +2 points, score 5 of 15." }).waitFor();
+    assert(
+      (await hops.nth(2).textContent()).includes("Joseph Fourier developed Fourier analysis"),
+      "after a clue a right guess scores 2, and a link with both ends known shows its fact",
+    );
+
+    await board.getByRole("button", { name: "Reveal hidden concept 1" }).click();
+    await feedback.filter({ hasText: "Hidden concept 1 was Exponential function." }).waitFor();
+    assert(
+      (await score.textContent()) === "Score 5 / 15" && (await hops.first().textContent()).includes("Revealed"),
+      "revealing a concept gives it away for no points",
+    );
+    await page.screenshot({ path: `${shots}35-chain-game.png` });
+
+    for (const name of ["Heat", "Maillard reaction"]) {
+      await guessField.fill(name);
+      await guessField.press("Enter");
+    }
+    const summary = dlg.getByTestId("chain-game-summary");
+    await summary.waitFor();
+    const summaryText = await summary.textContent();
+    assert(
+      summaryText.includes("You scored 11 of 15") && summaryText.includes("Found alone: 3. After a clue: 1. Revealed: 1. Wrong guesses: 1.") &&
+        summaryText.includes("Everything is connected") && summaryText.includes("a perfectly ordinary connection"),
+      "when every concept is known, the summary gives the title, the score, the tally and the moral",
+    );
+    await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "chain-game-summary");
+    assert(
+      (await dlg.getByTestId("chain-game-best").textContent()) === "Your first score for this pair of concepts.",
+      "…the focus moves to it, and the first score for a pair is its best",
+    );
+    await dlg.getByRole("button", { name: "Copy as text" }).waitFor();
+    await audit("Guess the chain summary");
+    await page.screenshot({ path: `${shots}36-chain-game-summary.png` });
+    await dlg.getByRole("button", { name: "Close" }).click();
+
+    // Dark theme, a second game on the same pair: give up, see the best score kept from before, play again.
+    await setTheme("dark");
+    await openChain();
+    await audit("Guess the chain, dark theme");
+    await board.getByRole("button", { name: "Show the answer" }).click();
+    await summary.waitFor();
+    assert(
+      (await summary.textContent()).includes("You scored 0 of 15") &&
+        (await dlg.getByTestId("chain-game-best").textContent()) === "Your best for this pair of concepts: 11 / 15.",
+      "Show the answer ends the game, and the best score for the pair is kept in the browser",
+    );
+    await audit("Guess the chain summary, dark theme");
+    await page.screenshot({ path: `${shots}37-chain-game-dark.png` });
+    await dlg.getByRole("button", { name: "Play again" }).click();
+    await summary.waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.querySelector('[data-testid="chain-game-score"]')?.textContent === "Score 0 / 15");
+    await page.waitForFunction(() => document.activeElement?.closest(".chain-game__guess"));
+    assert(true, "Play again starts a new game between the same ends");
+    await dlg.getByRole("button", { name: "Close" }).click();
+    await setTheme("light");
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

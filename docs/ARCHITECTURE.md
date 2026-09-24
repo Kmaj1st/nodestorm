@@ -145,6 +145,7 @@ Everything is in the user's browser. No account, no backend storage.
 | localStorage | `nodestorm-ui-language` | Interface language (absent = follow the browser). | `client/src/i18n/index.ts` |
 | localStorage | `nodestorm-theme` | Theme preference (absent = auto). | `client/src/lib/theme.ts` |
 | localStorage | `nodestorm-onboarding` | Welcome card / tour dismissed. | `client/src/lib/onboarding.ts` |
+| localStorage | `nodestorm-chain-game` | "Guess the chain" best scores, `{score, max}` per ordered pair of ends (`pairKey`), at most 200 pairs. | `client/src/lib/chainGame.ts` |
 | IndexedDB | database `nodestorm-snapshots`, stores `meta` and `data` | Version snapshots: metadata for the list, and the JSON only loaded to compare or restore. | `client/src/lib/snapshotDb.ts` |
 | IndexedDB | database `nodestorm-docs`, stores `docs`, `pages` (key `[docId, page]`) and `sessions` | Derive together: imported documents (metadata plus problems found), their page text, and derivation sessions, per project. Deleted with the project. | `client/src/lib/docDb.ts` |
 | memory | — | Undo/redo stacks (per graph, max 100), busy tasks, token usage. | `client/src/lib/history.ts`, `client/src/store/usageStore.ts` |
@@ -431,6 +432,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`; Reviewer 2: `stepsKey` (a hash of the steps' text), `checksForReferee`, `setReferee`, `refereeOutdated` (the card says so; the Markdown copy leaves an outdated report out). |
 | `absurd.ts` | Absurd chain: `chainConcepts`, `intermediates`, `chainToText` (clipboard), `sandboxName`, `hopExplanation`, `surprisePair` ("Surprise me": two different random concepts of the graph, else its one concept and
 `FUN_ENDS`; avoids the pair on screen), and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
+| `chainGame.ts` | "Guess the chain": `newGame` (the intermediate concepts become stops, with aliases from the graph), per stop `hidden` → `clued` → `guessed`, or `revealed`; `guess` (checks every open stop, any order; `known` for an end or a found concept, else counts a wrong guess), `clue`, `reveal`, `revealAll`, `score` / `maxScore` / `tally` (`POINTS`: 3 alone, 2 after a clue, 0 revealed); `matchesName` (`normalizeName`, leading article, aliases, `editDistance` with transpositions within `typoAllowance`: 0 up to 4 characters, 1 up to 8, else 2); `mask` blanks hidden names as whole words (longest name first, so a shown "Heat equation" keeps its "Heat"); `linkView` (fact and narration once both ends are known, else the masked narration as a clue); best scores `bestFor` / `recordBest` (storage injectable, errors ignored). |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
 | `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. |
 | `texImport.ts` | LaTeX import, no AI. `theoremEnvs` reads the `\newtheorem` declarations. `parseTexResults` finds each theorem-like environment with its kind, title, labels and refs (statement plus the following proof), and the terms a definition defines. `texToText` turns prose into text: maths is kept, display maths becomes `$$…$$`, and refs become names. `texReview` builds an `ExtractReview` (unique names, `\ref` links, optional unticked mention links) for `ExtractDialog`'s `initial` prop. |
@@ -519,6 +521,14 @@ definition, anything else as typed; `withBusy("absurd", …)`, cancelled when th
 graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res)`: `forkActive(sandboxName(title))` (switches to the
 new sandbox), one `mutate(applyAbsurdChain)` there (one undo step), then quiet `analyzeNode` for each new concept with
 the hop's fact as the clarify hint. The user's graph only changes through **Merge back**.
+
+**Guess the chain** (the dialog's second build button) runs the same `absurdChain` call (same avoid list, so *Play
+again* takes another route) and shows `ChainGame` (`client/src/panels/ChainGame.tsx`, same chunk) instead of the
+chain, remounted with a new `key` for each round. The board keeps its own `ChainGame` state from
+`client/src/lib/chainGame.ts`; the guess field and the feedback line (`role="status"`) sit above the timeline, each
+open stop's Clue and Reveal buttons sit on the link that arrives at it, and focus returns to the guess field after
+every move and goes to the summary when the game ends (which records the best score). Copy and Add to a sandbox are
+hidden until then, since they would give the chain away.
 
 ### Fork / merge
 
@@ -635,8 +645,10 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes), walkthrough, cycle
   resolution, Derive together, encyclopedia definitions, Lean / Mathlib, absurd chain (free-form and from the
   selection, roll again, copy, add to a sandbox, axe in both themes), concept kinds, theorem anatomy, LaTeX export,
-  the notation glossary, and parody voices & Reviewer 2 (a voiced explanation that fits the inspector and survives a
-  reload, a referee report and its outdated note, Surprise me; axe in both themes). The run is **pinned
+  the notation glossary, parody voices & Reviewer 2 (a voiced explanation that fits the inspector and survives a
+  reload, a referee report and its outdated note, Surprise me; axe in both themes), and Guess the chain (a wrong
+  guess, a right one with a typo, a clue from the keyboard, a reveal, the summary and the kept best score, Play
+  again; 390px width; axe in both themes). The run is **pinned
   to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
@@ -772,6 +784,10 @@ and server-binding items are real problems worth fixing.
 - **Absurd chain**: the facts are only as true as the model makes them (the prompt insists, the UI says to check, and
   nothing reaches the graph except through a sandbox). Its relations have origin `mix`, so after a merge they can't be
   told apart or filtered separately; a dedicated origin would follow "Add a relation origin" above.
+- **Guess the chain**: only the concept's name, its aliases in the graph and small typos count, so a correct synonym
+  the chain doesn't use ("e^x" for "Exponential function") is a wrong guess. Masking finds whole names with a plural
+  ending; a narration that bends a name ("Fourier's", "exponentials") can still give it away in a clue. Best scores
+  stay in this browser.
 - **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).
 - **Formal sciences**:
   - A kind the AI suggested is kept once set: a re-check never changes it (clear it in the inspector to get a new

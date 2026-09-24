@@ -61,3 +61,45 @@
 .absurd__label { font-style: normal; font-size: var(--text-xs); font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.04em; }
 .absurd__note { display: flex; gap: 6px; align-items: flex-start; line-height: 1.45; }
 .absurd__note .icon { margin-top: 1px; color: var(--ok); }
+
+/* "Guess the chain" (panels/ChainGame.tsx): the same timeline, with the hidden concepts as blanks. */
+.chain-game { display: flex; flex-direction: column; gap: var(--space-3); }
+.chain-game__head { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.chain-game__ends { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--space-1); font-size: var(--text-lg); min-width: 0; }
+.chain-game__ends strong { font-weight: 600; overflow-wrap: anywhere; }
+.chain-game__score {
+  font-size: var(--text-sm); font-weight: 600; font-variant-numeric: tabular-nums; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: var(--radius-full); padding: 2px 10px;
+}
+.chain-game__guess { display: flex; align-items: flex-end; gap: var(--space-2); }
+.chain-game__guess .field { flex: 1; min-width: 0; }
+.chain-game__guess input { width: 100%; min-width: 0; }
+.chain-game__feedback { min-height: 1.5em; line-height: 1.5; margin-top: calc(-1 * var(--space-1)); }
+.chain-game__feedback--ok { color: var(--ok); font-weight: 600; }
+.chain-game__feedback--wrong { color: var(--error-text); }
+.chain-game__feedback--info { color: var(--muted); }
+.chain-game__blank {
+  display: inline-grid; place-items: center; min-width: 40px; height: 22px; padding: 0 var(--space-2);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-sm); background: var(--surface);
+  color: var(--muted); font-weight: 600; font-size: var(--text-sm);
+}
+.chain-game__card--hidden { background: var(--surface); box-shadow: none; }
+.chain-game__clue { display: flex; flex-direction: column; gap: 2px; }
+.chain-game__clue .absurd__label { font-style: normal; }
+.chain-game__actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
+.chain-game__tag {
+  font-size: var(--text-xs); font-weight: 500; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-full); padding: 1px 8px;
+}
+.chain-game__tag--ok { color: var(--ok); background: var(--ok-soft); border-color: var(--ok-border); }
+.chain-game__giveup { display: flex; justify-content: flex-end; }
+.chain-game__summary {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg); border: 1px solid var(--accent-border); background: var(--accent-soft);
+}
+.chain-game__summary:focus { outline: none; }
+.chain-game__summary:focus-visible { outline: 2px solid var(--focus); outline-offset: 2px; }
+.chain-game__summary .absurd__moral { background: var(--panel); }
+.chain-game__final { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-xl); font-weight: 600; font-variant-numeric: tabular-nums; }
+.chain-game__final .icon { color: var(--accent); flex: none; }
+.chain-game__best { color: var(--text); }

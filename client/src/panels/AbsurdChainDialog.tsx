@@ -1,11 +1,12 @@
 import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle } from "@nodestorm/shared";
-import { ArrowLeftRight, ArrowRight, Copy, Dices, FlaskConical, ShieldCheck, Shuffle } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { ArrowLeftRight, ArrowRight, Copy, Dices, FlaskConical, Puzzle, ShieldCheck, Shuffle } from "lucide-react";
+import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { ABSURD_LENGTHS, ABSURD_STYLES, chainToText, intermediates, surprisePair, type AbsurdLength } from "../lib/absurd";
 import { absurdChain, absurdKey, addAbsurdChainToSandbox, cancelTask } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
+import { ChainGame } from "./ChainGame";
 import { MathText } from "./MathText";
 import { Modal } from "./Modal";
 import "./absurd.css";
@@ -13,7 +14,8 @@ import "./absurd.css";
 /**
  * "Absurd chain" (parody mode): two ends (concepts of the graph or anything typed), a narration style and a length;
  * the answer is shown as a sequence of links, each with its sober fact and its silly narration. The chain can be
- * copied as text or added to a new sandbox; the graph itself is never changed here.
+ * copied as text or added to a new sandbox; the graph itself is never changed here. "Guess the chain" builds the same
+ * chain as a game (panels/ChainGame.tsx) with the concepts in the middle hidden.
  */
 export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: string; to: string; onClose: () => void }) {
   const t = useT();
@@ -26,9 +28,14 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
   const [res, setRes] = useState<AbsurdChainResponse | null>(null);
   // The ends of the chain on screen, and the intermediate concepts of every roll between them so far.
   const [rolled, setRolled] = useState<{ ends: string; avoid: string[] } | null>(null);
+  // A game round (its number remounts the board) while playing "Guess the chain", and whether it is finished.
+  const [round, setRound] = useState<number | null>(null);
+  const [over, setOver] = useState(false);
   const listId = useId();
   const resultRef = useRef<HTMLDivElement>(null);
   const runRef = useRef<HTMLButtonElement>(null);
+  const playRef = useRef<HTMLButtonElement>(null);
+  const playing = round !== null;
 
   // Closing the dialog cancels a chain that is still being built.
   useEffect(() => () => cancelTask(absurdKey), []);
@@ -41,21 +48,35 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
   const same = named && resolve(from) === resolve(to);
   const again = Boolean(res && rolled?.ends === ends);
 
-  const run = async (a = from, b = to) => {
+  /** Build a chain to show it, or (`play`) to guess it; the same ends again take another route. */
+  const run = async (a = from, b = to, play = false) => {
     const avoid = again && endsKey(a, b) === ends ? rolled!.avoid : [];
     const out = await absurdChain(a, b, style, ABSURD_LENGTHS[length], avoid);
     if (!out) return;
     setRes(out);
     setRolled({ ends: endsKey(a, b), avoid: [...new Set([...avoid, ...intermediates(out)])] });
-    requestAnimationFrame(() => resultRef.current?.focus());
+    if (play) {
+      setOver(false);
+      setRound((r) => (r ?? 0) + 1); // the board focuses its guess field
+    } else {
+      setRound(null);
+      requestAnimationFrame(() => resultRef.current?.focus());
+    }
   };
+
+  // Names a concept of the graph also goes by count as right guesses.
+  const nodes = graph.nodes;
+  const aliasesOf = useCallback((name: string) => {
+    const n = findByName(nodes, name);
+    return n ? [n.name, ...n.aliases] : [];
+  }, [nodes]);
 
   // Two random ends (from the graph, or fun ones for a nearly empty graph), built straight away.
   const surprise = () => {
     const [a, b] = surprisePair(graph.nodes.map((n) => n.name), [from, to]);
     setFrom(a);
     setTo(b);
-    void run(a, b);
+    void run(a, b, playing);
   };
 
   const copy = async () => {
@@ -79,7 +100,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
         onKeyDown={(e) => {
           if (e.key !== "Enter" || !(e.target instanceof HTMLInputElement) || e.nativeEvent.isComposing) return;
           e.preventDefault();
-          requestAnimationFrame(() => runRef.current?.click());
+          requestAnimationFrame(() => (playing ? playRef : runRef).current?.click());
         }}
       >
         <div className="absurd__ends">
@@ -136,7 +157,11 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
         </p>
       )}
 
-      {res && (
+      {res && playing && (
+        <ChainGame key={round} chain={res} aliasesOf={aliasesOf} busy={busy} onOver={setOver} />
+      )}
+
+      {res && !playing && (
         <div className="absurd__result" ref={resultRef} tabIndex={-1} aria-busy={busy} data-testid="absurd-result">
           <h3 className="absurd__title">{res.title}</h3>
           <ol className="absurd__chain" aria-label={t("absurd.chain")}>
@@ -179,7 +204,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
       )}
 
       <div className="form__actions">
-        {res && (
+        {res && (!playing || over) && (
           <>
             <button type="button" className="form__lead" onClick={copy}>
               <Icon icon={Copy} size={14} />
@@ -194,14 +219,26 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
         {busy && <button type="button" onClick={() => cancelTask(absurdKey)}>{t("common.cancel")}</button>}
         <button
           type="button"
-          className="primary"
+          className={playing ? "primary" : undefined}
+          ref={playRef}
+          onClick={() => void run(from, to, true)}
+          disabled={!named || same || busy}
+          title={playing && again ? t("absurd.playAgainTitle") : t("absurd.playTitle")}
+          data-testid="absurd-play"
+        >
+          <Icon icon={Puzzle} size={14} />
+          {playing && again ? t("absurd.playAgain") : t("absurd.play")}
+        </button>
+        <button
+          type="button"
+          className={playing ? undefined : "primary"}
           ref={runRef}
           onClick={() => void run()}
           disabled={!named || same || busy}
-          title={again ? t("absurd.againTitle") : undefined}
+          title={again && !playing ? t("absurd.againTitle") : undefined}
         >
           <Icon icon={Dices} size={14} />
-          {again ? t("absurd.again") : t("absurd.run")}
+          {again && !playing ? t("absurd.again") : t("absurd.run")}
         </button>
       </div>
     </Modal>
