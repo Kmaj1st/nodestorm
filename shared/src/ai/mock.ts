@@ -68,6 +68,33 @@ const AMBIGUOUS: Record<string, { name: string; domain: string; definition: stri
   ],
 };
 
+/** Richer "explain more" material for a few KB concepts; the others get one built from their KB entry. */
+const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples: { title: string; body: string }[]; pitfalls: string[] }> = {
+  homomorphism: {
+    intuition: "a homomorphism translates one structure into another without breaking its arithmetic: combine then map, or map then combine — same result.",
+    keyPoints: [
+      "φ(ab) = φ(a)φ(b) for all a, b.",
+      "It sends the identity to the identity and inverses to inverses.",
+      "Its kernel is a normal subgroup and its image is a subgroup.",
+    ],
+    examples: [
+      { title: "Exponential map", body: "x ↦ eˣ from (ℝ, +) to (ℝ₊, ×): e^(x+y) = eˣ·eʸ." },
+      { title: "Reduction mod n", body: "ℤ → ℤ/nℤ sends each integer to its remainder class; sums map to sums." },
+      { title: "Non-example", body: "x ↦ x + 1 on (ℤ, +) does not send 0 to 0, so it is not a homomorphism." },
+    ],
+    pitfalls: [
+      "A homomorphism need not be injective or surjective — that is what isomorphisms add.",
+      "Check the operations of both structures: (ℝ, +) → (ℝ, ×) is a different setting from (ℝ, +) → (ℝ, +).",
+    ],
+  },
+  isomorphism: {
+    intuition: "isomorphic structures are the same structure with the elements renamed.",
+    keyPoints: ["An isomorphism is a bijective homomorphism.", "Its inverse is automatically a homomorphism.", "Isomorphic groups share every group-theoretic property."],
+    examples: [{ title: "Logarithm", body: "log: (ℝ₊, ×) → (ℝ, +) is an isomorphism, inverse to exp." }],
+    pitfalls: ["Having the same number of elements does not make two groups isomorphic (ℤ/4ℤ vs ℤ/2ℤ × ℤ/2ℤ)."],
+  },
+};
+
 function kbGet(name: string) {
   const key = normalizeName(name);
   const entry = Object.entries(KB).find(
@@ -117,6 +144,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.deps(inp.node.name, inp.existing ?? []));
       case "derive":
         return JSON.stringify(this.derive(inp.selected ?? []));
+      case "explain":
+        return JSON.stringify(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")));
       default:
         return "{}";
     }
@@ -173,6 +202,39 @@ export class MockProvider implements Provider {
         );
         return { ...d, matchesExisting: match?.name ?? null };
       }),
+    };
+  }
+
+  private explain(node: { name: string; definition?: string }, prereqs: { name: string }[], level: string) {
+    const entry = kbGet(node.name);
+    const extra = entry && EXPLAIN[entry.key];
+    const style =
+      level === "rigorous"
+        ? "Formally: "
+        : level === "example-driven"
+          ? "Look at the examples first: "
+          : "Intuitively: ";
+    const builds = prereqs.length ? ` It builds on ${prereqs.map((p) => p.name).join(", ")}.` : "";
+    if (entry) {
+      return {
+        summary: entry.definition,
+        intuition: style + (extra?.intuition ?? `${title(entry.key)} is a basic notion of abstract algebra.`) + builds,
+        keyPoints: extra?.keyPoints ?? [entry.definition, ...entry.deps.map((d) => d.reason)],
+        examples: extra?.examples ?? [],
+        pitfalls: extra?.pitfalls ?? [],
+        furtherReading: [
+          { title: "Any undergraduate abstract algebra textbook", hint: `The chapter that introduces “${title(entry.key)}”.` },
+        ],
+      };
+    }
+    const definition = node.definition?.trim();
+    return {
+      summary: definition || `${node.name} is not in the offline model's knowledge base.`,
+      intuition: `${style}the offline demo can only restate what the graph says about ${node.name}.${builds}`,
+      keyPoints: definition ? [definition] : [],
+      examples: [],
+      pitfalls: [],
+      furtherReading: [{ title: `An introductory text on ${node.name}`, hint: "Look for its definition and a first example." }],
     };
   }
 

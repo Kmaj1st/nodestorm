@@ -41,6 +41,23 @@ describe("server: x-ai-language", () => {
     expect(prompts.at(-1)![0].content).not.toContain("Output language");
   });
 
+  it("exposes the explain task too", async () => {
+    const res = await fetch(`${base}/api/explain`, {
+      method: "POST",
+      headers: { "content-type": "application/json", "x-ai-language": "Deutsch" },
+      body: JSON.stringify({ node: { name: "X" }, level: "rigorous" }),
+    });
+    // The recording provider answers every task with a deps reply, which has no summary.
+    expect(res.status).toBe(502);
+    expect(prompts.at(-1)![0].content).toMatch(/\[task:explain\][\s\S]*in Deutsch/);
+    const bad = await fetch(`${base}/api/explain`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ node: { name: "X" }, level: "poetic" }),
+    });
+    expect(bad.status).toBe(400);
+  });
+
   it("limits the length of what reaches the prompt", async () => {
     await deps({ "x-ai-language": encodeURIComponent(`Deutsch${"!".repeat(100)}`) });
     expect(prompts.at(-1)![0].content).toContain(`in Deutsch${"!".repeat(33)}.`);
