@@ -66,7 +66,8 @@ classDiagram
     dependsOn: node ids
     missingDeps: MissingDep[]
     error?, senses?: Sense[]
-    explanation?, notes?, mastery?
+    kind?: definition|theorem|lemma|…
+    explanation?, anatomy?, notes?, mastery?
   }
   class Relation {
     id, a, b
@@ -86,8 +87,15 @@ classDiagram
 - **ConceptNode.** `name`, `definition`, `aliases` (a rename keeps the old name as an alias). `dependsOn` holds the ids
   of prerequisites that are in the graph; `missingDeps` holds prerequisites the AI named that aren't (each with a
   `role`: `uses`, `derives` or `assumes`, and a `reason`). Optional personal data: `explanation` (the latest
-  "Explain more" answer with its level and time), `notes` (free text) and `mastery` (quiz score, review count, last
-  review time).
+  "Explain more" answer with its level and time), `anatomy` (the latest "Theorem anatomy", `NodeAnatomy`), `notes`
+  (free text) and `mastery` (quiz score, review count, last review time).
+- **Concept kind** (`ConceptKind`, optional `kind`): `definition`, `theorem`, `lemma`, `proposition`, `corollary`,
+  `axiom`, `conjecture`, `example`, `notation`, `other`. Graph content (unlike the personal data above, it travels in
+  share links). `THEOREM_KINDS` / `isTheoremLike` say which kinds get Theorem anatomy. In AI answers the kind is an
+  `AiConceptKind`: case-insensitive, and anything unknown or missing parses as `null` instead of failing the answer,
+  so answers from before kinds existed (or from models that invent "remark") still parse. An AI kind is only ever a
+  suggestion: `graphOps.suggestKind` sets it while the node has none, so a kind picked in the inspector (`setKind`,
+  an undo step) is never overridden. A picked meaning (`applySense`) replaces the kind, since that is a user choice.
 - **Status** (`NodeStatus`):
   - `checking`: an AI call for this node is running. It never survives a reload (`onRehydrateStorage` in
     `client/src/store/graphStore.ts` turns it into `error`) or an undo with no task running (`travel` in the same file).
@@ -115,7 +123,9 @@ classDiagram
   version snapshots all use it, and all are read back through `client/src/lib/importRepair.ts`.
 - **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
   `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
-  `QuizRequest/Response`. Requests carry `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`.
+  `QuizRequest/Response`, `AnatomyRequest/Response` (and the Derive together and cycle tasks). Requests carry
+  `NodeBrief`s (`name`, `definition`, `aliases`), built with `toBrief`; `name`, `clarify`, `deps`, `derive` and
+  `extract` answers carry a `kind` (`deps`: of the analysed concept).
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
   crude plural folding for Latin words) and
   `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
@@ -129,7 +139,7 @@ Everything is in the user's browser. No account, no backend storage.
 |---|---|---|---|
 | localStorage | `nodestorm` | Projects and graphs (zustand `persist`, version 2; v1 held a single brainstorm and is migrated by `migrateWorkspace`). Only the workspace is persisted (`partialize`), never UI state, undo history or a shared graph. | `client/src/store/graphStore.ts`, `client/src/lib/projects.ts` |
 | localStorage + sessionStorage | `nodestorm-settings` | Settings. **Split storage**: without *Remember keys* the copy in localStorage has every `apiKey` removed and the full copy (with keys) goes to sessionStorage, so keys vanish with the tab. With it, everything goes to localStorage. Reads prefer sessionStorage. | `client/src/store/settingsStore.ts` (`splitStorage`) |
-| localStorage | `nodestorm-view` | View filters (relation origins shown, edge labels, to-do only, focus radius). Focus itself isn't stored. | `client/src/store/viewStore.ts`, `sanitizeView` in `client/src/lib/view.ts` |
+| localStorage | `nodestorm-view` | View filters (relation origins shown, concept kinds shown, edge labels, to-do only, focus radius). Focus itself isn't stored. | `client/src/store/viewStore.ts`, `sanitizeView` in `client/src/lib/view.ts` |
 | localStorage | `nodestorm-ui-language` | Interface language (absent = follow the browser). | `client/src/i18n/index.ts` |
 | localStorage | `nodestorm-theme` | Theme preference (absent = auto). | `client/src/lib/theme.ts` |
 | localStorage | `nodestorm-onboarding` | Welcome card / tour dismissed. | `client/src/lib/onboarding.ts` |
@@ -181,7 +191,7 @@ never races a write.
   `[task:kind]` marker; `withLanguage` appends the output-language paragraph (`languageInstruction`) to the system
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
-  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `extract`, `quiz`, `resolveCycle`, and for Derive
+  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `anatomy`, `extract`, `quiz`, `resolveCycle`, and for Derive
   together `readPage`, `splitProblems`, `tutorHint` and `checkStep`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
@@ -190,7 +200,16 @@ never races a write.
   3. validates it with the response schema, and on a malformed answer asks once more, quoting the error.
   Timeouts and cancellation are not retried there. Some tasks post-process: `clarify` treats "ambiguous with one
   sense" as unambiguous, `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
-  ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index).
+  ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index),
+  `anatomy` runs `cleanAnatomy` (trimmed, no empty hypotheses, at most 8 hypotheses and 3 examples / non-examples).
+
+**Concept kinds in prompts.** `KIND_GUIDE` / `KIND_VALUES` in `prompts.ts` describe the kinds; the `name`, `clarify`,
+`deps`, `derive` and `extract` prompts ask for one, and `languageInstruction` keeps the kind values in English.
+
+**Theorem anatomy** (`anatomyPrompt`): given the statement (with its kind) and its prerequisites, the model lists the
+hypotheses (with what each is for and a counterexample without it), the conclusion, a 2-4 sentence proof idea
+(evidence for a conjecture, never a full proof), examples and non-examples. The mock answers it for its two KB
+theorems (First Isomorphism Theorem, Lagrange's theorem) and builds a fallback from an "If …, then …" definition.
 
 `TaskName = keyof typeof tasks` is used by both the server and the client, so adding a task to this object is what
 makes it exist everywhere.
@@ -260,7 +279,7 @@ sequenceDiagram
   registers `busy[key]` for the status bar, drops answers that arrive after a cancel, and turns errors into a toast
   (or the caller's `onError`). `cancelTask(key)` is what the status bar's cancel (X) button and dialogs' Cancel call. Busy keys
   follow patterns such as `analyze:<graphId>:<nodeId>`, `installAll:<graphId>:<nodeId>`, `mix:<a>:<b>`,
-  `explain:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`.
+  `explain:<graphId>:<nodeId>`, `anatomy:<graphId>:<nodeId>`, `quiz:<graphId>`, `name`, `derive`, `extract`.
 - **`inViewer(graphId)`**: every AI action first checks whether its graph is the share-viewer graph and refuses (with
   an info toast) if so. Only calls for that graph are refused; work on the user's own graphs continues.
 - **Token usage**: browser-mode providers call `onUsage`, which adds to `client/src/store/usageStore.ts` (shown in
@@ -325,7 +344,8 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `cycles.ts` | A cycle's links with their stored reasons (`cycleLinks`), `removeLinks`, `remainingCycle`, `fallbackLinkIndex`. |
 | `paths.ts` | Over `dependsOn`: `prerequisiteClosure`, `learningPath` (topological study order incl. missing deps), `findCycles` (Tarjan SCC), `cycleInfo`, `cycleThrough`. |
 | `layout.ts` | `layeredLayout` for Tidy: rows by dependency depth, prerequisites on top. |
-| `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts`, `showsEverything`. |
+| `view.ts` | `sanitizeView`, `neighbourhood` (focus hops), `visibleParts` (relation origins, concept kinds via `kindFilterOf` / `KIND_FILTERS` with "none" for untyped, to-do, focus), `showsEverything`. |
+| `kinds.ts` | Concept kinds: `KINDS`, `KIND_LABEL` (message keys), `KIND_NAME` (English, for exports), `KIND_TONE` (colour family of the `.kind-tag--<tone>` classes). |
 | `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
 | `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`. |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
@@ -334,7 +354,9 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `snapshots.ts` / `snapshotDb.ts` | Version capture, hash, prune plan, diff, `keepMastery` / IndexedDB wrapper. |
 | `importRepair.ts` | `repairImport(raw)`: accepts anything graph-like, fills defaults, drops dangling references, resets unknown enum values, and returns human-readable `fixes`. |
 | `share.ts` | `packGraph`, `encodeShare`/`decodeShare` (deflate + base64url in the URL hash), size limits. |
-| `export.ts` | `toMarkdown`, `toMermaid`, `exportFileName` (and its own `studyOrder`). PNG export is in `Toolbar.tsx`. |
+| `export.ts` | `toMarkdown` (with kinds, explanations and anatomies), `toMermaid`, `exportFileName` (and its own `studyOrder`). PNG export is in `Toolbar.tsx`. |
+| `latex.ts` | `toLatex`: an amsart document, one amsthm environment per kind (`ENV`; untyped and "other" are `concept`), in `studyOrder`, with `labels` (unique `c:<slug>`) and "Uses: Definition~\ref{…}" lines; `texEscape` escapes the text between formulas (`splitMath`) and maps common Unicode symbols; notes become remarks and an anatomy proof idea a `proof`. |
+| `glossary.ts` | `buildGlossary` / `pickSymbol`: the notation glossary (definitions and notation concepts; LHS of a defining equation, else the first short non-variable formula). |
 | `flashcards.ts` | `buildCards` (definition / prerequisite / relation cards in study order, or one learning path), `toAnki` (tab-separated with Anki's `#` header lines, HTML-escaped, `$…$` → `\(…\)` via `splitMath`), `toCsv` (RFC 4180). Used by `FlashcardsDialog`. |
 | `math.ts` | `splitMath`/`hasMath`: the LaTeX delimiter parser behind `MathText`, the Markdown export and `ankiMath` (see *Math* in section 8). |
 | `projects.ts` | Workspace operations, `cloneGraphs` (fresh ids with one shared map), `normalizeWorkspace`, `migrateWorkspace`. |
@@ -414,7 +436,7 @@ undo step in the parent; child sandboxes are re-parented. **Discard** → `autoS
 ### Share link
 
 `ShareDialog` → `encodeShare(graph, name)`: `packGraph` (short ids, drops empty fields, settles `checking`/`error`,
-**leaves out notes, explanations and mastery**) → JSON → raw deflate (`CompressionStream`, or `fflate` loaded on
+**leaves out notes, explanations, anatomies and mastery**; keeps kinds) → JSON → raw deflate (`CompressionStream`, or `fflate` loaded on
 demand) → base64url → `#share=1.<data>`. The hash never reaches a server. Opening: `openShareLink` in
 `client/src/App.tsx` (on load and on `hashchange`) → `decodeShare` (length caps, inflate with a 5 MB bomb guard,
 `repairImport`) → `graphStore.openView(graph, name)` (fresh id, `view` set, read-only). `ViewerBanner` offers **Save a
@@ -437,7 +459,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `InspectorSheet` (a collapsible bottom sheet under 800px), toast, and the dialogs.
 - `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Derive, Tidy/Find/Focus/View, graph/sandbox
   selector and fork, Settings (an AI status chip), File (import, exports incl. PNG via lazily imported `html-to-image`, Extract,
-  Quiz, Share, Versions). One row from 1200px up; under 800px the less-used groups fold into the More tools menu.
+  Quiz, Share, Versions, Notation, LaTeX). One row from 1200px up; under 800px the less-used groups fold into the More tools menu.
 - `client/src/graph/GraphCanvas.tsx`: the React Flow canvas. **Performance notes:**
   - React Flow node and edge objects are kept in local state/cache and **reused by identity** when their concept,
     relation, classes and visibility are unchanged, so an AI status update re-renders only that node; the edges array
@@ -447,9 +469,13 @@ which also clears the project's undo stacks. **Restore as new project** → `res
     (`useLabelLayer`) instead of using `<EdgeLabelRenderer>`, whose per-edge `querySelector` inside a store selector
     dominated big graphs; labels are dropped below zoom 0.45. `e2e/perf.mjs` measures a 300-concept graph.
   - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
-- `client/src/panels/Inspector.tsx`: node view (dependency flow, install, rename, explain, notes, learning path,
+- `client/src/panels/Inspector.tsx`: node view (kind select, dependency flow, install, rename, Theorem anatomy for theorem-like kinds, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
-- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Flashcards, Sense, Settings, Share,
+- `client/src/graph/KindTag.tsx`: the small uppercase kind label on cards, walkthrough slides and glossary rows,
+  coloured by `KIND_TONE` with the `--kind-*` tokens (always with its text, so colour is never the only cue).
+- `goToConcept(id)` (`client/src/store/viewStore.ts`): select and centre a concept, first turning off a to-do or kind
+  filter that hides it (Find and the notation glossary use it).
+- **Lazy dialogs** (`client/src/panels/lazy.tsx`): Add, Derive, Extract, Find, Flashcards, Glossary (Notation…), Sense, Settings, Share,
   Shortcuts, Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
@@ -509,7 +535,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   sandbox, server mode, persistence, export, undo & editing, layout, ambiguous names, failures, dependency tools,
   theme & a11y, rate limits/language/queue, projects, explain & notes, share link, focus & filters, shortcuts &
   offline, toolbar & 中文, extract, onboarding, **accessibility audit** (axe-core, WCAG 2.0–2.2 A/AA, both themes and
-  中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes). The run is **pinned
+  中文), quiz, versions, flashcards, math (KaTeX on a card and in the inspector, both themes), walkthrough, cycle resolution, Derive together, concept kinds, theorem anatomy, LaTeX export and the notation glossary. The run is **pinned
   to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
@@ -577,6 +603,16 @@ Every place that knows the list:
 9. Extract: `applyExtraction` in `client/src/lib/extract.ts` only overwrites existing `dependency` relations.
 10. i18n (`en.ts`, `zh.ts`) and tests: `client/test/view.test.ts`, the e2e "Focus & filters" section.
 
+### Add a concept kind
+
+1. `ConceptKind` in `shared/src/model.ts` (and `THEOREM_KINDS` if it has hypotheses and a conclusion).
+2. `KIND_GUIDE` / `KIND_VALUES` in `shared/src/ai/prompts.ts`, and `kindFromName` / `KB_KIND` in the mock if it helps.
+3. `client/src/lib/kinds.ts`: `KIND_LABEL`, `KIND_NAME`, `KIND_TONE` (all `Record<ConceptKind, …>`, so typecheck
+   reminds you), and the `kind.<kind>` strings in both locales.
+4. `ENV` in `client/src/lib/latex.ts` and its `\newtheorem` line in `toLatex`.
+5. View filters, import repair and share links iterate the enum: nothing to do. Tests: `shared/test/formal.test.ts`,
+   `client/test/kinds.test.ts`, `client/test/latex.test.ts`.
+
 ### Add a dialog
 
 Write the component in `client/src/panels/` wrapped in `<Modal label=… onClose=…>`. Register a loader in `loaders`
@@ -625,3 +661,13 @@ and server-binding items are real problems worth fixing.
   - The pdf.js worker (~1.3 MB) is precached by the service worker like every chunk. It ends in `.mjs`, which a static
     host must serve as JavaScript.
 - **Failed dialog chunks** need a page reload (browsers cache a failed dynamic import).
+- **Formal sciences**:
+  - A kind the AI suggested is kept once set: a re-check never changes it (clear it in the inspector to get a new
+    suggestion). The mock only knows its KB concepts and names that say what they are ("Zorn's lemma").
+  - The notation glossary is a heuristic: it takes the left-hand side of the first equation, so a definition whose
+    first equation is a property rather than notation (e.g. "$gNg^{-1} = N$" for a normal subgroup) lists that. A
+    concept of kind *notation* is the precise way to add an entry.
+  - The LaTeX export maps common Unicode math symbols and Greek letters for pdfLaTeX; other non-Latin characters
+    outside formulas (other than CJK, which switches to xeCJK) may need xelatex or lualatex. A `%` inside a formula is
+    passed through and comments out the rest of its line, as in any LaTeX source.
+  - Theorem anatomies, like explanations, are left out of share links.

@@ -7,6 +7,20 @@ Everything below landed on `claude/hopeful-pascal-bc67up` in one day. Most featu
 axe accessibility audit green after each merge. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for how it fits
 together.
 
+### Formal sciences (`claude/feature-formal`)
+- **Concept kinds**: definition, theorem, lemma, proposition, corollary, axiom, conjecture, example, notation or
+  other. Set by the AI (only while unset) or by hand in the inspector; a colour-coded, text-labelled tag on each card;
+  a View filter by kind; kept in JSON, share links, import repair and the Markdown notes. The example graph is typed.
+- **Theorem anatomy** in the inspector (new `anatomy` AI task): hypotheses with why each is needed and a
+  counterexample without it, the conclusion, a proof idea, examples and non-examples. Stored on the concept,
+  cancellable, never an undo step.
+- **LaTeX export**: a compilable `amsart` document with `amsthm` environments per kind, in study order, with
+  `\label`/`\ref` cross-references to prerequisites; text escaped, formulas passed through.
+- **Notation glossary** (File → Notation…): the symbols the definitions and notation concepts introduce, with a jump
+  to each concept. Built without the AI.
+- The walkthrough shows each slide's kind; Find and the glossary turn off a kind filter that hides their target; the
+  tour scrolls the Install button into a phone's bottom sheet even when it starts out of view.
+
 ### UI refresh
 - **No emoji or pictographic symbols** in the interface: icons are SVGs from `lucide-react` (one `Icon` component,
   decorative and `aria-hidden`), and translated strings no longer carry symbols ("Mix", "Derive", "File").
