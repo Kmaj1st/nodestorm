@@ -12,6 +12,7 @@ const loaders = {
   derive: () => import("./DeriveDialog"),
   extract: () => import("./ExtractDialog"),
   find: () => import("./FindDialog"),
+  flashcards: () => import("./FlashcardsDialog"),
   sense: () => import("./SenseDialog"),
   settings: () => import("./SettingsDialog"),
   share: () => import("./ShareDialog"),
@@ -85,6 +86,7 @@ export const AddNodeDialog = lazyDialog(() => loaders.add().then((m) => m.AddNod
 export const DeriveDialog = lazyDialog(() => loaders.derive().then((m) => m.DeriveDialog));
 export const ExtractDialog = lazyDialog(() => loaders.extract().then((m) => m.ExtractDialog));
 export const FindDialog = lazyDialog(() => loaders.find().then((m) => m.FindDialog));
+export const FlashcardsDialog = lazyDialog(() => loaders.flashcards().then((m) => m.FlashcardsDialog));
 export const SettingsDialog = lazyDialog(() => loaders.settings().then((m) => m.SettingsDialog));
 export const ShareDialog = lazyDialog(() => loaders.share().then((m) => m.ShareDialog));
 export const ShortcutsDialog = lazyDialog(() => loaders.shortcuts().then((m) => m.ShortcutsDialog));

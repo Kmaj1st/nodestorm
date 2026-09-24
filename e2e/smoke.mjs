@@ -657,6 +657,11 @@ try {
       "notes and Explain more can't be used in the viewer",
     );
     await viewer.screenshot({ path: `${shots}11-shared-viewer.png` });
+    await viewer.getByRole("button", { name: "File ▾" }).click();
+    await viewer.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
+    const viewerCards = viewer.getByRole("dialog", { name: "Flashcards" });
+    assert(/^[1-9]\d* cards$/.test(await viewerCards.getByTestId("flash-count").textContent()), "flashcards can be exported from a shared graph");
+    await viewerCards.getByRole("button", { name: "Close" }).click();
     await viewer.getByRole("button", { name: "Save a copy" }).click();
     await viewer.getByTestId("viewer-banner").waitFor({ state: "detached" });
     const viewerProject = viewer.getByRole("button", { name: /^Project: / });
@@ -812,7 +817,7 @@ try {
     JSON.stringify(fileItems) ===
       JSON.stringify([
         "Import JSON…", "Extract from text…", "Quiz me…", "Save snapshot…", "Versions…",
-        "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Share link…",
+        "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File ▾ holds import, Extract from text, Quiz me, Versions, every export format and the share link",
   );
@@ -1281,6 +1286,62 @@ try {
     await page.waitForTimeout(200);
     assert((await page.locator(".react-flow__node").count()) === count, "Delete/Backspace do nothing behind an open dialog");
     await shortcuts.getByRole("button", { name: "Close" }).click();
+  }
+
+  console.log("Flashcards");
+  {
+    // The Group theory example from the Versions section: export it as Anki cards, then as CSV.
+    await page.getByRole("button", { name: "File ▾" }).click();
+    await page.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
+    const cards = page.getByRole("dialog", { name: "Flashcards" });
+    await cards.waitFor();
+    await audit("Flashcards dialog");
+    const count = async () => Number((await cards.getByTestId("flash-count").textContent()).match(/\d+/)[0]);
+    const all = await count();
+    await cards.getByRole("checkbox", { name: /^Relations/ }).uncheck();
+    const withoutRelations = await count();
+    assert(withoutRelations > 0 && withoutRelations < all, `unticking relation cards leaves fewer cards (${all} → ${withoutRelations})`);
+    const save = async () => {
+      const [dl] = await Promise.all([page.waitForEvent("download"), cards.getByTestId("flash-download").click()]);
+      return { name: dl.suggestedFilename(), text: readFileSync(await dl.path(), "utf8") };
+    };
+    const anki = await save();
+    const lines = anki.text.trimEnd().split("\n");
+    assert(anki.name.endsWith("-anki.txt"), `the Anki file is named <project>-anki.txt: ${anki.name}`);
+    assert(
+      ["#separator:tab", "#html:true", "#notetype:Basic", "#tags column:3"].every((h) => lines.includes(h)) &&
+        lines.some((l) => l.startsWith("#deck:")),
+      "the Anki file starts with the header lines Anki reads",
+    );
+    const notes = lines.filter((l) => !l.startsWith("#"));
+    assert(notes.length === withoutRelations && notes.every((l) => l.split("\t").length === 3), "one Front/Back/Tags line per card");
+    assert(notes.some((l) => l.startsWith("Homomorphism\t")), "…including a Homomorphism card");
+    assert(!notes.some((l) => l.startsWith("How does ")), "…and no relation cards once unticked");
+    await cards.getByRole("radio", { name: /^CSV/ }).check();
+    const csv = await save();
+    assert(csv.name.endsWith("-flashcards.csv"), `the CSV file is named <project>-flashcards.csv: ${csv.name}`);
+    // RFC 4180: quoted fields may hold commas, doubled quotes and line breaks.
+    const rows = [];
+    let row = [], field = "", quoted = false;
+    const src = csv.text.replace(/^\uFEFF/, "");
+    for (let i = 0; i < src.length; i++) {
+      const c = src[i];
+      if (quoted) {
+        if (c === '"' && src[i + 1] === '"') { field += '"'; i++; }
+        else if (c === '"') quoted = false;
+        else field += c;
+      } else if (c === '"') quoted = true;
+      else if (c === ",") { row.push(field); field = ""; }
+      else if (c === "\r" && src[i + 1] === "\n") { row.push(field); rows.push(row); row = []; field = ""; i++; }
+      else field += c;
+    }
+    assert(
+      JSON.stringify(rows[0]) === '["front","back","tags"]' && rows.length === withoutRelations + 1 && rows.every((r) => r.length === 3),
+      "the CSV parses back into front,back,tags rows, one per card",
+    );
+    assert(rows.some((r) => r[0] === "Homomorphism" && r[1].length > 0), "…with the Homomorphism card and its definition");
+    await cards.getByRole("button", { name: "Close" }).click();
+    await cards.waitFor({ state: "detached" });
   }
 
   console.log("\nE2E passed");

@@ -121,6 +121,19 @@ Projects autosave to your browser's localStorage (data from earlier versions bec
   definitions and prerequisites, and every relation written out in both directions.
 - **Mermaid diagram**: flowchart text for GitHub, Notion, etc., copied to the clipboard and downloaded.
 - **PNG image**: a picture of the whole current graph.
+- **Flashcards (Anki)…**: the current graph, or the selected concept's learning path, as question-and-answer cards
+  in study order (prerequisites first). Tick the card types: *definitions* (name → definition and other names),
+  *prerequisites* ("What does X build on?") and *relations* ("How does A relate to B?", one card per direction). The
+  dialog previews the first cards and counts them.
+  - **Anki** (`<project>-anki.txt`): in Anki ≥ 2.1.55 use **File → Import**. The file's header lines set the tab
+    separator, HTML fields, the *Basic* note type, the deck (editable, default the project name; `::` makes a subdeck)
+    and the tags column, so no import settings are needed. Cards are tagged with the project name, the concept's
+    status (`status::ready`, `status::blocked`, …) and the card type (`card::definition`, …). Formulas written as
+    `$…$` / `$$…$$` are converted to `\(…\)` / `\[…\]`, which Anki's built-in MathJax renders. In an Anki whose
+    note types have translated names, pick the Basic type in the import dialog.
+  - **CSV** (`<project>-flashcards.csv`): `front,back,tags` in plain UTF-8 text (RFC 4180 quoting, with a byte-order
+    mark for Excel) for Quizlet, RemNote, a spreadsheet and the like; formulas stay as typed.
+  - Quiz questions aren't stored (only your grades are), so there are no quiz cards. Works in the share viewer too.
 - **Share link…** packs the current graph (without its sandboxes) into a link. No account or server is involved: the
   graph is compressed into the part of the URL after `#`, which browsers never send to a server, so it works on the
   static GitHub Pages site too. The dialog shows the link's length; some chat apps and mail clients cut off links
@@ -244,7 +257,7 @@ docs/     ARCHITECTURE.md, the maintainer's guide
 
 ```bash
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling, version snapshots
+npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling, version snapshots, flashcards
 npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings and an axe (WCAG A/AA) audit
 npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker (all chunks precached), offline start, a failed chunk load and the update notice
 ```

@@ -1,0 +1,11 @@
+/* "Flashcards (Anki)…" dialog (panels/FlashcardsDialog.tsx) */
+.flash__hint { margin-top: -8px; }
+.flash__preview { border-top: 1px solid var(--border); padding-top: 10px; display: flex; flex-direction: column; gap: 8px; }
+.flash__previewHead { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; }
+.flash__previewHead h4 { margin: 0; font-size: 12px; text-transform: uppercase; color: var(--muted); letter-spacing: 0.05em; }
+.flash__cards { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.flash__card {
+  border: 1px solid var(--border); border-radius: 8px; padding: 6px 10px; font-size: 13px;
+  display: flex; flex-direction: column; gap: 2px; white-space: pre-wrap; overflow-wrap: anywhere;
+}
+.flash__side { font-size: 11px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
