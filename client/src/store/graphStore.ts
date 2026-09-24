@@ -91,7 +91,8 @@ interface Actions {
   deleteProject(projectId: string): void;
   /** Build the Group theory example into the active (empty) graph as one undo step. */
   loadExample(): void;
-  forkActive(): void;
+  /** Copy the active graph into a new sandbox (named `name`, else "Sandbox n") and switch to it. */
+  forkActive(name?: string): void;
   mergeSandbox(sandboxId: string): void;
   discardSandbox(sandboxId: string): void;
   /** The current project (main graph first, then its sandboxes) as a nodestorm/v1 file. */
@@ -229,12 +230,12 @@ export const useGraphStore = create<GraphStore>()(
         if (p && [proj.DEFAULT_PROJECT_NAME, t("project.untitled")].some((d) => p.name.startsWith(d))) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
       },
 
-      forkActive() {
+      forkActive(name) {
         if (isViewing(get())) return;
         const { graphs, activeId, projects, projectId } = get();
         const src = graphs[activeId];
         const n = proj.projectGraphs(get(), projects[projectId]).filter((g) => g.parentId).length + 1;
-        const sb = fork(src, t("sandbox.name", { n }));
+        const sb = fork(src, name?.trim() || t("sandbox.name", { n }));
         set({ graphs: { ...graphs, [sb.id]: sb }, activeId: sb.id, selection: [], inspect: null });
       },
       mergeSandbox(sandboxId) {

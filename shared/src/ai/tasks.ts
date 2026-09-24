@@ -1,4 +1,8 @@
 import {
+  ABSURD_HARD_MAX,
+  AbsurdChainRequest,
+  AbsurdChainResponse,
+  type AbsurdHop,
   ClarifyRequest,
   ClarifyResponse,
   DepsRequest,
@@ -33,6 +37,7 @@ import {
 import type { z } from "zod";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
 import {
+  absurdChainPrompt,
   clarifyPrompt,
   depsPrompt,
   derivePrompt,
@@ -162,6 +167,8 @@ async function runStructured<S extends z.ZodTypeAny>(
   messages: ChatMessage[],
   schema: S,
   opts: RequestOptions & { search?: boolean; maxTokens?: number } = {},
+  /** Further checks on a parsed answer; what it throws counts as malformed output (asked again, then reported). */
+  check: (v: z.infer<S>) => z.infer<S> = (v) => v,
 ): Promise<z.infer<S>> {
   let lastErr = "";
   messages = withLanguage(messages, opts.language);
@@ -172,7 +179,7 @@ async function runStructured<S extends z.ZodTypeAny>(
     // Timeouts and cancellation propagate straight out; only malformed output is retried.
     const text = await provider.complete(msgs, { ...opts, json: true });
     try {
-      return schema.parse(extractJson(text));
+      return check(schema.parse(extractJson(text)));
     } catch (e) {
       lastErr = e instanceof Error ? e.message.slice(0, 300) : String(e);
     }
@@ -288,6 +295,11 @@ export const tasks = {
       solved: res.solved && res.verdict === "ok",
     };
   },
+  absurdChain: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = AbsurdChainRequest.parse(body);
+    // A broken chain counts as malformed output, so the model is asked once more, told what was wrong.
+    return runStructured(p, absurdChainPrompt(req), AbsurdChainResponse, o, (res) => cleanAbsurdChain(res, req));
+  },
 };
 export type TaskName = keyof typeof tasks;
 
@@ -320,4 +332,57 @@ export function cleanProblems(res: SplitProblemsResponse, pages: number[]): Spli
     problems.push({ label: pr.label.trim(), statement, page: pr.page != null && pages.includes(pr.page) ? pr.page : null });
   }
   return { problems };
+}
+
+/**
+ * Check and tidy an absurd chain: it must start at `from` and reach `to` (by name or alias), each hop starting where
+ * the previous one ended. Repairs what is only a matter of spelling (ends get the request's exact names, a hop's
+ * "from" the previous hop's exact "to"), cuts the chain where it first reaches `to`, and cuts out loops (a concept
+ * visited twice). Anything else (a gap between hops, the wrong start, never arriving, far too long) throws.
+ */
+export function cleanAbsurdChain(
+  res: AbsurdChainResponse,
+  req: { from: { name: string; aliases?: string[] }; to: { name: string; aliases?: string[] } },
+): AbsurdChainResponse {
+  const broken = (why: string) => new ProviderError(`The chain is broken: ${why}.`);
+  const hops: AbsurdHop[] = res.chain.map((h) => ({
+    from: h.from.trim(),
+    to: h.to.trim(),
+    kind: h.kind.trim(),
+    fact: h.fact.trim(),
+    quip: h.quip.trim(),
+  }));
+  if (!hops.length) throw broken("it has no links");
+  if (!findByName([req.from], hops[0].from)) throw broken(`it starts at "${hops[0].from}", not at "${req.from.name}"`);
+  const end = hops.findIndex((h) => findByName([req.to], h.to));
+  if (end < 0) throw broken(`it never reaches "${req.to.name}"`);
+  hops.length = end + 1;
+  for (let i = 1; i < hops.length; i++) {
+    if (normalizeName(hops[i].from) !== normalizeName(hops[i - 1].to)) {
+      throw broken(`link ${i} ends at "${hops[i - 1].to}" but link ${i + 1} starts at "${hops[i].from}"`);
+    }
+  }
+  hops[0].from = req.from.name;
+  hops[hops.length - 1].to = req.to.name;
+  // Cut out loops: a hop that returns to a concept already on the chain drops everything since that concept.
+  const out: AbsurdHop[] = [];
+  const names = [normalizeName(req.from.name)];
+  for (const h of hops) {
+    const back = names.indexOf(normalizeName(h.to));
+    if (back >= 0) {
+      out.length = back;
+      names.length = back + 1;
+    } else {
+      out.push(out.length ? { ...h, from: out[out.length - 1].to } : { ...h, from: req.from.name });
+      names.push(normalizeName(h.to));
+    }
+  }
+  if (!out.length) throw broken("it goes round in a circle");
+  if (out.length > ABSURD_HARD_MAX) throw broken(`it has ${out.length} links, more than ${ABSURD_HARD_MAX}`);
+  return {
+    title: res.title.trim() || `${req.from.name} → ${req.to.name}`,
+    chain: out,
+    moral: res.moral.trim(),
+    plausibility: res.plausibility.trim(),
+  };
 }

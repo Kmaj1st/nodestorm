@@ -823,16 +823,17 @@ try {
   await page.getByTestId("sandbox-banner").getByRole("button", { name: "Merge back" }).waitFor();
   assert(await oneRow(), "…also in a sandbox, whose Merge back and Discard sit in the sandbox banner");
   await page.setViewportSize({ width: 1400, height: 900 });
+  assert(await oneRow(), "…and at 1400px (the brand and button labels come back from 1440px)");
   await toolbar.screenshot({ path: `${shots}14-toolbar-en.png` });
   await page.getByRole("button", { name: "File", exact: true }).click();
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Save snapshot…", "Versions…", "Walkthrough…",
+        "Import JSON…", "Extract from text…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…",
         "JSON (this project)", "Markdown notes", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
-    "File holds import, Extract from text, Quiz me, Derive together, Versions, every export format and the share link",
+    "File holds import, Extract from text, Quiz me, Derive together, Absurd chain, Versions, every export format and the share link",
   );
   await page.keyboard.press("Escape");
 
@@ -1609,6 +1610,99 @@ try {
     assert((await panel.locator(".derive-session").count()) === 2 && (await panel.locator(".derive-doc").count()) === 3, "documents and derivations survive a reload");
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
+  }
+
+  console.log("Absurd chain");
+  {
+    // Still the offline demo in browser mode: its chains run through a short list of true facts.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Homomorphism");
+    await addByName("Group");
+    await waitBadge("Group", "ready");
+    await waitBadge("Homomorphism", "ready");
+    const mainNodes = await page.locator(".react-flow__node").count();
+
+    // Free-form, from the File menu: two ends that aren't in the graph at all.
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    const dlg = page.getByRole("dialog", { name: "Absurd chain" });
+    await dlg.waitFor();
+    assert(await dlg.getByRole("button", { name: "Build the chain" }).isDisabled(), "the chain needs two ends");
+    await dlg.getByLabel("From", { exact: true }).fill("Fourier transform");
+    await dlg.getByLabel("To", { exact: true }).fill("fourier transforms");
+    await dlg.getByText("Pick two different concepts.").waitFor();
+    await dlg.getByLabel("To", { exact: true }).fill("Toast");
+    await dlg.getByLabel("Style").selectOption("conspiracy");
+    await dlg.getByLabel("To", { exact: true }).press("Enter");
+    const result = dlg.getByTestId("absurd-result");
+    await result.waitFor();
+    const hops = dlg.getByRole("list", { name: "The chain" }).getByRole("listitem");
+    assert(
+      (await hops.count()) === 4 &&
+        (await result.getByRole("heading").textContent()) === "What they don't want you to know about Fourier transform and Toast",
+      "Enter builds a chain from Fourier transform to Toast, in four links with a title in the chosen style",
+    );
+    const first = hops.first();
+    assert(
+      (await first.textContent()).includes("was invented to solve") && (await first.textContent()).includes("Joseph Fourier developed Fourier analysis"),
+      "each link shows its relation and its sober fact",
+    );
+    assert(
+      (await first.locator(".absurd-hop__quip").evaluate((el) => getComputedStyle(el).fontStyle)) === "italic",
+      "…and its narration, set apart in italics",
+    );
+    await hops.nth(1).locator(".katex").first().waitFor();
+    assert(true, "formulas in a fact are typeset");
+    assert((await result.textContent()).includes("Connect enough dots"), "the chain ends with its moral");
+    await audit("Absurd chain dialog with a chain");
+    const quip1 = await first.locator(".absurd-hop__quip").textContent();
+    await dlg.getByRole("button", { name: "Roll again" }).click();
+    await page.waitForFunction(
+      (q) => document.querySelector(".absurd-hop__quip")?.textContent !== q,
+      quip1,
+    );
+    assert(true, "Roll again asks for another chain between the same ends");
+
+    await context.grantPermissions(["clipboard-read", "clipboard-write"], { origin: `http://localhost:${WEB_PORT}` });
+    await dlg.getByRole("button", { name: "Copy as text" }).click();
+    await page.locator(".toast").filter({ hasText: "Chain copied" }).waitFor();
+    const copied = await page.evaluate(() => navigator.clipboard.readText());
+    assert(
+      copied.startsWith("What they don't want you to know") && copied.includes("1. Fourier transform → Heat equation (was invented to solve)") && copied.includes("Moral: "),
+      "Copy as text puts the whole chain on the clipboard",
+    );
+    await page.screenshot({ path: `${shots}30-absurd-chain.png` });
+
+    // Into a sandbox: the graph itself stays as it was.
+    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.waitFor({ state: "detached" });
+    await page.getByTestId("sandbox-banner").filter({ hasText: "What they don't want you to know" }).waitFor();
+    await node("Maillard reaction").waitFor();
+    assert((await page.locator(".react-flow__node").count()) === mainNodes + 5, "Add to a sandbox forks the graph under the chain's title and adds the chain's five concepts there");
+    await page.getByRole("combobox", { name: "Graph" }).selectOption({ label: "Main graph" });
+    await page.getByTestId("sandbox-banner").waitFor({ state: "detached" });
+    assert((await page.locator(".react-flow__node").count()) === mainNodes, "…while the main graph is unchanged");
+
+    // From the toolbar, with two concepts selected: they are the two ends.
+    await setTheme("dark");
+    await node("Homomorphism").click();
+    await node("Group").click({ modifiers: ["Shift"] });
+    await page.getByRole("button", { name: "Absurd chain", exact: true }).click();
+    await dlg.waitFor();
+    assert(
+      (await dlg.getByLabel("From", { exact: true }).inputValue()) === "Homomorphism" && (await dlg.getByLabel("To", { exact: true }).inputValue()) === "Group",
+      "the toolbar's Absurd chain starts from the two selected concepts",
+    );
+    await dlg.getByRole("button", { name: "Swap the two ends" }).click();
+    await dlg.getByRole("button", { name: "Build the chain" }).click();
+    await result.waitFor();
+    assert((await hops.first().textContent()).includes("Group") && (await hops.count()) === 1, "Swap turns the chain around");
+    await audit("Absurd chain dialog, dark theme");
+    await page.screenshot({ path: `${shots}31-absurd-chain-dark.png` });
+    await dlg.getByRole("button", { name: "Close" }).click();
+    await setTheme("light");
   }
 
   console.log("\nE2E passed");

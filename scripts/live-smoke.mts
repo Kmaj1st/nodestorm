@@ -49,6 +49,13 @@ const inputs: Partial<Record<TaskName, unknown>> = {
     ],
   },
   tutorHint: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], references: [notes], context: [hom], nth: 1 },
+  absurdChain: {
+    from: { name: "Fourier transform", definition: "", aliases: [] },
+    to: { name: "Toast", definition: "", aliases: [] },
+    style: "conspiracy",
+    hops: { min: 3, max: 5 },
+    context: [hom],
+  },
   checkStep: { problem: kernelProblem, steps: ["Let $k \\in \\ker\\varphi$ and $g \\in G$."], step: "Then $gkg^{-1} \\in \\ker\\varphi$.", references: [notes], context: [hom] },
 };
 // readPage needs a page image and a vision model: check it by importing a scanned PDF in the app.

@@ -55,6 +55,15 @@ no key needed) or an empty graph.
   dotted line; **View** can hide them as *Extracted relations*) and checks each new concept's prerequisites through
   the AI queue. The whole insert is one undo step. The offline demo recognises its algebra concepts and terms in
   "quotes" or **bold**.
+- **Absurd chain** (the theatre-masks button next to **Mix**, or **File → Absurd chain…**) is a parody mode: real
+  facts, ridiculous reasoning. Give it two concepts, the two selected ones or any two you type (*Fourier transform*
+  and *Toast* work without being in the graph), pick a style (*deadpan*, *conspiracy*, *epic saga*, *bureaucratic*,
+  *academic overkill*) and a length (3 to 7 links). The AI builds a chain A → X1 → … → B in which every link is a
+  true, checkable relation stated soberly as a **fact**; only the narration under it, the title and the closing
+  **moral** are silly. **Roll again** asks for a different route, **Copy as text** puts the chain on the clipboard,
+  and **Add to a sandbox** forks the graph into a sandbox named after the chain and adds its concepts and links there
+  (one undo step), so your graph only changes if you merge it back. The facts come from an AI: check before quoting
+  one.
 - **Fix anything by hand.** Rename a concept (the old name stays as an alias), edit a relation's text in the inspector,
   **Delete** removes the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or
   Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
@@ -273,7 +282,7 @@ Actions**, then run the workflow; the run shows the site's URL. To deploy on eve
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract,quiz}, GET /api/providers, GET /api/models
+server/   optional Express API: POST /api/{name,clarify,relate,deps,derive,explain,extract,quiz,resolveCycle,readPage,splitProblems,tutorHint,checkStep,absurdChain}, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
 e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
 scripts/  live smoke test against real providers

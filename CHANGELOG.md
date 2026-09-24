@@ -48,6 +48,12 @@ together.
   - The AI checks each step (correct / gap / error / unclear) and gives hints that get more specific when asked
     again. It never writes the derivation for you, and it cites your references by page.
   - You choose what goes into the graph: the result, linked to the concepts it used, with its source page.
+- **Absurd chain** (parody mode): link any two concepts, from the graph or typed in, through a chain of 3-7 true,
+  checkable facts, narrated in a silly style (deadpan, conspiracy, epic, bureaucratic, academic overkill). Roll again
+  for another route, copy it as text, or add it to a new sandbox named after it. A new `absurdChain` AI task whose
+  answers are checked (the chain must run from one end to the other; loops are cut out) and asked again when broken.
+  The toolbar now keeps the brand and button labels hidden up to 1440px (was 1360px), so it stays on one row with
+  the new button.
 - **Automatic cycle resolution**: when a check closes a dependency cycle, the AI picks the wrong link from the
   reasons each link was added with, and it is removed as one undoable step (a Settings toggle; "Resolve with AI" in
   the inspector).
