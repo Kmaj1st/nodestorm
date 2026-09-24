@@ -1,6 +1,7 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import { useEffect, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
+import { removeNode, removeRelation } from "./lib/graphOps";
 import { AddNodeDialog } from "./panels/AddNodeDialog";
 import { DeriveDialog } from "./panels/DeriveDialog";
 import { FindDialog } from "./panels/FindDialog";
@@ -21,6 +22,34 @@ export function App() {
   const setToast = useGraphStore((s) => s.setToast);
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
+
+  // Undo/redo and Delete. React Flow's own delete key is off (GraphCanvas) so deletions go through history.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      // Leave keys alone while typing, and while a dialog is open.
+      const t = e.target instanceof Element ? e.target : null;
+      if (t?.closest("input, textarea, select, [contenteditable=true], .modal")) return;
+      const s = useGraphStore.getState();
+      const mod = e.ctrlKey || e.metaKey;
+      const key = e.key.toLowerCase();
+      if (mod && !e.altKey && (key === "z" || key === "y")) {
+        e.preventDefault();
+        if (key === "y" || e.shiftKey) s.redo();
+        else s.undo();
+      } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
+        // An open relation wins over the node selection (clicking an arrowhead doesn't deselect nodes).
+        const ins = s.inspect;
+        if (ins?.kind === "edge") s.mutate((g) => removeRelation(g, ins.relationId));
+        else if (s.selection.length) s.mutate((g) => s.selection.reduce(removeNode, g));
+        else return;
+        e.preventDefault();
+        s.setSelection([]);
+        s.setInspect(null);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
 
   useEffect(() => {
     if (!toast) return;

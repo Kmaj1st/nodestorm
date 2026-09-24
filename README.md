@@ -10,6 +10,8 @@ An AI-aided brainstorming graph. Add concepts as nodes. The AI then helps with f
 
 New concepts appear in a free spot near what you're looking at (or near the concept they relate to), and the view pans to them. **Tidy** arranges the graph in layers, with prerequisites above the concepts that depend on them. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, then selects it and centres the view on it.
 
+Everything the AI suggests can be fixed by hand: rename a concept (the old name stays as an alias) or edit a relation's text in the inspector, and press **Delete** to remove the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
+
 Graphs autosave to your browser's localStorage. **Export ▾** saves them in several forms:
 - **JSON (all graphs)**: everything, including sandboxes. Load it again with **Import**.
 - **Markdown notes**: the current graph as study notes. Concepts come in study order (prerequisites first), with aliases, definitions and prerequisites, and every relation is written out in both directions.

@@ -3,6 +3,7 @@ import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
 import { emptyGraph, fork, merge } from "../lib/graphOps";
 import { repairImport } from "../lib/importRepair";
+import * as hist from "../lib/history";
 
 export type Inspect =
   | { kind: "node"; id: string }
@@ -21,6 +22,20 @@ interface State {
   settingsOpen: boolean;
   /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
   clarifying: { graphId: string; nodeId: string } | null;
+  /** Undo/redo stacks per graph id (in memory only). */
+  history: Record<string, hist.History<Graph>>;
+}
+
+/**
+ * How a mutation shows up in undo history:
+ * - "step" (default): a new undo step; steps with the same `key` in a row are coalesced into one.
+ * - "merge": folded into the previous step (follow-up bookkeeping of a user action).
+ * - "background": not a step at all. Used for AI progress and results (status spinners, prerequisites):
+ *   the change is also applied to every snapshot, so undoing never resurrects a stale "checking" state.
+ */
+export interface MutateOptions {
+  history?: "step" | "merge" | "background";
+  key?: string;
 }
 
 export interface BusyTask {
@@ -30,7 +45,9 @@ export interface BusyTask {
 
 interface Actions {
   /** Apply a pure graph operation to a specific graph (defaults to the active one). */
-  mutate(fn: (g: Graph) => Graph, graphId?: string): void;
+  mutate(fn: (g: Graph) => Graph, graphId?: string, opts?: MutateOptions): void;
+  undo(graphId?: string): void;
+  redo(graphId?: string): void;
   setSelection(ids: string[]): void;
   setInspect(i: Inspect): void;
   setSettingsOpen(open: boolean): void;
@@ -54,6 +71,19 @@ function initial(): Pick<State, "graphs" | "mainId" | "activeId"> {
   return { graphs: { [g.id]: g }, mainId: g.id, activeId: g.id };
 }
 
+/** Move through a graph's history. A check restored as "checking" with no task running is marked failed. */
+function travel(s: State, id: string, step: typeof hist.undo<Graph>): Pick<State, "graphs" | "history"> | null {
+  const g = s.graphs[id];
+  const r = g && step(s.history[id] ?? hist.emptyHistory<Graph>(), g);
+  if (!r) return null;
+  // Busy key format of analyzeNode (lib/actions.ts).
+  const stale = (n: Graph["nodes"][number]) => n.status === "checking" && !s.busy[`analyze:${id}:${n.id}`];
+  const nodes = r.present.nodes.map((n) =>
+    stale(n) ? { ...n, status: "error" as const, error: "The check was interrupted by undo/redo. Retry to run it again." } : n,
+  );
+  return { graphs: { ...s.graphs, [id]: { ...r.present, nodes } }, history: { ...s.history, [id]: r.history } };
+}
+
 export const useGraphStore = create<GraphStore>()(
   persist(
     (set, get) => ({
@@ -64,12 +94,27 @@ export const useGraphStore = create<GraphStore>()(
       toast: null,
       settingsOpen: false,
       clarifying: null,
+      history: {},
 
-      mutate(fn, graphId) {
+      mutate(fn, graphId, opts = {}) {
         const id = graphId ?? get().activeId;
         const g = get().graphs[id];
         if (!g) return; // graph was discarded while an AI call was in flight
-        set({ graphs: { ...get().graphs, [id]: fn(g) } });
+        const next = fn(g);
+        const mode = opts.history ?? "step";
+        // A background change still reaches the snapshots when it is a no-op now (e.g. its node was deleted).
+        if (next === g && mode !== "background") return;
+        const h = get().history[id] ?? hist.emptyHistory<Graph>();
+        const nh = mode === "step" ? hist.record(h, g, opts.key) : mode === "background" ? hist.rebase(h, fn) : h;
+        set({ graphs: { ...get().graphs, [id]: next }, history: { ...get().history, [id]: nh } });
+      },
+      undo(graphId) {
+        const next = travel(get(), graphId ?? get().activeId, hist.undo);
+        if (next) set(next);
+      },
+      redo(graphId) {
+        const next = travel(get(), graphId ?? get().activeId, hist.redo);
+        if (next) set(next);
       },
       setSelection: (selection) => set({ selection }),
       setInspect: (inspect) => set({ inspect }),
@@ -98,9 +143,12 @@ export const useGraphStore = create<GraphStore>()(
         if (!sb || !parent) return;
         const rest = { ...graphs, [parent.id]: merge(parent, sb) };
         delete rest[sandboxId];
+        // The merge is one undo step in the parent (undoing it doesn't bring the sandbox back).
+        const history = { ...get().history, [parent.id]: hist.record(get().history[parent.id] ?? hist.emptyHistory(), parent) };
+        delete history[sandboxId];
         // Sandboxes forked from this one are re-parented onto its parent.
         for (const g of Object.values(rest)) if (g.parentId === sandboxId) rest[g.id] = { ...g, parentId: parent.id };
-        set({ graphs: rest, activeId: parent.id, selection: [], inspect: null });
+        set({ graphs: rest, history, activeId: parent.id, selection: [], inspect: null });
       },
       discardSandbox(sandboxId) {
         const { graphs, activeId, mainId } = get();
@@ -110,7 +158,9 @@ export const useGraphStore = create<GraphStore>()(
         delete rest[sandboxId];
         for (const g of Object.values(rest)) if (g.parentId === sandboxId) rest[g.id] = { ...g, parentId: sb.parentId };
         const nextActive = activeId === sandboxId ? (rest[sb.parentId] ? sb.parentId : mainId) : activeId;
-        set({ graphs: rest, activeId: nextActive, selection: [], inspect: null });
+        const history = { ...get().history };
+        delete history[sandboxId];
+        set({ graphs: rest, history, activeId: nextActive, selection: [], inspect: null });
       },
 
       exportJson() {
@@ -124,10 +174,10 @@ export const useGraphStore = create<GraphStore>()(
         const { doc, fixes } = repairImport(JSON.parse(text));
         const graphs = Object.fromEntries(doc.graphs.map((g) => [g.id, g]));
         const main = doc.graphs.find((g) => !g.parentId) ?? doc.graphs[0];
-        set({ graphs, mainId: main.id, activeId: main.id, selection: [], inspect: null });
+        set({ graphs, mainId: main.id, activeId: main.id, selection: [], inspect: null, history: {} });
         return fixes;
       },
-      reset: () => set({ ...initial(), selection: [], inspect: null }),
+      reset: () => set({ ...initial(), selection: [], inspect: null, history: {} }),
     }),
     {
       name: "nodestorm",
@@ -150,3 +200,5 @@ export const useGraphStore = create<GraphStore>()(
 );
 
 export const activeGraph = (s: GraphStore) => s.graphs[s.activeId];
+export const canUndo = (s: GraphStore) => !!s.history[s.activeId]?.past.length;
+export const canRedo = (s: GraphStore) => !!s.history[s.activeId]?.future.length;

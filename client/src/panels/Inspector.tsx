@@ -1,7 +1,49 @@
 import type { ConceptNode, Graph } from "@nodestorm/shared";
+import { useEffect, useState } from "react";
 import { analyzeNode, installDep, mix } from "../lib/actions";
-import { removeNode, removeRelation, updateNode } from "../lib/graphOps";
+import { removeNode, removeRelation, renameNode, updateNode, updateRelation } from "../lib/graphOps";
 import { activeGraph, useGraphStore } from "../store/graphStore";
+
+/**
+ * A text field edited locally and saved on blur or Enter (Shift+Enter for a newline when multiline);
+ * Escape reverts. `save` returns an error message to reject the value, which is shown under the field.
+ */
+function DraftField({ value, save, multiline, className, label, testId }: {
+  value: string;
+  save: (v: string) => string | undefined;
+  multiline?: boolean;
+  className?: string;
+  label: string;
+  testId?: string;
+}) {
+  const [draft, setDraft] = useState(value);
+  const [error, setError] = useState<string>();
+  useEffect(() => { setDraft(value); setError(undefined); }, [value]); // e.g. after undo
+
+  const commit = () => {
+    const err = draft === value ? undefined : save(draft);
+    setError(err);
+  };
+  const props = {
+    value: draft,
+    className: `${className ?? ""}${error ? " invalid" : ""}`,
+    "aria-label": label,
+    "aria-invalid": !!error,
+    "data-testid": testId,
+    onChange: (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => setDraft(e.target.value),
+    onBlur: commit,
+    onKeyDown: (e: React.KeyboardEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+      if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); commit(); }
+      if (e.key === "Escape") { setDraft(value); setError(undefined); }
+    },
+  };
+  return (
+    <span className="draft">
+      {multiline ? <textarea rows={3} {...props} /> : <input {...props} />}
+      {error && <span className="error small" role="alert">{error}</span>}
+    </span>
+  );
+}
 
 export function Inspector() {
   const graph = useGraphStore(activeGraph);
@@ -24,6 +66,7 @@ export function Inspector() {
         <li>Select two concepts (Shift/Ctrl-click) and press <b>Mix</b> to find how they relate — in both directions.</li>
         <li>Click an <b>arrowhead</b> on a relation to read what that side does to the other.</li>
         <li><b>Fork sandbox</b> to derive new ideas in a copy; merge back or discard later.</li>
+        <li><b>Delete</b> removes the selection; <b>Ctrl+Z</b> / <b>Ctrl+Shift+Z</b> undo and redo.</li>
       </ol>
     </aside>
   );
@@ -41,7 +84,17 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   return (
     <aside className="inspector" data-testid="node-panel">
       <div className="inspector__title">
-        <h3>{node.name}</h3>
+        <DraftField
+          key={node.id}
+          value={node.name}
+          label="Rename concept"
+          className="title-input"
+          save={(v) => {
+            const r = renameNode(graph, node.id, v);
+            if (!r.error) mutate((g) => renameNode(g, node.id, v).graph);
+            return r.error;
+          }}
+        />
         <span className={`concept__badge concept__badge--${node.status}`}>{node.status}</span>
       </div>
       {node.aliases.length > 0 && <div className="muted small">also: {node.aliases.join(", ")}</div>}
@@ -51,7 +104,9 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         <textarea
           rows={3}
           value={node.definition}
-          onChange={(e) => mutate((g) => updateNode(g, node.id, { definition: e.target.value }))}
+          // Typing into the field is one undo step.
+          onChange={(e) =>
+            mutate((g) => updateNode(g, node.id, { definition: e.target.value }), graphId, { key: `def:${node.id}` })}
         />
       </label>
 
@@ -154,10 +209,29 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
       <div className="muted small">{rel.origin === "dependency" ? "Dependency link" : rel.origin === "derive" ? "Derived link" : "Mixed relation"}</div>
       <h3 className="rel-title">
         <span>{from?.name}</span>
-        <span className="rel-kind">{d.kind}</span>
+        <span className="rel-kind">
+          <DraftField
+            key={`${relationId}:${dir}`}
+            value={d.kind}
+            label="Relation kind"
+            save={(v) => {
+              if (!v.trim()) return "Say what it does (or “none”).";
+              mutate((g) => updateRelation(g, relationId, dir, { kind: v.trim() }));
+              return undefined;
+            }}
+          />
+        </span>
         <span>{to?.name}</span>
       </h3>
-      <p data-testid="relation-explanation">{d.explanation}</p>
+      <DraftField
+        key={`${relationId}:${dir}`}
+        value={d.explanation}
+        multiline
+        label="Relation explanation"
+        className="rel-explanation"
+        testId="relation-explanation"
+        save={(v) => { mutate((g) => updateRelation(g, relationId, dir, { explanation: v.trim() })); return undefined; }}
+      />
       <div className="dir-switch">
         <button onClick={() => setInspect({ kind: "edge", relationId, dir: other })}>
           ⇄ Show what {to?.name} does to {from?.name}

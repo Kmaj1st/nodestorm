@@ -127,9 +127,9 @@ try {
   const aToB = arrows.filter({ has: page.locator("polygon") }).first();
   const relId = (await aToB.getAttribute("data-testid")).split("-").slice(1, -1).join("-");
   await page.getByTestId(`arrow-${relId}-aToB`).click({ force: true });
-  const exp1 = await page.getByTestId("relation-explanation").textContent();
+  const exp1 = await page.getByTestId("relation-explanation").inputValue();
   await page.getByTestId(`arrow-${relId}-bToA`).click({ force: true });
-  const exp2 = await page.getByTestId("relation-explanation").textContent();
+  const exp2 = await page.getByTestId("relation-explanation").inputValue();
   assert(exp1 && exp2 && exp1 !== exp2, `two directions differ:\n      A→B: ${exp1}\n      B→A: ${exp2}`);
 
   console.log("Mix two nodes");
@@ -199,6 +199,49 @@ try {
   writeFileSync(`${shots}8-export.png`, png.data);
   assert(png.name.endsWith(".png") && png.data.subarray(1, 4).toString() === "PNG" && png.data.length > 5000, "PNG image of the canvas");
 
+  console.log("Undo & editing");
+  const undoBtn = page.getByRole("button", { name: "Undo", exact: true });
+  assert(await undoBtn.isDisabled(), "undo history is not persisted (nothing to undo after reload)");
+  const edgeCount = () => page.locator(".react-flow__edge").count();
+  const edgesBefore = await edgeCount();
+  await node("Homomorphism").click();
+  await page.keyboard.press("Delete");
+  await node("Homomorphism").waitFor({ state: "detached" });
+  assert((await edgeCount()) < edgesBefore, "Delete removes the selected node and its edges");
+  await page.keyboard.press("Control+z");
+  await node("Homomorphism").waitFor();
+  await page.waitForFunction((n) => document.querySelectorAll(".react-flow__edge").length === n, edgesBefore);
+  assert(true, "Ctrl+Z brings it back with its edges");
+  await page.keyboard.press("Control+Shift+z");
+  await node("Homomorphism").waitFor({ state: "detached" });
+  await undoBtn.click();
+  await node("Homomorphism").waitFor();
+  assert(!(await page.getByRole("button", { name: "Redo", exact: true }).isDisabled()), "redo and the ↶ button work too");
+
+  await node("Kernel").click();
+  const rename = page.getByLabel("Rename concept");
+  await rename.fill("Isomorphism");
+  await rename.press("Enter");
+  assert((await page.getByTestId("node-panel").getByRole("alert").textContent()).includes("already in the graph"), "renaming to an existing name is rejected");
+  await rename.fill("Kernel of a homomorphism");
+  await rename.press("Enter");
+  await node("Kernel of a homomorphism").waitFor();
+  assert((await page.getByTestId("node-panel").textContent()).includes("also: ker, Kernel"), "rename keeps the old name as an alias");
+
+  await page.getByTestId(`arrow-${relId}-aToB`).click({ force: true });
+  const explanation = page.getByTestId("relation-explanation");
+  await explanation.fill("Edited by hand.");
+  await explanation.press("Enter");
+  await page.getByTestId(`arrow-${relId}-bToA`).click({ force: true });
+  await page.getByTestId(`arrow-${relId}-aToB`).click({ force: true });
+  assert((await explanation.inputValue()) === "Edited by hand.", "relation explanation edited by hand");
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  await page.keyboard.press("Control+z");
+  await page.getByTestId(`arrow-${relId}-aToB`).click({ force: true });
+  assert((await explanation.inputValue()) !== "Edited by hand.", "the edit is undoable");
+  await page.keyboard.press("Control+y");
+  await page.screenshot({ path: `${shots}5b-edited.png` });
+
   const openSettings = async () => {
     await page.getByRole("button", { name: "AI settings" }).click();
     return page.getByRole("dialog", { name: "Settings" });
@@ -227,7 +270,11 @@ try {
   assert((await find.getByRole("option").first().textContent()).includes("First Isomorphism Theorem"), "Ctrl+K fuzzy-finds a concept");
   await page.keyboard.press("Enter");
   await page.waitForFunction(() => document.querySelector('[data-testid="node-First Isomorphism Theorem"]')?.className.includes("concept--selected"));
-  assert((await find.count()) === 0 && (await page.getByTestId("node-panel").textContent()).includes("First Isomorphism Theorem"), "Enter selects it and opens it in the inspector");
+  // The inspector title is an editable name field, so read its value rather than the panel's text.
+  assert(
+    (await find.count()) === 0 && (await page.getByLabel("Rename concept").inputValue()) === "First Isomorphism Theorem",
+    "Enter selects it and opens it in the inspector",
+  );
   assert(await inView("First Isomorphism Theorem"), "view centred on the found concept");
   await page.screenshot({ path: `${shots}5b-tidy.png` });
 

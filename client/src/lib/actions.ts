@@ -1,4 +1,12 @@
-import { CancelledError, findByName, toBrief, type DerivedProposal, type NameCandidate, type Sense } from "@nodestorm/shared";
+import {
+  CancelledError,
+  findByName,
+  toBrief,
+  type DerivedProposal,
+  type Graph,
+  type NameCandidate,
+  type Sense,
+} from "@nodestorm/shared";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
@@ -6,7 +14,11 @@ import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { viewport } from "./viewport";
 
-/** Async flows that combine AI calls with graph mutations. Each binds to the graph it started in. */
+/**
+ * Async flows that combine AI calls with graph mutations. Each binds to the graph it started in.
+ * AI progress and results of a concept check are "background" mutations: they are not undo steps, and they
+ * also land in the undo snapshots, so undo/redo keeps what the AI found (see MutateOptions).
+ */
 
 const store = () => useGraphStore.getState();
 const graph = (id: string) => store().graphs[id];
@@ -69,16 +81,17 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   const node = find();
   if (!node) return;
   const key = analyzeKey(graphId, nodeId);
-  const set = (patch: Parameters<typeof ops.updateNode>[2]) => store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId);
+  const bg = (fn: (g: Graph) => Graph) => store().mutate(fn, graphId, { history: "background" });
+  const set = (patch: Parameters<typeof ops.updateNode>[2]) => bg((g) => ops.updateNode(g, nodeId, patch));
+  // Results are applied even if the node was deleted meanwhile: that is a no-op now, but undoing the delete
+  // brings the node back with the result instead of a spinner that never stops.
   const handlers: BusyHandlers = {
     onError: (e) => {
       const msg = e instanceof Error ? e.message : String(e);
-      if (find()) store().mutate((g) => ops.setNodeError(g, nodeId, msg), graphId);
+      bg((g) => ops.setNodeError(g, nodeId, msg));
       reportError(e, `${node.name}: `);
     },
-    onCancel: () => {
-      if (find()) store().mutate((g) => ops.setNodeError(g, nodeId, "Check cancelled. Retry to run it again."), graphId);
-    },
+    onCancel: () => bg((g) => ops.setNodeError(g, nodeId, "Check cancelled. Retry to run it again.")),
   };
   set({ status: "checking", error: undefined });
 
@@ -95,9 +108,10 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
         ),
       handlers,
     );
-    if (!res || !find()) return;
+    if (!res) return;
     if (res.ambiguous) {
       set({ status: "unclear", senses: res.senses });
+      if (!find()) return;
       store().setClarifying({ graphId, nodeId });
       return; // continues in chooseSense once the user picks a meaning
     }
@@ -114,7 +128,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       api.deps({ node: toBrief(current), existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief) }, signal),
     handlers,
   );
-  if (res && find()) store().mutate((g) => ops.applyDeps(g, nodeId, res.prerequisites), graphId);
+  if (res) bg((g) => ops.applyDeps(g, nodeId, res.prerequisites));
 }
 
 /** The user picked (or wrote) a meaning for an ambiguous node. */
@@ -183,7 +197,9 @@ export function installDep(dependentId: string, depName: string) {
   const hint = dependent && dep ? `Needed by "${dependent.name}" (${dep.role}): ${dep.reason}` : undefined;
   const id = addConcept({ name: depName, position: ops.installPosition(g, dependentId, index) }, graphId, hint);
   // If the concept already existed under this name, addNode didn't run satisfyMissing for it.
-  store().mutate((g) => ops.satisfyMissing(g, id), graphId);
+  // Folded into the add's undo step when there was one.
+  const history = g.nodes.some((n) => n.id === id) ? "step" : "merge";
+  store().mutate((g) => ops.satisfyMissing(g, id), graphId, { history });
   store().setInspect({ kind: "node", id: dependentId });
   return id;
 }
@@ -198,7 +214,9 @@ export async function mix(aId: string, bId: string) {
     api.relate({ a: toBrief(a), b: toBrief(b) }, signal),
   );
   if (!res) return;
-  store().mutate((g) => ops.upsertRelation(g, aId, bId, res.aToB, res.bToA, "mix"), graphId);
+  // The user asked for this relation, so it is an undo step (skipped if either end was deleted meanwhile).
+  const both = (g: Graph) => g.nodes.some((n) => n.id === aId) && g.nodes.some((n) => n.id === bId);
+  store().mutate((g) => (both(g) ? ops.upsertRelation(g, aId, bId, res.aToB, res.bToA, "mix") : g), graphId);
   const rel = ops.findRelation(graph(graphId), aId, bId);
   if (rel) store().setInspect({ kind: "edge", relationId: rel.id, dir: rel.a === aId ? "aToB" : "bToA" });
 }
@@ -226,6 +244,6 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
       if (target && target.id !== id) out = ops.upsertRelation(out, id, target.id, l.fromNew, l.toNew, "derive");
     }
     return out;
-  }, graphId);
+  }, graphId, { history: g.nodes.some((n) => n.id === id) ? "step" : "merge" }); // one undo step with the add
   return id;
 }
