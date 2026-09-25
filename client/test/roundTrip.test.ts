@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { sourceLabel, toMarkdown } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
 import { repairImport } from "../src/lib/importRepair";
+import { wikiBase, wikiName } from "../src/lib/mediawiki";
 import { decodeShare, encodeShare } from "../src/lib/share";
 
 const node = (id: string, name: string, extra: Partial<Graph["nodes"][number]> = {}): Graph["nodes"][number] => ({
@@ -119,6 +120,17 @@ describe("symbol-only concept names", () => {
     expect(normalizeName("!!!")).toBe("");
     expect(normalizeName("  - ")).toBe("");
     expect(normalizeName("Group!")).toBe("group");
+  });
+});
+
+describe("a community wiki's source survives import", () => {
+  it("keeps the source of a Fandom wiki with a long name", () => {
+    const name = wikiName("fandom", "a".repeat(61));
+    expect(name).toHaveLength(61); // Settings accepts it
+    const base = wikiBase({ site: "fandom", wiki: name })!;
+    const source = { site: base.label, title: "Creeper", url: base.page("Creeper") };
+    const out = repairImport(doc([node("a", "Creeper", { definition: "d", source })]));
+    expect(out.doc.graphs[0].nodes[0].source).toEqual(source);
   });
 });
 

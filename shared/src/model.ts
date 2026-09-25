@@ -206,8 +206,8 @@ export type GraphExport = z.infer<typeof GraphExport>;
 export const SourceRef = z.object({
   title: z.string().max(300),
   page: z.number().int().min(1).optional(),
-  /** The site a looked-up definition came from ("ProofWiki", "Wikipedia"…) and its page. */
-  site: z.string().max(60).optional(),
+  /** The site a looked-up definition came from ("ProofWiki", "Wikipedia", "Fandom (minecraft)"…) and its page. */
+  site: z.string().max(100).optional(),
   url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
