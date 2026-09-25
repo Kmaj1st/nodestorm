@@ -1,5 +1,24 @@
 # Changelog
 
+## 2026-09-25: layers in 2.5D and 3D, and Physics
+
+- **Physics** (the magnet button in the toolbar):
+  - Relations act as springs and cards push each other apart without ever overlapping, so the graph sorts itself by its connections. Prerequisites drift above what needs them.
+  - Dragging a card pulls its neighbours along.
+  - Double-click a card, or use Pin in the inspector, to hold it in place.
+  - Once things settle, the result is saved as one undo step.
+  - With reduced motion turned on, it jumps straight to the result.
+  - Graphs of more than 400 concepts are too big for it.
+- **Layered view (2.5D)** (View → Layout):
+  - Concepts stand on stacked plates, one per dependency depth, with the foundations on top.
+  - A card slides along its own layer.
+  - Switching back to Flat restores the layout you had.
+  - Physics also works in this view.
+- **3D view** (View → 3D view…):
+  - The layers as plates stacked in 3D. Drag to rotate, scroll to zoom and right-drag to pan (arrow keys, +/- and 0 do the same), and click a concept to open it.
+  - A list of the layers beside it works without the canvas.
+  - It is loaded only when opened (139 KB gzipped) and works offline.
+
 ## 2026-09-25: remaining fixes and interface polish
 
 ### Fixes

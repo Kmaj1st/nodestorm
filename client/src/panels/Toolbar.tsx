@@ -47,7 +47,7 @@ import { texReview } from "../lib/texImport";
 import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog, FlashcardsDialog, GlossaryDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
-import { FocusButton, ViewMenu } from "./ViewMenu";
+import { FocusButton, PhysicsButton, ViewMenu } from "./ViewMenu";
 import { Icon } from "../ui/Icon";
 
 /**
@@ -142,6 +142,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
           <Icon icon={Search} />
         </button>
         <FocusButton />
+        <PhysicsButton />
         <ViewMenu />
       </div>
 

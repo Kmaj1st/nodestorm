@@ -29,16 +29,20 @@ export interface Focus {
 interface ViewState extends ViewPrefs {
   /** Focus mode: only this concept and its neighbourhood (within `hops`) are shown. */
   focus: Focus | null;
+  /** The 3D view is open (not remembered: it is a dialog). */
+  view3d: boolean;
   setPrefs(patch: Partial<ViewPrefs>): void;
   setFocus(focus: Focus | null): void;
+  setView3d(open: boolean): void;
 }
 
 export const useView = create<ViewState>()((set, get) => ({
   ...load(),
   focus: null,
+  view3d: false,
   setPrefs(patch) {
-    const { origins, edgeLabels, todoOnly, hops, kinds } = { ...get(), ...patch };
-    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds });
+    const { origins, edgeLabels, todoOnly, hops, kinds, layout, physics } = { ...get(), ...patch };
+    const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds, layout, physics });
     try {
       localStorage.setItem(KEY, JSON.stringify(prefs));
     } catch {
@@ -47,6 +51,7 @@ export const useView = create<ViewState>()((set, get) => ({
     set(prefs);
   },
   setFocus: (focus) => set({ focus }),
+  setView3d: (view3d) => set({ view3d }),
 }));
 
 /** The focus that applies to `graph` (focus mode is per graph: switching graphs shows everything). */

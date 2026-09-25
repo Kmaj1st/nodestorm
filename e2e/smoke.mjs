@@ -296,6 +296,103 @@ try {
   assert(await inView("First Isomorphism Theorem"), "view centred on the found concept");
   await page.screenshot({ path: `${shots}5b-tidy.png` });
 
+  console.log("Physics and layers");
+  {
+    const stored = () =>
+      page.evaluate(() => {
+        const st = JSON.parse(localStorage.getItem("nodestorm") ?? "{}").state;
+        return Object.fromEntries(st.graphs[st.activeId].nodes.map((n) => [n.name, n.position]));
+      });
+    const cards = async () => {
+      const out = {};
+      for (const l of await page.locator('.react-flow__node [data-testid^="node-"]').all()) out[(await l.getAttribute("data-testid")).slice(5)] = await l.boundingBox();
+      return out;
+    };
+    const overlapping = (bs) => {
+      const list = Object.entries(bs);
+      for (const [i, [na, a]] of list.entries()) {
+        for (const [nb, b] of list.slice(i + 1)) {
+          if (a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height) {
+            console.log(`  (${na} overlaps ${nb}: ${JSON.stringify(a)} ${JSON.stringify(b)})`);
+            return true;
+          }
+        }
+      }
+      return false;
+    };
+    const settled = () => page.waitForFunction(() => document.querySelector(".canvas")?.getAttribute("data-settled") === "true", null, { timeout: 20000 });
+    const before = await stored();
+    await page.getByRole("button", { name: "Physics" }).click();
+    assert((await page.getByRole("button", { name: "Physics" }).getAttribute("aria-pressed")) === "true", "Physics is a toggle button");
+    await settled();
+    assert(!overlapping(await cards()), "Physics settles with no overlapping cards");
+    const after = await stored();
+    assert(JSON.stringify(after) !== JSON.stringify(before), "the settled positions are saved");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.waitForTimeout(300);
+    assert(JSON.stringify(await stored()) === JSON.stringify(before), "one Undo takes the whole arrangement back");
+    await page.getByRole("button", { name: "Redo", exact: true }).click();
+    await page.waitForTimeout(300);
+    // A drag holds the card at the pointer; its neighbours follow and the result is again one undo step.
+    const iso = await node("Isomorphism").boundingBox();
+    await page.mouse.move(iso.x + 60, iso.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(iso.x + 260, iso.y + 60, { steps: 8 });
+    await page.mouse.up();
+    await settled();
+    assert(!overlapping(await cards()), "…and after a drag");
+    await page.getByRole("button", { name: "Physics" }).click();
+
+    console.log("Layered view");
+    const flat = await stored();
+    await page.getByRole("button", { name: /^View/ }).click();
+    await page.getByLabel("Layered (2.5D)").check();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(400);
+    assert(await page.locator(".layer-plate").first().isVisible(), "the layered view draws its layer plates");
+    assert((await page.locator(".layer-plate").count()) >= 3, "…one per dependency layer");
+    const layered = await cards();
+    assert(layered["Homomorphism"].y < layered["Isomorphism"].y && layered["Isomorphism"].y < layered["First Isomorphism Theorem"].y, "prerequisites stand on the layers above");
+    assert(!overlapping(layered), "no card overlaps another in the layered view");
+    assert(JSON.stringify(await stored()) === JSON.stringify(flat), "switching the view moves nothing that is saved");
+    // A drag slides the card along its layer.
+    const b = layered["Isomorphism"];
+    await page.mouse.move(b.x + 60, b.y + 20);
+    await page.mouse.down();
+    await page.mouse.move(b.x + 180, b.y + 220, { steps: 6 });
+    await page.mouse.up();
+    await page.waitForTimeout(200);
+    const moved = (await cards())["Isomorphism"];
+    assert(Math.abs(moved.y - b.y) < 2 && moved.x > b.x + 60, "a card dragged in the layered view stays on its layer");
+    const s2 = await stored();
+    assert(s2["Isomorphism"].y === flat["Isomorphism"].y && s2["Isomorphism"].x !== flat["Isomorphism"].x, "…and only its x is saved");
+    await page.screenshot({ path: `${shots}5c-layered.png` });
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await page.getByRole("button", { name: /^View/ }).click();
+    await page.getByLabel("Flat").check();
+    await page.keyboard.press("Escape");
+    await page.waitForTimeout(300);
+    assert((await page.locator(".layer-plate").count()) === 0, "the flat view has no plates");
+    assert(JSON.stringify(await stored()) === JSON.stringify(flat), "back to flat, the layout is as it was");
+
+    console.log("3D view");
+    await page.getByRole("button", { name: /^View/ }).click();
+    await page.getByRole("button", { name: "3D view…" }).click();
+    const d3 = page.getByRole("dialog", { name: "3D view" });
+    await d3.getByTestId("graph3d-canvas").waitFor({ timeout: 20000 });
+    assert(await d3.getByRole("heading", { name: "Layer 0: foundations" }).isVisible(), "the 3D view lists the concepts by layer");
+    await d3.getByTestId("graph3d-canvas").focus();
+    await page.keyboard.press("ArrowLeft");
+    await page.keyboard.press("+");
+    await page.keyboard.press("0");
+    await page.waitForTimeout(500);
+    await page.screenshot({ path: `${shots}5d-3d.png` });
+    await d3.getByRole("button", { name: "Isomorphism", exact: true }).click();
+    await d3.waitFor({ state: "detached" });
+    await page.waitForFunction(() => document.querySelector('[data-testid="node-Isomorphism"]')?.className.includes("concept--selected"));
+    assert((await page.getByLabel("Rename concept").inputValue()) === "Isomorphism", "picking a concept in the 3D view opens it on the canvas");
+  }
+
   console.log("Ambiguous names");
   {
     const st = await openSettings();
@@ -1106,6 +1203,22 @@ try {
   await audit("dark theme, relation open");
   await node("Group").click();
   await audit("dark theme, concept open");
+  await page.getByRole("button", { name: /^View/ }).click();
+  await page.getByLabel("Layered (2.5D)").check();
+  await audit("dark theme, View menu with the layout choice");
+  await page.getByRole("button", { name: "3D view…" }).click();
+  await page.getByTestId("graph3d-canvas").waitFor({ timeout: 20000 });
+  await audit("dark theme, 3D view");
+  await page.screenshot({ path: `${shots}38-3d-dark.png` });
+  await page.getByRole("dialog", { name: "3D view" }).getByRole("button", { name: "Close" }).click();
+  await page.getByRole("button", { name: "Physics" }).click();
+  await page.waitForFunction(() => document.querySelector(".canvas")?.getAttribute("data-settled") === "true", null, { timeout: 20000 });
+  await audit("dark theme, layered view with Physics");
+  await page.screenshot({ path: `${shots}38-layered-dark.png` });
+  await page.getByRole("button", { name: "Physics" }).click();
+  await page.getByRole("button", { name: /^View/ }).click();
+  await page.getByLabel("Flat").check();
+  await page.keyboard.press("Escape");
   {
     const st = await openSettings();
     await st.getByLabel("Theme", { exact: true }).selectOption("light");

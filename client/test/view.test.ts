@@ -91,7 +91,11 @@ describe("view prefs", () => {
     expect(sanitizeView(null)).toEqual(DEFAULT_VIEW);
     expect(sanitizeView("garbage")).toEqual(DEFAULT_VIEW);
     const v = sanitizeView({ origins: { mix: false, bogus: false }, edgeLabels: "no", todoOnly: true, hops: 9 });
-    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true, extract: true }, edgeLabels: true, todoOnly: true, hops: 3, kinds: DEFAULT_VIEW.kinds });
+    expect(v).toEqual({ origins: { mix: false, dependency: true, derive: true, extract: true }, edgeLabels: true, todoOnly: true, hops: 3, kinds: DEFAULT_VIEW.kinds, layout: "flat", physics: false });
+    // Layout and Physics: known values kept, anything else back to the default.
+    expect(sanitizeView({ layout: "layered", physics: true })).toMatchObject({ layout: "layered", physics: true });
+    expect(sanitizeView({ layout: "3d", physics: "yes" })).toMatchObject({ layout: "flat", physics: false });
+    expect(isFiltered({ ...DEFAULT_VIEW, layout: "layered", physics: true })).toBe(false);
     // Kind filters: unknown kinds dropped, missing ones shown.
     const k = sanitizeView({ kinds: { theorem: false, remark: false, none: "x" } }).kinds;
     expect(k.theorem).toBe(false);

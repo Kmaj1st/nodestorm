@@ -2,7 +2,7 @@ import type { Graph } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import { searchNodes } from "../src/lib/fuzzy";
 import * as ops from "../src/lib/graphOps";
-import { dependencyLayers, layeredLayout } from "../src/lib/layout";
+import { dependencyLayers, fromLayered, LAYERED, layeredLayout, layeredView } from "../src/lib/layout";
 
 const { w, h } = ops.NODE_SIZE;
 const overlaps = (a: { x: number; y: number }, b: { x: number; y: number }) =>
@@ -117,5 +117,31 @@ describe("searchNodes", () => {
     expect(searchNodes(n.nodes, "iso").map((x) => x.name)).toEqual(["Isomorphism", "First Isomorphism Theorem", "Kernel"]);
     // Notes need the query as typed: scattered letters don't match them.
     expect(searchNodes(n.nodes, "ltr")).toEqual([]);
+  });
+});
+
+describe("layeredView (the 2.5D view)", () => {
+  it("puts each concept on its dependency layer's row, shifted by the layer's shear, keeping its own x", () => {
+    let g = build(["Set", "Group", "Kernel"], { Group: ["Set"], Kernel: ["Group"] });
+    g = ops.setPositions(g, new Map(g.nodes.map((n, i) => [n.id, { x: 100 * i, y: 999 }])));
+    const v = layeredView(g);
+    const at = (n: string) => v.get(byName(g, n).id)!;
+    expect(at("Set")).toEqual({ x: 0, y: 0 });
+    expect(at("Group")).toEqual({ x: 100 + LAYERED.shear, y: LAYERED.dy });
+    expect(at("Kernel")).toEqual({ x: 200 + 2 * LAYERED.shear, y: 2 * LAYERED.dy });
+    // Back to the stored x (the stored y isn't used by the layered view).
+    expect(fromLayered(at("Kernel").x, 2)).toBe(200);
+  });
+
+  it("spreads cards that would overlap on a row, keeping their order and the row's centre", () => {
+    let g = build(["A", "B", "C"]);
+    g = ops.setPositions(g, new Map(g.nodes.map((n, i) => [n.id, { x: i * 10, y: 0 }])));
+    const v = layeredView(g);
+    const xs = ["A", "B", "C"].map((n) => v.get(byName(g, n).id)!.x);
+    expect(xs[0]).toBeLessThan(xs[1]);
+    expect(xs[1] - xs[0]).toBeGreaterThanOrEqual(w + LAYERED.gap - 1);
+    expect(Math.abs((xs[0] + xs[1] + xs[2]) / 3 - 10)).toBeLessThanOrEqual(1);
+    const all = [...v.values()];
+    for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) expect(overlaps(all[i], all[j])).toBe(false);
   });
 });

@@ -10,6 +10,8 @@ import {
   ExternalLink,
   GraduationCap,
   PenLine,
+  Pin,
+  PinOff,
   Highlighter,
   ListTree,
   Presentation,
@@ -20,6 +22,7 @@ import {
   TriangleAlert,
   Wand2,
 } from "lucide-react";
+import { useView } from "../store/viewStore";
 import { useEffect, useRef, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
@@ -131,6 +134,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const setInspect = useGraphStore((s) => s.setInspect);
   const setClarifying = useGraphStore((s) => s.setClarifying);
   const viewing = useGraphStore(isViewing);
+  const physicsOn = useView((v) => v.physics);
   const graphId = graph.id;
   const deps = graph.nodes.filter((n) => node.dependsOn.includes(n.id));
   const dependents = graph.nodes.filter((n) => n.dependsOn.includes(node.id));
@@ -173,6 +177,18 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           {KINDS.map((k) => <option key={k} value={k}>{t(KIND_LABEL[k])}</option>)}
         </select>
       </label>
+      {(physicsOn || node.pinned) && !viewing && (
+        <button
+          className={`small-btn pin-toggle${node.pinned ? " small-btn--on" : ""}`}
+          aria-pressed={Boolean(node.pinned)}
+          title={t("physics.pinTitle")}
+          onClick={() => mutate((g) => updateNode(g, node.id, { pinned: node.pinned ? undefined : true }), graphId)}
+          data-testid="pin-toggle"
+        >
+          <Icon icon={node.pinned ? PinOff : Pin} size={14} />
+          {t(node.pinned ? "physics.unpin" : "physics.pin")}
+        </button>
+      )}
 
       <label className="field">
         {t("node.definition")}

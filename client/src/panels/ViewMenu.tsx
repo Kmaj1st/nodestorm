@@ -1,9 +1,10 @@
 import type { RelationOrigin } from "@nodestorm/shared";
-import { ChevronDown, Eye, Focus } from "lucide-react";
+import { Box, ChevronDown, Eye, Focus, Magnet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { KIND_LABEL } from "../lib/kinds";
-import { isFiltered, KIND_FILTERS, kindFilterOf } from "../lib/view";
+import { isFiltered, KIND_FILTERS, kindFilterOf, type CanvasLayout } from "../lib/view";
+import { PHYSICS_MAX_NODES } from "../graph/usePhysics";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { focusTarget, toggleFocus, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
@@ -34,6 +35,31 @@ export function FocusButton() {
     </button>
   );
 }
+
+/** Toolbar "Physics" toggle: relations become springs and cards push apart, so the graph sorts itself. */
+export function PhysicsButton() {
+  const t = useT();
+  const on = useView((v) => v.physics);
+  const tooBig = useGraphStore((s) => activeGraph(s).nodes.length > PHYSICS_MAX_NODES);
+  return (
+    <button
+      onClick={() => useView.getState().setPrefs({ physics: !on })}
+      disabled={tooBig}
+      aria-pressed={on && !tooBig}
+      className={`icon-btn${on && !tooBig ? " small-btn--on" : ""}`}
+      title={tooBig ? t("physics.titleTooBig", { n: PHYSICS_MAX_NODES }) : t(on ? "physics.titleOn" : "physics.titleOff")}
+      aria-label={t("physics.button")}
+      data-testid="physics-button"
+    >
+      <Icon icon={Magnet} />
+    </button>
+  );
+}
+
+const LAYOUTS: { value: CanvasLayout; label: MessageKey; title: MessageKey }[] = [
+  { value: "flat", label: "layers.flat", title: "layers.flatTitle" },
+  { value: "layered", label: "layers.layered", title: "layers.layeredTitle" },
+];
 
 /** "View" popover: which relation kinds to draw, edge labels, and the to-do view. Remembered per browser. */
 export function ViewMenu() {
@@ -80,6 +106,28 @@ export function ViewMenu() {
       </button>
       {open && (
         <div className="menu__list view-menu" role="dialog" aria-label={t("view.button")}>
+          <fieldset className="view-menu__layout">
+            <legend className="view-menu__head">{t("layers.layout")}</legend>
+            {LAYOUTS.map((l) => (
+              <label key={l.value} className="check" title={t(l.title)}>
+                <input type="radio" name="canvas-layout" checked={view.layout === l.value} onChange={() => view.setPrefs({ layout: l.value })} />
+                {t(l.label)}
+              </label>
+            ))}
+            <button
+              className="small-btn view-menu__3d"
+              onClick={() => {
+                setOpen(false);
+                view.setView3d(true);
+              }}
+              title={t("layers.open3dTitle")}
+              disabled={!graph.nodes.length}
+            >
+              <Icon icon={Box} size={14} />
+              {t("layers.open3d")}
+            </button>
+          </fieldset>
+          <hr className="menu__sep" />
           <div className="view-menu__head">{t("view.showRelations")}</div>
           {KINDS.map((k) => (
             <label key={k.origin} className="check" title={t(k.title)}>

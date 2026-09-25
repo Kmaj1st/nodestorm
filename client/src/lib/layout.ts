@@ -84,3 +84,31 @@ export function layeredLayout(g: Graph, opts: LayoutOptions = {}): Map<string, {
   }
   return out;
 }
+
+/** Geometry of the layered (2.5D) view: rows one per dependency depth, each shifted right like stacked sheets. */
+export const LAYERED = { dy: NODE_SIZE.h + 120, shear: 80, gap: 36 };
+
+/**
+ * Where each concept is drawn in the layered view: on its layer's row (y = layer × dy) at its own x, shifted by the
+ * layer's shear. Cards that would overlap on a row are spread apart (keeping their order and the row's centre), so the
+ * view is readable before any layout; stored positions are untouched. Pure.
+ */
+export function layeredView(g: Graph, layers = dependencyLayers(g)): Map<string, { x: number; y: number }> {
+  const rows = new Map<number, { id: string; x: number }[]>();
+  for (const n of g.nodes) {
+    const l = layers.get(n.id) ?? 0;
+    (rows.get(l) ?? rows.set(l, []).get(l)!).push({ id: n.id, x: n.position.x });
+  }
+  const out = new Map<string, { x: number; y: number }>();
+  for (const [l, row] of rows) {
+    row.sort((a, b) => a.x - b.x || (a.id < b.id ? -1 : 1));
+    const xs = row.map((r) => r.x);
+    for (let i = 1; i < xs.length; i++) xs[i] = Math.max(xs[i], xs[i - 1] + NODE_SIZE.w + LAYERED.gap);
+    const shift = (row.reduce((s, r) => s + r.x, 0) - xs.reduce((s, x) => s + x, 0)) / row.length;
+    row.forEach((r, i) => out.set(r.id, { x: Math.round(xs[i] + shift + l * LAYERED.shear), y: l * LAYERED.dy }));
+  }
+  return out;
+}
+
+/** The stored x for a card shown at `x` on `layer` in the layered view (its stored y is left alone). */
+export const fromLayered = (x: number, layer: number) => Math.round(x - layer * LAYERED.shear);

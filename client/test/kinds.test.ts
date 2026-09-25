@@ -107,6 +107,13 @@ describe("kinds from the AI (offline demo)", () => {
     expect(ops.merge(r.graph, ops.fork(r.graph, "S")).nodes.find((n) => n.id === r.id)!.kind).toBe("definition");
   });
 
+  it("a pin survives a file round trip and share links", () => {
+    const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel" });
+    const g = ops.updateNode(r.graph, r.id, { pinned: true });
+    expect(repairImport({ nodes: JSON.parse(JSON.stringify(g.nodes)) }).doc.graphs[0].nodes[0].pinned).toBe(true);
+    expect(repairImport(packGraph(g, "P")).doc.graphs[0].nodes[0].pinned).toBe(true);
+  });
+
   it("the hand-set flag survives a file round trip and share links", () => {
     const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel" });
     const g = ops.setKind(r.graph, r.id, null);

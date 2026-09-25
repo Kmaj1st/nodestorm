@@ -58,6 +58,7 @@ export function packGraph(g: Graph, name: string): unknown {
     if (n.source) out.source = n.source;
     if (n.kind) out.kind = n.kind;
     if (n.kindByUser) out.kindByUser = true;
+    if (n.pinned) out.pinned = true;
     return out;
   });
   const dir = (d: { kind: string; explanation: string }) => (d.explanation ? { kind: d.kind, explanation: d.explanation } : { kind: d.kind });

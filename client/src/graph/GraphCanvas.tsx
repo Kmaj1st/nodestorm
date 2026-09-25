@@ -6,6 +6,7 @@ import {
   ReactFlow,
   useReactFlow,
   type NodeChange,
+  type NodePositionChange,
   type OnSelectionChangeParams,
   type Viewport,
 } from "@xyflow/react";
@@ -13,16 +14,19 @@ import { Focus, Network, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { rich, useT } from "../i18n";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
+import { dependencyLayers, fromLayered, LAYERED, layeredView } from "../lib/layout";
 import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
 import { useTheme } from "../lib/theme";
-import { MAX_HOPS, showsEverything, visibleParts } from "../lib/view";
+import { DEFAULT_VIEW, MAX_HOPS, showsEverything, visibleParts } from "../lib/view";
 import { registerViewport, viewport } from "../lib/viewport";
 import { ShortcutsButton } from "../panels/ShortcutsHelp";
-import { activeGraph, useGraphStore } from "../store/graphStore";
+import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { activeFocus, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
+import { LayerPlates } from "./LayerPlates";
+import { PHYSICS_MAX_NODES, usePhysics } from "./usePhysics";
 
 const nodeTypes = { concept: ConceptNode };
 const edgeTypes = { bi: BiRelationEdge };
@@ -37,6 +41,7 @@ export function GraphCanvas() {
   const setSelection = useGraphStore((s) => s.setSelection);
   const setInspect = useGraphStore((s) => s.setInspect);
   const theme = useTheme((s) => s.theme);
+  const viewing = useGraphStore(isViewing);
   const loadExample = useCallback(() => {
     useGraphStore.getState().loadExample();
     viewport.fit();
@@ -61,11 +66,43 @@ export function GraphCanvas() {
   const setFocus = useView((v) => v.setFocus);
   const focus = useMemo(() => activeFocus({ focus: focusState, hops }, graph), [focusState, hops, graph]);
   const visible = useMemo(() => {
-    const prefs = { origins, todoOnly, hops, kinds, edgeLabels: true };
+    const prefs = { ...DEFAULT_VIEW, origins, todoOnly, hops, kinds };
     return showsEverything(prefs, focus) ? null : visibleParts(graph, prefs, focus);
   }, [graph, origins, todoOnly, hops, kinds, focus]);
 
+  // Layered (2.5D) view: each concept is drawn on its dependency layer's plate (lib/layout.ts layeredView); the
+  // stored positions stay as they are, so switching back to the flat view restores the layout.
+  const layout = useView((v) => v.layout);
+  const physicsOn = useView((v) => v.physics) && graph.nodes.length <= PHYSICS_MAX_NODES;
+  const layers = useMemo(() => (layout === "layered" ? dependencyLayers(graph) : null), [graph, layout]);
+  const display = useMemo(() => (layers ? layeredView(graph, layers) : null), [graph, layers]);
+  const displayRef = useRef({ display, layers, graph });
+  displayRef.current = { display, layers, graph };
+  const posOf = useCallback((id: string) => {
+    const { display: d, graph: g } = displayRef.current;
+    return d?.get(id) ?? g.nodes.find((n) => n.id === id)?.position ?? { x: 0, y: 0 };
+  }, []);
+  /** On-screen position → stored position (in the layered view only x is the card's own; y is its layer's row). */
+  const toStore = useCallback((id: string, at: { x: number; y: number }) => {
+    const { layers: ls, graph: g } = displayRef.current;
+    const stored = g.nodes.find((n) => n.id === id)?.position ?? at;
+    return ls ? { x: fromLayered(at.x, ls.get(id) ?? 0), y: stored.y } : at;
+  }, []);
+
   const [nodes, setNodes] = useState<ConceptFlowNode[]>([]);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
+
+  const physics = usePhysics({
+    enabled: physicsOn,
+    graph,
+    display: posOf,
+    visible: visible?.nodes ?? null,
+    lockY: layout === "layered",
+    toStore,
+    setNodes,
+    onScreen: () => new Map(nodesRef.current.map((n) => [n.id, n.position])),
+  });
   useEffect(() => {
     setNodes((prev) => {
       const byId = new Map(prev.map((n) => [n.id, n]));
@@ -75,9 +112,14 @@ export function GraphCanvas() {
         const className = chain ? (chain.has(c.id) ? "path-on" : "path-dim") : undefined;
         const inCycle = cycles.nodes.has(c.id);
         const hidden = visible ? !visible.nodes.has(c.id) : false;
+        const at = display?.get(c.id) ?? c.position;
+        // While Physics is moving cards it owns their positions; otherwise (Undo included) a card sits where the view puts it.
+        // (In the read-only viewer nothing is saved, so Physics keeps them where it put them.)
+        const moving = physicsOn && (physics.settling || viewing);
+        const placed = moving || old?.dragging || (old?.position.x === at.x && old.position.y === at.y);
         // Keep the very same object when nothing about this node changed: React Flow and the memoised
         // ConceptNode then skip it, so an AI status update of one node re-renders only that node.
-        if (old && old.data.concept === c && old.data.inCycle === inCycle && old.className === className && !!old.hidden === hidden) {
+        if (old && placed && old.data.concept === c && old.data.inCycle === inCycle && old.className === className && !!old.hidden === hidden) {
           if (prev[i] !== old) changed = true;
           return old;
         }
@@ -86,7 +128,7 @@ export function GraphCanvas() {
           ...(old ?? {}),
           id: c.id,
           type: "concept" as const,
-          position: old?.dragging ? old.position : c.position,
+          position: old?.dragging || (moving && old) ? old.position : at,
           className,
           hidden,
           // A hidden concept can't stay selected (Delete and the toolbar act on the selection).
@@ -96,7 +138,8 @@ export function GraphCanvas() {
       });
       return changed ? next : prev;
     });
-  }, [graph, chain, cycles, visible]);
+  }, [graph, chain, cycles, visible, display, physicsOn, physics.settling, viewing]);
+
 
   // Let the action layer place new nodes in view and pan/zoom to them (see lib/viewport.ts).
   const rf = useReactFlow<ConceptFlowNode, RelationFlowEdge>();
@@ -105,8 +148,11 @@ export function GraphCanvas() {
     const box = (id: string) => {
       const c = activeGraph(useGraphStore.getState()).nodes.find((n) => n.id === id);
       if (!c) return null;
-      const m = rf.getInternalNode(id)?.measured;
-      return { x: c.position.x, y: c.position.y, w: m?.width ?? NODE_SIZE.w, h: m?.height ?? NODE_SIZE.h };
+      const internal = rf.getInternalNode(id);
+      const m = internal?.measured;
+      // Where the card is on screen (the layered view and Physics move it away from its stored position).
+      const p = internal?.position ?? c.position;
+      return { x: p.x, y: p.y, w: m?.width ?? NODE_SIZE.w, h: m?.height ?? NODE_SIZE.h };
     };
     const centreOn = (b: { x: number; y: number; w: number; h: number }, zoom: number) =>
       void rf.setCenter(b.x + b.w / 2, b.y + b.h / 2, { zoom, duration: 400 });
@@ -201,22 +247,47 @@ export function GraphCanvas() {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<ConceptFlowNode>[]) => {
-      setNodes((ns) => applyNodeChanges(changes, ns));
+      // In the layered view a card slides along its layer's row: the layer comes from its prerequisites.
+      const ls = displayRef.current.layers;
+      const kept = ls
+        ? changes.map((c): NodeChange<ConceptFlowNode> =>
+            c.type === "position" && c.position ? ({ ...c, position: { x: c.position.x, y: (ls.get(c.id) ?? 0) * LAYERED.dy } } as NodePositionChange) : c,
+          )
+        : changes;
+      setNodes((ns) => applyNodeChanges(kept, ns));
     },
     [],
   );
 
+  const { onDragStart, onDrag, onDragStop } = physics;
+  const onNodeDragStart = useCallback((_: unknown, _node: ConceptFlowNode, dragged: ConceptFlowNode[]) => onDragStart(dragged), [onDragStart]);
+  const onNodeDrag = useCallback((_: unknown, _node: ConceptFlowNode, dragged: ConceptFlowNode[]) => onDrag(dragged), [onDrag]);
   const onNodeDragStop = useCallback(
     (_: unknown, _node: ConceptFlowNode, dragged: ConceptFlowNode[]) => {
+      // With Physics on, the drag and the settling it sets off are one undo step.
+      const key = onDragStop(dragged);
       // One undo step per drag (all dragged nodes together); a drag that ends where it started is none.
-      mutate((g) =>
-        dragged.reduce((acc, n) => {
-          const p = acc.nodes.find((c) => c.id === n.id)?.position;
-          return p && p.x === n.position.x && p.y === n.position.y ? acc : updateNode(acc, n.id, { position: n.position });
-        }, g),
+      mutate(
+        (g) =>
+          dragged.reduce((acc, n) => {
+            const p = acc.nodes.find((c) => c.id === n.id)?.position;
+            const to = toStore(n.id, n.position);
+            return p && p.x === to.x && p.y === to.y ? acc : updateNode(acc, n.id, { position: to });
+          }, g),
+        undefined,
+        key ? { key } : undefined,
       );
     },
-    [mutate],
+    [mutate, onDragStop, toStore],
+  );
+
+  // With Physics on, a double-click pins a card in place (or lets it go again).
+  const onNodeDoubleClick = useCallback(
+    (_: unknown, node: ConceptFlowNode) => {
+      if (!physicsOn) return;
+      mutate((g) => updateNode(g, node.id, { pinned: node.data.concept.pinned ? undefined : true }));
+    },
+    [mutate, physicsOn],
   );
 
   const onSelectionChange = useCallback(
@@ -232,7 +303,11 @@ export function GraphCanvas() {
   const focusName = focus && graph.nodes.find((n) => n.id === focus.nodeId)?.name;
 
   return (
-    <div ref={wrapper} className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}`}>
+    <div
+      ref={wrapper}
+      className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}${layers ? " canvas--layered" : ""}`}
+      data-settled={physicsOn ? String(!physics.settling) : undefined}
+    >
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
         colorMode={theme}
@@ -241,7 +316,10 @@ export function GraphCanvas() {
         nodeTypes={nodeTypes}
         edgeTypes={edgeTypes}
         onNodesChange={onNodesChange}
+        onNodeDragStart={onNodeDragStart}
+        onNodeDrag={onNodeDrag}
         onNodeDragStop={onNodeDragStop}
+        onNodeDoubleClick={onNodeDoubleClick}
         onSelectionChange={onSelectionChange}
         onPaneClick={onPaneClick}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
@@ -253,9 +331,16 @@ export function GraphCanvas() {
         onlyRenderVisibleElements={graph.nodes.length >= LARGE_GRAPH}
       >
         <Background gap={24} />
+        {layers && <LayerPlates nodes={nodes} layers={layers} />}
         <Controls showInteractive={false}><ShortcutsButton /></Controls>
         <MiniMap pannable zoomable ariaLabel={t("canvas.map")} />
       </ReactFlow>
+      {physics.settling && (
+        <div className="physics-badge" role="status" data-testid="physics-settling">
+          <span className="spinner spinner--xs" aria-hidden="true" />
+          {t("physics.settling")}
+        </div>
+      )}
       {focus && (
         <div className="focus-bar" role="group" aria-label={t("focus.bar")} data-testid="focus-bar">
           <Icon icon={Focus} size={14} className="focus-bar__icon" />

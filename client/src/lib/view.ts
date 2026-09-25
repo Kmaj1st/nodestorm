@@ -19,7 +19,13 @@ export interface ViewPrefs {
   hops: number;
   /** Which concepts are drawn, by `ConceptNode.kind` ("none" for concepts without one). */
   kinds: Record<KindFilter, boolean>;
+  /** "layered": concepts stand on stacked plates, one per dependency depth (the 2.5D view). */
+  layout: CanvasLayout;
+  /** Physics: relations are springs and cards push each other apart, so the graph sorts itself. */
+  physics: boolean;
 }
+
+export type CanvasLayout = "flat" | "layered";
 
 /** A kind filter: one per concept kind, plus "none" for concepts whose kind isn't set. */
 export type KindFilter = ConceptKind | "none";
@@ -33,6 +39,8 @@ export const DEFAULT_VIEW: ViewPrefs = {
   todoOnly: false,
   hops: 1,
   kinds: Object.fromEntries(KIND_FILTERS.map((k) => [k, true])) as ViewPrefs["kinds"],
+  layout: "flat",
+  physics: false,
 };
 
 /** Accept whatever was stored (older, newer or hand-edited) and fall back to defaults field by field. */
@@ -46,7 +54,8 @@ export function sanitizeView(raw: unknown): ViewPrefs {
   const hops = typeof v.hops === "number" && Number.isFinite(v.hops) ? Math.min(MAX_HOPS, Math.max(1, Math.round(v.hops))) : 1;
   const k = v.kinds && typeof v.kinds === "object" ? (v.kinds as Record<string, unknown>) : {};
   const kinds = Object.fromEntries(KIND_FILTERS.map((x) => [x, bool(k[x], true)])) as ViewPrefs["kinds"];
-  return { origins, edgeLabels: bool(v.edgeLabels, true), todoOnly: bool(v.todoOnly, false), hops, kinds };
+  const layout: CanvasLayout = v.layout === "layered" ? "layered" : "flat";
+  return { origins, edgeLabels: bool(v.edgeLabels, true), todoOnly: bool(v.todoOnly, false), hops, kinds, layout, physics: bool(v.physics, false) };
 }
 
 /** True when some filter hides part of the graph (focus mode aside). */

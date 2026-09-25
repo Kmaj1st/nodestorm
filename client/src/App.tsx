@@ -7,7 +7,7 @@ import { removeNode, removeRelation } from "./lib/graphOps";
 import { decodeShare, shareToken } from "./lib/share";
 import { Inspector } from "./panels/Inspector";
 // Dialogs load on demand (their own chunks), see panels/lazy.tsx.
-import { AbsurdChainDialog, AddNodeDialog, DeriveDialog, FindDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
+import { AbsurdChainDialog, AddNodeDialog, DeriveDialog, FindDialog, Graph3DDialog, SenseDialog, SettingsDialog } from "./panels/lazy";
 import { OfflineBanner } from "./panels/OfflineBanner";
 import { QuizHost } from "./panels/QuizHost";
 import { WalkthroughHost } from "./panels/WalkthroughHost";
@@ -37,6 +37,7 @@ export function App() {
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
   const viewing = useGraphStore(isViewing);
   const absurd = useAbsurd((s) => s.open);
+  const view3d = useView((s) => s.view3d);
   const closeAbsurd = useAbsurd((s) => s.closeAbsurd);
 
   // A share link (#share=…) opens its graph read-only, on load and when a link is pasted into this tab.
@@ -143,6 +144,7 @@ export function App() {
         {finding && <FindDialog onClose={() => setFinding(false)} />}
         {deriveFrom && <DeriveDialog anchorIds={deriveFrom} onClose={() => setDeriveFrom(null)} />}
         {absurd && !viewing && <AbsurdChainDialog {...absurd} onClose={closeAbsurd} />}
+        {view3d && <Graph3DDialog onClose={() => useView.getState().setView3d(false)} />}
         <QuizHost />
         <WalkthroughHost />
       </div>
