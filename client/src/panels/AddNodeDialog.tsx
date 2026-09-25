@@ -1,6 +1,6 @@
 import type { NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
-import { useT } from "../i18n";
+import { listJoin, useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
 import { OWN_SOURCE } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
@@ -93,7 +93,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
                 <li key={c.name}>
                   <div>
                     <strong>{c.name}</strong>
-                    {c.aliases.length > 0 && <span className="muted"> · {c.aliases.join(", ")}</span>}
+                    {c.aliases.length > 0 && <span className="muted"> · {listJoin(c.aliases)}</span>}
                     <div className="muted small"><MathText text={c.definition} /></div>
                   </div>
                   <button type="button" onClick={() => { addCandidate(c); onClose(); }}>{t("add.use")}</button>

@@ -1,5 +1,5 @@
 import { isTheoremLike, type ConceptNode, type DirRel, type Graph, type NodeStatus } from "@nodestorm/shared";
-import { t } from "../i18n";
+import { listJoin, t } from "../i18n";
 import { studyOrder } from "./export";
 import { splitMath } from "./math";
 import { learningPath } from "./paths";
@@ -82,7 +82,7 @@ export function buildCards(g: Graph, opts: CardOptions = {}): Flashcard[] {
   for (const n of order) {
     if (kinds.has("definition") && n.definition.trim()) {
       const also = n.aliases.filter((a) => a.trim());
-      const back = [n.definition.trim(), ...(also.length ? ["", t("flash.cardAlso", { names: also.join(", ") })] : [])];
+      const back = [n.definition.trim(), ...(also.length ? ["", t("flash.cardAlso", { names: listJoin(also) })] : [])];
       cards.push({ kind: "definition", front: n.name, back: back.join("\n"), tags: tags(n, "definition") });
     }
     if (kinds.has("prerequisites")) {

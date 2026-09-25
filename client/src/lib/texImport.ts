@@ -1,4 +1,5 @@
 import { normalizeName, type ConceptKind } from "@nodestorm/shared";
+import { t as tr } from "../i18n";
 import type { ExtractItem, ExtractLink, ExtractReview } from "./extract";
 
 /**
@@ -381,7 +382,7 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
   results.forEach((r, i) => {
     for (const l of r.refs) {
       const j = byLabel.get(l);
-      if (j !== undefined) link(i, j, `Refers to ${resultLabel(results[j])}${results[j].title ? ` (${results[j].title})` : ""}.`, true);
+      if (j !== undefined) link(i, j, tr(results[j].title ? "texImport.refersToTitled" : "texImport.refersTo", { label: resultLabel(results[j]), title: results[j].title ?? "" }), true);
     }
   });
   // Mention links compare every result with every definition: skipped for very large documents.
@@ -391,10 +392,10 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
       results.forEach((d, j) => {
         if (j >= i) return; // only earlier definitions: a paper defines before it uses
         for (const term of d.terms) {
-          const t = term.toLowerCase();
-          if (t.length < 4) continue;
-          const re = new RegExp(`(^|[^\\p{L}])${t.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?([^\\p{L}]|$)`, "u");
-          if (re.test(text)) link(i, j, `Mentions “${term}”.`, false);
+          const low = term.toLowerCase();
+          if (low.length < 4) continue;
+          const re = new RegExp(`(^|[^\\p{L}])${low.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}(s|es)?([^\\p{L}]|$)`, "u");
+          if (re.test(text)) link(i, j, tr("texImport.mentions", { term }), false);
         }
       });
     });

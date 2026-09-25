@@ -200,7 +200,7 @@ export function ChainGame({
               <span className="absurd-hop__n" aria-hidden="true">{i + 1}</span>
               <div className={`absurd-hop__card${v.fact ? "" : " chain-game__card--hidden"}`}>
                 <div className="absurd-hop__head">
-                  <span className="sr-only">{t("absurd.hop", { n: i + 1 })}: </span>
+                  <span className="sr-only">{t("common.label", { label: t("absurd.hop", { n: i + 1 }) })} </span>
                   <span className="absurd-hop__ends">
                     {name(order[i])}
                     <Icon icon={ArrowRight} size={14} className="absurd-hop__arrow" />
@@ -218,7 +218,7 @@ export function ChainGame({
                 </div>
                 {v.fact && (
                   <p className="absurd-hop__fact">
-                    <span className="sr-only">{t("absurd.factLabel")}: </span>
+                    <span className="sr-only">{t("common.label", { label: t("absurd.factLabel") })} </span>
                     <MathText text={v.fact} />
                   </p>
                 )}
@@ -275,7 +275,7 @@ export function ChainGame({
         <p className="absurd__note muted small">
           <Icon icon={ShieldCheck} size={14} />
           <span>
-            {chain.plausibility && <>{t("absurd.plausibilityLabel")}: <MathText text={chain.plausibility} /> </>}
+            {chain.plausibility && <>{t("common.label", { label: t("absurd.plausibilityLabel") })}{" "}<MathText text={chain.plausibility} /> </>}
             {t("absurd.check")}
           </span>
         </p>

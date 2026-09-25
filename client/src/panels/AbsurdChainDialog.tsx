@@ -209,7 +209,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
                 <span className="absurd-hop__n" aria-hidden="true">{i + 1}</span>
                 <div className="absurd-hop__card">
                   <div className="absurd-hop__head">
-                    <span className="sr-only">{t("absurd.hop", { n: i + 1 })}: </span>
+                    <span className="sr-only">{t("common.label", { label: t("absurd.hop", { n: i + 1 }) })} </span>
                     <span className="absurd-hop__ends">
                       <strong>{h.from}</strong>
                       <Icon icon={ArrowRight} size={14} className="absurd-hop__arrow" />
@@ -224,7 +224,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
                     {h.kind && <span className="absurd-hop__kind">{h.kind}</span>}
                   </div>
                   <p className="absurd-hop__fact">
-                    <span className="sr-only">{t("absurd.factLabel")}: </span>
+                    <span className="sr-only">{t("common.label", { label: t("absurd.factLabel") })} </span>
                     <MathText text={h.fact} />
                   </p>
                   {h.quip && <p className="absurd-hop__quip"><MathText text={h.quip} /></p>}
@@ -241,7 +241,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
           <p className="absurd__note muted small">
             <Icon icon={ShieldCheck} size={14} />
             <span>
-              {res.plausibility && <>{t("absurd.plausibilityLabel")}: <MathText text={res.plausibility} /> </>}
+              {res.plausibility && <>{t("common.label", { label: t("absurd.plausibilityLabel") })}{" "}<MathText text={res.plausibility} /> </>}
               {t("absurd.check")}
             </span>
           </p>

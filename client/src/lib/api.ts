@@ -2,7 +2,9 @@ import {
   DEFAULT_TIMEOUT_MS,
   createProvider,
   normalizeLanguage,
+  ProviderError,
   withDeadline,
+  type ProviderErrorInfo,
   type AbsurdChainRequest,
   type AnatomyRequest,
   type ClarifyRequest,
@@ -48,7 +50,7 @@ function browserProvider(kind: ProviderKind, cfg: ProviderConfig): Provider {
 }
 
 async function serverFetch<T>(path: string, init: RequestInit = {}, signal?: AbortSignal, timeoutMs = 15_000): Promise<T> {
-  return withDeadline("The NodeStorm server", { signal, timeoutMs }, async (sig) => {
+  return withDeadline(t("api.serverLabel"), { signal, timeoutMs }, async (sig) => {
     let res: Response;
     try {
       res = await fetch(`/api/${path}`, { ...init, signal: sig });
@@ -59,7 +61,10 @@ async function serverFetch<T>(path: string, init: RequestInit = {}, signal?: Abo
     const data = await res.json().catch(() => ({}));
     if (!res.ok) {
       const fallback = res.status === 404 || res.status >= 500 ? t("api.serverDown") : t("api.requestFailed", { status: res.status });
-      throw new Error((data as { error?: string }).error ?? fallback);
+      const err = data as { error?: string } & Partial<ProviderErrorInfo>;
+      // A provider error keeps its code, so it is shown in the interface language (see errorMessage).
+      if (err.code) throw new ProviderError(err.error ?? fallback, res.status, undefined, err as ProviderErrorInfo);
+      throw new Error(err.error ?? fallback);
     }
     return data as T;
   });

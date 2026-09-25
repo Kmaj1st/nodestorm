@@ -70,6 +70,27 @@ export function t(key: MessageKey, params?: Params): string {
   return translate(useLocale.getState().lang, key, params);
 }
 
+const LIST_SEPARATOR: Record<Lang, string> = { en: ", ", zh: "、" };
+const listFormats = new Map<Lang, Intl.ListFormat | null>();
+
+/**
+ * Names listed in running text, in the interface language: "A, B, C" in English, "A、B、C" in Chinese (no "and": the
+ * lists are of names, often cut short). Uses Intl.ListFormat where there is one, else the separator above.
+ */
+export function listJoin(items: readonly string[], lang: Lang = useLocale.getState().lang): string {
+  if (!listFormats.has(lang)) {
+    let f: Intl.ListFormat | null = null;
+    try {
+      if (typeof Intl !== "undefined" && "ListFormat" in Intl) f = new Intl.ListFormat(lang, { type: "conjunction", style: "narrow" });
+    } catch {
+      /* an engine without the locale's data: the plain separator below */
+    }
+    listFormats.set(lang, f);
+  }
+  const f = listFormats.get(lang);
+  return f ? f.format(items) : items.join(LIST_SEPARATOR[lang]);
+}
+
 /** `t` for components: subscribes to the language so the component re-renders when it changes. */
 export function useT(): typeof t {
   useLocale((s) => s.lang);

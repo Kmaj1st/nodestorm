@@ -1,6 +1,6 @@
 import type { ConceptNode } from "@nodestorm/shared";
 import { useState } from "react";
-import { useT } from "../i18n";
+import { listJoin, useT } from "../i18n";
 import { aiSource, checkWithAi, chooseSense, sensesLookedUp } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
@@ -73,10 +73,10 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
         <p className="small sense__searched" data-testid="sense-searched">
           {!senses.length
             ? searched?.asked.length
-              ? t("sense.nothing", { sites: searched.asked.join(", ") })
+              ? t("sense.nothing", { sites: listJoin(searched.asked) })
               : t(searched ? "sense.nothingOff" : "sense.none")
-            : quiet.length > 0 && t("sense.notIn", { sites: quiet.join(", ") })}
-          {searched && searched.failed.length > 0 && <> {t("sense.failed", { sites: searched.failed.join(", ") })}</>}
+            : quiet.length > 0 && t("sense.notIn", { sites: listJoin(quiet) })}
+          {searched && searched.failed.length > 0 && <> {t("sense.failed", { sites: listJoin(searched.failed) })}</>}
         </p>
       )}
       <div className="senses" role="radiogroup">

@@ -225,7 +225,7 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
 function dirRel(d: unknown, fixes: Fixes): DirRel {
   if (isObj(d) && typeof d.kind === "string") return { kind: d.kind, explanation: str(d.explanation) };
   fixes.add(t("repair.filledDirections"));
-  return { kind: "relates to", explanation: "" };
+  return { kind: t("rel.relatesTo"), explanation: "" };
 }
 
 /** Counts each kind of fix so the summary reads "dropped 3 relations…" rather than listing each one. */

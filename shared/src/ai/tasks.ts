@@ -197,7 +197,11 @@ async function runStructured<S extends z.ZodTypeAny>(
       lastErr = e instanceof Error ? e.message.slice(0, 300) : String(e);
     }
   }
-  throw new ProviderError(`${provider.label} returned malformed output: ${lastErr}`);
+  throw new ProviderError(`${provider.label} returned malformed output: ${lastErr}`, 502, undefined, {
+    code: "malformed",
+    params: { provider: provider.label },
+    detail: lastErr,
+  });
 }
 
 const MAX_EXTRACTED = 40;
@@ -314,7 +318,12 @@ export const tasks = {
     const res = await runStructured(p, resolveCyclePrompt(req), ResolveCycleResponse, o);
     // Out-of-range or repeated numbers are dropped; the caller checks the rest really breaks the cycle.
     const remove = [...new Set(res.remove.filter((i) => i < req.links.length))];
-    if (!remove.length) throw new ProviderError(`${p.label} didn't name a valid link to remove`);
+    if (!remove.length) {
+      throw new ProviderError(`${p.label} didn't name a valid link to remove`, 502, undefined, {
+        code: "noValidLink",
+        params: { provider: p.label },
+      });
+    }
     return { remove, reason: res.reason };
   },
   readPage: async (p: Provider, body: unknown, o?: RequestOptions) => {
@@ -466,8 +475,10 @@ export function cleanProblems(res: SplitProblemsResponse, pages: number[]): Spli
 export function checkAbsurdStops(hops: AbsurdHop[], via: { name: string; aliases?: string[] }[]): AbsurdHop[] {
   if (!via.length) return hops;
   const order = via.map((v) => `"${v.name}"`).join(", ");
-  const broken = (why: string) =>
-    new ProviderError(`The chain is broken: ${why}. It must pass through every stop, in this order: ${order}.`);
+  const broken = (why: string) => {
+    const detail = `${why}. It must pass through every stop, in this order: ${order}.`;
+    return new ProviderError(`The chain is broken: ${detail}`, 502, undefined, { code: "chainBroken", detail });
+  };
   const out = hops.map((h) => ({ ...h }));
   // Intermediate concept i is where hop i arrives and hop i + 1 leaves.
   const middle = out.slice(0, -1).map((h) => h.to);
@@ -501,7 +512,8 @@ export function cleanAbsurdChain(
     via?: { name: string; aliases?: string[] }[];
   },
 ): AbsurdChainResponse {
-  const broken = (why: string) => new ProviderError(`The chain is broken: ${why}.`);
+  const broken = (why: string) =>
+    new ProviderError(`The chain is broken: ${why}.`, 502, undefined, { code: "chainBroken", detail: `${why}.` });
   const hops: AbsurdHop[] = res.chain.map((h) => ({
     from: h.from.trim(),
     to: h.to.trim(),

@@ -20,12 +20,13 @@ import {
   findPapers as searchPapers,
   SiteBlockedError,
 } from "@nodestorm/shared";
-import { t } from "../i18n";
+import { listJoin, t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 import { autoSnapshot } from "../store/snapshotStore";
 import { hiddenIn, useView } from "../store/viewStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
+import { errorMessage } from "./errors";
 import { applyAbsurdChain, sandboxName, type AbsurdStop } from "./absurd";
 import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
@@ -50,7 +51,7 @@ const graph = (id: string) => store().graphs[id];
 /** Report an AI failure; a missing key opens Settings instead of just complaining. */
 function reportError(e: unknown, prefix = "") {
   if (e instanceof NeedsSetupError) store().setSettingsOpen(true);
-  store().setToast(prefix + (e instanceof Error ? e.message : String(e)));
+  store().setToast(prefix + (errorMessage(e)));
 }
 
 /**
@@ -152,7 +153,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
   // brings the node back with the result instead of a spinner that never stops.
   const handlers: BusyHandlers = {
     onError: (e) => {
-      const msg = e instanceof Error ? e.message : String(e);
+      const msg = errorMessage(e);
       bg((g) => ops.setNodeError(g, nodeId, msg));
       reportError(e, `${node.name}: `);
     },
@@ -301,7 +302,7 @@ export async function resolveCycle(
     current = cycles.remainingCycle(graph(graphId), ids);
   }
   if (!removed.length) return null;
-  const notice = t("cycle.resolved", { links: removed.join(", "), reason: reasons.join(" ") });
+  const notice = t("cycle.resolved", { links: listJoin(removed), reason: reasons.join(" ") });
   if (!opts.silent) store().setToast(notice, "info");
   return notice;
 }
@@ -808,10 +809,10 @@ function installSummary(name: string, r: InstallReport, maxDepth: number): strin
         ? t("install.done", { n, name, depth: r.depth })
         : t("install.nothing", { name }),
   ];
-  if (r.unclear.length) parts.push(t("install.unclear", { names: r.unclear.join(", ") }));
-  if (r.failed.length) parts.push(t("install.failed", { names: r.failed.join(", ") }));
-  if (r.limit === "depth") parts.push(t("install.depthLimit", { max: maxDepth, names: r.leftOver.join(", ") }));
-  if (r.limit === "nodes") parts.push(t("install.nodeLimit", { n, names: r.leftOver.join(", ") }));
+  if (r.unclear.length) parts.push(t("install.unclear", { names: listJoin(r.unclear) }));
+  if (r.failed.length) parts.push(t("install.failed", { names: listJoin(r.failed) }));
+  if (r.limit === "depth") parts.push(t("install.depthLimit", { max: maxDepth, names: listJoin(r.leftOver) }));
+  if (r.limit === "nodes") parts.push(t("install.nodeLimit", { n, names: listJoin(r.leftOver) }));
   if (r.cycles.length) parts.push(t("install.cycles", { cycles: r.cycles.join("; ") }));
   return parts.join(" ");
 }
@@ -985,7 +986,7 @@ export async function suggestConnections(nodeId: string, graphId = store().activ
   const none = { kind: "none", explanation: "" };
   const fromText = mentioned.map((n) => ({
     concept: { name: n.name, definition: n.definition, aliases: n.aliases, kind: n.kind ?? null },
-    relation: { from: node.name, to: n.name, aToB: { kind: "using", explanation: t("connect.mentioned", { name: n.name }) }, bToA: none },
+    relation: { from: node.name, to: n.name, aToB: { kind: t("rel.dep.uses"), explanation: t("connect.mentioned", { name: n.name }) }, bToA: none },
   }));
   const fromAi = (res?.suggestions ?? []).map((s) => ({
     concept: { name: s.name, definition: s.definition, aliases: [], kind: s.kind ?? null },

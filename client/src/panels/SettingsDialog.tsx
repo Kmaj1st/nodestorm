@@ -11,8 +11,9 @@ import {
 import { Check, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
-import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref, type MessageKey } from "../i18n";
+import { browserLang, LANG_NAMES, listJoin, rich, useLocale, useT, type LangPref, type MessageKey } from "../i18n";
 import { api } from "../lib/api";
+import { errorMessage } from "../lib/errors";
 import { pausedSites, SITE_NAME } from "../lib/lookup";
 import { providerName } from "../lib/online";
 import { EDGE_COLOR_KEYS, useTheme, type EdgeColorKey, type EdgeColors, type ThemePref } from "../lib/theme";
@@ -65,7 +66,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
   useEffect(() => {
     if (connection !== "server") return;
-    api.serverProviders().then(setServer, (e) => setServer({ error: e instanceof Error ? e.message : String(e) }));
+    api.serverProviders().then(setServer, (e) => setServer({ error: errorMessage(e) }));
   }, [connection]);
 
   const canDiscover = connection === "server" ? Boolean(serverInfo?.configured) : !meta.needsKey || Boolean(cfg.apiKey);
@@ -81,7 +82,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
       const models = await api.listModels(provider, cfg, connection, ctrl.signal);
       if (!ctrl.signal.aborted) setModels({ status: "ok", models });
     } catch (e) {
-      if (!ctrl.signal.aborted) setModels({ status: "error", message: e instanceof Error ? e.message : String(e) });
+      if (!ctrl.signal.aborted) setModels({ status: "error", message: errorMessage(e) });
     }
   }, [provider, cfg, connection]);
   useEffect(() => () => discovery.current?.abort(), []);
@@ -415,7 +416,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <span className="muted small">{t("settings.lookupWikisHint")}</span>
         <span className="muted small">{t("settings.lookupHint")}</span>
         {lookup.enabled && pausedSites().length > 0 && (
-          <span className="warn small">{t("settings.lookupPaused", { sites: pausedSites().map((s) => SITE_NAME[s]).join(", ") })}</span>
+          <span className="warn small">{t("settings.lookupPaused", { sites: listJoin(pausedSites().map((s) => SITE_NAME[s])) })}</span>
         )}
       </fieldset>
 

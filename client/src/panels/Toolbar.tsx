@@ -32,8 +32,9 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { t as tr, useT, type MessageKey } from "../i18n";
+import { listJoin, t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
+import { errorMessage } from "../lib/errors";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { toLatex } from "../lib/latex";
 import { providerName } from "../lib/online";
@@ -79,7 +80,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   const busyMix = Object.keys(s.busy).some((k) => k.startsWith("mix:"));
   const canMix = selected.length === 2 && blocked.length === 0 && !busyMix;
   const canDerive = selected.length >= 1 && blocked.length === 0;
-  const blockReason = blocked.length ? t("toolbar.blockReason", { names: blocked.map((n) => n.name).join(", ") }) : undefined;
+  const blockReason = blocked.length ? t("toolbar.blockReason", { names: listJoin(blocked.map((n) => n.name)) }) : undefined;
 
   // The graph selector lists only the current project's graphs: its main graph, then its sandboxes.
   const [main, ...sandboxes] = projectGraphs(s, s.projects[s.projectId]);
@@ -286,7 +287,7 @@ function FileMenu() {
       const repairs = fixes.length ? ` ${tr("file.importRepairs", { fixes: fixes.join("; ") })}` : "";
       setToast(tr("file.imported", { name }) + repairs, "info");
     } catch (e) {
-      setToast(tr("file.importFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setToast(tr("file.importFailed", { error: errorMessage(e) }));
     }
   };
 
@@ -296,7 +297,7 @@ function FileMenu() {
     try {
       await fn();
     } catch (e) {
-      setToast(tr("file.exportFailed", { error: e instanceof Error ? e.message : String(e) }));
+      setToast(tr("file.exportFailed", { error: errorMessage(e) }));
     }
   };
 

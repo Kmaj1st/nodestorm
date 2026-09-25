@@ -18,7 +18,7 @@ import {
   type LucideIcon,
 } from "lucide-react";
 import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
-import { useT, type MessageKey } from "../../i18n";
+import { listJoin, useT, type MessageKey } from "../../i18n";
 import {
   addStep,
   editStep,
@@ -320,7 +320,7 @@ function Step({ step, n, onDelete }: { step: DerivStep; n: number; onDelete: () 
             )}
             {c.missing.length > 0 && (
               <p className="small derive-check__missing">
-                {t("dt.missing")} {c.missing.join(", ")}
+                {t("dt.missing")} {listJoin(c.missing)}
               </p>
             )}
             <Cites cites={c.cites} />

@@ -2,7 +2,7 @@ import type { ConceptNode as CN } from "@nodestorm/shared";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { BrickWall, CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo } from "react";
-import { useT, type MessageKey } from "../i18n";
+import { listJoin, useT, type MessageKey } from "../i18n";
 import { analyzeNode, checkWithAi, sensesLookedUp } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
@@ -100,7 +100,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       {c.missingDeps.length > 0 && (
         <div className="concept__missing">
           <Icon icon={CircleDashed} size={12} />
-          <span>{t("badge.missing", { names: c.missingDeps.map((d) => d.name).join(", ") })}</span>
+          <span>{t("badge.missing", { names: listJoin(c.missingDeps.map((d) => d.name)) })}</span>
         </div>
       )}
       {data.inCycle && (

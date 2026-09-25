@@ -1,5 +1,5 @@
 import type { ConceptNode, ExplainLevel, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
-import { translate, useLocale, type Lang, type MessageKey } from "../i18n";
+import { listJoin, translate, useLocale, type Lang, type MessageKey } from "../i18n";
 import { isUnrelated } from "./graphOps";
 import { KIND_LABEL } from "./kinds";
 import { splitMath } from "./math";
@@ -96,21 +96,21 @@ export function toMarkdown(g: Graph): string {
   for (const n of ordered) {
     lines.push(`### ${mdEscape(n.name)}`, "");
     if (n.kind) lines.push(`${em("kind.label")} ${t(KIND_LABEL[n.kind])}`, "");
-    if (n.aliases.length) lines.push(`${em("md.also")} ${n.aliases.map(mdEscape).join(", ")}`, "");
+    if (n.aliases.length) lines.push(`${em("md.also")} ${listJoin(n.aliases.map(mdEscape))}`, "");
     lines.push(n.definition.trim() ? mdEscape(n.definition) : `_${t("def.empty")}_`, "");
     const prereqs = n.dependsOn
       .map((id) => byId.get(id))
       .filter((p): p is ConceptNode => !!p)
       .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
-    if (prereqs.length) lines.push(`${bold("md.prereqs")} ${prereqs.map((p) => mdEscape(p.name)).join(", ")}`, "");
+    if (prereqs.length) lines.push(`${bold("md.prereqs")} ${listJoin(prereqs.map((p) => mdEscape(p.name)))}`, "");
     if (n.missingDeps.length) {
-      lines.push(`${bold("md.missing")} ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
+      lines.push(`${bold("md.missing")} ${listJoin(n.missingDeps.map((d) => mdEscape(d.name)))}`, "");
     }
     if (n.source) {
       const label = mdEscape(sourceLabel(n.source));
       lines.push(`${em("node.source")} ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}`, "");
     }
-    if (n.formal?.decls.length) lines.push(`${em("md.mathlib")} ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
+    if (n.formal?.decls.length) lines.push(`${em("md.mathlib")} ${listJoin(n.formal.decls.map((d) => `\`${d.name}\``))}`, "");
     if (n.papers?.works.length) lines.push(t("md.papers"), "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");
     if (n.anatomy) lines.push(...anatomyMd(n.anatomy));
     if (n.explanation) lines.push(...explanationMd(n.explanation));

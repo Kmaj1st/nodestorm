@@ -249,7 +249,7 @@ export const useGraphStore = create<GraphStore>()(
         get().mutate((g) => (g.nodes.length ? g : buildExample(g, data)));
         // A project that was never named takes the example's name.
         const p = get().projects[get().projectId];
-        if (p && [proj.DEFAULT_PROJECT_NAME, t("project.untitled")].some((d) => p.name.startsWith(d))) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
+        if (p && proj.isUntitledProjectName(p.name)) get().renameProject(p.id, proj.uniqueProjectName(get(), data.name));
       },
 
       forkActive(name) {
