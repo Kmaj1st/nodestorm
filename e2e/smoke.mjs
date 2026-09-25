@@ -647,6 +647,30 @@ try {
   assert((await projectButton.getAttribute("aria-label")) === "Project: Group theory", "the example builds 7 concepts offline and names the project");
   assert((await node("First Isomorphism Theorem").textContent()).includes("missing: Isomorphism"), "the example has a blocked concept to install");
   await node("First Isomorphism Theorem").click();
+
+  console.log("Basic concepts");
+  {
+    // Taken as given: marking the blocked theorem basic drops its missing prerequisite; Undo brings it back.
+    const panel = page.getByTestId("node-panel");
+    const toggle = panel.getByTestId("basic-toggle");
+    assert(!(await toggle.isChecked()), "a concept isn't basic to begin with");
+    await toggle.check();
+    await waitBadge("First Isomorphism Theorem", "ready");
+    const card = node("First Isomorphism Theorem");
+    assert(!(await card.getAttribute("class")).includes("concept--blocked") && !(await card.textContent()).includes("missing:"), "a basic concept is no longer blocked");
+    assert((await card.getByRole("img", { name: "Basic concept" }).count()) === 1, "…its card carries the basic mark");
+    await panel.getByTestId("basic-note").waitFor();
+    assert(
+      (await panel.getByTestId("install-Isomorphism").count()) === 0 && (await panel.getByTestId("install-all").count()) === 0,
+      "…and the inspector says it is taken as given, with nothing to install",
+    );
+    const { violations } = await new AxeBuilder({ page }).include('[data-testid="node-panel"]').withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+    assert(!violations.length, `axe finds no WCAG A/AA violations in the inspector of a basic concept${violations.map((v) => ` ${v.id}`).join("")}`);
+    await page.screenshot({ path: `${shots}10-basic.png` });
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    await waitBadge("First Isomorphism Theorem", "blocked");
+    assert(!(await toggle.isChecked()) && (await card.textContent()).includes("missing: Isomorphism"), "Undo makes it blocked on its missing prerequisite again");
+  }
   await page.getByTestId("install-Isomorphism").click();
   await waitBadge("First Isomorphism Theorem", "ready");
   assert((await nodeCount()) === 8, "installing the missing prerequisite unblocks it");

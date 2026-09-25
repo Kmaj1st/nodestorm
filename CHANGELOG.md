@@ -17,6 +17,7 @@
 - **Wording:** "prerequisites" (not "dependencies") for what a concept needs, "concept" (not "node"), and counts read "1 new concept", "1 layer". Chinese wording made consistent (连线 for graph links, 循环依赖, 定理解剖/假设), with Chinese colons and quotes.
 - **Settings on a phone:** the Fandom / BWIKI fields no longer stick out of the dialog.
 - A test checks that no Chinese message is left in English and that every plural form resolves.
+- **Basic concepts:** Inspector → **Basic concept** marks a concept as taken as given (a small mark on its card). It needs no prerequisites: its missing ones go, it is never blocked, and no prerequisite check (no AI call) runs for it. The links it already has stay. Unmarking leaves it "not checked", ready for **Check prerequisites with AI**. A blocked concept's missing list also offers "take it as given". Undo, share links, files and sandboxes keep the mark.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

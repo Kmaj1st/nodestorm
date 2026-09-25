@@ -231,6 +231,11 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
 
   const current = find();
   if (!current) return;
+  // A basic concept is taken as given: no prerequisite check, so no AI call for it.
+  if (current.basic) {
+    set({ status: "ok", error: undefined });
+    return;
+  }
   const g = graph(graphId);
   const res = await withBusy(
     key,

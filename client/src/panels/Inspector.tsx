@@ -4,6 +4,7 @@ import {
   ArrowLeftRight,
   ArrowRight,
   BookOpen,
+  BrickWall,
   Check,
   ChevronRight,
   Drama,
@@ -58,7 +59,7 @@ import {
   relookupKey,
   resolveCycle,
 } from "../lib/actions";
-import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
+import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setBasic, setKind, updateNode, updateRelation } from "../lib/graphOps";
 import { paperByline, sourceLabel } from "../lib/export";
 import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
@@ -193,6 +194,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           {KINDS.map((k) => <option key={k} value={k}>{t(KIND_LABEL[k])}</option>)}
         </select>
       </label>
+      <BasicToggle node={node} graphId={graphId} viewing={viewing} />
       {(physicsOn || node.pinned) && !viewing && (
         <button
           className={`small-btn pin-toggle${node.pinned ? " small-btn--on" : ""}`}
@@ -241,8 +243,14 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           <h4>{t("node.missing")}</h4>
           {node.missingDeps.length > 0 && <InstallAll key={node.id} node={node} graphId={graphId} />}
         </div>
-        {node.status === "checking" && <p className="muted small">{t("node.checking")}</p>}
-        {node.status === "ok" && <p className="muted small">{t("node.ready")}</p>}
+        {node.basic ? (
+          <p className="muted small" data-testid="basic-note">{t("basic.none")}</p>
+        ) : (
+          <>
+            {node.status === "checking" && <p className="muted small">{t("node.checking")}</p>}
+            {node.status === "ok" && <p className="muted small">{t("node.ready")}</p>}
+          </>
+        )}
         <ul className="deps">
           {node.missingDeps.map((d) => (
             <li key={d.name} className="deps__missing">
@@ -256,6 +264,11 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             </li>
           ))}
         </ul>
+        {node.missingDeps.length > 0 && !viewing && (
+          <button className="link small" onClick={() => mutate((g) => setBasic(g, node.id, true), graphId)} data-testid="mark-basic">
+            {t("basic.markInstead", { name: node.name })}
+          </button>
+        )}
       </section>
 
       <section>
@@ -342,9 +355,11 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             <Icon icon={PenLine} size={14} />{t("dt.fromNode")}
           </button>
         )}
-        <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
-          <Icon icon={RefreshCw} size={14} />{t("node.recheck")}
-        </button>
+        {!node.basic && (
+          <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
+            <Icon icon={RefreshCw} size={14} />{t("node.recheck")}
+          </button>
+        )}
         <button
           className="danger"
           onClick={() => { mutate((g) => removeNode(g, node.id)); setInspect(null); }}
@@ -353,6 +368,32 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </button>
       </div>
     </aside>
+  );
+}
+
+/**
+ * "Basic concept": taken as given, so it needs no prerequisites (see graphOps.setBasic). Toggling is an undo step.
+ */
+function BasicToggle({ node, graphId, viewing }: { node: ConceptNode; graphId: string; viewing: boolean }) {
+  const t = useT();
+  const mutate = useGraphStore((s) => s.mutate);
+  if (viewing && !node.basic) return null;
+  return (
+    <div className="basic-toggle">
+      <label className="check">
+        <input
+          type="checkbox"
+          checked={Boolean(node.basic)}
+          disabled={viewing}
+          aria-describedby={`basic-hint-${node.id}`}
+          onChange={(e) => mutate((g) => setBasic(g, node.id, e.target.checked), graphId)}
+          data-testid="basic-toggle"
+        />
+        <Icon icon={BrickWall} size={14} />
+        {t("basic.label")}
+      </label>
+      <span className="muted small" id={`basic-hint-${node.id}`}>{t("basic.hint")}</span>
+    </div>
   );
 }
 

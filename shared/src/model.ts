@@ -159,6 +159,11 @@ export const ConceptNode = z.object({
   kindByUser: z.boolean().optional(),
   /** Held in place by the user: Physics and its springs leave it where it is. */
   pinned: z.boolean().optional(),
+  /**
+   * A basic concept: a foundation the user takes as given. It never has missing prerequisites and no prerequisite
+   * check is run for it (see setBasic in client/src/lib/graphOps.ts). Links the user made stay.
+   */
+  basic: z.boolean().optional(),
   /** The latest "Theorem anatomy" answer (theorem-like kinds). AI study material, like `explanation`. */
   anatomy: NodeAnatomy.optional(),
 });
