@@ -5,6 +5,9 @@ import { z } from "zod";
 export const DepRole = z.enum(["uses", "derives", "assumes"]);
 export type DepRole = z.infer<typeof DepRole>;
 
+/** A role in an AI answer: case-insensitive ("Uses", " DERIVES "); an unknown one still makes the answer malformed. */
+export const AiDepRole = z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), DepRole);
+
 export const MissingDep = z.object({
   name: z.string(),
   reason: z.string(),
@@ -303,7 +306,7 @@ export type DepsRequest = z.infer<typeof DepsRequest>;
 
 export const Prerequisite = z.object({
   name: z.string(),
-  role: DepRole,
+  role: AiDepRole,
   reason: z.string(),
   /** Name of an existing node the model believes this prerequisite corresponds to. */
   matchesExisting: z.string().nullish(),
@@ -492,7 +495,7 @@ export type ExtractedRelation = z.infer<typeof ExtractedRelation>;
 export const ExtractedPrerequisite = z.object({
   dependent: z.string(),
   prerequisite: z.string(),
-  role: DepRole,
+  role: AiDepRole,
   reason: z.string().default(""),
 });
 export type ExtractedPrerequisite = z.infer<typeof ExtractedPrerequisite>;
