@@ -48,7 +48,8 @@ export function pickSymbol(formulas: string[]): { symbol: string; formula?: stri
  * side cut out of a set-builder or a presentation ("\{g \in G : g") isn't shown broken.
  */
 function balanced(tex: string): boolean {
-  const tokens = tex.match(/\\left|\\right|\\langle|\\rangle|\\[{}]|\\[A-Za-z]+|\\.|[{}()[\]]/g) ?? [];
+  // Whole command names first, so \\rightarrow is one token and not \\right + "arrow".
+  const tokens = tex.match(/\\[A-Za-z]+|\\[{}]|\\.|[{}()[\]]/g) ?? [];
   const pairs: Record<string, string> = { "{": "}", "(": ")", "[": "]", "\\{": "\\}", "\\langle": "\\rangle", "\\left": "\\right" };
   const closers = new Set(Object.values(pairs));
   const stack: string[] = [];

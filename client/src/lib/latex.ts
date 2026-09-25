@@ -70,16 +70,13 @@ for (const [c, latin] of Object.entries({ "Α": "A", "Β": "B", "Ε": "E", "Ζ":
   UNICODE[c] = `\\ensuremath{\\mathrm{${latin}}}`;
 }
 
-/** A formula with its Unicode symbols written as LaTeX commands (as they would be in text, minus \\ensuremath). */
+/**
+ * A formula with its Unicode symbols written as LaTeX commands. Each is written as `\\ensuremath{…}`, which works in
+ * maths and inside `\\text{…}` alike, and being braced can't run into a following letter ("\\le" + "x"). Latin-1
+ * symbols (× · ± ¬) count too: pdfLaTeX drops those in maths. A bare `%` would comment out the rest of the line.
+ */
 function mathUnicode(tex: string): string {
-  return tex
-    .replace(/(?<!\\)%/g, "\\%") // a bare % would comment out the rest of the line
-    .replace(/[^\x00-\xff]/g, (c, at: number) => {
-      const m = UNICODE[c] && /^\\ensuremath\{(.*)\}$/.exec(UNICODE[c]);
-      if (!m) return c;
-      // A command followed by a letter needs a space: "\\in x", not "\\inx".
-      return /[A-Za-z]/.test(tex[at + 1] ?? "") ? `${m[1]} ` : m[1];
-    });
+  return tex.replace(/(?<!\\)%/g, "\\%").replace(/[^\x00-\x7f]/g, (c) => UNICODE[c] ?? c);
 }
 
 const SPECIAL: Record<string, string> = {

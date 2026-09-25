@@ -137,10 +137,18 @@ describe("toLatex: symbols, scripts and stale parts", () => {
 
   it("writes Unicode symbols inside formulas as commands, and escapes % there", () => {
     const tex = toLatex(graphWith({ definition: "A map $f: G → H$ with $a ≤ b$ and $x % y$ and $αx$." }));
-    expect(tex).toContain("$f: G \\to H$");
-    expect(tex).toContain("$a \\le b$");
+    expect(tex).toContain("$f: G \\ensuremath{\\to} H$");
+    expect(tex).toContain("$a \\ensuremath{\\le} b$");
     expect(tex).toContain("$x \\% y$");
-    expect(tex).toContain("$\\alpha x$");
+    expect(tex).toContain("$\\ensuremath{\\alpha}x$");
+  });
+
+  it("keeps Latin-1 maths symbols, symbols inside \\text, and letters after an escaped %", () => {
+    const tex = toLatex(graphWith({ definition: "$a × b · c ± d$, $\\neg p ¬ q$, $\\text{a → b}$, $50\\%≤x$." }));
+    expect(tex).toContain("$a \\ensuremath{\\times} b \\ensuremath{\\cdot} c \\ensuremath{\\pm} d$");
+    expect(tex).toContain("$\\neg p \\ensuremath{\\neg} q$");
+    expect(tex).toContain("$\\text{a \\ensuremath{\\to} b}$");
+    expect(tex).toContain("$50\\%\\ensuremath{\\le}x$");
   });
 
   it("gives characters pdfLaTeX doesn't know a placeholder so the document compiles", () => {

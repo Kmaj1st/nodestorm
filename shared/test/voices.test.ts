@@ -193,3 +193,20 @@ describe("Reviewer 2", () => {
     expect(unclear.points[0]).toMatchObject({ step: 1, severity: "minor" });
   });
 });
+
+describe("referee report: review-3 fixes", () => {
+  it("keeps the more severe of two copies of a point, and reads step 0 as the whole derivation", () => {
+    const res = RefereeResponse.parse({
+      verdict: "major revisions",
+      summary: "s",
+      points: [
+        { step: 1, severity: "minor", comment: "Same point." },
+        { step: 1, severity: "fatal", comment: "Same point." },
+        { step: 0, severity: "major", comment: "Whole thing." },
+      ],
+      grudgingPraise: "",
+    });
+    const out = cleanReferee(res, 2);
+    expect(out.points.map((p) => [p.severity, p.step ?? null])).toEqual([["fatal", 1], ["major", null]]);
+  });
+});

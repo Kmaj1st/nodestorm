@@ -696,7 +696,8 @@ const lenientWords = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCa
 
 export const RefereePoint = z.object({
   /** The step it is about (1-based), or none for the derivation as a whole. */
-  step: z.number().int().min(1).nullish().transform((v) => v ?? undefined).optional(),
+  // A step the model numbers 0 (or oddly) is read as "the derivation as a whole", not an error for the report.
+  step: z.preprocess((v) => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : undefined), z.number().int().min(1).optional()),
   severity: z.preprocess(lenientWords, RefereeSeverity).catch("minor"),
   comment: z.string().trim().min(1),
 });

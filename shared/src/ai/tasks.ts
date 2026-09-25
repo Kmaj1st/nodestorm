@@ -342,10 +342,11 @@ const SEVERITY_ORDER = ["fatal", "major", "minor", "pedantic"] as const;
  */
 export function cleanReferee(res: RefereeResponse, steps: number): RefereeResponse {
   const seen = new Set<string>();
+  // Sorted by severity first, so of two copies of the same point the more severe one is kept.
   const points = res.points
     .map((pt) => ({ ...pt, comment: pt.comment.trim(), step: pt.step && pt.step <= steps ? pt.step : undefined }))
-    .filter((pt) => pt.comment && !seen.has(pt.comment) && seen.add(pt.comment))
     .sort((a, b) => SEVERITY_ORDER.indexOf(a.severity) - SEVERITY_ORDER.indexOf(b.severity))
+    .filter((pt) => pt.comment && !seen.has(pt.comment) && seen.add(pt.comment))
     .slice(0, 8);
   const verdict = steps === 0 && res.verdict === "accept" ? "reject" : res.verdict;
   return { verdict, summary: res.summary.trim(), points, grudgingPraise: res.grudgingPraise.trim() };

@@ -1,4 +1,4 @@
-import type { ConceptKind } from "@nodestorm/shared";
+import { normalizeName, type ConceptKind } from "@nodestorm/shared";
 import type { ExtractItem, ExtractLink, ExtractReview } from "./extract";
 
 /**
@@ -35,10 +35,15 @@ export function stripComments(tex: string): string {
 /** Environment name → printed name, from `\newtheorem{env}[counter]{Name}` / `\newtheorem*{env}{Name}` / `\newtheorem{env}{Name}[section]`. */
 export function theoremEnvs(tex: string): Map<string, string> {
   const envs = new Map<string, string>();
-  for (const m of tex.matchAll(/\\(?:newtheorem|declaretheorem)\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)?(?:\{([^}]+)\})?/g)) {
-    const env = m[1].trim();
-    const name = (m[2] ?? env).trim();
-    envs.set(env, name);
+  for (const m of tex.matchAll(/\\newtheorem\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)?(?:\{([^}]+)\})?/g)) {
+    envs.set(m[1].trim(), (m[2] ?? m[1]).trim());
+  }
+  // thmtools: \declaretheorem[name=Theorem, sibling=…]{thm} (options first) or \declaretheorem{theorem}.
+  for (const m of tex.matchAll(/\\declaretheorem\*?\s*(?:\[([^\]]*)\]\s*)?\{([^}]+)\}(?:\s*\[([^\]]*)\])?/g)) {
+    const opts = `${m[1] ?? ""},${m[3] ?? ""}`;
+    const env = m[2].trim();
+    const name = /(?:^|,)\s*name\s*=\s*\{?([^,}]+)\}?/.exec(opts)?.[1].trim();
+    envs.set(env, name ?? env.charAt(0).toUpperCase() + env.slice(1));
   }
   return envs;
 }
@@ -161,12 +166,13 @@ export function texToText(tex: string, nameOf: (label: string) => string | undef
   let s = tex
     // As in LaTeX, a single line break is a space; a blank line starts a paragraph.
     .replace(/[ \t]*\n(?![ \t]*\n)[ \t]*/g, " ")
-    .replace(/\\\[([\s\S]*?)\\\]/g, (_, m: string) => `\n$$${m.trim()}$$\n`)
+    // (Not "\\\\[2pt]", a line break with extra space, which also contains "\\[".)
+    .replace(/(?<!\\)\\\[([\s\S]*?)\\\]/g, (_, m: string) => `\n$$${m.trim()}$$\n`)
     .replace(/\\begin\{(equation|align|gather|multline|eqnarray|displaymath)\*?\}([\s\S]*?)\\end\{\1\*?\}/g, (_, env: string, m: string) => {
       const body = m.replace(/\\label\{[^}]*\}/g, "").replace(/\\(?:nonumber|notag)\b/g, "").trim();
       return `\n$$${/^(align|eqnarray)/.test(env) ? `\\begin{aligned}${body}\\end{aligned}` : body}$$\n`;
     })
-    .replace(/\\\(([\s\S]*?)\\\)/g, (_, m: string) => `$${m}$`);
+    .replace(/(?<!\\)\\\(([\s\S]*?)\\\)/g, (_, m: string) => `$${m}$`);
   // Prose and maths apart: $$…$$ and $…$ (not \$) are kept as they are.
   const parts = s.split(/(\$\$[\s\S]*?\$\$|(?<!\\)\$(?:[^$\\]|\\.)*\$)/);
   s = parts.map((p, i) => (i % 2 ? p.replace(/\s*\n\s*/g, " ") : proseToText(p, nameOf))).join("");
@@ -183,7 +189,8 @@ export function texToText(tex: string, nameOf: (label: string) => string | undef
 function definedTerms(body: string): string[] {
   const terms: string[] = [];
   for (const m of body.matchAll(/\\(?:emph|textbf|textit|index|defn|term)\s*\{((?:[^{}]|\{[^{}]*\})*)\}/g)) {
-    const t = texToText(m[1]).replace(/\$[^$]*\$/g, "").replace(/\s+/g, " ").trim();
+    // Maths in a term keeps its letters: "$p$-group" is the "p-group".
+    const t = texToText(m[1]).replace(/\$([^$]*)\$/g, (_, x: string) => x.replace(/\\[A-Za-z]+\s*/g, "").replace(/[{}^_]/g, "")).replace(/\s+/g, " ").trim();
     if (t && t.length <= 60 && /\p{L}/u.test(t) && !terms.includes(t)) terms.push(t);
   }
   return terms;
@@ -209,7 +216,8 @@ export function parseTexResults(source: string): TexResult[] {
     const opt = optional(tex, bodyStart);
     let title: string | undefined;
     if (opt && !/^\s*$/.test(opt.text)) {
-      title = texToText(opt.text).replace(/\s+/g, " ").trim() || undefined;
+      // [{Hahn--Banach}] braces the title so a "]" can't end it: the braces aren't part of it.
+      title = texToText(opt.text.trim().replace(/^\{([\s\S]*)\}$/, "$1")).replace(/--/g, "–").replace(/\s+/g, " ").trim() || undefined;
       bodyStart = opt.end;
     } else if (opt) bodyStart = opt.end;
     const body = tex.slice(bodyStart, endAt);
@@ -239,11 +247,16 @@ export function parseTexResults(source: string): TexResult[] {
 }
 
 /** A concept name for a result: its title, else what a definition defines, else "Theorem 3". */
-export function resultName(r: TexResult): string {
+export function resultName(r: TexResult, docTitle?: string): string {
   if (r.title) return r.title.replace(/\s*\\cite.*$/, "").trim();
   if (r.terms.length) return r.terms[0].charAt(0).toUpperCase() + r.terms[0].slice(1);
-  return `${r.heading} ${r.number}`;
+  // "Lemma 1" alone would clash with another paper's Lemma 1 in the same graph.
+  const short = docTitle && (docTitle.length > 40 ? `${docTitle.slice(0, 39).trimEnd()}…` : docTitle);
+  return short ? `${r.heading} ${r.number} (${short})` : `${r.heading} ${r.number}`;
 }
+
+/** Above this many results, no mention links (they would take seconds and make a review list nobody can read). */
+const MENTIONS_MAX = 200;
 
 /** Plain text of the document's title (for the review heading and sources). */
 export function texTitle(source: string): string | undefined {
@@ -260,11 +273,12 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
   const results = parseTexResults(source);
   const byLabel = new Map<string, number>();
   results.forEach((r, i) => r.labels.forEach((l) => byLabel.set(l, i)));
-  // Unique names: a second "Lemma" title gets its number.
+  const title = texTitle(source);
+  // Unique names (as the graph compares them: "Main" and "Main." are the same): a repeated one gets its number.
   const names: string[] = [];
   for (const r of results) {
-    let n = resultName(r);
-    if (names.some((x) => x.toLowerCase() === n.toLowerCase())) n = `${n} (${r.heading} ${r.number})`;
+    let n = resultName(r, title);
+    if (names.some((x) => normalizeName(x) === normalizeName(n))) n = `${n} (${r.heading} ${r.number})`;
     names.push(n);
   }
   const nameOf = (label: string) => {
@@ -300,7 +314,8 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
       if (j !== undefined) link(i, j, `Refers to ${results[j].heading} ${results[j].number}${results[j].title ? ` (${results[j].title})` : ""}.`, true);
     }
   });
-  if (opts.mentions) {
+  // Mention links compare every result with every definition: skipped for very large documents.
+  if (opts.mentions && results.length <= MENTIONS_MAX) {
     results.forEach((r, i) => {
       const text = texToText(r.statement).replace(/\$[^$]*\$/g, " ").toLowerCase();
       results.forEach((d, j) => {
@@ -314,5 +329,5 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
       });
     });
   }
-  return { items, links, title: texTitle(source), results: results.length };
+  return { items, links, title, results: results.length };
 }

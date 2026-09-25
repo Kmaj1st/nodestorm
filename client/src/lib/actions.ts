@@ -216,7 +216,8 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       if (!opts.quiet) store().setClarifying({ graphId, nodeId });
       return; // continues in chooseSense once the user picks a meaning
     }
-    if (res.senses[0]?.definition) set({ definition: res.senses[0].definition });
+    // The AI's text: an encyclopedia source from an earlier look-up no longer applies.
+    if (res.senses[0]?.definition) set({ definition: res.senses[0].definition, ...(find()?.source?.url ? { source: undefined } : {}) });
     const kind = res.senses[0]?.kind;
     if (kind) bg((g) => ops.suggestKind(g, nodeId, kind));
   }

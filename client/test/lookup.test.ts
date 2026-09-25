@@ -148,6 +148,17 @@ describe("definitions from encyclopedias", () => {
     expect(store().settingsOpen).toBe(false);
   });
 
+  it("an AI definition after “Ask again” doesn't keep an encyclopedia's source", async () => {
+    routes = [[/proofwiki.*page=Definition:Kernel/, () => json({ parse: { title: "Definition:Kernel", wikitext: KERNEL } })]];
+    const id = add("Kernel");
+    store().mutate((g) => ops.updateNode(g, id, { definition: "old", status: "ok" }));
+    await relookup(id);
+    expect(node(id).source?.site).toBe("ProofWiki");
+    await analyzeNode(id, undefined, undefined, { askAi: true });
+    expect(node(id).source).toBeUndefined();
+    expect(node(id).definition).not.toContain("\\phi^{-1}");
+  });
+
   it("falls back to the AI when nothing is found", async () => {
     const id = add("Homomorphism");
     await analyzeNode(id);

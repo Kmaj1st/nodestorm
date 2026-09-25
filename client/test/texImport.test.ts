@@ -42,22 +42,22 @@ describe("LaTeX import", () => {
     expect(r.items.map((i) => [i.name, i.kind])).toEqual([
       ["Homomorphism", "definition"],
       ["Kernel", "definition"],
-      ["Lemma 1", "lemma"],
+      ["Lemma 1 (Notes on Group Homomorphisms)", "lemma"],
       ["First Isomorphism Theorem", "theorem"],
-      ["Remark 1", "other"],
+      ["Remark 1 (Notes on Group Homomorphisms)", "other"],
     ]);
     expect(r.items[1].definition).toBe("The kernel of a homomorphism $\\varphi$ (Homomorphism) is $\\ker\\varphi = \\{g \\in G : \\varphi(g) = e_H\\}$.");
     expect(r.items[0].definition).toBe("Let $G$ and $H$ be groups. A homomorphism is a map $\\varphi\\colon G \\to H$ with\n$$\\varphi(ab) = \\varphi(a)\\varphi(b) \\quad\\text{for all } a, b \\in G.$$");
     expect(r.links.map((l) => `${l.from} -> ${l.to}`)).toEqual([
       "Kernel -> Homomorphism",
-      "Lemma 1 -> Kernel",
-      "First Isomorphism Theorem -> Lemma 1",
+      "Lemma 1 (Notes on Group Homomorphisms) -> Kernel",
+      "First Isomorphism Theorem -> Lemma 1 (Notes on Group Homomorphisms)",
       "First Isomorphism Theorem -> Homomorphism",
       "First Isomorphism Theorem -> Kernel",
     ]);
     const withMentions = texReview(paper, { mentions: true });
     const extra = withMentions.links.filter((l) => !l.include).map((l) => `${l.from} -> ${l.to}`);
-    expect(extra).toEqual(["Lemma 1 -> Homomorphism", "Remark 1 -> Homomorphism", "Remark 1 -> Kernel"]);
+    expect(extra).toEqual(["Lemma 1 (Notes on Group Homomorphisms) -> Homomorphism", "Remark 1 (Notes on Group Homomorphisms) -> Homomorphism", "Remark 1 (Notes on Group Homomorphisms) -> Kernel"]);
   });
 
   it("goes into the graph as concepts with kinds and prerequisites", () => {
@@ -68,7 +68,7 @@ describe("LaTeX import", () => {
     expect(byName("First Isomorphism Theorem").dependsOn.map((id) => graph.nodes.find((n) => n.id === id)!.name).sort()).toEqual([
       "Homomorphism",
       "Kernel",
-      "Lemma 1",
+      "Lemma 1 (Notes on Group Homomorphisms)",
     ]);
   });
 
@@ -76,5 +76,25 @@ describe("LaTeX import", () => {
     expect(texReview("\\begin{document}Hello\\end{document}").items).toEqual([]);
     const dup = texReview("\\begin{theorem}[Main]A\\end{theorem}\\begin{theorem}[Main]B\\end{theorem}");
     expect(dup.items.map((i) => i.name)).toEqual(["Main", "Main (Theorem 2)"]);
+    // Names the graph would take for the same concept count as repeats too.
+    expect(texReview("\\begin{theorem}[Main]A\\end{theorem}\\begin{theorem}[Main.]B\\end{theorem}").items.map((i) => i.name)).toEqual(["Main", "Main. (Theorem 2)"]);
+  });
+
+  it("handles braced titles, thmtools, \\\\[2pt] in maths, p-groups, and untitled results of a titled paper", () => {
+    const r = texReview(
+      [
+        "\\title{Short}",
+        "\\declaretheorem[name=Theorem, numberwithin=section]{thm}",
+        "\\begin{thm}[{Hahn--Banach}]Holds.\\end{thm}",
+        "\\begin{definition}A \\emph{$p$-group} is a group of order $p^n$.\\end{definition}",
+        "\\begin{lemma}\\begin{align} a &= b \\\\[2pt] c &= d \\end{align}\\end{lemma}",
+      ].join("\n"),
+    );
+    expect(r.items.map((i) => [i.name, i.kind])).toEqual([
+      ["Hahn–Banach", "theorem"],
+      ["P-group", "definition"],
+      ["Lemma 1 (Short)", "lemma"],
+    ]);
+    expect(r.items[2].definition).toBe("$$\\begin{aligned}a &= b \\\\[2pt] c &= d\\end{aligned}$$");
   });
 });
