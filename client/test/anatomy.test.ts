@@ -40,7 +40,10 @@ describe("theorem anatomy action (offline demo)", () => {
     store().mutate((g) => ops.addNode(g, { name: "First Isomorphism Theorem", kind: "theorem" }).graph);
     const id = byName("First Isomorphism Theorem")!.id;
     store().mutate((g) => ops.updateNode(g, id, { notes: "mine" })); // the user's last step
-    await anatomyNode(id);
+    // The clock moves on every read, as it can under load: the undo snapshots must still get the same answer.
+    let now = 1_000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => ++now);
+    await anatomyNode(id).finally(() => clock.mockRestore());
     const an = byName("First Isomorphism Theorem")!.anatomy!;
     expect(an.hypotheses.length).toBeGreaterThanOrEqual(2);
     expect(an.conclusion).toContain("\\operatorname{im}");

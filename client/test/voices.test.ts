@@ -155,4 +155,16 @@ describe("explainNode with a voice", () => {
     await explainNode(r.id, "rigorous");
     expect(store().graphs[store().activeId].nodes[0].explanation?.voice).toBeUndefined();
   });
+
+  it("undo keeps the very same explanation, even when the clock moves while it is stored", async () => {
+    const r = ops.addNode(store().graphs[store().activeId], { name: "Homomorphism", position: { x: 0, y: 0 } });
+    store().mutate(() => r.graph);
+    store().mutate((g) => ops.updateNode(g, r.id, { notes: "mine" }));
+    let now = 1_000;
+    const clock = vi.spyOn(Date, "now").mockImplementation(() => ++now);
+    await explainNode(r.id, "rigorous").finally(() => clock.mockRestore());
+    const ex = store().graphs[store().activeId].nodes[0].explanation;
+    store().undo();
+    expect(store().graphs[store().activeId].nodes[0].explanation).toEqual(ex);
+  });
 });
