@@ -369,7 +369,10 @@ export function absorbPrerequisites(into: ConceptNode, from: Pick<ConceptNode, "
   return withStatus({ ...into, dependsOn, missingDeps });
 }
 
-/** Point everything that referenced `fromId` at `toId` instead, then drop `fromId` (`toId` takes its prerequisites). */
+/**
+ * Point everything that referenced `fromId` at `toId` instead, then drop `fromId`. `toId` takes its prerequisites,
+ * and its name and aliases as aliases (those free of other concepts', see freeAliases).
+ */
 export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
   const swap = (id: string) => (id === fromId ? toId : id);
   const relations: Relation[] = [];
@@ -385,7 +388,11 @@ export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
       const out = { ...n, dependsOn: [...new Set(n.dependsOn.map(swap))].filter((d) => d !== n.id) };
       return n.id === toId && from ? absorbPrerequisites(out, { dependsOn: from.dependsOn.map(swap), missingDeps: from.missingDeps }) : out;
     });
-  return { ...g, nodes, relations };
+  const into = nodes.find((n) => n.id === toId);
+  if (!from || !into) return { ...g, nodes, relations };
+  const out = { ...g, nodes, relations };
+  const aliases = freeAliases(out, toId, into.name, [...into.aliases, from.name, ...from.aliases]);
+  return { ...out, nodes: nodes.map((n) => (n === into ? { ...n, aliases } : n)) };
 }
 
 /**
@@ -523,8 +530,28 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
     const into = nodes.get(to);
     if (!into) continue;
     let out = into;
-    for (const n of list) out = absorbPrerequisites(out, { dependsOn: n.dependsOn.map((d) => foldedInto.get(d) ?? d), missingDeps: n.missingDeps });
+    for (const n of list) {
+      out = absorbPrerequisites(out, { dependsOn: n.dependsOn.map((d) => foldedInto.get(d) ?? d), missingDeps: n.missingDeps });
+      // Its names answer for the twin too (freed of other concepts' below).
+      out = { ...out, aliases: [...out.aliases, n.name, ...n.aliases] };
+    }
     nodes.set(to, out);
+  }
+  // Aliases the sandbox brought in (new or edited there, or from a folded concept) that are now another concept's
+  // name or alias are dropped: the aliases the parent had win, so no name finds two concepts.
+  const sbIds = new Set(sb.nodes.map((n) => n.id));
+  const brought = [...nodes.values()].filter((n) => folded.has(n.id) || sbIds.has(n.id));
+  const had = new Map(parent.nodes.map((n) => [n.id, new Set(n.aliases.map(normalizeName))]));
+  const setAliases = (keep: (n: ConceptNode) => string[]) => {
+    for (const n of brought) {
+      const now = nodes.get(n.id)!;
+      nodes.set(n.id, { ...now, aliases: freeAliases({ ...parent, nodes: [...nodes.values()] }, n.id, n.name, keep(n)) });
+    }
+  };
+  if (brought.length) {
+    // First only the aliases each concept had in the parent, then the new ones where still free.
+    setAliases((n) => n.aliases.filter((a) => had.get(n.id)?.has(normalizeName(a))));
+    setAliases((n) => n.aliases);
   }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));
   for (const r of sb.relations) {
