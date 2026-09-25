@@ -5,6 +5,7 @@ import {
   isTransientStatus,
   parseRetryAfter,
   ProviderError,
+  redactSecret,
   textOf,
   type ProviderErrorCode,
   withDeadline,
@@ -90,7 +91,12 @@ export class AnthropicProvider implements Provider {
     retry?: { afterMs?: number },
     extra: { params?: Record<string, string | number>; detail?: string } = {},
   ) {
-    return new ProviderError(message, status, retry, { code, params: { provider: this.label, ...extra.params }, detail: extra.detail });
+    // The SDK's messages include the HTTP body, which may echo the key back.
+    return new ProviderError(redactSecret(message, this.apiKey), status, retry, {
+      code,
+      params: { provider: this.label, ...extra.params },
+      detail: redactSecret(extra.detail, this.apiKey),
+    });
   }
 
   private wrap(err: unknown, Anthropic: Sdk): never {

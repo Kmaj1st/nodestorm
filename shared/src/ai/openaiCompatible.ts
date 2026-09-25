@@ -4,6 +4,7 @@ import {
   isTransientStatus,
   parseRetryAfter,
   ProviderError,
+  redactSecret,
   type ProviderErrorCode,
   withDeadline,
   withRetries,
@@ -76,7 +77,12 @@ export class OpenAICompatibleProvider implements Provider {
     retry?: { afterMs?: number },
     extra: { params?: Record<string, string | number>; detail?: string } = {},
   ) {
-    return new ProviderError(message, status, retry, { code, params: { provider: this.label, ...extra.params }, detail: extra.detail });
+    // The HTTP body may echo the key back: it never reaches a message the user (or the server's reply) sees.
+    return new ProviderError(redactSecret(message, this.apiKey), status, retry, {
+      code,
+      params: { provider: this.label, ...extra.params },
+      detail: redactSecret(extra.detail, this.apiKey),
+    });
   }
 
   private async request(path: string, init: RequestInit, opts: RequestOptions & { timeoutMs: number }) {

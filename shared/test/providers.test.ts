@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { createProvider } from "../src/ai/createProvider";
-import { CancelledError, ProviderError, withDeadline, type Provider } from "../src/ai/provider";
+import { CancelledError, ProviderError, redactSecret, withDeadline, type Provider } from "../src/ai/provider";
 import { tasks } from "../src/ai/tasks";
 
 afterEach(() => vi.unstubAllGlobals());
@@ -40,6 +40,27 @@ describe("model discovery", () => {
     stubFetch(() => json({ error: "invalid key" }, 401));
     const p = createProvider("siliconflow", { apiKey: "bad" });
     await expect(p.listModels()).rejects.toMatchObject({ status: 401 });
+  });
+
+  it("never repeats the key when a provider (or a proxy in front of it) echoes it in an error", async () => {
+    const key = "sk-live-0123456789abcdef";
+    for (const status of [401, 403, 400]) {
+      stubFetch(() => json({ error: { message: `Incorrect API key provided: ${key}. Header was "Bearer ${key}"` } }, status));
+      const err = await createProvider("siliconflow", { apiKey: key, model: "m" })
+        .complete([{ role: "user", content: "hi" }], { timeoutMs: 1000 })
+        .catch((e: ProviderError) => e);
+      expect(err).toBeInstanceOf(ProviderError);
+      const shown = JSON.stringify({ message: (err as ProviderError).message, info: (err as ProviderError).info });
+      expect(shown).not.toContain(key);
+      expect(shown).toContain("Incorrect API key provided");
+    }
+  });
+
+  it("redactSecret hides a secret anywhere in a text, and leaves texts without it alone", () => {
+    expect(redactSecret("key sk-abc123456 and again sk-abc123456", "sk-abc123456")).toBe("key [key hidden] and again [key hidden]");
+    expect(redactSecret("nothing here", "sk-abc123456")).toBe("nothing here");
+    expect(redactSecret("a short 'k' stays", "k")).toBe("a short 'k' stays"); // too short to be a real key
+    expect(redactSecret(undefined, "sk-abc123456")).toBeUndefined();
   });
 
   it("refuses to call without a key", async () => {
