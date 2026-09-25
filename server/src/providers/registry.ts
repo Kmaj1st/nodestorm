@@ -28,7 +28,9 @@ export function createRegistry(env = process.env) {
     /** Build a provider from server env; the client may pick the provider and model, never the key. */
     get(id?: string | null, model?: string | null, timeoutMs?: number): Provider {
       const kind = id || defaultId;
-      if (!isProviderKind(kind)) throw new ProviderError(`Unknown provider "${id}"`, 400);
+      if (!isProviderKind(kind)) {
+        throw new ProviderError(`Unknown provider "${id}"`, 400, undefined, { code: "unknownProvider", params: { provider: String(id) } });
+      }
       const cfg = envConfig(kind, env);
       return createProvider(kind, { ...cfg, model: model || cfg.model, timeoutMs: timeoutMs ?? cfg.timeoutMs });
     },

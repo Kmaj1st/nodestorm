@@ -1,5 +1,5 @@
 import type { Graph } from "@nodestorm/shared";
-import { t } from "../i18n";
+import { MESSAGES, t, translate, type Lang } from "../i18n";
 import { emptyGraph, uid } from "./graphOps";
 
 /**
@@ -24,7 +24,9 @@ export interface Workspace {
   activeId: string;
 }
 
-export const DEFAULT_PROJECT_NAME = "Untitled project";
+/** A name the app gave a project ("Untitled project 2", "未命名项目"), in any interface language. */
+export const isUntitledProjectName = (name: string) =>
+  (Object.keys(MESSAGES) as Lang[]).some((lang) => name.startsWith(translate(lang, "project.untitled")));
 
 /** Id of the root graph `graphId` descends from (itself for a main graph). Stops on broken or cyclic links. */
 export function rootOf(graphs: Record<string, Graph>, graphId: string): string {
@@ -50,7 +52,7 @@ export function projectList(ws: Pick<Workspace, "projects">): Project[] {
 }
 
 /** "Untitled project", "Untitled project 2", … (or `base 2` etc.): the first name no project uses yet. */
-export function uniqueProjectName(ws: Pick<Workspace, "projects">, base = DEFAULT_PROJECT_NAME): string {
+export function uniqueProjectName(ws: Pick<Workspace, "projects">, base = t("project.untitled")): string {
   const taken = new Set(Object.values(ws.projects).map((p) => p.name.trim().toLowerCase()));
   for (let i = 1; ; i++) {
     const name = i === 1 ? base : `${base} ${i}`;
@@ -121,7 +123,7 @@ export function duplicateProject(ws: Workspace, projectId: string, name?: string
   const p = ws.projects[projectId];
   if (!p) return ws;
   const { graphs, ids } = cloneGraphs(projectGraphs(ws, p));
-  const copy = newProject(ws, name?.trim() || uniqueProjectName(ws, `${p.name} (copy)`), ids.get(p.mainId)!);
+  const copy = newProject(ws, name?.trim() || uniqueProjectName(ws, t("project.copyName", { name: p.name })), ids.get(p.mainId)!);
   return {
     graphs: { ...ws.graphs, ...Object.fromEntries(graphs.map((g) => [g.id, g])) },
     projects: { ...ws.projects, [copy.id]: copy },
@@ -210,12 +212,12 @@ export function normalizeWorkspace(ws: Workspace): Workspace {
       const { parentId: _broken, ...root } = g;
       graphs[g.id] = root;
     }
-    const p = newProject(out, uniqueProjectName(out, g.parentId ? g.name : "My brainstorm"), g.id);
+    const p = newProject(out, uniqueProjectName(out, g.parentId ? g.name : t("project.default")), g.id);
     projects[p.id] = p;
     owned.add(g.id);
     out = { ...out, projects };
   }
-  if (!Object.keys(projects).length) return createProject(out, "My brainstorm");
+  if (!Object.keys(projects).length) return createProject(out, t("project.default"));
   const active = graphs[ws.activeId] ? rootOf(graphs, ws.activeId) : undefined;
   const current = Object.values(projects).find((p) => p.mainId === active);
   if (current) return { ...out, projectId: current.id };
@@ -234,7 +236,7 @@ export function migrateWorkspace(persisted: unknown, version: number): Workspace
     const projects: Record<string, Project> = {};
     const main = s.mainId && graphs[s.mainId] && !graphs[s.mainId].parentId ? s.mainId : undefined;
     if (main) {
-      const p: Project = { id: uid("p"), name: "My brainstorm", mainId: main, createdAt: Date.now() };
+      const p: Project = { id: uid("p"), name: t("project.default"), mainId: main, createdAt: Date.now() };
       projects[p.id] = p;
     }
     return normalizeWorkspace({ graphs, projects, projectId: Object.keys(projects)[0] ?? "", activeId: s.activeId ?? main ?? "" });

@@ -49,14 +49,58 @@ export interface Provider {
   listModels(opts?: RequestOptions): Promise<ModelInfo[]>;
 }
 
+/**
+ * What went wrong, as a stable code the interface translates (the English `message` is for logs, the server's
+ * JSON and the model's retry note). `params` fill in the sentence; `detail` is the raw part (an HTTP body, the
+ * provider's own message, a network error) shown after it.
+ */
+export type ProviderErrorCode =
+  | "timeout" // {provider, seconds}
+  | "rateLimited" // {provider}, and {seconds} once retries are used up
+  | "noKey" // {provider}
+  | "invalidKey" // {provider}
+  | "modelDenied" // {provider, model}
+  | "modelNotFound" // {provider, model}
+  | "noModel" // {provider}
+  | "unreachable" // {provider}
+  | "sdkLoad" // {provider}
+  | "http" // {provider, status}
+  | "declined" // {provider}
+  | "empty" // {provider}
+  | "emptyReasoning" // {provider}
+  | "continuations" // {provider}
+  | "malformed" // {provider}
+  | "noValidLink" // {provider}
+  | "chainBroken"
+  | "unknownProvider"; // {provider}
+
+export interface ProviderErrorInfo {
+  code: ProviderErrorCode;
+  params?: Record<string, string | number>;
+  detail?: string;
+}
+
 export class ProviderError extends Error {
+  code?: ProviderErrorCode;
+  params?: Record<string, string | number>;
+  detail?: string;
   constructor(
     message: string,
     public status = 502,
     /** Set on transient failures (rate limit, 5xx, network) worth retrying; `afterMs` comes from Retry-After. */
     public retry?: { afterMs?: number },
+    info?: ProviderErrorInfo,
   ) {
     super(message);
+    this.name = "ProviderError";
+    this.code = info?.code;
+    this.params = info?.params;
+    this.detail = info?.detail;
+  }
+
+  /** The code, parameters and detail, for the server's JSON error (the browser translates them). */
+  get info(): ProviderErrorInfo | undefined {
+    return this.code ? { code: this.code, params: this.params, detail: this.detail } : undefined;
   }
 }
 
@@ -93,6 +137,8 @@ export async function withDeadline<T>(
       ? new ProviderError(
           `${label} didn't respond within ${Math.round(opts.timeoutMs / 1000)}s — the model may be overloaded or slow. Try again, pick a faster model, or raise the timeout in Settings.`,
           504,
+          undefined,
+          { code: "timeout", params: { provider: label, seconds: Math.round(opts.timeoutMs / 1000) } },
         )
       : new CancelledError();
   const onAbort = () => {
@@ -176,8 +222,14 @@ export async function withRetries<T>(
         await sleep(wait, signal);
         continue;
       }
-      if (e.status === 429)
-        throw new ProviderError(`Rate limited by ${label} — try again in ${Math.max(1, Math.ceil(wait / 1000))} s.`, 429);
+      if (e.status === 429) {
+        const seconds = Math.max(1, Math.ceil(wait / 1000));
+        throw new ProviderError(`Rate limited by ${label} — try again in ${seconds} s.`, 429, undefined, {
+          code: "rateLimited",
+          params: { provider: label, seconds },
+          detail: e.detail,
+        });
+      }
       throw e;
     }
   }

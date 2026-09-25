@@ -630,6 +630,8 @@ button.edge-label--active:hover:not(:disabled) {
 .rel-kind { display: flex; align-items: center; gap: 6px; color: var(--accent); font-size: var(--text-md); font-weight: 500; }
 .rel-kind__arrow { color: var(--accent); }
 .rel-kind input { color: var(--accent); font-weight: 500; }
+.rel-kind__none { font-weight: 400; font-style: italic; }
+.check.rel-none { font-size: var(--text-sm); color: var(--muted); }
 .rel-explanation { font-size: var(--text-md); line-height: 1.55; }
 .dir-switch button { width: 100%; justify-content: flex-start; text-align: left; padding: 6px var(--space-3); }
 /* Inline-editable text (DraftField): looks like plain text until hovered or focused. */

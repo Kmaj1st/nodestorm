@@ -39,7 +39,9 @@ export function createApp(registry: Registry) {
       res.json({ models: await provider.listModels() });
     } catch (err) {
       const status = err instanceof ProviderError ? err.status : 500;
-      res.status(status).json({ error: err instanceof Error ? err.message : "Internal error" });
+      // `code` (with its params and detail) lets the browser say it in the interface language.
+      const info = err instanceof ProviderError ? err.info : undefined;
+      res.status(status).json({ error: err instanceof Error ? err.message : "Internal error", ...info });
     }
   });
 
@@ -57,7 +59,7 @@ export function createApp(registry: Registry) {
         } else if (err instanceof ZodError) {
           res.status(400).json({ error: "Invalid request", details: err.issues });
         } else if (err instanceof ProviderError) {
-          res.status(err.status).json({ error: err.message });
+          res.status(err.status).json({ error: err.message, ...err.info });
         } else {
           console.error(err);
           res.status(500).json({ error: err instanceof Error ? err.message : "Internal error" });

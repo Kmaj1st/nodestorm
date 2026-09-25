@@ -3,7 +3,8 @@ import { Bookmark, History, Save } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
-import { t as tr, useLocale, useT, type MessageKey } from "../i18n";
+import { listJoin, t as tr, useLocale, useT, type MessageKey } from "../i18n";
+import { errorMessage } from "../lib/errors";
 import { diffSummary, isSame, MAX_AUTO, type AutoReason, type SnapshotMeta } from "../lib/snapshots";
 import { currentProject, useGraphStore } from "../store/graphStore";
 import {
@@ -66,7 +67,7 @@ export function VersionsDialog({ onClose, focusSave }: { onClose: () => void; fo
     try {
       await fn();
     } catch (e) {
-      setError(tr("versions.failed", { error: e instanceof Error ? e.message : String(e) }));
+      setError(tr("versions.failed", { error: errorMessage(e) }));
     } finally {
       setWorking(false);
     }
@@ -184,14 +185,14 @@ function Compare({ id, current }: { id: string; current: Graph }) {
     let live = true;
     snapshotMain(id).then(
       (g) => live && setSnap(g),
-      (e) => live && setError(e instanceof Error ? e.message : String(e)),
+      (e) => live && setError(errorMessage(e)),
     );
     return () => { live = false; };
   }, [id]);
   if (error) return <p className="error small" role="alert">{t("versions.failed", { error })}</p>;
   if (!snap) return <p className="muted small">{t("common.loading")}</p>;
   const d = diffSummary(snap, current);
-  const names = (list: string[]) => list.slice(0, 8).join(", ") + (list.length > 8 ? ", …" : "");
+  const names = (list: string[]) => listJoin(list.length > 8 ? [...list.slice(0, 8), "…"] : list);
   if (isSame(d)) return <p className="muted small versions__diff">{t("versions.same")}</p>;
   return (
     <ul className="versions__diff small" data-testid="version-diff" aria-label={t("versions.diffLabel")}>

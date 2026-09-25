@@ -4,6 +4,7 @@ import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
 import { rich, useLang, useT } from "../i18n";
+import { errorMessage } from "../lib/errors";
 import { encodeShare, LONG_LINK, shareUrl } from "../lib/share";
 import { Modal } from "./Modal";
 
@@ -23,7 +24,7 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
     let live = true;
     encodeShare(graph, name).then(
       (token) => live && setLink(shareUrl(token)),
-      (e) => live && setError(e instanceof Error ? e.message : String(e)),
+      (e) => live && setError(errorMessage(e)),
     );
     return () => { live = false; };
   }, [graph, name]);

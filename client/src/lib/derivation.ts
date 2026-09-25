@@ -351,7 +351,7 @@ export function applyGraphPlan(
           .map((it) => ({
             from: problem.key,
             to: it.key,
-            aToB: { kind: "uses", explanation: "Used in the derivation." },
+            aToB: { kind: "uses", explanation: t("dt.usedIn") },
             bToA: { kind: "", explanation: "" },
             role: "uses" as const,
             include: true,

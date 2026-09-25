@@ -4,6 +4,7 @@ import {
   isTransientStatus,
   parseRetryAfter,
   ProviderError,
+  type ProviderErrorCode,
   withDeadline,
   withRetries,
   type ChatMessage,
@@ -67,8 +68,19 @@ export class OpenAICompatibleProvider implements Provider {
     return Boolean(this.apiKey);
   }
 
+  /** A ProviderError with a code the interface translates (see ProviderErrorCode); `provider` is always filled in. */
+  private error(
+    code: ProviderErrorCode,
+    message: string,
+    status = 502,
+    retry?: { afterMs?: number },
+    extra: { params?: Record<string, string | number>; detail?: string } = {},
+  ) {
+    return new ProviderError(message, status, retry, { code, params: { provider: this.label, ...extra.params }, detail: extra.detail });
+  }
+
   private async request(path: string, init: RequestInit, opts: RequestOptions & { timeoutMs: number }) {
-    if (!this.apiKey) throw new ProviderError(`${this.label}: API key is not set`, 503);
+    if (!this.apiKey) throw this.error("noKey", `${this.label}: API key is not set`, 503);
     // The deadline covers the whole exchange, including reading the body and any retries.
     const deadlineAt = Date.now() + opts.timeoutMs;
     return withDeadline(this.label, opts, (signal) =>
@@ -87,20 +99,27 @@ export class OpenAICompatibleProvider implements Provider {
       });
     } catch (e) {
       if (signal.aborted) throw e;
-      const msg = `${this.label}: could not reach ${this.baseURL} (${e instanceof Error ? e.message : e})`;
-      throw new ProviderError(msg, 502, {});
+      const why = e instanceof Error ? e.message : String(e);
+      const msg = `${this.label}: could not reach ${this.baseURL} (${why})`;
+      throw this.error("unreachable", msg, 502, {}, { detail: `${this.baseURL}: ${why}` });
     }
     if (!res.ok) {
-      const body = await res.text().catch(() => "");
+      const body = (await res.text().catch(() => "")).slice(0, 300);
       const status = res.status === 401 || res.status === 403 ? 401 : res.status === 429 ? 429 : 502;
       const retry = isTransientStatus(res.status) ? { afterMs: parseRetryAfter(res.headers.get("retry-after")) } : undefined;
-      throw new ProviderError(`${this.label} HTTP ${res.status}: ${body.slice(0, 300)}`, status, retry);
+      // A rejected key and a rate limit get their own sentence; anything else names the HTTP status.
+      const code = res.status === 401 ? "invalidKey" : res.status === 429 ? "rateLimited" : "http";
+      const detail = code === "http" ? body : [`HTTP ${res.status}`, body].filter(Boolean).join(": ");
+      throw this.error(code, `${this.label} HTTP ${res.status}: ${body}`, status, retry, {
+        params: { status: res.status },
+        detail: detail || undefined,
+      });
     }
     return res.json();
   }
 
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
-    if (!this.model) throw new ProviderError(`${this.label}: no model selected`, 400);
+    if (!this.model) throw this.error("noModel", `${this.label}: no model selected`, 400);
     // Both attempts (JSON mode, then plain if the model rejects it) share one deadline.
     const deadlineAt = Date.now() + (opts.timeoutMs ?? this.timeoutMs);
     const send = (jsonMode: boolean) =>
@@ -137,7 +156,7 @@ export class OpenAICompatibleProvider implements Provider {
     const reply = data as { choices?: { message?: { content?: string } }[]; usage?: { total_tokens?: number } };
     const content = reply.choices?.[0]?.message?.content;
     if (typeof content !== "string" || !content.trim()) {
-      throw new ProviderError(`${this.label}: empty response (a reasoning model may have used up max_tokens while thinking)`);
+      throw this.error("emptyReasoning", `${this.label}: empty response (a reasoning model may have used up max_tokens while thinking)`);
     }
     const tokens = reply.usage?.total_tokens;
     if (typeof tokens === "number" && tokens > 0) opts.onUsage?.(tokens);

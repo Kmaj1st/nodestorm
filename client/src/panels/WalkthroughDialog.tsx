@@ -114,7 +114,7 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
                 {slide.relations.map((r, n) => (
                   <li key={n}>
                     <span className="walk__arrow">{r.dir === "out" ? "→" : "←"}</span> <strong>{r.otherName}</strong>
-                    {r.kind && <>: {r.kind}</>}
+                    {r.kind && <>{t("common.label", { label: "" })} {r.kind}</>}
                     {r.explanation && <> — <MathText text={r.explanation} /></>}
                   </li>
                 ))}

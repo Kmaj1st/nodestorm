@@ -19,6 +19,7 @@ import {
   type GraphPlan,
   type Problem,
 } from "../lib/derivation";
+import { errorMessage } from "../lib/errors";
 import * as db from "../lib/docDb";
 import type { DocMeta, DocPage } from "../lib/docDb";
 import { readPdf, renderPageImage, titleFromFile } from "../lib/pdf";
@@ -206,7 +207,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
                   if (res.text) Object.assign(p, { text: res.text, via: "vision" });
                 } catch (e) {
                   if (signal.aborted) break;
-                  if (i === 0) graphs().setToast(t("dt.visionFailed", { error: e instanceof Error ? e.message : String(e) }), "error");
+                  if (i === 0) graphs().setToast(t("dt.visionFailed", { error: errorMessage(e) }), "error");
                 }
               }
               return out;
@@ -231,7 +232,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
         );
         if (kind === "problems") void get().findProblems(meta.id);
       } catch (e) {
-        graphs().setToast(t("dt.importFailed", { title, error: e instanceof Error ? e.message : String(e) }), "error");
+        graphs().setToast(t("dt.importFailed", { title, error: errorMessage(e) }), "error");
       } finally {
         set({ importing: null });
       }

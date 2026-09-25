@@ -108,6 +108,8 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
   const tone = unrelated ? "unrelated" : rel.origin;
   const nameOf = (n: InternalNode) => (n.data as { concept?: { name: string } }).concept?.name ?? "?";
   const [aName, bName] = [nameOf(s), nameOf(t)];
+  // The stored keyword "none" is read out in the interface language.
+  const shown = (kind: string) => (kind.trim() === "none" ? tr("edge.unrelatedLabel") : kind);
 
   const p1 = borderPoint(s, center(t)); // end at A
   const p2 = borderPoint(t, center(s)); // end at B
@@ -129,12 +131,12 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
       <Arrow
         tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} tone={tone}
         testId={`arrow-${rel.id}-aToB`}
-        label={unrelated ? tr("edge.unrelated", { a: aName, b: bName }) : tr("edge.arrow", { a: aName, b: bName, kind: rel.aToB.kind })}
+        label={unrelated ? tr("edge.unrelated", { a: aName, b: bName }) : tr("edge.arrow", { a: aName, b: bName, kind: shown(rel.aToB.kind) })}
       />
       <Arrow
         tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} tone={tone}
         testId={`arrow-${rel.id}-bToA`}
-        label={unrelated ? tr("edge.unrelated", { a: bName, b: aName }) : tr("edge.arrow", { a: bName, b: aName, kind: rel.bToA.kind })}
+        label={unrelated ? tr("edge.unrelated", { a: bName, b: aName }) : tr("edge.arrow", { a: bName, b: aName, kind: shown(rel.bToA.kind) })}
       />
       {labelLayer &&
         showLabels &&

@@ -3,6 +3,7 @@ import { ChevronDown, ChevronUp, CircleAlert, Eye, FlaskConical, History, Info, 
 import { useEffect, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
 import { rich, t, useT } from "./i18n";
+import { errorMessage } from "./lib/errors";
 import { removeNode, removeRelation } from "./lib/graphOps";
 import { decodeShare, shareToken } from "./lib/share";
 import { Inspector } from "./panels/Inspector";
@@ -184,7 +185,7 @@ async function openShareLink() {
     s.setToast(fixes.length ? t("viewer.repaired", { fixes: fixes.join("; ") }) : null, "info");
   } catch (e) {
     clearShareHash();
-    s.setToast(t("viewer.openFailed", { error: e instanceof Error ? e.message : String(e) }));
+    s.setToast(t("viewer.openFailed", { error: errorMessage(e) }));
   }
 }
 

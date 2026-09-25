@@ -6,6 +6,7 @@ import {
   parseRetryAfter,
   ProviderError,
   textOf,
+  type ProviderErrorCode,
   withDeadline,
   withRetries,
   type ChatMessage,
@@ -35,7 +36,12 @@ function loadSdk(): Promise<Sdk> {
     (m) => m.default,
     (err) => {
       sdk = null;
-      throw new ProviderError(`Anthropic: could not load the SDK (${err instanceof Error ? err.message : err})`, 502);
+      const detail = err instanceof Error ? err.message : String(err);
+      throw new ProviderError(`Anthropic: could not load the SDK (${detail})`, 502, undefined, {
+        code: "sdkLoad",
+        params: { provider: "Anthropic" },
+        detail,
+      });
     },
   );
   return sdk;
@@ -64,7 +70,7 @@ export class AnthropicProvider implements Provider {
 
   /** The SDK and a client for this key, created on the first request. */
   private async api(): Promise<{ client: Anthropic; Anthropic: Sdk }> {
-    if (!this.apiKey) throw new ProviderError("Anthropic: API key is not set", 503);
+    if (!this.apiKey) throw this.error("noKey", "Anthropic: API key is not set", 503);
     const Anthropic = await loadSdk();
     this.client ??= new Anthropic({
       apiKey: this.apiKey,
@@ -76,23 +82,39 @@ export class AnthropicProvider implements Provider {
     return { client: this.client, Anthropic };
   }
 
+  /** A ProviderError with a code the interface translates (see ProviderErrorCode); `provider` is always filled in. */
+  private error(
+    code: ProviderErrorCode,
+    message: string,
+    status = 502,
+    retry?: { afterMs?: number },
+    extra: { params?: Record<string, string | number>; detail?: string } = {},
+  ) {
+    return new ProviderError(message, status, retry, { code, params: { provider: this.label, ...extra.params }, detail: extra.detail });
+  }
+
   private wrap(err: unknown, Anthropic: Sdk): never {
     if (err instanceof ProviderError) throw err;
-    if (err instanceof Anthropic.AuthenticationError) throw new ProviderError("Anthropic: invalid API key", 401);
+    const detail = err instanceof Error ? err.message : undefined;
+    if (err instanceof Anthropic.AuthenticationError) throw this.error("invalidKey", "Anthropic: invalid API key", 401, undefined, { detail });
     if (err instanceof Anthropic.PermissionDeniedError)
-      throw new ProviderError("Anthropic: this key can't use that model", 401);
+      throw this.error("modelDenied", "Anthropic: this key can't use that model", 401, undefined, { params: { model: this.model }, detail });
     if (err instanceof Anthropic.NotFoundError)
-      throw new ProviderError(`Anthropic: model "${this.model}" not found`, 400);
+      throw this.error("modelNotFound", `Anthropic: model "${this.model}" not found`, 400, undefined, { params: { model: this.model } });
     if (err instanceof Anthropic.APIUserAbortError) throw err;
     // Rate limits, overload/5xx and network failures are marked retryable; withRetries decides whether to wait.
     const retryAfter = () => ({
       afterMs: parseRetryAfter(err instanceof Anthropic.APIError ? err.headers?.get("retry-after") : null),
     });
-    if (err instanceof Anthropic.RateLimitError) throw new ProviderError("Anthropic: rate limited", 429, retryAfter());
-    if (err instanceof Anthropic.APIConnectionError) throw new ProviderError("Anthropic: could not reach the API", 502, {});
+    if (err instanceof Anthropic.RateLimitError) throw this.error("rateLimited", "Anthropic: rate limited", 429, retryAfter());
+    if (err instanceof Anthropic.APIConnectionError)
+      throw this.error("unreachable", "Anthropic: could not reach the API", 502, {}, { detail });
     if (err instanceof Anthropic.APIError) {
       const retry = err.status !== undefined && isTransientStatus(err.status) ? retryAfter() : undefined;
-      throw new ProviderError(`Anthropic API error ${err.status}: ${err.message}`, 502, retry);
+      throw this.error("http", `Anthropic API error ${err.status}: ${err.message}`, 502, retry, {
+        params: { status: err.status ?? "?" },
+        detail: err.message,
+      });
     }
     throw err;
   }
@@ -157,15 +179,15 @@ export class AnthropicProvider implements Provider {
             convo.push({ role: "assistant", content: res.content });
             continue;
           }
-          if (res.stop_reason === "refusal") throw new ProviderError("Anthropic: request was declined");
+          if (res.stop_reason === "refusal") throw this.error("declined", "Anthropic: request was declined");
           const text = res.content
             .filter((b): b is Anthropic.Beta.BetaTextBlock => b.type === "text")
             .map((b) => b.text)
             .join("");
-          if (!text) throw new ProviderError("Anthropic: empty response");
+          if (!text) throw this.error("empty", "Anthropic: empty response");
           return text;
         }
-        throw new ProviderError("Anthropic: too many pause_turn continuations");
+        throw this.error("continuations", "Anthropic: too many pause_turn continuations");
       } catch (err) {
         this.wrap(err, Anthropic);
       }

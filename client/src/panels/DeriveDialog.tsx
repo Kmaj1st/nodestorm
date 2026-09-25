@@ -45,7 +45,7 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
               <div className="muted small"><MathText text={p.definition} /></div>
               {p.links.map((l) => (
                 <div className="small candidate__link" key={l.to}>
-                  <Icon icon={ArrowRight} size={12} /><span>{l.to}: <em>{l.fromNew.kind}</em></span>
+                  <Icon icon={ArrowRight} size={12} /><span>{t("common.label", { label: l.to })} <em>{l.fromNew.kind}</em></span>
                 </div>
               ))}
             </div>

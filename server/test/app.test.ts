@@ -49,6 +49,8 @@ describe("server: x-ai-language", () => {
     });
     // The recording provider answers every task with a deps reply, which has no summary.
     expect(res.status).toBe(502);
+    // The error carries its code, so the browser can say it in the interface language.
+    expect(await res.json()).toMatchObject({ error: expect.stringMatching(/malformed/), code: "malformed", params: { provider: "Rec" } });
     expect(prompts.at(-1)![0].content).toMatch(/\[task:explain\][\s\S]*in Deutsch/);
     const bad = await fetch(`${base}/api/explain`, {
       method: "POST",

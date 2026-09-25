@@ -11,7 +11,7 @@ import {
   type Relation,
   type RelationOrigin,
 } from "@nodestorm/shared";
-import { t } from "../i18n";
+import { t, type MessageKey } from "../i18n";
 
 /** Pure graph operations. Every function returns a new Graph and never mutates its input. */
 
@@ -37,21 +37,27 @@ export const OWN_SOURCE: SourceRef = { site: "you", title: "" };
 
 /**
  * Labels of a prerequisite link: one active label from the dependent ("using", never "is used by"); the prerequisite's
- * side is "none", so the link reads as a single arrow.
+ * side is "none", so the link reads as a single arrow. They are written in the interface language of the moment.
  */
-export const DEP_KIND: Record<DepRole, string> = {
-  uses: "using",
-  derives: "deriving",
-  assumes: "assuming",
+export const DEP_KIND: Record<DepRole, MessageKey> = {
+  uses: "rel.dep.uses",
+  derives: "rel.dep.derives",
+  assumes: "rel.dep.assumes",
 };
 
 /** The two directions of a prerequisite link between two names. */
 export function depKinds(dependent: string, prereq: string, role: DepRole, reason: string) {
   return {
-    aToB: { kind: DEP_KIND[role], explanation: reason },
-    bToA: { kind: "none", explanation: `${prereq} is a prerequisite of ${dependent}: ${reason}` },
+    aToB: { kind: t(DEP_KIND[role]), explanation: reason },
+    bToA: { kind: "none", explanation: t("rel.prereqOf", { prereq, dependent, reason }) },
   };
 }
+
+/** What may be typed for "no relation this way", in either interface language: stored as the keyword "none". */
+const NONE_WORDS = new Set(["none", "无", "没有", "无关系", "没有关系", "不相关"]);
+
+/** A relation kind as typed by the user, with "none" (or 无, 没有…) turned into the stored keyword "none". */
+export const typedKind = (typed: string) => (NONE_WORDS.has(typed.trim().toLowerCase()) ? "none" : typed.trim());
 
 /** Mix looked and found no relation in either direction (both sides "none"). */
 export const isUnrelated = (r: Pick<Relation, "aToB" | "bToA">) => r.aToB.kind.trim() === "none" && r.bToA.kind.trim() === "none";
@@ -342,7 +348,7 @@ export function removeDependency(g: Graph, dependentId: string, prereqId: string
   // The shared edge described the removed direction; re-describe it for the one that's left.
   const prereq = nodes.find((n) => n.id === prereqId)!;
   const dependent = nodes.find((n) => n.id === dependentId)!;
-  const d = depRelation(prereq, dependent, "uses", `${prereq.name} builds on ${dependent.name}.`);
+  const d = depRelation(prereq, dependent, "uses", t("rel.buildsOn", { a: prereq.name, b: dependent.name }));
   const flipped: Relation = { ...rel, a: prereqId, b: dependentId, aToB: d.aToB, bToA: d.bToA };
   return { ...out, relations: g.relations.map((r) => (r.id === rel.id ? flipped : r)) };
 }

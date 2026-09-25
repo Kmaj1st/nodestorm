@@ -33,7 +33,7 @@ import { ExtractDialog } from "./lazy";
 import type { Site } from "../lib/lookup";
 import { wikiName } from "../lib/mediawiki";
 import { useEffect, useRef, useState } from "react";
-import { rich, useLang, useT, type MessageKey } from "../i18n";
+import { listJoin, rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   aiSource,
   applyProposal,
@@ -60,7 +60,7 @@ import {
   relookupKey,
   resolveCycle,
 } from "../lib/actions";
-import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setBasic, setKind, updateNode, updateRelation } from "../lib/graphOps";
+import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setBasic, setKind, typedKind, updateNode, updateRelation } from "../lib/graphOps";
 import { paperByline, sourceLabel } from "../lib/export";
 import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
@@ -189,7 +189,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           <Icon icon={EyeOff} size={16} />
         </button>
       </div>
-      {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
+      {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: listJoin(node.aliases) })}</div>}
       </header>
 
       <label className="field field--inline">
@@ -318,7 +318,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
               <li key={r.id}>
                 <button className="link rel-link" onClick={() => setInspect({ kind: "edge", relationId: r.id, dir })}>
                   {incoming && <span className="rel-link__to">{other?.name}</span>}
-                  <span className="rel-link__kind">{r[dir].kind}</span>
+                  <span className="rel-link__kind">{r[dir].kind.trim() === "none" ? t("edge.unrelatedLabel") : r[dir].kind}</span>
                   <Icon icon={ArrowRight} size={14} className="rel-link__arrow" />
                   <span className="rel-link__to">{incoming ? t("rel.this") : other?.name}</span>
                 </button>
@@ -908,6 +908,16 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
   const [from, to] = dir === "aToB" ? [a, b] : [b, a];
   const d = rel[dir];
   const other = dir === "aToB" ? "bToA" : "aToB";
+  const readOnly = useGraphStore(isViewing);
+  // "No relation this way" is stored as the keyword "none"; unticking brings back the label it replaced.
+  const none = d.kind.trim() === "none";
+  const [before, setBefore] = useState<Record<string, string>>({});
+  const beforeKey = `${relationId}:${dir}`;
+  const setNone = (on: boolean) => {
+    if (on) setBefore((b) => ({ ...b, [beforeKey]: d.kind }));
+    const kind = on ? "none" : before[beforeKey] || t("rel.relatesTo");
+    mutate((g) => updateRelation(g, relationId, dir, { kind }));
+  };
 
   return (
     <aside className="inspector" data-testid="relation-panel">
@@ -916,19 +926,28 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
         <span>{from?.name}</span>
         <span className="rel-kind">
           <Icon icon={ArrowDown} size={14} className="rel-kind__arrow" />
-          <DraftField
-            key={`${relationId}:${dir}`}
-            value={d.kind}
-            label={t("rel.kind")}
-            save={(v) => {
-              if (!v.trim()) return t("rel.kindEmpty");
-              mutate((g) => updateRelation(g, relationId, dir, { kind: v.trim() }));
-              return undefined;
-            }}
-          />
+          {none ? (
+            <span className="rel-kind__none muted" data-testid="relation-kind-none">{t("edge.unrelatedLabel")}</span>
+          ) : (
+            <DraftField
+              key={`${relationId}:${dir}`}
+              value={d.kind}
+              label={t("rel.kind")}
+              testId="relation-kind"
+              save={(v) => {
+                if (!v.trim()) return t("rel.kindEmpty");
+                mutate((g) => updateRelation(g, relationId, dir, { kind: typedKind(v) }));
+                return undefined;
+              }}
+            />
+          )}
         </span>
         <span>{to?.name}</span>
       </h3>
+      <label className="check small rel-none">
+        <input type="checkbox" checked={none} disabled={readOnly} onChange={(e) => setNone(e.target.checked)} data-testid="relation-none" />
+        {t("rel.none")}
+      </label>
       <DraftField
         key={`${relationId}:${dir}`}
         value={d.explanation}
@@ -1172,10 +1191,10 @@ function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
             </ul>
           )}
           {!f.decls.length && <p className="small">{t("formal.none", { name: node.name })}</p>}
-          {f.unchecked?.length ? <p className="small warn">{t("formal.unchecked", { names: f.unchecked.join(", ") })}</p> : null}
+          {f.unchecked?.length ? <p className="small warn">{t("formal.unchecked", { names: listJoin(f.unchecked) })}</p> : null}
           <p className="muted small">
             {t("common.checkedOn", { date: shortDate(f.checkedAt, lang) })}{" · "}
-            {f.unverified.length > 0 && <>{t("formal.unverified", { names: f.unverified.join(", ") })} </>}
+            {f.unverified.length > 0 && <>{t("formal.unverified", { names: listJoin(f.unverified) })} </>}
             <a href={loogleSearchUrl(`"${node.name}"`)} target="_blank" rel="noopener noreferrer">
               {t("formal.searchYourself")}
             </a>
