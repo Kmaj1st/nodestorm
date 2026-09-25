@@ -97,4 +97,11 @@ export function StatusMark({ status }: { status: CN["status"] }) {
   return status === "checking" ? <span className="spinner spinner--xs" aria-hidden="true" /> : <span className="pill__dot" aria-hidden="true" />;
 }
 
-export const ConceptNode = memo(ConceptNodeView);
+/**
+ * React Flow also passes the node's position (positionAbsoluteX/Y, dragging, …), which the card doesn't draw: compare
+ * only what it does use, so moving cards (a drag, or Physics moving every card each frame) doesn't re-render them.
+ */
+export const ConceptNode = memo(
+  ConceptNodeView,
+  (a: NodeProps<ConceptFlowNode>, b: NodeProps<ConceptFlowNode>) => a.data === b.data && a.selected === b.selected,
+);

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Faster start:** the first-paint bundle is 15% smaller (805 kB instead of 950 kB; 258 kB instead of 313 kB gzipped). The in-page AI (provider clients, prompts, the offline demo's knowledge base), the Chinese interface text (only fetched when the interface is Chinese) and LaTeX export/import are now loaded when first needed. The service worker still caches them all, so everything works offline.
+- **Smoother Physics on big graphs:** a simulation step on 400 concepts takes about a quarter of the time (1.7 ms instead of 7 ms), with exactly the same result, and concept cards no longer re-render when they only move (Physics frames and drags).
+- `e2e/perf.mjs` also measures a Physics run and main-thread time of each section; `PERF_PROFILE=status|inspect|drag|physics` profiles one.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.

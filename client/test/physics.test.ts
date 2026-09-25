@@ -84,6 +84,16 @@ describe("physics", () => {
     expect(noOverlaps(simPositions(big))).toBe(true);
   });
 
+  it("finds neighbours across grid cells on both sides of the origin", () => {
+    // 180 cards packed around (0, 0), so the grid (above 150 nodes) has cells at negative and positive coordinates.
+    const many = Array.from({ length: 180 }, (_, i) => ({ id: `n${i}`, x: ((i % 15) - 7) * 50, y: (Math.floor(i / 15) - 6) * 30 }));
+    const sim = createSim(many, many.slice(1).map((n, i) => ({ a: many[i].id, b: n.id })));
+    settle(sim, 3000);
+    const p = simPositions(sim);
+    expect(noOverlaps(p)).toBe(true);
+    expect([...p.values()].some((q) => q.x < 0) && [...p.values()].some((q) => q.x > 0)).toBe(true);
+  });
+
   it("in layered mode moves only x and keeps each card on its row", () => {
     const nodes = ["a", "b", "c", "d"].map((n, i) => ({ id: n, x: 0, y: i < 2 ? 0 : 200 }));
     const sim = createSim(nodes, [{ a: "a", b: "c", prereq: true }], { lockY: true });
