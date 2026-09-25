@@ -854,7 +854,8 @@ try {
   await (await viewMenu()).getByRole("checkbox", { name: /To-do only/ }).check();
   await waitCounts("1/0");
   assert(await node("First Isomorphism Theorem").isVisible(), "the to-do view shows only the concept that isn't ready");
-  await page.keyboard.press("Escape"); // closes the popover
+  await page.keyboard.press("Escape"); // closes the popover, and focus returns to the View button
+  await page.evaluate(() => document.activeElement?.blur());
   // Nothing has focus now, so Delete reaches the app's handler (as on the canvas).
   const deleteReachesApp = await page.evaluate(() => document.activeElement === document.body);
   await page.keyboard.press("Delete");
@@ -1298,12 +1299,12 @@ try {
     // Zoomed far out, descriptions would be unreadable: cards show just their name, larger.
     const nameSize = () => node("Group").locator(".concept__name").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     const near = await nameSize();
-    for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Zoom Out" }).click();
+    for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Zoom out" }).click();
     await page.waitForFunction(() => document.querySelector(".canvas")?.classList.contains("canvas--far"));
     assert(await node("Group").locator(".concept__def").isHidden(), "zoomed out, a card hides its description");
     assert((await nameSize()) > near, "…and shows its name larger");
     await page.screenshot({ path: `${shots}5e-zoomed-out.png` });
-    await page.getByRole("button", { name: "Fit View" }).click();
+    await page.getByRole("button", { name: "Fit everything in view" }).click();
   }
   await node("First Isomorphism Theorem").click(); // blocked, with a learning path in the inspector
   await audit("main screen with a graph and a concept open in the inspector");
@@ -2630,11 +2631,14 @@ try {
     await page.keyboard.press("Escape");
     assert(!(await viewPop.isVisible()) && (await viewButton.evaluate((el) => el === document.activeElement)), "Escape closes the View popover and focus returns to its button");
 
-    // Settings: the two wiki fields stack instead of pushing past the dialog's edge.
+    // Settings (behind More tools on a phone): the two wiki fields stack instead of pushing past the dialog's edge.
+    const moreTools = page.getByRole("button", { name: "More tools" });
+    await moreTools.click();
     const st = await openSettings();
     await st.getByTestId("lookup-bwiki").scrollIntoViewIfNeeded();
     assert((await fits(st.getByTestId("lookup-bwiki"))) && (await fits(st.getByTestId("lookup-fandom"))), "phone: Settings' wiki fields fit the screen");
     await st.getByRole("button", { name: "Cancel" }).click();
+    await moreTools.click();
 
     // The inspector bottom sheet with a concept open.
     await node("Normal subgroup").click();

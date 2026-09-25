@@ -204,7 +204,7 @@ export const en = {
   "canvas.controls": "Zoom controls",
   "canvas.zoomIn": "Zoom in",
   "canvas.zoomOut": "Zoom out",
-  "canvas.fitView": "Fit the graph to the screen",
+  "canvas.fitView": "Fit everything in view",
   "canvas.nodeHelp": "Press Enter or Space to select the concept. The arrow keys then move it; Delete removes it and Escape cancels.",
   "canvas.nodeMoved": "Moved the concept. New position: x {x}, y {y}",
   "viewer.banner": "Viewing a shared graph. Save a copy to edit.",

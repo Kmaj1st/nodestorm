@@ -202,7 +202,7 @@ export const zh: Record<MessageKey, string> = {
   "canvas.controls": "缩放控件",
   "canvas.zoomIn": "放大",
   "canvas.zoomOut": "缩小",
-  "canvas.fitView": "缩放以显示整张图谱",
+  "canvas.fitView": "缩放以显示全部",
   "canvas.nodeHelp": "按 Enter 或空格键选中该概念，然后可用方向键移动它；按 Delete 删除，按 Esc 取消。",
   "canvas.nodeMoved": "已移动该概念。新位置：x {x}，y {y}",
   "viewer.banner": "正在查看分享的图谱。保存副本后即可编辑。",

@@ -1,5 +1,5 @@
 import { BookOpen, PenLine, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useT } from "../../i18n";
 import { useDerive } from "../../store/deriveStore";
 import { Icon } from "../../ui/Icon";
@@ -25,8 +25,9 @@ export function DerivePanel() {
   // On a small screen the panel covers the app: what it hides (toolbar, canvas, inspector) leaves the Tab order and
   // the accessibility tree, as behind a dialog. Dialogs opened from the panel are outside these, so stay usable.
   // Focus moves into the panel when it opens, so keyboard users land in it, and back to where it was when it closes.
+  // Where focus was before the panel opened (read while rendering: an effect re-run would see the panel itself).
+  const [opener] = useState(() => document.activeElement as HTMLElement | null);
   useEffect(() => {
-    const opener = document.activeElement as HTMLElement | null;
     const query = window.matchMedia?.("(max-width: 800px)");
     const hidden = () => [...document.querySelectorAll<HTMLElement>(".app > .toolbar, .app > .main > :not(.derive-panel)")];
     const apply = () => hidden().forEach((el) => (el.inert = Boolean(query?.matches)));
