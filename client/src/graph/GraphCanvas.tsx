@@ -200,6 +200,7 @@ export function GraphCanvas() {
   const edgeCache = useRef<RelationFlowEdge[]>([]);
   const edges = useMemo<RelationFlowEdge[]>(() => {
     const deps = new Map(graph.nodes.map((n) => [n.id, n.dependsOn]));
+    const names = new Map(graph.nodes.map((n) => [n.id, n.name]));
     const isDep = (x: string, y: string) => Boolean(deps.get(x)?.includes(y));
     const prev = new Map(edgeCache.current.map((e) => [e.id, e]));
     const next = graph.relations.map((r): RelationFlowEdge => {
@@ -208,14 +209,16 @@ export function GraphCanvas() {
       const className = chain ? (onPath ? "path-on" : "path-dim") : undefined;
       const cycle = cycles.links.has(linkKey(r.a, r.b)) || cycles.links.has(linkKey(r.b, r.a));
       const hidden = visible ? !visible.relations.has(r.id) : false;
+      // Not a tab stop (edgesFocusable is off; its arrowheads are), so a named group rather than React Flow's "img".
+      const ariaLabel = t("canvas.relation", { a: names.get(r.a) ?? "?", b: names.get(r.b) ?? "?" });
       const old = prev.get(r.id);
-      if (old?.data?.relation === r && old.data.cycle === cycle && old.className === className && !!old.hidden === hidden) return old;
-      return { id: r.id, source: r.a, target: r.b, type: "bi" as const, className, hidden, data: { relation: r, cycle } };
+      if (old?.data?.relation === r && old.data.cycle === cycle && old.className === className && !!old.hidden === hidden && old.ariaLabel === ariaLabel) return old;
+      return { id: r.id, source: r.a, target: r.b, type: "bi" as const, className, hidden, ariaRole: "group", ariaLabel, data: { relation: r, cycle } };
     });
     const cached = edgeCache.current;
     if (next.length !== cached.length || next.some((e, i) => e !== cached[i])) edgeCache.current = next;
     return edgeCache.current;
-  }, [graph, chain, cycles, visible]);
+  }, [graph, chain, cycles, visible, t]);
 
   // What gets hidden leaves the selection and the inspector, so Delete can't remove something that isn't shown.
   useEffect(() => {
@@ -307,6 +310,21 @@ export function GraphCanvas() {
   const onPaneClick = useCallback(() => setInspect(null), [setInspect]);
   const focusName = focus && graph.nodes.find((n) => n.id === focus.nodeId)?.name;
 
+  // React Flow's screen-reader texts and zoom-button names, in the interface language.
+  const ariaLabels = useMemo(
+    () => ({
+      "controls.ariaLabel": t("canvas.controls"),
+      "controls.zoomIn.ariaLabel": t("canvas.zoomIn"),
+      "controls.zoomOut.ariaLabel": t("canvas.zoomOut"),
+      "controls.fitView.ariaLabel": t("canvas.fitView"),
+      "minimap.ariaLabel": t("canvas.map"),
+      "node.a11yDescription.default": t("canvas.nodeHelp"),
+      "node.a11yDescription.keyboardDisabled": t("canvas.nodeHelp"),
+      "node.a11yDescription.ariaLiveMessage": ({ x, y }: { x: number; y: number }) => t("canvas.nodeMoved", { x, y }),
+    }),
+    [t],
+  );
+
   return (
     <div
       ref={wrapper}
@@ -329,6 +347,10 @@ export function GraphCanvas() {
         onPaneClick={onPaneClick}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
         deleteKeyCode={null} // Delete/Backspace are handled in App so deletions are undoable
+        // A relation is reached from the keyboard by its two arrowheads (BiRelationEdge); the edge itself would be
+        // an extra tab stop that does nothing, named by internal ids.
+        edgesFocusable={false}
+        ariaLabelConfig={ariaLabels}
         nodesConnectable={false}
         fitView
         fitViewOptions={{ maxZoom: 1.2 }}

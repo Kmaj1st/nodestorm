@@ -2595,6 +2595,72 @@ try {
     await setTheme("light");
   }
 
+  console.log("Small screens");
+  {
+    // A phone (390px wide) on the Group theory example: nothing may scroll sideways or spill off the screen.
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.getByRole("button", { name: "Load example: Group theory" }).click();
+    await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+    await page.setViewportSize({ width: 390, height: 800 });
+    await page.waitForTimeout(300);
+    const noHScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth);
+    const fits = async (loc) => {
+      const b = await loc.boundingBox();
+      return b && b.x >= 0 && b.x + b.width <= 390;
+    };
+    const top = async (name) => (await page.getByRole("button", { name, exact: true }).boundingBox()).y;
+    assert(await noHScroll(), "phone: no horizontal scroll on the main screen");
+    assert(
+      new Set(await Promise.all(["Add concept", "Mix", "Derive", "Derive together"].map(top))).size === 1,
+      "phone: Add, Mix, Derive and Derive together share one toolbar row",
+    );
+    assert((await page.locator(".react-flow__edge[tabindex]").count()) === 0, "relations are reached by their arrowheads, not by an extra tab stop each");
+    await audit("phone, nothing selected (the details sheet scrolls and can take focus)");
+
+    // The View popover opens inside the screen (it used to run off its left edge), and Tab out of it closes it.
+    const viewButton = page.getByRole("button", { name: /^View/ });
+    await viewButton.click();
+    const viewPop = page.getByRole("dialog", { name: "View" });
+    assert((await fits(viewPop)) && (await noHScroll()), "phone: the View popover fits the screen");
+    await viewPop.getByRole("checkbox", { name: "Relation labels" }).focus();
+    for (let i = 0; i < 8 && (await viewPop.isVisible()); i++) await page.keyboard.press("Tab");
+    assert(!(await viewPop.isVisible()), "Tab out of the View popover closes it");
+    await viewButton.click();
+    await page.keyboard.press("Escape");
+    assert(!(await viewPop.isVisible()) && (await viewButton.evaluate((el) => el === document.activeElement)), "Escape closes the View popover and focus returns to its button");
+
+    // Settings: the two wiki fields stack instead of pushing past the dialog's edge.
+    const st = await openSettings();
+    await st.getByTestId("lookup-bwiki").scrollIntoViewIfNeeded();
+    assert((await fits(st.getByTestId("lookup-bwiki"))) && (await fits(st.getByTestId("lookup-fandom"))), "phone: Settings' wiki fields fit the screen");
+    await st.getByRole("button", { name: "Cancel" }).click();
+
+    // The inspector bottom sheet with a concept open.
+    await node("Normal subgroup").click();
+    await page.getByLabel("Rename concept").waitFor();
+    assert(await noHScroll(), "phone: no horizontal scroll with the inspector open");
+    await audit("phone, a concept open in the details sheet");
+
+    // Derive together covers the phone screen: what it hides leaves the Tab order, and closing it returns focus.
+    const dtButton = page.getByTestId("derive-together");
+    await dtButton.focus();
+    await page.keyboard.press("Enter");
+    const panel = page.getByTestId("derive-panel");
+    await panel.getByRole("heading", { name: "Derive together" }).waitFor();
+    assert(await page.locator(".toolbar").evaluate((el) => el.inert), "phone: the toolbar behind Derive together is inert");
+    for (let i = 0; i < 12; i++) await page.keyboard.press("Tab");
+    assert(await page.evaluate(() => !document.activeElement?.closest(".toolbar, .react-flow, .sheet")), "…so Tab never lands on what the panel covers");
+    await panel.getByRole("button", { name: "Close" }).click();
+    await panel.waitFor({ state: "detached" });
+    assert(
+      !(await page.locator(".toolbar").evaluate((el) => el.inert)) && (await dtButton.evaluate((el) => el === document.activeElement)),
+      "closing it restores the app and focus returns to the Derive together button",
+    );
+    await page.screenshot({ path: `${shots}38-phone.png` });
+    await page.setViewportSize({ width: 1400, height: 900 });
+  }
+
   console.log("\nE2E passed");
 } catch (e) {
   console.error(e);

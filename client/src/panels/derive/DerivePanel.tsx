@@ -22,8 +22,23 @@ export function DerivePanel() {
   const hasSession = useDerive((s) => Boolean(s.currentId));
   const ref = useRef<HTMLElement>(null);
 
-  // Focus moves into the panel when it opens, so keyboard users land in it.
-  useEffect(() => ref.current?.focus(), []);
+  // On a small screen the panel covers the app: what it hides (toolbar, canvas, inspector) leaves the Tab order and
+  // the accessibility tree, as behind a dialog. Dialogs opened from the panel are outside these, so stay usable.
+  // Focus moves into the panel when it opens, so keyboard users land in it, and back to where it was when it closes.
+  useEffect(() => {
+    const opener = document.activeElement as HTMLElement | null;
+    const query = window.matchMedia?.("(max-width: 800px)");
+    const hidden = () => [...document.querySelectorAll<HTMLElement>(".app > .toolbar, .app > .main > :not(.derive-panel)")];
+    const apply = () => hidden().forEach((el) => (el.inert = Boolean(query?.matches)));
+    apply();
+    query?.addEventListener("change", apply);
+    ref.current?.focus();
+    return () => {
+      query?.removeEventListener("change", apply);
+      hidden().forEach((el) => (el.inert = false));
+      if (opener?.isConnected && (!document.activeElement || document.activeElement === document.body)) opener.focus();
+    };
+  }, []);
 
   const onKey = (e: React.KeyboardEvent) => {
     if (e.key === "Escape" && !e.defaultPrevented && !(e.target as Element).closest("textarea, input")) {

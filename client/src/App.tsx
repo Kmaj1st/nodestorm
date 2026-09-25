@@ -260,13 +260,26 @@ function InspectorSheet() {
   useEffect(() => {
     if (inspect) setOpen(true);
   }, [inspect]);
+  // As a bottom sheet its content scrolls on its own, so it takes keyboard focus too (to scroll it with the arrow
+  // keys when it holds only text, like the help shown when nothing is selected).
+  const [small, setSmall] = useState(() => Boolean(window.matchMedia?.(SMALL_SCREEN).matches));
+  useEffect(() => {
+    const query = window.matchMedia?.(SMALL_SCREEN);
+    const update = () => setSmall(query.matches);
+    query?.addEventListener("change", update);
+    return () => query?.removeEventListener("change", update);
+  }, []);
   return (
     <div className={`sheet${open ? "" : " sheet--closed"}`}>
       <button className="sheet__toggle" aria-expanded={open} aria-controls="inspector-sheet" onClick={() => setOpen(!open)}>
         <Icon icon={open ? ChevronDown : ChevronUp} />
         {t(open ? "sheet.hide" : "sheet.show")}
       </button>
-      <div className="sheet__content" id="inspector-sheet">
+      <div
+        className="sheet__content"
+        id="inspector-sheet"
+        {...(small && { tabIndex: 0, role: "region", "aria-label": t("sheet.label") })}
+      >
         <Inspector />
       </div>
     </div>

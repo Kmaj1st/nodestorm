@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Phones and keyboards:** the View popover opens inside the screen on phones and tablets (it ran off the left edge); Settings' Fandom/BWIKI fields stack on a phone instead of spilling past the dialog; Add, Mix, Derive and Derive together share one toolbar row at 390px, so the canvas gets a row back. Tabbing out of the project, View or File menu closes it, and Escape returns focus to its button. On a phone, **Derive together** hides the app it covers from Tab and screen readers, and closing it returns focus to where it was. The details sheet can be scrolled from the keyboard. Relations are no longer an extra tab stop named by internal ids (their arrowheads are the keyboard targets), and the zoom buttons and canvas hints for screen readers follow the interface language.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.
