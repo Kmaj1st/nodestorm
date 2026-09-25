@@ -1,14 +1,13 @@
-import { CancelledError, lookupConcept, normalizeName, type LookupSense, type LookupSite } from "@nodestorm/shared";
+import { CancelledError, normalizeName, type LookupSense, type LookupSite } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { useSettings } from "../store/settingsStore";
-import { baikeLookup } from "./baike";
-import { wikiLookup } from "./mediawiki";
 import { isOnline } from "./online";
 
 /**
  * Every site a definition can come from: the encyclopedias in shared/src/lookup (ProofWiki, Wikipedia/Wikidata), and
  * the browser-only ones: Baidu Baike (a sandboxed JSONP call, lib/baike.ts) and the community wikis Moegirl, Fandom
- * and BWIKI (lib/mediawiki.ts).
+ * and BWIKI (lib/mediawiki.ts). Their clients are loaded on the first look-up that misses the cache
+ * (lib/lookupClients.ts); everything else here is cheap and synchronous.
  */
 export type Site = LookupSite | "baidu" | "moegirl" | "fandom" | "bwiki";
 
@@ -204,6 +203,16 @@ export async function lookupEverywhere(name: string, max: number, signal?: Abort
 async function askSites(name: string, lang: string, sites: Site[], max: number, signal?: AbortSignal): Promise<{ senses: LookupSense[]; blocked: Site[] }> {
   const { lookup } = useSettings.getState();
   const blocked: Site[] = [];
+  if (!sites.length) return { senses: [], blocked };
+  // The clients failing to load (offline before the service worker cached them) is like every site failing: nothing
+  // is cached, and the AI is asked instead.
+  const clients = await import("./lookupClients").catch((e) => {
+    console.warn("Look-up code failed to load:", e);
+    return null;
+  });
+  if (signal?.aborted) throw new CancelledError();
+  if (!clients) return { senses: [], blocked: [...sites] };
+  const { lookupConcept, baikeLookup, wikiLookup } = clients;
   const shared = sites.filter((s): s is LookupSite => s === "proofwiki" || s === "wikipedia");
   // The shared encyclopedias first, together (lookupConcept tries them in order).
   if (shared.length && shared[0] === sites[0]) {
