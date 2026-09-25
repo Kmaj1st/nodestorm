@@ -38,7 +38,8 @@ export interface CodecOptions {
 export function packGraph(g: Graph, name: string): unknown {
   const ids = new Map(g.nodes.map((n, i) => [n.id, i.toString(36)]));
   // Quiz mastery, notes, explanations and theorem anatomies are deliberately left out: they are the sender's own study progress and
-  // notebook rather than part of the graph, and whoever saves a copy starts their own quiz from scratch.
+  // notebook rather than part of the graph, and whoever saves a copy starts their own quiz from scratch. Stored lookups
+  // (Mathlib declarations, papers) are bulky and can be fetched again, so they stay out too.
   const nodes = g.nodes.map((n) => {
     // A check that's running or failed here can't be resumed by the viewer: show what's known.
     const status = n.status === "checking" || n.status === "error" ? (n.missingDeps.length ? "blocked" : "ok") : n.status;

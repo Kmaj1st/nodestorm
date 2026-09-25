@@ -5,6 +5,7 @@ import {
   Mastery,
   SourceRef,
   NodeFormal,
+  NodePapers,
   NodeAnatomy,
   ExplainVoice,
   NodeExplanation,
@@ -171,6 +172,11 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     const f = NodeFormal.safeParse(n.formal);
     if (f.success) node.formal = f.data;
     else fixes.add(t("repair.droppedFormal"));
+  }
+  if (n.papers !== undefined) {
+    const p = NodePapers.safeParse(n.papers);
+    if (p.success) node.papers = p.data;
+    else fixes.add(t("repair.droppedPapers"));
   }
   if (n.source !== undefined) {
     const src = SourceRef.safeParse(n.source);

@@ -1,4 +1,4 @@
-import { isTheoremLike, leanEditorUrl, loogleSearchUrl, mathlibDocUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
+import { isTheoremLike, leanEditorUrl, loogleSearchUrl, mathlibDocUrl, openAlexSearchUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -6,6 +6,7 @@ import {
   BookOpen,
   ChevronRight,
   Drama,
+  FileText,
   ExternalLink,
   GraduationCap,
   PenLine,
@@ -30,6 +31,8 @@ import {
   explainNode,
   findInMathlib,
   mathlibKey,
+  findPapers,
+  papersKey,
   installAllKey,
   installAllMissing,
   installDep,
@@ -39,7 +42,7 @@ import {
   resolveCycle,
 } from "../lib/actions";
 import { removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
-import { sourceLabel } from "../lib/export";
+import { paperByline, sourceLabel } from "../lib/export";
 import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
@@ -268,6 +271,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
 
       <ExplainSection key={node.id} node={node} graphId={graphId} />
       <FormalSection node={node} graphId={graphId} viewing={viewing} />
+      <PapersSection node={node} graphId={graphId} viewing={viewing} />
 
       <label className="field">
         {t("node.notes")}
@@ -805,6 +809,85 @@ function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
             {f.unverified.length > 0 && <>{t("formal.unverified", { names: f.unverified.join(", ") })} </>}
             <a href={loogleSearchUrl(`"${node.name}"`)} target="_blank" rel="noopener noreferrer">
               {t("formal.searchYourself")}
+            </a>
+          </p>
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * "Papers": published works about this concept from OpenAlex, so the reading list is real literature. Each title
+ * links to the paper (DOI or landing page), with its byline, citation count and a free copy when there is one.
+ */
+function PapersSection({ node, graphId, viewing }: { node: ConceptNode; graphId: string; viewing: boolean }) {
+  const t = useT();
+  const lang = useLang();
+  const key = papersKey(graphId, node.id);
+  const running = useGraphStore((s) => Boolean(s.busy[key]));
+  const p = node.papers;
+  if (viewing && !p?.works.length) return null;
+  const https = (u: string | undefined) => (u && u.startsWith("https://") ? u : undefined);
+  return (
+    <section data-testid="papers">
+      <div className="section-head">
+        <h4>{t("papers.title")}</h4>
+        {!viewing && (
+          <div className="explain__controls">
+            {running && (
+              <button className="small-btn" onClick={() => cancelTask(key)} data-testid="papers-cancel">
+                {t("common.cancel")}
+              </button>
+            )}
+            <button className="small-btn" onClick={() => void findPapers(node.id, graphId)} disabled={running} data-testid="papers-button">
+              {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={FileText} size={14} />}
+              {t(running ? "papers.running" : p ? "papers.again" : "papers.run")}
+            </button>
+          </div>
+        )}
+      </div>
+      {!p && !running && <p className="muted small">{t("papers.empty")}</p>}
+      {p && (
+        <>
+          {p.works.length > 0 && (
+            <ul className="paper-list">
+              {p.works.map((w) => {
+                const url = https(w.url);
+                const oa = https(w.openAccessUrl);
+                const by = paperByline(w);
+                return (
+                  <li key={w.id} className="paper">
+                    {url ? (
+                      <a href={url} target="_blank" rel="noopener noreferrer" className="paper__title">
+                        <MathText text={w.title} inline />
+                      </a>
+                    ) : (
+                      <span className="paper__title">
+                        <MathText text={w.title} inline />
+                      </span>
+                    )}
+                    <span className="paper__meta small">
+                      {by && <>{by} · </>}
+                      {t("papers.citedBy", { n: w.citedBy.toLocaleString(lang) })}
+                      {oa && (
+                        <>
+                          {" · "}
+                          <a href={oa} target="_blank" rel="noopener noreferrer" title={t("papers.freeTitle", { title: w.title })}>
+                            {t("papers.free")}
+                          </a>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+          <p className="muted small">
+            {p.works.length > 0 && p.query && <>{t("papers.searched", { query: p.query })} </>}
+            <a href={openAlexSearchUrl(node.name)} target="_blank" rel="noopener noreferrer">
+              {t("papers.searchYourself")}
             </a>
           </p>
         </>

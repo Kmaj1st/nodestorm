@@ -22,8 +22,9 @@ export class SiteBlockedError extends Error {
 
 /**
  * The header that identifies the app, per site: what each site's CORS allows (any other custom header makes the
- * browser's preflight fail). Wikimedia asks for `Api-User-Agent`; Loogle allows `X-Loogle-Client`; ProofWiki gets
- * none, so its request stays a "simple" one.
+ * browser's preflight fail). Wikimedia asks for `Api-User-Agent`; Loogle allows `X-Loogle-Client`; ProofWiki and
+ * OpenAlex (which allows only standard headers such as Accept and Authorization) get none, so their requests stay
+ * "simple" ones.
  */
 function identify(site: string, opts: LookupOptions): Record<string, string> {
   if (site === "Wikipedia" || site === "Wikidata") return { "Api-User-Agent": opts.userAgent ?? DEFAULT_USER_AGENT };

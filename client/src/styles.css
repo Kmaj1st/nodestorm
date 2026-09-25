@@ -1013,3 +1013,11 @@ kbd {
 }
 .formal-decl__doc { margin: var(--space-1) 0 0; color: var(--muted); }
 .formal-decl__try { display: inline-flex; align-items: center; gap: 3px; margin-top: var(--space-1); color: var(--accent); min-height: 24px; }
+
+/* Papers (OpenAlex) in the inspector: a compact list, title then byline. */
+.paper-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
+.paper { display: flex; flex-direction: column; gap: 2px; overflow-wrap: anywhere; }
+.paper__title { color: var(--accent); font-weight: 500; line-height: 1.35; }
+span.paper__title { color: var(--text); }
+.paper__meta { color: var(--muted); }
+.paper__meta a { color: var(--accent); }

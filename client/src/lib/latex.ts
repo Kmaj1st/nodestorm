@@ -1,5 +1,5 @@
 import { isTheoremLike, type ConceptKind, type ConceptNode, type Graph } from "@nodestorm/shared";
-import { sourceLabel, studyOrder } from "./export";
+import { paperByline, sourceLabel, studyOrder } from "./export";
 import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
 
@@ -119,6 +119,18 @@ export function texEscape(s: string, opts: { inline?: boolean } = {}): string {
     .join("");
 }
 
+const oneLine = (s: string) => s.replace(/\s+/g, " ").trim();
+
+/**
+ * A URL for `\href`: `%` and `#` escaped as hyperref expects, and characters that would break the argument (braces,
+ * backslashes, spaces…) percent-encoded. Stored links are https only (see PaperWork in model.ts).
+ */
+export function texUrl(u: string): string {
+  return u
+    .replace(/[\\{}^`|"<>\s]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase().padStart(2, "0")}`)
+    .replace(/[%#]/g, "\\$&");
+}
+
 /** Paragraphs of a multi-line text, each escaped; blank lines separate paragraphs as in LaTeX. */
 function texParagraphs(s: string): string {
   return s
@@ -195,6 +207,13 @@ export function toLatex(g: Graph, opts: LatexOptions = {}): string {
       else body.push("\\begin{proof}[Proof idea]", texParagraphs(an.proofIdea), "\\end{proof}", "");
     }
     if (n.notes?.trim()) body.push("\\begin{remark}[Notes]", texParagraphs(n.notes), "\\end{remark}", "");
+    if (n.papers?.works.length) {
+      const items = n.papers.works.map((w) => {
+        const by = paperByline(w);
+        return `  \\item \\href{${texUrl(w.url)}}{\\emph{${texEscape(oneLine(w.title), { inline: true })}}}${by ? `, ${texEscape(oneLine(by), { inline: true })}` : ""}.`;
+      });
+      body.push("\\begin{remark}[Further reading]", "\\leavevmode", "\\begin{itemize}", ...items, "\\end{itemize}", "\\end{remark}", "");
+    }
   }
   body.push("\\end{document}", "");
 

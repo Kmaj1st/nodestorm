@@ -41,7 +41,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
   // Never ask the real encyclopedias: every concept's definition then comes from the offline demo AI, as the
   // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead.
-  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org/;
+  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org/;
   const blockLookups = (ctx) => ctx.route(LOOKUP_SITES, (r) => r.abort());
   await blockLookups(context);
   // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
@@ -1822,6 +1822,88 @@ try {
     const tryIt = await formal.getByRole("link", { name: "Try it in the Lean editor" }).first().getAttribute("href");
     assert(decodeURIComponent(tryIt).endsWith("#code=import Mathlib\n\n#check MonoidHom.ker\n"), "…and opens it in the Lean web editor with Mathlib imported");
     await audit("inspector with Mathlib declarations");
+    await context.unrouteAll();
+    await blockLookups(context);
+  }
+
+  console.log("Papers");
+  {
+    // OpenAlex answers with fixtures (still on "Kernel" from the Mathlib section, which is missing "Homomorphism").
+    const filters = [];
+    let hold = null; // a promise the next answer waits for (to test Cancel)
+    const works = [
+      {
+        id: "https://openalex.org/W101",
+        doi: "https://doi.org/10.1017/S1446788700014567",
+        display_name: "Kernels of inverse semigroup homomorphisms",
+        publication_year: 1974,
+        authorships: ["D. B. McAlister", "N. R. Reilly", "A. Third", "B. Fourth"].map((display_name) => ({ author: { display_name } })),
+        primary_location: { landing_page_url: "https://www.cambridge.org/x", source: { display_name: "Journal of the Australian Mathematical Society" } },
+        cited_by_count: 1234,
+        open_access: { oa_url: "https://arxiv.org/abs/0000.0001" },
+      },
+      {
+        id: "https://openalex.org/W102",
+        doi: null,
+        display_name: "The kernel of a <i>homomorphism</i>",
+        publication_year: 1996,
+        authorships: [{ author: { display_name: "C. Author" } }],
+        primary_location: { landing_page_url: "http://insecure.example.org/paper", source: null },
+        cited_by_count: 3,
+        open_access: { oa_url: null },
+      },
+    ];
+    await context.unrouteAll();
+    await context.route(LOOKUP_SITES, async (route) => {
+      const url = new URL(route.request().url());
+      if (url.hostname !== "api.openalex.org") return route.abort();
+      filters.push(url.searchParams.get("filter"));
+      if (hold) await hold;
+      // A cancelled request may be gone by now.
+      await route.fulfill({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify({ meta: { count: 2 }, results: works }) }).catch(() => {});
+    });
+    const papers = page.getByTestId("papers");
+    await papers.scrollIntoViewIfNeeded();
+    assert((await papers.textContent()).includes("every paper listed exists"), "the Papers section says what it does before a search");
+    // Cancel a slow search: nothing is stored.
+    let release;
+    hold = new Promise((r) => (release = r));
+    await papers.getByTestId("papers-button").click();
+    await papers.getByTestId("papers-cancel").click();
+    release();
+    hold = null;
+    await papers.getByRole("button", { name: "Find papers" }).waitFor();
+    assert((await papers.locator(".paper").count()) === 0, "a cancelled search stores nothing");
+    await papers.getByTestId("papers-button").click();
+    await papers.locator(".paper").first().waitFor();
+    const searched = filters.slice(-2).map((f) => f.split(",")[0]);
+    // Two works are fewer than half the list, so the name alone fills it up (the same two here, not repeated).
+    assert(
+      JSON.stringify(searched) === JSON.stringify(['title_and_abstract.search:"kernel" AND ("homomorphism")', 'title_and_abstract.search:"kernel"']),
+      `the search uses the concept's prerequisites, then the name alone: ${searched}`,
+    );
+    const titles = await papers.locator(".paper__title").allTextContents();
+    assert(JSON.stringify(titles) === JSON.stringify(["Kernels of inverse semigroup homomorphisms", "The kernel of a homomorphism"]), `lists the papers OpenAlex found: ${titles}`);
+    const first = papers.getByRole("link", { name: "Kernels of inverse semigroup homomorphisms" });
+    assert((await first.getAttribute("href")) === "https://doi.org/10.1017/S1446788700014567", "a title links to its DOI");
+    assert((await first.getAttribute("target")) === "_blank" && (await first.getAttribute("rel")) === "noopener noreferrer", "…in a new tab, without an opener");
+    const meta = await papers.locator(".paper__meta").first().textContent();
+    assert(meta.includes("D. B. McAlister, N. R. Reilly, A. Third et al., 1974, Journal of the Australian Mathematical Society · cited by 1,234"), `byline and citations: ${meta}`);
+    assert((await papers.getByRole("link", { name: "Free copy" }).getAttribute("href")) === "https://arxiv.org/abs/0000.0001", "an open-access copy is linked");
+    // A work with only a plain-http page links to OpenAlex instead.
+    assert((await papers.getByRole("link", { name: "The kernel of a homomorphism" }).getAttribute("href")) === "https://openalex.org/W102", "never an http link");
+    assert((await papers.getByRole("link", { name: "Search OpenAlex yourself" }).getAttribute("href")).startsWith("https://openalex.org/works?search="), "links to searching OpenAlex");
+    assert(await papers.getByRole("button", { name: "Search again" }).isVisible(), "offers Search again");
+    await audit("inspector with papers");
+    await setTheme("dark");
+    await audit("inspector with papers, dark theme");
+    await page.screenshot({ path: `${shots}35-papers-dark.png` });
+    await setTheme("light");
+    // The result survives a reload (stored on the node, like Mathlib results).
+    await page.reload();
+    await node("Kernel").click();
+    await page.getByTestId("papers").locator(".paper").first().waitFor();
+    assert((await page.getByTestId("papers").locator(".paper").count()) === 2, "papers survive a reload");
     await context.unrouteAll();
     await blockLookups(context);
   }
