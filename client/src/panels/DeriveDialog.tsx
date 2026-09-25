@@ -28,7 +28,7 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
       {!graph.parentId && (
         <p className="hint">{t("derive.tip")}</p>
       )}
-      <div className="row">
+      <div className="row derive__goal">
         <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
         <button onClick={run} disabled={busy}>
           {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={RefreshCw} size={14} />}

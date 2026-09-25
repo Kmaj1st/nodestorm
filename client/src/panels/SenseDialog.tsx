@@ -137,6 +137,7 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
           className="primary"
           onClick={confirm}
           disabled={choice === OTHER ? !otherDef.trim() : !picked}
+          title={choice === OTHER ? (otherDef.trim() ? undefined : t("sense.writeFirst")) : picked ? undefined : t("sense.pickFirst")}
         >
           {t(lookedUp ? "sense.useDefinition" : "sense.use")}
         </button>

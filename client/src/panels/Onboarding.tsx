@@ -43,6 +43,8 @@ export function Onboarding() {
   );
 }
 
+/** A touch screen (no mouse or keyboard to speak of). */
+const touchScreen = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 const q = <E extends Element = Element>(sel: string) => document.querySelector<E>(sel);
 const focusAdd = () => q<HTMLElement>('[data-tour="add"]')?.focus();
 
@@ -56,10 +58,17 @@ function WelcomeCard() {
   const titleId = useId();
   const aiReady = useSettings(isReady);
   const { dismissWelcome, startTour } = useOnboarding.getState();
+  // The card is where a first visit starts: its first choice takes the focus, unless something else already has it
+  // (not on a touch screen, where a focus ring is only noise).
+  const tourRef = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (touchScreen()) return;
+    if (!document.activeElement || document.activeElement === document.body) tourRef.current?.focus({ preventScroll: true });
+  }, []);
   const example = () => {
     loadExampleHere();
     dismissWelcome();
-    useGraphStore.getState().setToast(tr("welcome.loaded"), "info");
+    useGraphStore.getState().setToast(tr(touchScreen() ? "welcome.loadedTouch" : "welcome.loaded"), "info");
     focusAdd();
   };
   const empty = () => {
@@ -72,7 +81,7 @@ function WelcomeCard() {
         <h2 id={titleId}>{t("welcome.title")}</h2>
         <p>{t("welcome.intro")}</p>
         <div className="welcome__choices">
-          <button className="primary" onClick={startTour}><Icon icon={Compass} />{t("welcome.tour")}</button>
+          <button className="primary" onClick={startTour} ref={tourRef}><Icon icon={Compass} />{t("welcome.tour")}</button>
           <button onClick={example} title={t("canvas.exampleTitle")}><Icon icon={Network} />{t("welcome.example")}</button>
           <button onClick={empty}><Icon icon={FilePlus} />{t("welcome.empty")}</button>
         </div>

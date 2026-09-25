@@ -58,6 +58,13 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
   const playRef = useRef<HTMLButtonElement>(null);
   const playing = round !== null;
 
+  // A new chain takes the focus (the Build button is disabled meanwhile), once it is on screen: the first one isn't
+  // rendered yet by the next animation frame.
+  const [focusResult, setFocusResult] = useState(0);
+  useEffect(() => {
+    if (focusResult) resultRef.current?.focus();
+  }, [focusResult]);
+
   // Closing the dialog cancels a chain that is still being built.
   useEffect(() => () => cancelTask(absurdKey), []);
 
@@ -90,7 +97,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
       setRound((r) => (r ?? 0) + 1); // the board focuses its guess field
     } else {
       setRound(null);
-      requestAnimationFrame(() => resultRef.current?.focus());
+      setFocusResult((n) => n + 1);
     }
   };
 
@@ -334,10 +341,11 @@ function StopsEditor({
     setName("");
     setError("");
     setSaid(t("absurd.via.added", { name: shown }));
-    // The field goes away once the list is full: the focus moves to the new row's last button.
+    // The field goes away once the list is full: the focus moves to the new row's last button. Otherwise it goes
+    // back to the field, for the next stop (the Add stop button is disabled once the field is empty).
     if (stops.length + 1 >= ABSURD_MAX_VIA) {
       requestAnimationFrame(() => listRef.current?.querySelector<HTMLButtonElement>("li:last-child button:last-child")?.focus());
-    }
+    } else inputRef.current?.focus();
   };
 
   const move = (i: number, d: -1 | 1) => {
