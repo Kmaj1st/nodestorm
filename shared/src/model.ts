@@ -793,20 +793,28 @@ export interface ProvidersResponse {
 
 // ---------- Helpers ----------
 
+/**
+ * Symbols that change what a name means: math and other symbols (\p{S}: "+", "∇", "∫", "~"…) and a few marks
+ * Unicode files as punctuation (# * ′ ″ ‴ † ‡ %), so "C", "C++" and "C#", or "f" and "f′", stay different
+ * concepts. Other punctuation (hyphens, underscores, dots, "!", quotes, brackets) only separates words.
+ */
+const MEANINGFUL_SYMBOL = /([\p{S}#*′″‴⁗†‡%])/gu;
+
 export function normalizeName(s: string): string {
   const folded = s
     .toLowerCase()
     .normalize("NFKD")
     .replace(/[\u0300-\u036f]/g, ""); // Latin accents: "Poincaré" ~ "poincare"
-  const words = folded
-    // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
-    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
-    .trim()
-    .replace(/([a-z])s(?=\s|$)/g, "$1"); // crude plural folding for Latin words: "groups" ~ "group"
-  if (words) return words;
-  // A name made only of symbols ("∇", "∫", "⊗") keeps them, so symbols differ from each other and from "" (no
-  // name); punctuation alone ("!!!", "-") still counts as no name.
-  return folded.replace(/[^\p{S}]+/gu, " ").trim();
+  return (
+    folded
+      // Each meaningful symbol is a word of its own, so "a+b" ~ "a + b" and "C ++" ~ "C++".
+      .replace(MEANINGFUL_SYMBOL, " $1 ")
+      // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…) and the
+      // symbols above; punctuation alone ("!!!", "-") counts as no name.
+      .replace(/[^\p{L}\p{N}\p{M}\p{S}#*′″‴⁗†‡%]+/gu, " ")
+      .trim()
+      .replace(/([a-z])s(?=\s|$)/g, "$1") // crude plural folding for Latin words: "groups" ~ "group"
+  );
 }
 
 /** Find the node matching a name via name or aliases (case/plural-insensitive). */

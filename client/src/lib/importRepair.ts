@@ -9,6 +9,7 @@ import {
   NodePapers,
   NodeAnatomy,
   ExplainVoice,
+  Graph as GraphSchema,
   NodeExplanation,
   NodeStatus,
   RelationOrigin,
@@ -70,6 +71,51 @@ export function repairImport(raw: unknown): { doc: GraphExport; fixes: string[] 
   const name = isObj(raw) && isObj(raw.project) && typeof raw.project.name === "string" ? raw.project.name.trim() : "";
   const project = name ? { project: { name } } : {};
   return { doc: GraphExport.parse({ format: "nodestorm/v1", ...project, graphs: ordered }), fixes: fixes.list() };
+}
+
+/**
+ * The graphs and projects saved in this browser, checked the way imports are: a damaged graph (a missing list, a
+ * concept without a field) is repaired field by field and the rest kept; a healthy one is kept as it is (the very
+ * same object). Only entries that aren't graphs or projects at all are dropped. `fixes` lists what was repaired.
+ */
+export function repairSaved(
+  rawGraphs: unknown,
+  rawProjects: unknown,
+): { graphs: Record<string, Graph>; projects: Record<string, SavedProject>; fixes: string[] } {
+  const fixes = new Fixes();
+  const graphs: Record<string, Graph> = {};
+  for (const [id, g] of Object.entries(isObj(rawGraphs) ? rawGraphs : {})) {
+    if (!isObj(g)) { fixes.add(t("repair.droppedNonGraph")); continue; }
+    const own = new Fixes();
+    const repaired = repairGraph(g, own);
+    const renamed = g.id !== id;
+    const valid = GraphSchema.safeParse(g).success;
+    if (valid && !own.size() && !renamed) { graphs[id] = g as unknown as Graph; continue; }
+    // The storage key is the id projects and sandboxes refer to.
+    graphs[id] = { ...repaired, id };
+    fixes.merge(own);
+    // Missing lists and fields are filled in without a fix of their own.
+    if (!valid && !own.size()) fixes.add(t("repair.filledFields"));
+    if (renamed) fixes.add(t("repair.graphId"));
+  }
+  const projects: Record<string, SavedProject> = {};
+  for (const [id, p] of Object.entries(isObj(rawProjects) ? rawProjects : {})) {
+    if (!isObj(p) || typeof p.mainId !== "string") { fixes.add(t("repair.droppedProject")); continue; }
+    const ok = p.id === id && typeof p.name === "string" && p.name.trim() && num(p.createdAt);
+    if (!ok) fixes.add(t("repair.project"));
+    projects[id] = ok
+      ? (p as unknown as SavedProject)
+      : { id, name: str(p.name).trim() || t("repair.projectName"), mainId: p.mainId, createdAt: num(p.createdAt) ? p.createdAt : Date.now() };
+  }
+  return { graphs, projects, fixes: fixes.list() };
+}
+
+/** A project as `lib/projects.ts` saves it (repeated here so this file doesn't depend on the store's modules). */
+interface SavedProject {
+  id: string;
+  name: string;
+  mainId: string;
+  createdAt: number;
 }
 
 function repairGraph(g: Record<string, unknown>, fixes: Fixes): Graph {
@@ -233,6 +279,12 @@ class Fixes {
   private counts = new Map<string, number>();
   add(msg: string, n = 1) {
     this.counts.set(msg, (this.counts.get(msg) ?? 0) + n);
+  }
+  size() {
+    return this.counts.size;
+  }
+  merge(other: Fixes) {
+    for (const [msg, n] of other.counts) this.add(msg, n);
   }
   list(): string[] {
     return [...this.counts].map(([msg, n]) => (n > 1 ? `${msg} (×${n})` : msg));

@@ -23,6 +23,12 @@
 - **Smoother Physics on big graphs:** a simulation step on 400 concepts takes about a quarter of the time (1.7 ms instead of 7 ms), with exactly the same result, and concept cards no longer re-render when they only move (Physics frames and drags).
 - `e2e/perf.mjs` also measures a Physics run and main-thread time of each section; `PERF_PROFILE=status|inspect|drag|physics` profiles one.
 - **Phones and keyboards:** the View popover opens inside the screen on phones and tablets (it ran off the left edge); Settings' Fandom/BWIKI fields stack on a phone instead of spilling past the dialog; Add, Mix, Derive and Derive together share one toolbar row at 390px, so the canvas gets a row back. Tabbing out of the project, View or File menu closes it, and Escape returns focus to its button. On a phone, **Derive together** hides the app it covers from Tab and screen readers, and closing it returns focus to where it was. The details sheet can be scrolled from the keyboard. Relations are no longer an extra tab stop named by internal ids (their arrowheads are the keyboard targets), and the zoom buttons and canvas hints for screen readers follow the interface language.
+- **Damaged saved projects load:** graphs saved in the browser are checked like imports when the page opens. A missing list or field is filled in, a broken entry dropped, and the rest of the project kept; a notice says what was repaired.
+- **A saved AI provider that no longer exists** goes back to the default one, so AI actions open Settings instead of failing.
+- **Aliases stay unambiguous:** a new concept's alias (or one found by a look-up, or kept on renaming) that is another concept's name or alias is dropped; the concept is added as usual.
+- **Extracting without an AI set up** leaves the new concepts "not checked" (their badge checks them later) instead of one error per concept.
+- **C, C++ and C#** (and f / f′, A / A*, A†) are different concepts: symbols such as + # * ′ † count in names, while case, spaces, hyphens, underscores and trailing punctuation still don't.
+- **Escape doesn't lose typed text:** in the definitions pop-up (your own definition), Add concept (definition or description) and Settings (unsaved changes), Escape, a click outside or X first asks "Discard what you typed?"; focus is on **Keep editing**, and Escape again goes back to the text.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

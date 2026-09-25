@@ -10,6 +10,9 @@ export const zh: Record<MessageKey, string> = {
   "common.checkedOn": "查询于 {date}",
   "common.undo": "撤销",
   "common.close": "关闭",
+  "modal.discardAsk": "要放弃已输入的内容吗？",
+  "modal.keepEditing": "继续编辑",
+  "modal.discard": "放弃",
   "common.save": "保存",
   "common.add": "添加",
   "common.delete": "删除",
@@ -471,6 +474,7 @@ export const zh: Record<MessageKey, string> = {
   "extract.back": "修改文本",
   "extract.add": "添加所选（{n} 个概念，{links} 条关系）",
   "extract.done": "已从文本添加 {n} 个概念和 {links} 条关系。撤销会一次全部移除。",
+  "extract.notChecked": "尚未检查它们的前置知识：请先在设置中配置 AI，再点击它们的“用 AI 检查”标记。",
 
   // 查找概念
   "find.dialog": "查找概念",
@@ -662,6 +666,12 @@ export const zh: Record<MessageKey, string> = {
   "repair.readUntagged": "把没有格式标记的文件当作 nodestorm/v1 读取",
   "repair.importedGraph": "导入的图",
   "repair.interrupted": "导出时检查尚未完成。点击重试可再次运行。",
+  "repair.filledFields": "补全了图中缺失的字段",
+  "repair.graphId": "恢复了一个图的 id",
+  "repair.droppedProject": "删除了一个没有主图的项目条目",
+  "repair.project": "恢复了项目的名称或日期",
+  "repair.projectName": "恢复的项目",
+  "toast.savedRepaired": "此浏览器中保存的部分数据已损坏，现已修复：{fixes}。其余内容均已保留。",
   "project.imported": "导入的项目",
   // 首次使用引导：欢迎卡片与功能导览（panels/Onboarding.tsx）
   "welcome.title": "欢迎使用 NodeStorm",

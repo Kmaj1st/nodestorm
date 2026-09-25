@@ -949,8 +949,20 @@ export function insertExtraction(review: ExtractReview, graphId = store().active
     return r.graph;
   }, graphId);
   const links = (graph(graphId)?.relations.length ?? 0) - before;
-  for (const id of added) void analyzeNode(id, graphId, undefined, { quiet: true });
-  store().setToast(t("extract.done", { n: added.length, links }), "info");
+  // The extraction came from the AI, so with one set up the new concepts are checked right away. Without one they
+  // wait as "not checked" (as with "ask first"), instead of failing one by one.
+  const aiReady = isReady(useSettings.getState());
+  if (aiReady) for (const id of added) void analyzeNode(id, graphId, undefined, { quiet: true });
+  else if (added.length) {
+    const ids = new Set(added);
+    store().mutate(
+      (g) => ({ ...g, nodes: g.nodes.map((n) => (ids.has(n.id) ? ops.settleBasic({ ...n, status: "pending", error: undefined }) : n)) }),
+      graphId,
+      { history: "merge" },
+    );
+  }
+  const done = t("extract.done", { n: added.length, links });
+  store().setToast(aiReady || !added.length ? done : `${done} ${t("extract.notChecked")}`, "info");
   if (added.length && graphId === store().activeId) viewport.reveal(added[0]);
   return added;
 }

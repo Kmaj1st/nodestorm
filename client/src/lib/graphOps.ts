@@ -138,7 +138,7 @@ export function addNode(g: Graph, input: NewNodeInput): { graph: Graph; id: stri
     id: uid("n"),
     name: input.name.trim(),
     definition: input.definition?.trim() ?? "",
-    aliases: input.aliases ?? [],
+    aliases: freeAliases(g, null, input.name, input.aliases ?? []),
     status: "checking",
     // The requested position is only a preference: the node goes to the nearest spot that overlaps nothing.
     position: findFreeSpot(g.nodes.map((n) => n.position), input.position ?? defaultPosition(g)),
@@ -223,7 +223,34 @@ export function setNodeError(g: Graph, nodeId: string, error: string): Graph {
 }
 
 export function updateNode(g: Graph, nodeId: string, patch: Partial<ConceptNode>): Graph {
-  return { ...g, nodes: g.nodes.map((n) => (n.id === nodeId ? settleBasic({ ...n, ...patch }) : n)) };
+  const renamed = patch.aliases !== undefined || patch.name !== undefined;
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      if (n.id !== nodeId) return n;
+      const next = { ...n, ...patch };
+      return settleBasic(renamed ? { ...next, aliases: freeAliases(g, nodeId, next.name, next.aliases) } : next);
+    }),
+  };
+}
+
+/**
+ * A concept's aliases that can answer for it: trimmed, not empty, not its own name, not repeated, and not the
+ * name or an alias of another concept (so no name ever finds two concepts). A clashing alias is dropped; the
+ * concept itself is kept.
+ */
+export function freeAliases(g: Graph, nodeId: string | null, name: string, aliases: readonly string[]): string[] {
+  const others = g.nodes.filter((n) => n.id !== nodeId);
+  const seen = new Set([normalizeName(name)]);
+  const out: string[] = [];
+  for (const raw of aliases) {
+    const a = raw.trim();
+    const k = normalizeName(a);
+    if (!k || seen.has(k) || findByName(others, a)) continue;
+    seen.add(k);
+    out.push(a);
+  }
+  return out;
 }
 
 /**
@@ -413,13 +440,8 @@ export function renameNode(g: Graph, nodeId: string, rawName: string): { graph: 
   if (name === node.name) return { graph: g };
   const dup = findByName(g.nodes.filter((n) => n.id !== nodeId), name);
   if (dup) return { graph: g, error: t("node.renameDuplicate", { name: dup.name }) };
-  // Old name becomes an alias; the new name itself is never an alias, and aliases stay unique.
-  const aliases: string[] = [];
-  for (const a of [...node.aliases, node.name]) {
-    const k = normalizeName(a);
-    if (k !== normalizeName(name) && !aliases.some((b) => normalizeName(b) === k)) aliases.push(a);
-  }
-  return { graph: satisfyMissing(updateNode(g, nodeId, { name, aliases }), nodeId) };
+  // Old name becomes an alias; the new name itself is never an alias, and aliases stay unique (updateNode).
+  return { graph: satisfyMissing(updateNode(g, nodeId, { name, aliases: [...node.aliases, node.name] }), nodeId) };
 }
 
 /** Edit one direction of a relation by hand. */

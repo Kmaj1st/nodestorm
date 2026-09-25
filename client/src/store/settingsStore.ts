@@ -139,11 +139,15 @@ export const useSettings = create<SettingsStore>()(
       version: 1,
       storage: createJSONStorage(() => splitStorage),
       // New providers added in later versions get an empty config.
+      // A provider (or connection) this version doesn't know goes back to the default, so AI calls open Settings
+      // instead of failing.
       merge: (persisted, current) => {
         const p = (persisted ?? {}) as Partial<SettingsState>;
         return {
           ...current,
           ...p,
+          provider: PROVIDERS.some((m) => m.kind === p.provider) ? p.provider! : current.provider,
+          connection: p.connection === "browser" || p.connection === "server" ? p.connection : current.connection,
           configs: { ...emptyConfigs(), ...(p.configs ?? {}) },
           clarify: { ...current.clarify, ...(p.clarify ?? {}) },
           installAll: { ...current.installAll, ...(p.installAll ?? {}) },
@@ -156,7 +160,8 @@ export const useSettings = create<SettingsStore>()(
 
 /** True when AI calls can work right now without opening Settings. */
 export function isReady(s: SettingsState): boolean {
-  if (s.connection === "server") return true;
   const meta = PROVIDERS.find((p) => p.kind === s.provider);
-  return !meta?.needsKey || Boolean(s.configs[s.provider]?.apiKey);
+  if (!meta) return false; // a provider this version doesn't have
+  if (s.connection === "server") return true;
+  return !meta.needsKey || Boolean(s.configs[s.provider]?.apiKey);
 }

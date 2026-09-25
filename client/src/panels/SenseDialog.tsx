@@ -67,6 +67,7 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
       label={t(lookedUp ? "sense.lookupDialog" : "sense.dialog")}
       title={t(lookedUp ? "sense.lookupTitle" : "sense.title", { name: node.name })}
       onClose={close}
+      dirty={choice === OTHER && Boolean(otherDef.trim() || otherName.trim())}
     >
       <p className="muted small">{t(lookedUp ? "sense.lookupIntro" : "sense.intro")}</p>
       {lookedUp && (

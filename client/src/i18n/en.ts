@@ -11,6 +11,9 @@ export const en = {
   "common.checkedOn": "Checked {date}",
   "common.undo": "Undo",
   "common.close": "Close",
+  "modal.discardAsk": "Discard what you typed?",
+  "modal.keepEditing": "Keep editing",
+  "modal.discard": "Discard",
   "common.save": "Save",
   "common.add": "Add",
   "common.delete": "Delete",
@@ -476,6 +479,7 @@ export const en = {
   "extract.back": "Edit text",
   "extract.add": "Add selected ({n, plural, one {# concept} other {# concepts}}, {links, plural, one {# relation} other {# relations}})",
   "extract.done": "Added {n, plural, one {# concept} other {# concepts}} and {links, plural, one {# relation} other {# relations}} from the text. Undo removes them all at once.",
+  "extract.notChecked": "Their prerequisites aren't checked yet: set up an AI in Settings, then use their “check with AI” badge.",
 
   // Find concept
   "find.dialog": "Find concept",
@@ -673,6 +677,12 @@ export const en = {
   "repair.readUntagged": "read a file without a format tag as nodestorm/v1",
   "repair.importedGraph": "Imported graph",
   "repair.interrupted": "The check was interrupted before export. Retry to run it again.",
+  "repair.filledFields": "filled in missing fields of a graph",
+  "repair.graphId": "restored a graph's id",
+  "repair.droppedProject": "dropped a project entry without a main graph",
+  "repair.project": "restored a project's name or date",
+  "repair.projectName": "Recovered project",
+  "toast.savedRepaired": "Some saved data in this browser was damaged and has been repaired: {fixes}. Everything else was kept.",
   "project.imported": "Imported project",
   // First-run onboarding: welcome card and guided tour (panels/Onboarding.tsx)
   "welcome.title": "Welcome to NodeStorm",

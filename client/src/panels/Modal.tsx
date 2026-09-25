@@ -16,8 +16,12 @@ const stack: HTMLElement[] = [];
  *
  * With a `title` it has the standard header: the title and a close (X) button. Put the actions last, in a
  * `.form__actions` row: it sticks to the bottom of a long dialog, right-aligned.
+ *
+ * `dirty`: the dialog holds something the user typed and hasn't saved. Escape, the backdrop and the close button
+ * then ask "Discard what you typed?" first (focus on "Keep editing"; Escape again keeps editing), so a stray key
+ * never loses the text. The dialog's own Cancel-like buttons still close it directly.
  */
-export function Modal({ label, title, onClose, className, top, children }: {
+export function Modal({ label, title, onClose, className, top, dirty = false, children }: {
   label: string;
   /** The visible heading (defaults to none: the palette and the walkthrough draw their own). */
   title?: ReactNode;
@@ -25,6 +29,7 @@ export function Modal({ label, title, onClose, className, top, children }: {
   className?: string;
   /** Sit near the top of the screen (command palette) instead of centred. */
   top?: boolean;
+  dirty?: boolean;
   children: ReactNode;
 }) {
   const t = useT();
@@ -34,6 +39,32 @@ export function Modal({ label, title, onClose, className, top, children }: {
   const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   const close = useRef(onClose);
   close.current = onClose;
+  const [asking, setAsking] = useState(false);
+  const confirming = asking && dirty;
+  const keepBtn = useRef<HTMLButtonElement>(null);
+  const returnTo = useRef<HTMLElement | null>(null);
+  // What Escape, the backdrop and the close button do: close, or ask first when there is unsaved text.
+  const requestClose = useRef(() => {});
+  requestClose.current = () => {
+    if (!dirty) return onClose();
+    if (!confirming && document.activeElement instanceof HTMLElement) returnTo.current = document.activeElement;
+    setAsking(true);
+  };
+  const keepEditing = useRef(() => {});
+  keepEditing.current = () => {
+    setAsking(false);
+    const back = returnTo.current;
+    (back?.isConnected ? back : body.current)?.focus();
+  };
+  const confirmingRef = useRef(confirming);
+  confirmingRef.current = confirming;
+
+  useEffect(() => {
+    if (confirming) keepBtn.current?.focus();
+  }, [confirming]);
+  useEffect(() => {
+    if (!dirty) setAsking(false);
+  }, [dirty]);
 
   useEffect(() => {
     const el = body.current!;
@@ -49,7 +80,8 @@ export function Modal({ label, title, onClose, className, top, children }: {
       if (stack[stack.length - 1] !== el) return;
       if (e.key === "Escape") {
         e.preventDefault();
-        close.current();
+        if (confirmingRef.current) keepEditing.current();
+        else requestClose.current();
       } else if (e.key === "Tab") {
         const items = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].filter((n) => n.offsetParent !== null);
         if (!items.length) return e.preventDefault();
@@ -80,7 +112,7 @@ export function Modal({ label, title, onClose, className, top, children }: {
       // Only a click that starts and ends on the backdrop closes: dragging a text selection out of a field doesn't.
       onMouseDown={(e) => (downOnBackdrop.current = e.target === e.currentTarget)}
       onClick={(e) => {
-        if (e.target === e.currentTarget && downOnBackdrop.current) onClose();
+        if (e.target === e.currentTarget && downOnBackdrop.current) requestClose.current();
         downOnBackdrop.current = false;
       }}
     >
@@ -96,10 +128,20 @@ export function Modal({ label, title, onClose, className, top, children }: {
         {title !== undefined && (
           <header className="modal__header">
             <h2 className="modal__title">{title}</h2>
-            <button type="button" className="icon-btn modal__close" onClick={onClose} aria-label={t("common.close")} title={t("common.close")}>
+            <button type="button" className="icon-btn modal__close" onClick={() => requestClose.current()} aria-label={t("common.close")} title={t("common.close")}>
               <Icon icon={X} />
             </button>
           </header>
+        )}
+        {confirming && (
+          <div className="modal__discard" role="alert" data-testid="modal-discard">
+            <span>{t("modal.discardAsk")}</span>
+            <span className="spacer" />
+            <button type="button" ref={keepBtn} className="primary" onClick={() => keepEditing.current()}>
+              {t("modal.keepEditing")}
+            </button>
+            <button type="button" onClick={() => onClose()}>{t("modal.discard")}</button>
+          </div>
         )}
         {children}
       </div>
