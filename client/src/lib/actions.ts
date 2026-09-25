@@ -13,6 +13,9 @@ import {
   type QuizStyle,
   type FormalDecl,
   type Sense,
+  type SourceRef,
+  type LookupSite,
+  providerMeta,
   loogleDeclaration,
   findPapers as searchPapers,
   SiteBlockedError,
@@ -23,10 +26,11 @@ import { autoSnapshot } from "../store/snapshotStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import { applyAbsurdChain, sandboxName } from "./absurd";
-import { applyExtraction, type ExtractReview } from "./extract";
+import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { lookupDefinitions, lookupReady } from "./lookup";
+import { isOnline } from "./online";
 import { viewport } from "./viewport";
 import * as cycles from "./cycles";
 import * as paths from "./paths";
@@ -211,13 +215,15 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     );
     if (!res) return;
     if (res.ambiguous) {
-      set({ status: "unclear", senses: res.senses });
+      // The AI's meanings record it as their source (a looked-up meaning keeps its encyclopedia).
+      const src = aiSource();
+      set({ status: "unclear", senses: res.senses.map((s) => ({ ...s, source: s.source ?? src })) });
       if (!find()) return;
       if (!opts.quiet) store().setClarifying({ graphId, nodeId });
       return; // continues in chooseSense once the user picks a meaning
     }
-    // The AI's text: an encyclopedia source from an earlier look-up no longer applies.
-    if (res.senses[0]?.definition) set({ definition: res.senses[0].definition, ...(find()?.source?.url ? { source: undefined } : {}) });
+    // The AI's text: its source is the AI (an encyclopedia's from an earlier look-up no longer applies).
+    if (res.senses[0]?.definition) set({ definition: res.senses[0].definition, source: aiSource() });
     const kind = res.senses[0]?.kind;
     if (kind) bg((g) => ops.suggestKind(g, nodeId, kind));
   }
@@ -299,14 +305,37 @@ export const relookupKey = (graphId: string, nodeId: string) => `relookup:${grap
  * "Look up again": ask the encyclopedias for this concept's definition and replace it (one undo step). Several
  * meanings go to "what do you mean?"; nothing found leaves the concept as it is and says so.
  */
-export async function relookup(nodeId: string, graphId = store().activeId) {
+/**
+ * "Look up again" / "Look up in…": replace the definition (one undo step) with one from an encyclopedia, even when
+ * the concept is already defined. `from` picks the source: a site ("proofwiki", "wikipedia" with Wikidata), or "ai"
+ * (the AI defines it again); without it, the enabled sites in order.
+ */
+export async function relookup(nodeId: string, graphId = store().activeId, from?: LookupSite | "ai") {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
-  if (!lookupReady()) return store().setToast(t("toast.lookupUnavailable"), "info");
   const clarify = useSettings.getState().clarify;
+  if (from === "ai") {
+    // The AI's definition (or its meanings to pick from), recorded as its, as one undo step like a look-up.
+    const g = graph(graphId);
+    const res = await withBusy(relookupKey(graphId, nodeId), t("task.clarify", { name: node.name }), (signal) =>
+      api.clarify({ name: node.name, context: g.nodes.filter((n) => n.id !== nodeId).map(toBrief), count: clarify.enabled ? clarify.options : 1 }, signal),
+    );
+    if (!res) return;
+    const src = aiSource();
+    const senses = res.senses.filter((s) => s.definition.trim()).map((s): Sense => ({ ...s, source: s.source ?? src }));
+    if (!senses.length) return store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
+    if (res.ambiguous && senses.length > 1 && clarify.enabled) {
+      store().mutate((g) => ops.updateNode(g, nodeId, { status: "unclear", senses }), graphId);
+      store().setClarifying({ graphId, nodeId });
+      return;
+    }
+    store().mutate((g) => ops.updateNode(g, nodeId, { definition: senses[0].definition, source: senses[0].source }), graphId);
+    return;
+  }
+  if (from ? !isOnline() : !lookupReady()) return store().setToast(t("toast.lookupUnavailable"), "info");
   const senses = await withBusy(relookupKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) =>
-    lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true }),
+    lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true, ...(from ? { sites: [from] } : {}) }),
   );
   if (!senses) return;
   if (!senses.length) return store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
@@ -411,6 +440,14 @@ export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, 
   else void analyzeNode(id, graphId);
 }
 
+/** The source recorded for a definition the AI wrote: "AI" with the provider and model it came from. */
+export function aiSource(): SourceRef {
+  const s = useSettings.getState();
+  const meta = providerMeta(s.provider);
+  const model = (s.connection === "browser" ? s.configs[s.provider]?.model : s.serverModels[s.provider]) || meta.defaultModel || "";
+  return { site: "AI", title: (model ? `${meta.label} · ${model}` : meta.label).slice(0, 300) };
+}
+
 export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, hint?: string): string {
   let id = "";
   let existed = false;
@@ -449,7 +486,7 @@ export function suggestNames(description: string) {
 }
 
 export function addCandidate(c: NameCandidate) {
-  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind });
+  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind, source: aiSource() });
 }
 
 /**
@@ -752,12 +789,12 @@ export function extractFromText(text: string, focus?: string) {
  * concepts' prerequisites. Those checks go through the AI queue (Settings → parallel AI calls) and run quietly:
  * a concept with several meanings waits as "unclear" instead of opening a dialog per concept.
  */
-export function insertExtraction(review: ExtractReview, graphId = store().activeId) {
+export function insertExtraction(review: ExtractReview, graphId = store().activeId, anchor?: { x: number; y: number }) {
   let added: string[] = [];
   autoSnapshot("extract", graphId);
   const before = graph(graphId)?.relations.length ?? 0;
   store().mutate((g) => {
-    const r = applyExtraction(g, review, viewport.center());
+    const r = applyExtraction(g, review, anchor ?? viewport.center());
     added = r.added;
     return r.graph;
   }, graphId);
@@ -768,6 +805,50 @@ export function insertExtraction(review: ExtractReview, graphId = store().active
   return added;
 }
 
+export const connectKey = (graphId: string, nodeId: string) => `connect:${graphId}:${nodeId}`;
+
+/**
+ * "Suggest connections": keywords for a concept to connect to, as a review list the user picks from (the Extract
+ * review). Concepts of the graph its definition names come first, found without the AI; then the AI's suggestions
+ * (existing concepts by their graph name, new ones with a definition). Already linked ones are left out. Null when
+ * there is nothing to suggest (a toast says so).
+ */
+export async function suggestConnections(nodeId: string, graphId = store().activeId): Promise<ExtractReview | null> {
+  if (inViewer(graphId)) return null;
+  const g = graph(graphId);
+  const node = g?.nodes.find((n) => n.id === nodeId);
+  if (!node) return null;
+  const linkedIds = new Set(g.relations.flatMap((r) => (r.a === nodeId ? [r.b] : r.b === nodeId ? [r.a] : [])));
+  const mentioned = mentionedIn(g, node).filter((n) => !linkedIds.has(n.id));
+  // Without AI set up, what the definition names is still worth offering (asking the AI would open Settings).
+  const aiReady = isReady(useSettings.getState());
+  const res = !aiReady && mentioned.length ? undefined : await withBusy(connectKey(graphId, nodeId), t("task.connect", { name: node.name }), (signal) =>
+    api.connect(
+      {
+        node: toBrief(node),
+        existing: g.nodes.filter((n) => n.id !== nodeId).slice(0, 200).map(toBrief),
+        linked: g.nodes.filter((n) => linkedIds.has(n.id)).map((n) => n.name),
+      },
+      signal,
+    ),
+  );
+  const none = { kind: "none", explanation: "" };
+  const fromText = mentioned.map((n) => ({
+    concept: { name: n.name, definition: n.definition, aliases: n.aliases, kind: n.kind ?? null },
+    relation: { from: node.name, to: n.name, aToB: { kind: "using", explanation: t("connect.mentioned", { name: n.name }) }, bToA: none },
+  }));
+  const fromAi = (res?.suggestions ?? []).map((s) => ({
+    concept: { name: s.name, definition: s.definition, aliases: [], kind: s.kind ?? null },
+    relation: { from: node.name, to: s.name, aToB: s.aToB, bToA: s.bToA },
+  }));
+  const all = [...fromText, ...fromAi];
+  if (!all.length) {
+    if (res) store().setToast(t("connect.none", { name: node.name }), "info");
+    return null;
+  }
+  return { ...buildReview(g, { concepts: all.map((x) => x.concept), relations: all.map((x) => x.relation), prerequisites: [] }), origin: aiSource() };
+}
+
 export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const graphId = store().activeId;
   const g = graph(graphId);
@@ -776,7 +857,7 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const cy = Math.max(...anchors.map((n) => n.position.y), 0);
   // Preferred spot: below the anchors; addNode shifts it to the nearest free place.
   const id = addConcept(
-    { name: p.name, definition: p.definition, aliases: p.aliases, kind: p.kind, position: { x: cx, y: cy + 200 } },
+    { name: p.name, definition: p.definition, aliases: p.aliases, kind: p.kind, source: aiSource(), position: { x: cx, y: cy + 200 } },
     graphId,
   );
   store().mutate((g) => {

@@ -7,6 +7,8 @@ import { splitMath } from "./math";
 
 /** "Title, p. 3", or just the title. */
 export function sourceLabel(s: SourceRef): string {
+  if (s.site === "AI") return `AI (${s.title})`;
+  if (s.site === "you") return "own words";
   return s.page ? `${s.title}, p. ${s.page}` : s.title;
 }
 

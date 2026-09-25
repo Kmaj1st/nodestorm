@@ -28,7 +28,12 @@ export interface NewNodeInput {
   aliases?: string[];
   position?: { x: number; y: number };
   kind?: ConceptKind | null;
+  /** Where the definition came from (an encyclopedia, the AI, a document, or the user). */
+  source?: SourceRef;
 }
+
+/** A definition the user wrote or edited themselves. */
+export const OWN_SOURCE: SourceRef = { site: "you", title: "" };
 
 /**
  * Labels of a prerequisite link: one active label from the dependent ("using", never "is used by"); the prerequisite's
@@ -141,6 +146,7 @@ export function addNode(g: Graph, input: NewNodeInput): { graph: Graph; id: stri
     missingDeps: [],
   };
   if (input.kind) node.kind = input.kind;
+  if (input.source && node.definition) node.source = input.source;
   const graph = satisfyMissing({ ...g, nodes: [...g.nodes, node] }, node.id);
   return { graph, id: node.id, existed: false };
 }

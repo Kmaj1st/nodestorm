@@ -193,3 +193,18 @@ describe("resolveCycle task", () => {
     await expect(tasks.resolveCycle(new MockProvider(), { links: links.slice(0, 1) })).rejects.toThrow();
   });
 });
+
+describe("connect", () => {
+  it("drops the concept itself, linked names and repeats, keeps active labels and the count", async () => {
+    const { cleanConnect } = await import("../src/ai/tasks");
+    const d = (kind: string) => ({ kind, explanation: "" });
+    const s = (name: string, a = "using", b = "none") => ({ name, keyword: "", definition: "", kind: null, aToB: d(a), bToA: d(b) });
+    const out = cleanConnect(
+      { suggestions: [s("Kernel"), s("Group"), s("group"), s("Ring", "none", "used by"), s("Field", "using", "is used by"), s("Coset")] },
+      { node: { name: "Kernel", definition: "", aliases: ["ker"] }, linked: ["Coset"], count: 2 },
+    );
+    expect(out.suggestions.map((x) => x.name)).toEqual(["Group", "Ring"]);
+    const all = cleanConnect({ suggestions: [s("Field", "using", "is used by")] }, { node: { name: "K", definition: "", aliases: [] }, linked: [], count: 8 });
+    expect([all.suggestions[0].aToB.kind, all.suggestions[0].bToA.kind]).toEqual(["using", "none"]);
+  });
+});

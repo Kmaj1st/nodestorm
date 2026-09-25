@@ -22,11 +22,12 @@ import type {
   TutorHintRequest,
   CheckStepRequest,
   MathlibRequest,
+  ConnectRequest,
 } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport" | "connect";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -492,5 +493,22 @@ exist are thrown away, so do not guess: when unsure, give fewer names or none. A
 Schema: {"candidates":[{"name":string,"why":string}]}`,
     ),
     input(req, `Concept:\n${brief(req.node)}\n\n${contextBlock(req.context)}`),
+  ];
+}
+
+export function connectPrompt(req: ConnectRequest): ChatMessage[] {
+  const linked = req.linked.length ? `\nAlready linked (do not suggest): ${req.linked.join("; ")}` : "";
+  return [
+    sys(
+      "connect",
+      `Suggest keywords to connect a concept to: the concepts it most directly relates to. First the concepts its definition itself mentions or relies on, then what builds on it, close relatives (generalisations, special cases, duals), standard examples and the tools used with it. At most ${req.count}, most useful first. Only real, established concepts.
+"name" = the concept's standard name (singular). If it is already in the graph, even under another name, use the graph's exact name.
+"keyword" = the word or phrase in the given definition that points to it, copied exactly, or "" if none does.
+"definition" = one sentence ("" for a concept already in the graph).
+${KIND_GUIDE}
+"aToB" = what the given concept does to / for the suggestion, "bToA" = what the suggestion does to / for the given concept. ${RELATION_KIND} "explanation" is one sentence.
+Schema: {"suggestions":[{"name":string,"keyword":string,"definition":string,"kind":${KIND_VALUES}|null,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}]}`,
+    ),
+    input(req, `Concept:\n${brief(req.node)}${linked}\n\n${contextBlock(req.existing)}`),
   ];
 }

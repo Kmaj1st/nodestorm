@@ -6,6 +6,7 @@ import {
   type AbsurdChainRequest,
   type AnatomyRequest,
   type ClarifyRequest,
+  type ConnectRequest,
   providerMeta,
   tasks,
   type DepsRequest,
@@ -133,6 +134,7 @@ export const api = {
   splitProblems: (req: SplitProblemsRequest, signal?: AbortSignal) => run("splitProblems", req, signal),
   tutorHint: (req: Partial<TutorHintRequest> & Pick<TutorHintRequest, "problem">, signal?: AbortSignal) => run("tutorHint", req, signal),
   mathlib: (req: Partial<MathlibRequest> & Pick<MathlibRequest, "node">, signal?: AbortSignal) => run("mathlib", req, signal),
+  connect: (req: Partial<ConnectRequest> & Pick<ConnectRequest, "node">, signal?: AbortSignal) => run("connect", req, signal),
   checkStep: (req: Partial<CheckStepRequest> & Pick<CheckStepRequest, "problem" | "step">, signal?: AbortSignal) =>
     run("checkStep", req, signal),
   refereeReport: (req: Partial<RefereeRequest> & Pick<RefereeRequest, "problem">, signal?: AbortSignal) =>

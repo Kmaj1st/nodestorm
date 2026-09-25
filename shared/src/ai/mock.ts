@@ -413,6 +413,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.resolveCycle(inp.links ?? []));
       case "quiz":
         return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
+      case "connect":
+        return JSON.stringify(this.connect(inp));
       case "mathlib":
         return JSON.stringify({ candidates: MATHLIB[normalizeName(String(inp.node?.name ?? ""))] ?? [] });
       case "readPage":
@@ -678,6 +680,36 @@ export class MockProvider implements Provider {
           ? { kind: inverse(ab), explanation: `${b} is a building block of ${a}: ${ab.reason}` }
           : { kind: "none", explanation: `No direct influence of ${b} on ${a} is known to the offline model.` },
     };
+  }
+
+  /**
+   * Suggested connections from the KB: what the concept's definition mentions, what it builds on, and what builds on
+   * it. An existing concept keeps the graph's name; the demo's relation labels are active ("using"), one side "none".
+   */
+  private connect(inp: { node: { name: string; definition?: string }; existing?: { name: string; aliases?: string[] }[]; count?: number }) {
+    const self = kbGet(inp.node.name);
+    const text = ` ${normalizeName(inp.node.definition ?? self?.definition ?? "")} `;
+    const graphName = (key: string) =>
+      (inp.existing ?? []).find((e) => [e.name, ...(e.aliases ?? [])].some((n) => kbGet(n)?.key === key))?.name ?? title(key);
+    const out: { name: string; keyword: string; definition: string; kind: ConceptKind; aToB: { kind: string; explanation: string }; bToA: { kind: string; explanation: string } }[] = [];
+    const add = (key: string, keyword: string, uses: boolean, why: string) => {
+      if (key === self?.key || out.some((o) => normalizeName(o.name) === normalizeName(graphName(key)))) return;
+      const none = { kind: "none", explanation: "" };
+      const rel = { kind: "using", explanation: why };
+      out.push({ name: graphName(key), keyword, definition: KB[key].definition, kind: kindOf(key), aToB: uses ? rel : none, bToA: uses ? none : rel });
+    };
+    for (const [k, v] of Object.entries(KB)) {
+      const hit = [k, ...v.aliases].find((n) => text.includes(` ${normalizeName(n)} `));
+      if (hit) add(k, hit, true, `Its definition mentions ${hit}.`);
+    }
+    for (const d of self?.deps ?? []) {
+      const key = kbGet(d.name)?.key;
+      if (key) add(key, "", true, d.reason);
+    }
+    for (const [k, v] of Object.entries(KB)) {
+      if (self && v.deps.some((d) => kbGet(d.name)?.key === self.key)) add(k, "", false, `${title(k)} builds on ${inp.node.name}.`);
+    }
+    return { suggestions: out.slice(0, Number(inp.count ?? 8)) };
   }
 
   private deps(name: string, existing: { name: string; aliases?: string[] }[]) {

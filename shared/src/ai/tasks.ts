@@ -35,6 +35,8 @@ import {
   CheckStepResponse,
   MathlibRequest,
   MathlibResponse,
+  ConnectRequest,
+  ConnectResponse,
   RefereeRequest,
   RefereeResponse,
   type SheetProblem,
@@ -59,6 +61,7 @@ import {
   tutorHintPrompt,
   checkStepPrompt,
   mathlibPrompt,
+  connectPrompt,
   refereeReportPrompt,
   relatePrompt,
   withLanguage,
@@ -365,8 +368,31 @@ export const tasks = {
       .slice(0, 6);
     return { candidates };
   },
+  connect: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = ConnectRequest.parse(body);
+    const res = await runStructured(p, connectPrompt(req), ConnectResponse, o);
+    return cleanConnect(res, req);
+  },
 };
 export type TaskName = keyof typeof tasks;
+
+/**
+ * Suggested connections: each name once, never the concept itself or one it is already linked to, one active label
+ * per side, at most `count`.
+ */
+export function cleanConnect(res: ConnectResponse, req: Pick<ConnectRequest, "node" | "linked" | "count">): ConnectResponse {
+  const skip = new Set([req.node.name, ...req.node.aliases, ...req.linked].map(normalizeName));
+  const out: ConnectResponse["suggestions"] = [];
+  for (const s of res.suggestions) {
+    const key = normalizeName(s.name);
+    if (!key || skip.has(key)) continue;
+    skip.add(key);
+    const [aToB, bToA] = activeOnly(s.aToB, s.bToA);
+    out.push({ ...s, name: s.name.trim(), keyword: s.keyword.trim(), definition: s.definition.trim(), aToB, bToA });
+    if (out.length >= (req.count ?? 8)) break;
+  }
+  return { suggestions: out };
+}
 
 const MAX_TUTOR_CONCEPTS = 5;
 

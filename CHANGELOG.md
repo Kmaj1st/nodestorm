@@ -1,5 +1,19 @@
 # Changelog
 
+## 2026-09-25: suggested connections, sources for every definition
+
+- **Suggest connections** (Inspector → Relations):
+  - Finds keywords a concept can connect to. Concepts of the graph its definition names come first, found without the AI. Then come the AI's suggestions: what it relies on, what builds on it, close relatives and examples.
+  - They are shown in the review list, where you tick what to add. An existing concept is linked, not added again. New ones come with a definition and are placed below the concept.
+  - Already linked concepts are never suggested.
+- **Every definition records its source:**
+  - an encyclopedia (linked);
+  - the AI, with the provider and model;
+  - an imported paper;
+  - "written by you" when you type or edit it.
+  - Older concepts show "not recorded".
+- **Look up in…:** next to the source, define a concept again from ProofWiki, Wikipedia / Wikidata or the AI, even when it already has a definition, and even with look-ups before the AI switched off. It replaces the definition as one undo step, or asks "what do you mean?" when there are several meanings.
+
 ## 2026-09-25: "no relation" links, relation colours, zoomed-out cards
 
 - **No relation found:** when Mix finds no relation either way, the link stays but is drawn in its own colour (rose) with a long dash, marked "no relation". A notice says so. Exports write the pair once ("no relation found"); the 3D view uses the same colour.

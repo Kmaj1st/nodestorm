@@ -79,12 +79,15 @@ export async function lookupDefinitions(
   name: string,
   max: number,
   signal?: AbortSignal,
-  /** `fresh`: skip the cache ("Look up again" should see today's page). */
-  opts: { fresh?: boolean } = {},
+  /**
+   * `fresh`: skip the cache ("Look up again" should see today's page). `sites`: ask exactly these (the user picked
+   * one), even when look-ups before the AI are switched off in Settings or the site refused recently.
+   */
+  opts: { fresh?: boolean; sites?: LookupSite[] } = {},
 ): Promise<LookupSense[]> {
-  if (!lookupReady()) return [];
+  if (opts.sites ? !isOnline() : !lookupReady()) return [];
   const lang = lookupLanguage(useSettings.getState().language, name);
-  const sites = activeSites();
+  const sites = opts.sites ?? activeSites();
   const key = `${lang}:${sites.join(",")}:${max}:${normalizeName(name)}`;
   const hit = loadCache()[key];
   if (hit && !opts.fresh && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return hit.senses;

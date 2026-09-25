@@ -2,6 +2,7 @@ import type { NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
 import { useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
+import { OWN_SOURCE } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
 import { MathText } from "./MathText";
 import { Modal } from "./Modal";
@@ -18,7 +19,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
   const submitName = (e: React.FormEvent) => {
     e.preventDefault();
     if (!name.trim()) return;
-    addConcept({ name, definition });
+    addConcept({ name, definition, source: definition.trim() ? OWN_SOURCE : undefined });
     onClose();
   };
 

@@ -573,6 +573,34 @@ export type MathlibCandidate = z.infer<typeof MathlibCandidate>;
 export const MathlibResponse = z.object({ candidates: z.array(MathlibCandidate).default([]) });
 export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
+// ---------- Suggest connections ----------
+
+/** Keywords to connect a concept to: the concepts it most directly relates to, for the user to pick from. */
+export const ConnectRequest = z.object({
+  node: NodeBrief,
+  /** Concepts already in the graph (a suggestion that is one of them uses its exact name). */
+  existing: z.array(NodeBrief).max(200).default([]),
+  /** Names already linked to the concept: not suggested again. */
+  linked: z.array(z.string()).max(200).default([]),
+  count: z.number().int().min(1).max(12).default(8),
+});
+export type ConnectRequest = z.infer<typeof ConnectRequest>;
+
+export const ConnectSuggestion = z.object({
+  name: z.string().trim().min(1).max(200),
+  /** The word or phrase in the concept's definition that points to it ("" when none does). */
+  keyword: z.string().default(""),
+  definition: z.string().default(""),
+  kind: ConceptKind.nullable().optional().catch(null),
+  /** aToB: what the concept does to the suggestion; bToA: what the suggestion does to the concept. */
+  aToB: DirRel,
+  bToA: DirRel,
+});
+export type ConnectSuggestion = z.infer<typeof ConnectSuggestion>;
+
+export const ConnectResponse = z.object({ suggestions: z.array(ConnectSuggestion).default([]) });
+export type ConnectResponse = z.infer<typeof ConnectResponse>;
+
 // ---------- Derive together ----------
 
 /** Largest page image `readPage` accepts (base64 characters, about 6 MB of JPEG). */

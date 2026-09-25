@@ -399,5 +399,6 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
       });
     });
   }
-  return { items, links, title, results: results.length };
+  // The new concepts' definitions come from the paper: it is their source.
+  return { items, links, title, results: results.length, ...(title ? { origin: { title: title.slice(0, 300) } } : {}) };
 }

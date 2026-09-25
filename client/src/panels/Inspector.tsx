@@ -23,13 +23,19 @@ import {
   Trash2,
   TriangleAlert,
   Wand2,
+  Waypoints,
 } from "lucide-react";
 import { useView } from "../store/viewStore";
+import type { ExtractReview } from "../lib/extract";
+import { ExtractDialog } from "./lazy";
 import { useEffect, useRef, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
+  aiSource,
   analyzeNode,
   anatomyKey,
+  connectKey,
+  suggestConnections,
   anatomyNode,
   cancelTask,
   explainKey,
@@ -46,7 +52,7 @@ import {
   relookupKey,
   resolveCycle,
 } from "../lib/actions";
-import { removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
+import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setKind, updateNode, updateRelation } from "../lib/graphOps";
 import { paperByline, sourceLabel } from "../lib/export";
 import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
@@ -254,7 +260,10 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       <LearningPath node={node} graph={graph} />
 
       <section>
-        <h4>{t("node.relations")}</h4>
+        <div className="section-head">
+          <h4>{t("node.relations")}</h4>
+          {!viewing && <ConnectButton key={`connect:${node.id}`} node={node} graphId={graphId} />}
+        </div>
         <ul className="links links--rows">
           {graph.relations.filter((r) => r.a === node.id || r.b === node.id).map((r) => {
             const other = byId(r.a === node.id ? r.b : r.a);
@@ -450,7 +459,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
               className="small-btn"
               disabled={node.definition.trim() === ex.summary.trim()}
               // A user decision, so a normal undo step.
-              onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary, ...(node.source?.url ? { source: undefined } : {}) }), graphId)}
+              onClick={() => mutate((g) => updateNode(g, node.id, { definition: ex.summary, source: aiSource() }), graphId)}
               data-testid="use-summary"
             >
               <Icon icon={ArrowDown} size={14} />{t("explain.useSummary")}
@@ -597,8 +606,8 @@ function DefinitionField({ node, graphId, viewing }: { node: ConceptNode; graphI
             }}
             // Typing into the field is one undo step.
             onChange={(e) =>
-              // Once it's the user's own text, an encyclopedia no longer vouches for it.
-              mutate((g) => updateNode(g, node.id, { definition: e.target.value, ...(node.source?.url ? { source: undefined } : {}) }), graphId, { key: `def:${node.id}` })}
+              // Once it's the user's own text, the source is the user (a document's reference, with no site, is kept).
+              mutate((g) => updateNode(g, node.id, { definition: e.target.value, ...(!node.source || node.source.site ? { source: OWN_SOURCE } : {}) }), graphId, { key: `def:${node.id}` })}
           />
           <MathPreview text={node.definition} testId="definition-preview" />
         </>
@@ -625,6 +634,49 @@ function MathPreview({ text, testId }: { text: string; testId: string }) {
     <div className="math-preview" data-testid={testId}>
       <span className="math-preview__label">{t("math.preview")}</span>
       <MathText text={text} />
+    </div>
+  );
+}
+
+/**
+ * "Suggest connections": keywords to connect this concept to (what its definition names, and the AI's suggestions),
+ * shown in the Extract review list, where the user ticks what goes into the graph.
+ */
+function ConnectButton({ node, graphId }: { node: ConceptNode; graphId: string }) {
+  const t = useT();
+  const key = connectKey(graphId, node.id);
+  const running = useGraphStore((s) => Boolean(s.busy[key]));
+  const [review, setReview] = useState<ExtractReview | null>(null);
+  return (
+    <div className="explain__controls">
+      {running && (
+        <button className="small-btn" onClick={() => cancelTask(key)} data-testid="connect-cancel">
+          {t("common.cancel")}
+        </button>
+      )}
+      <button
+        className="small-btn"
+        onClick={async () => setReview(await suggestConnections(node.id, graphId))}
+        disabled={running}
+        title={t("connect.buttonTitle")}
+        data-testid="connect-button"
+      >
+        {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Waypoints} size={14} />}
+        {t(running ? "connect.running" : "connect.button")}
+      </button>
+      {review && (
+        <ExtractDialog
+          initial={{
+            review,
+            title: node.name,
+            heading: t("connect.title", { name: node.name }),
+            intro: t("connect.intro"),
+            // New concepts go below this one.
+            anchor: { x: node.position.x + 110, y: node.position.y + 260 },
+          }}
+          onClose={() => setReview(null)}
+        />
+      )}
     </div>
   );
 }
@@ -843,28 +895,93 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
   const graphId = useGraphStore((s) => s.activeId);
   const busy = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
   const src = node.source;
-  const lookupOn = useSettings((s) => s.lookup.enabled);
-  const canLookup = !viewing && lookupOn;
-  // Only for a concept with a source: others were defined by the AI or by hand, and the row would cost space.
-  if (!src) return null;
+  // Every definition says where it came from: an encyclopedia (linked), the AI (and which model), a document, the
+  // user, or, for older concepts, nothing recorded.
+  const label = !src
+    ? t(node.definition.trim() ? "source.unknown" : "source.empty")
+    : src.site === "AI"
+      ? t("source.ai", { model: src.title })
+      : src.site === "you"
+        ? t("source.you")
+        : sourceLabel(src);
   return (
     <div className="source-line small" data-testid="definition-source">
       <span className="muted">
         {t("node.source")}:{" "}
-        {src.url ? (
+        {src?.url ? (
           <a href={src.url} target="_blank" rel="noopener noreferrer">
             {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}
             <Icon icon={ExternalLink} size={12} />
           </a>
         ) : (
-          sourceLabel(src)
+          label
         )}
       </span>
-      {canLookup && src.url && (
-        <button className="link link--icon" onClick={() => void relookup(node.id)} disabled={busy || node.status === "checking"}>
-          <Icon icon={BookOpen} size={12} />
-          {t("node.lookupAgain")}
-        </button>
+      {!viewing && <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} />}
+    </div>
+  );
+}
+
+const LOOKUP_FROM: { from: "proofwiki" | "wikipedia" | "ai"; label: MessageKey }[] = [
+  { from: "proofwiki", label: "source.fromProofwiki" },
+  { from: "wikipedia", label: "source.fromWikipedia" },
+  { from: "ai", label: "source.fromAi" },
+];
+
+/** "Look up in…": define the concept again from a source the user picks, even when it already has a definition. */
+function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: string; busy: boolean }) {
+  const t = useT();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent) {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        button.current?.focus();
+      } else if (ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close, true);
+    };
+  }, [open]);
+  return (
+    <div className="popover-anchor" ref={ref}>
+      <button
+        ref={button}
+        className="link link--icon"
+        onClick={() => setOpen(!open)}
+        disabled={busy}
+        aria-haspopup="menu"
+        aria-expanded={open}
+        title={t("source.lookupTitle")}
+        data-testid="lookup-menu"
+      >
+        {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={BookOpen} size={12} />}
+        {t("source.lookup")}
+      </button>
+      {open && (
+        <div className="popover lookup-menu" role="menu" aria-label={t("source.lookup")}>
+          {LOOKUP_FROM.map((o) => (
+            <button
+              key={o.from}
+              role="menuitem"
+              className="lookup-menu__item"
+              onClick={() => {
+                setOpen(false);
+                void relookup(node.id, graphId, o.from);
+              }}
+            >
+              {t(o.label)}
+            </button>
+          ))}
+        </div>
       )}
     </div>
   );

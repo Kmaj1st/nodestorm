@@ -1222,6 +1222,34 @@ try {
     assert(await page.locator(".view-menu__legend").getByText("No relation found").isVisible(), "the View menu shows the colour legend");
     await page.keyboard.press("Escape");
 
+    console.log("Suggest connections");
+    await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } }); // clear the Mix selection
+    await node("Subgroup").click();
+    await page.getByTestId("connect-button").click();
+    const conn = page.getByRole("dialog", { name: "Connections for Subgroup" });
+    await conn.waitFor();
+    const offered = await conn.locator(".extract__list li").allTextContents();
+    assert(offered.some((x) => /Lagrange/i.test(x)), `it proposes keywords to connect, e.g. Lagrange's theorem (${offered.length} offered)`);
+    assert((await page.getByTestId(/^node-Lagrange/i).count()) === 0, "…and adds nothing until the user picks");
+    await conn.getByRole("button", { name: /^Add selected/ }).click();
+    await page.getByTestId(/^node-Lagrange/i).first().waitFor();
+    assert(true, "the picked concepts go into the graph, linked to Subgroup");
+
+    console.log("Definition sources");
+    await node("Group").click();
+    const srcLine = page.getByTestId("definition-source");
+    assert(/^Source:/.test((await srcLine.textContent()) ?? ""), "every definition shows its source line");
+    await srcLine.getByTestId("lookup-menu").click();
+    assert(
+      JSON.stringify(await page.getByRole("menu", { name: "Look up in…" }).getByRole("menuitem").allTextContents()) ===
+        JSON.stringify(["ProofWiki", "Wikipedia / Wikidata", "AI"]),
+      "“Look up in…” offers ProofWiki, Wikipedia / Wikidata and the AI, even for a defined concept",
+    );
+    await page.getByRole("menuitem", { name: "AI" }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent?.includes("AI (Offline demo · mock-kb)"));
+    assert(true, "a definition from the AI notes the AI (and its model) as its source");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+
     // Zoomed far out, descriptions would be unreadable: cards show just their name, larger.
     const nameSize = () => node("Group").locator(".concept__name").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
     const near = await nameSize();

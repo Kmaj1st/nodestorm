@@ -116,9 +116,9 @@ describe("definitions from encyclopedias", () => {
     await analyzeNode(id);
     expect(node(id).senses?.[0].source?.site).toBe("Wikidata");
     await analyzeNode(id, undefined, undefined, { askAi: true });
-    // The offline AI's own meanings for "Expectation" (no source).
+    // The offline AI's own meanings for "Expectation": their source is the AI (and which model).
     expect(node(id).status).toBe("unclear");
-    expect(node(id).senses?.every((s) => !s.source)).toBe(true);
+    expect(node(id).senses?.every((s) => s.source?.site === "AI" && s.source.title === "Offline demo · mock-kb")).toBe(true);
   });
 
   it("an install's hint lets the AI pick among several looked-up meanings instead of asking", async () => {
@@ -130,7 +130,7 @@ describe("definitions from encyclopedias", () => {
     ];
     const id = add("Expectation");
     await analyzeNode(id, undefined, "needed by Variance (probability)");
-    expect(node(id).senses?.some((s) => s.source)).not.toBe(true);
+    expect(node(id).senses?.some((s) => s.source && s.source.site !== "AI")).not.toBe(true);
   });
 
   it("without AI set up, a chosen looked-up meaning is kept instead of failing", async () => {
@@ -155,7 +155,7 @@ describe("definitions from encyclopedias", () => {
     await relookup(id);
     expect(node(id).source?.site).toBe("ProofWiki");
     await analyzeNode(id, undefined, undefined, { askAi: true });
-    expect(node(id).source).toBeUndefined();
+    expect(node(id).source).toEqual({ site: "AI", title: "Offline demo · mock-kb" });
     expect(node(id).definition).not.toContain("\\phi^{-1}");
   });
 
@@ -163,7 +163,7 @@ describe("definitions from encyclopedias", () => {
     const id = add("Homomorphism");
     await analyzeNode(id);
     expect(node(id).definition).toMatch(/preserves the operations/); // the mock AI's definition
-    expect(node(id).source).toBeUndefined();
+    expect(node(id).source).toEqual({ site: "AI", title: "Offline demo · mock-kb" }); // noted as the AI's
   });
 
   it("skips a site that refused for a while", async () => {
@@ -207,5 +207,19 @@ describe("definitions from encyclopedias", () => {
     expect(lookupLanguage("auto", "Ядро")).toBe("ru");
     expect(lookupLanguage("Chinese (中文)", "Kernel")).toBe("zh");
     expect(lookupLanguage("Klingon", "Kernel")).toBe("en");
+  });
+
+  it("looks up from a source the user picks, even when already defined and look-ups are off", async () => {
+    useSettings.setState({ lookup: { enabled: false, proofwiki: true, wikipedia: true } });
+    routes = [[/proofwiki.*page=Definition:Kernel/, () => json({ parse: { title: "Definition:Kernel", wikitext: KERNEL } })]];
+    const id = add("Kernel");
+    store().mutate((g) => ops.updateNode(g, id, { definition: "my own words", status: "ok", source: ops.OWN_SOURCE }));
+    await relookup(id, undefined, "proofwiki");
+    expect(node(id).source?.site).toBe("ProofWiki");
+    expect(node(id).definition).toContain("kernel");
+    await relookup(id, undefined, "ai");
+    expect(node(id).source?.site).toBe("AI");
+    store().undo();
+    expect(node(id).source?.site).toBe("ProofWiki");
   });
 });

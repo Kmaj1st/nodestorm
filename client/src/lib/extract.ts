@@ -1,4 +1,4 @@
-import { findByName, normalizeName, type ConceptKind, type ConceptNode, type DepRole, type DirRel, type ExtractResponse, type Graph } from "@nodestorm/shared";
+import { findByName, normalizeName, type ConceptKind, type ConceptNode, type DepRole, type DirRel, type ExtractResponse, type Graph, type SourceRef } from "@nodestorm/shared";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 
@@ -34,6 +34,8 @@ export interface ExtractLink {
 export interface ExtractReview {
   items: ExtractItem[];
   links: ExtractLink[];
+  /** Recorded as the source of the new concepts' definitions (the AI, or the imported paper). */
+  origin?: SourceRef;
 }
 
 /** The existing concept a candidate duplicates (by its name or one of its aliases), if any. */
@@ -145,7 +147,7 @@ export function applyExtraction(
   const added: string[] = [];
   let out = g;
   for (const { it, index } of newItems(g, items)) {
-    const r = ops.addNode(out, { name: it.name, definition: it.definition, aliases: it.aliases, kind: it.kind, position: positions.get(index) });
+    const r = ops.addNode(out, { name: it.name, definition: it.definition, aliases: it.aliases, kind: it.kind, source: review.origin, position: positions.get(index) });
     ids.set(index, r.id);
     if (!r.existed) added.push(r.id);
     out = r.graph;
@@ -166,4 +168,20 @@ export function applyExtraction(
     out = ops.upsertRelation(out, a, b, l.aToB, l.bToA, "extract");
   }
   return { graph: out, added };
+}
+
+/**
+ * Concepts in the graph that a concept's definition names (by name or alias, as a whole word, outside formulas),
+ * other than itself: the offline part of "Suggest connections".
+ */
+export function mentionedIn(g: Graph, node: ConceptNode): ConceptNode[] {
+  const text = ` ${node.definition.replace(/\$[^$]*\$/g, " ").toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ")} `;
+  return g.nodes.filter(
+    (n) =>
+      n.id !== node.id &&
+      [n.name, ...n.aliases].some((name) => {
+        const w = name.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim();
+        return w.length >= 3 && (text.includes(` ${w} `) || text.includes(` ${w}s `));
+      }),
+  );
 }

@@ -3,7 +3,7 @@ import { ArrowLeft, FileUp, Plus, ScanText } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { t as tr, useT, type MessageKey } from "../i18n";
-import { cancelTask, extractFromText, insertExtraction } from "../lib/actions";
+import { aiSource, cancelTask, extractFromText, insertExtraction } from "../lib/actions";
 import { buildReview, duplicateOf, linkUsable, newItems, type ExtractItem, type ExtractReview } from "../lib/extract";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { MathText } from "./MathText";
@@ -24,8 +24,11 @@ export function ExtractDialog({
   initial,
 }: {
   onClose: () => void;
-  /** Start at the review with these candidates (LaTeX import: lib/texImport.ts) instead of asking the AI. */
-  initial?: { review: ExtractReview; title: string };
+  /**
+   * Start at the review with these candidates instead of asking the AI: LaTeX import (lib/texImport.ts, `title` is
+   * the paper's) or "Suggest connections" (`heading` and `intro` replace the import's, new concepts go near `anchor`).
+   */
+  initial?: { review: ExtractReview; title: string; heading?: string; intro?: string; anchor?: { x: number; y: number } };
 }) {
   const t = useT();
   const graph = useGraphStore(activeGraph);
@@ -50,7 +53,7 @@ export function ExtractDialog({
     e.preventDefault();
     if (!text.trim() || tooLong) return;
     const res = await extractFromText(text, focus);
-    if (res) setReview(buildReview(graph, res));
+    if (res) setReview({ ...buildReview(graph, res), origin: aiSource() });
   };
 
   const setItem = (i: number, patch: Partial<ExtractItem>) =>
@@ -62,14 +65,14 @@ export function ExtractDialog({
   const linking = review ? review.links.filter((l) => l.include && linkUsable(graph, review.items, l)).length : 0;
   const add = () => {
     if (!review) return;
-    insertExtraction(review);
+    insertExtraction(review, undefined, initial?.anchor);
     onClose();
   };
 
   return (
     <Modal
-      label={initial ? t("texImport.title", { title: initial.title }) : t("extract.title")}
-      title={initial ? t("texImport.title", { title: initial.title }) : t("extract.title")}
+      label={initial ? (initial.heading ?? t("texImport.title", { title: initial.title })) : t("extract.title")}
+      title={initial ? (initial.heading ?? t("texImport.title", { title: initial.title })) : t("extract.title")}
       onClose={onClose}
       className="extract"
     >
@@ -126,7 +129,7 @@ export function ExtractDialog({
         </form>
       ) : (
         <>
-          <p className="muted small">{t(initial ? "texImport.intro" : "extract.reviewIntro")}</p>
+          <p className="muted small">{initial?.intro ?? t(initial ? "texImport.intro" : "extract.reviewIntro")}</p>
           <h4 className="extract__head">{t("extract.concepts", { n: review.items.length })}</h4>
           {review.items.length === 0 && <p className="muted">{t("extract.none")}</p>}
           <ul className="extract__list" aria-label={t("extract.concepts", { n: review.items.length })}>
