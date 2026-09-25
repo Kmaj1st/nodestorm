@@ -82,7 +82,30 @@ try {
     [".react-flow__node", ".react-flow__edge", ".edge-label"].map((s) => document.querySelectorAll(s).length).join(" / "),
   );
 
+  const cdp = await page.context().newCDPSession(page);
+  await cdp.send("Performance.enable");
+  const taskMs = async () => (await cdp.send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value * 1000;
+  // PERF_PROFILE=<section> (status, inspect, drag or physics; 1 means drag) prints that section's hottest functions.
+  const profiling = (section) => (process.env.PERF_PROFILE === "1" ? "drag" : process.env.PERF_PROFILE) === section;
+  const startProfile = async (section) => {
+    if (profiling(section)) await cdp.send("Profiler.enable").then(() => cdp.send("Profiler.start"));
+  };
+  const printProfile = async (section) => {
+    if (!profiling(section)) return;
+    const { profile: p } = await cdp.send("Profiler.stop");
+    const byId = new Map(p.nodes.map((n) => [n.id, n]));
+    const self = new Map();
+    p.samples.forEach((id, i) => {
+      const f = byId.get(id).callFrame;
+      const k = `${f.functionName || "(anonymous)"} ${f.url.split("/").pop().split("?")[0]}:${f.lineNumber}`;
+      self.set(k, (self.get(k) ?? 0) + (p.timeDeltas[i] ?? 0) / 1000);
+    });
+    for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 15)) console.log(`  ${v.toFixed(1).padStart(7)} ms  ${k}`);
+  };
+
   // 20 AI-style status updates of one node, each rendered before the next (background mutations, as in actions.ts).
+  await startProfile("status");
+  let busy0 = await taskMs();
   results["20 status updates of one node"] = await page.evaluate(async () => {
     const { useGraphStore } = await import("/src/store/graphStore.ts");
     const { updateNode } = await import("/src/lib/graphOps.ts");
@@ -95,8 +118,12 @@ try {
     }
     return Math.round(performance.now() - start);
   });
+  results["20 status updates: main-thread busy"] = Math.round((await taskMs()) - busy0);
+  await printProfile("status");
 
   // 20 inspector changes (opening one relation after another, as clicking arrowheads does).
+  await startProfile("inspect");
+  busy0 = await taskMs();
   results["20 relation inspections"] = await page.evaluate(async () => {
     const { useGraphStore } = await import("/src/store/graphStore.ts");
     const tick = () => new Promise((r) => setTimeout(r));
@@ -108,16 +135,14 @@ try {
     useGraphStore.getState().setInspect(null);
     return Math.round(performance.now() - start);
   });
+  results["20 relation inspections: main-thread busy"] = Math.round((await taskMs()) - busy0);
+  await printProfile("inspect");
 
   // Drag one node 30 steps. Wall time here is mostly Playwright round trips, so report the renderer's
   // main-thread busy time (Chrome's TaskDuration metric) instead: that is what makes a drag janky.
-  const cdp = await page.context().newCDPSession(page);
-  await cdp.send("Performance.enable");
-  const taskMs = async () => (await cdp.send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value * 1000;
   const box = await page.getByTestId("node-Concept 150").boundingBox();
-  const profile = Boolean(process.env.PERF_PROFILE); // print the hottest functions during the drag
-  if (profile) await cdp.send("Profiler.enable").then(() => cdp.send("Profiler.start"));
-  const busy0 = await taskMs();
+  await startProfile("drag");
+  busy0 = await taskMs();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   for (let i = 1; i <= 30; i++) {
@@ -126,19 +151,30 @@ try {
   }
   await page.mouse.up();
   results["drag one node 30 steps: main-thread busy"] = Math.round((await taskMs()) - busy0);
-  if (profile) {
-    const { profile: p } = await cdp.send("Profiler.stop");
-    const byId = new Map(p.nodes.map((n) => [n.id, n]));
-    const self = new Map();
-    p.samples.forEach((id, i) => {
-      const f = byId.get(id).callFrame;
-      const k = `${f.functionName || "(anonymous)"} ${f.url.split("/").pop().split("?")[0]}:${f.lineNumber}`;
-      self.set(k, (self.get(k) ?? 0) + (p.timeDeltas[i] ?? 0) / 1000);
-    });
-    for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 15)) console.log(`  ${v.toFixed(1).padStart(7)} ms  ${k}`);
-  }
+  await printProfile("drag");
   const moved = await page.getByTestId("node-Concept 150").boundingBox();
   if (Math.abs(moved.x - box.x) < 100) throw new Error(`the drag did not move the node: ${JSON.stringify([box, moved])}`);
+
+  // Physics on the whole graph for 60 frames: the simulation steps twice a frame and every card moves each frame.
+  await page.evaluate(async () => {
+    const { useView } = await import("/src/store/viewStore.ts");
+    useView.getState().setPrefs({ physics: true });
+  });
+  await startProfile("physics");
+  busy0 = await taskMs();
+  const frames = await page.evaluate(() => new Promise((r) => {
+    const start = performance.now();
+    let n = 0;
+    const f = () => (++n >= 60 ? r(performance.now() - start) : requestAnimationFrame(f));
+    requestAnimationFrame(f);
+  }));
+  results["physics 60 frames: main-thread busy / frame"] = Math.round(((await taskMs()) - busy0) / 60);
+  results["physics 60 frames: wall time"] = Math.round(frames);
+  await printProfile("physics");
+  await page.evaluate(async () => {
+    const { useView } = await import("/src/store/viewStore.ts");
+    useView.getState().setPrefs({ physics: false });
+  });
 
   // Zoomed in to reading size, only what's on screen is rendered (onlyRenderVisibleElements), labels included.
   for (let i = 0; i < 12; i++) {

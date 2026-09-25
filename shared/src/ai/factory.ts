@@ -1,8 +1,3 @@
-import { AnthropicProvider } from "./anthropic";
-import { MockProvider } from "./mock";
-import { OpenAICompatibleProvider } from "./openaiCompatible";
-import type { Provider } from "./provider";
-
 export type ProviderKind =
   | "siliconflow"
   | "anthropic"
@@ -23,9 +18,6 @@ export interface ProviderConfig {
   timeoutMs?: number;
 }
 
-/** Providers that speak the OpenAI chat-completions API; they only differ in endpoint, default model and key page. */
-const OPENAI_COMPATIBLE = new Set<ProviderKind>(["siliconflow", "deepseek", "moonshot", "zhipu", "dashscope", "ollama", "openai"]);
-
 export interface ProviderMeta {
   kind: ProviderKind;
   label: string;
@@ -42,7 +34,7 @@ export interface ProviderMeta {
   visionModel?: string;
 }
 
-/** Everything the UI needs to render a provider picker. Add new providers here and in createProvider. */
+/** Everything the UI needs to render a provider picker. Add new providers here and in createProvider (createProvider.ts). */
 export const PROVIDERS: ProviderMeta[] = [
   {
     kind: "siliconflow",
@@ -117,31 +109,5 @@ export const PROVIDERS: ProviderMeta[] = [
 ];
 
 export const providerMeta = (kind: ProviderKind) => PROVIDERS.find((p) => p.kind === kind)!;
-
-export function createProvider(kind: ProviderKind, cfg: ProviderConfig = {}): Provider {
-  const meta = providerMeta(kind);
-  const model = cfg.model || meta.defaultModel;
-  const baseURL = cfg.baseURL || meta.defaultBaseURL || "";
-  if (OPENAI_COMPATIBLE.has(kind)) {
-    return new OpenAICompatibleProvider({
-      id: kind,
-      label: meta.label,
-      baseURL,
-      // Ollama ignores the key but the client always sends one.
-      apiKey: cfg.apiKey || (meta.needsKey ? undefined : kind),
-      model,
-      timeoutMs: cfg.timeoutMs,
-      ...(kind === "siliconflow" ? { modelsQuery: "type=text&sub_type=chat" } : {}),
-    });
-  }
-  switch (kind) {
-    case "anthropic":
-      return new AnthropicProvider({ apiKey: cfg.apiKey, model, webSearch: cfg.webSearch, timeoutMs: cfg.timeoutMs });
-    case "mock":
-      return new MockProvider();
-    default:
-      throw new Error(`No client for provider "${kind}"`);
-  }
-}
 
 export const isProviderKind = (s: unknown): s is ProviderKind => PROVIDERS.some((p) => p.kind === s);

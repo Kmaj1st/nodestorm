@@ -116,29 +116,39 @@ export function setFixed(sim: Sim, id: string, fixed: boolean, at?: { x: number;
 
 export const isSettled = (sim: Sim) => sim.alpha < SETTLED_ALPHA;
 
-/** Pairs of bodies close enough to interact: all pairs for small graphs, a uniform grid for large ones. */
-function nearPairs(bodies: Body[], reach: number): [number, number][] {
-  const pairs: [number, number][] = [];
-  if (bodies.length <= GRID_ABOVE) {
-    for (let i = 0; i < bodies.length; i++) for (let j = i + 1; j < bodies.length; j++) pairs.push([i, j]);
-    return pairs;
+/** A grid cell as one number (a Map key without building strings; cells stay far below 1e6 in either direction). */
+const cellKey = (cx: number, cy: number) => cx * 1_000_003 + cy;
+
+/**
+ * Visit the pairs of bodies close enough to interact (i < j): all pairs for small graphs, a uniform grid for large
+ * ones. The grid is built before the first visit, so `visit` may move bodies. This runs several times per animation
+ * frame, so it allocates no pair list and no string keys.
+ */
+function eachNearPair(bodies: Body[], reach: number, visit: (i: number, j: number) => void) {
+  const n = bodies.length;
+  if (n <= GRID_ABOVE) {
+    for (let i = 0; i < n; i++) for (let j = i + 1; j < n; j++) visit(i, j);
+    return;
   }
-  const cells = new Map<string, number[]>();
-  const cell = (b: Body) => [Math.floor(b.x / reach), Math.floor(b.y / reach)];
-  bodies.forEach((b, i) => {
-    const [cx, cy] = cell(b);
-    const k = `${cx},${cy}`;
-    (cells.get(k) ?? cells.set(k, []).get(k)!).push(i);
-  });
-  bodies.forEach((b, i) => {
-    const [cx, cy] = cell(b);
+  const cx = new Float64Array(n);
+  const cy = new Float64Array(n);
+  const cells = new Map<number, number[]>();
+  for (let i = 0; i < n; i++) {
+    cx[i] = Math.floor(bodies[i].x / reach);
+    cy[i] = Math.floor(bodies[i].y / reach);
+    const k = cellKey(cx[i], cy[i]);
+    const list = cells.get(k);
+    if (list) list.push(i);
+    else cells.set(k, [i]);
+  }
+  for (let i = 0; i < n; i++) {
     for (let dx = -1; dx <= 1; dx++) {
       for (let dy = -1; dy <= 1; dy++) {
-        for (const j of cells.get(`${cx + dx},${cy + dy}`) ?? []) if (j > i) pairs.push([i, j]);
+        const list = cells.get(cellKey(cx[i] + dx, cy[i] + dy));
+        if (list) for (const j of list) if (j > i) visit(i, j);
       }
     }
-  });
-  return pairs;
+  }
 }
 
 /** A deterministic nudge for two nodes on exactly the same spot (so they can be pushed apart). */
@@ -181,22 +191,22 @@ export function step(sim: Sim): number {
   }
 
   // Repulsion between nearby concepts.
-  for (const [i, j] of nearPairs(bodies, REACH)) {
+  eachNearPair(bodies, REACH, (i, j) => {
     const a = bodies[i];
     const b = bodies[j];
     let dx = b.x - a.x;
-    let dy = lockY ? 0 : b.y - a.y;
-    if (lockY && Math.abs(b.y - a.y) >= H) continue; // other layers don't push along a row
+    const dy = lockY ? 0 : b.y - a.y;
+    if (lockY && Math.abs(b.y - a.y) >= H) return; // other layers don't push along a row
     if (dx === 0 && dy === 0) dx = nudge(i, j);
     const d2 = dx * dx + dy * dy;
-    if (d2 > REACH * REACH) continue;
+    if (d2 > REACH * REACH) return;
     const d = Math.sqrt(d2);
     const f = (CHARGE * alpha) / Math.max(d2, 900) / d;
     fx[i] -= dx * f;
     fy[i] -= dy * f;
     fx[j] += dx * f;
     fy[j] += dy * f;
-  }
+  });
 
   // Integrate, with a faint pull back to where the graph started so loose parts don't wander off.
   let moved = 0;
@@ -227,16 +237,16 @@ function separate(sim: Sim): number {
   const { bodies } = sim;
   const lockY = sim.opts.lockY;
   let most = 0;
-  for (const [i, j] of nearPairs(bodies, W + PAD)) {
+  eachNearPair(bodies, W + PAD, (i, j) => {
     const a = bodies[i];
     const b = bodies[j];
-    if (a.fixed && b.fixed) continue;
+    if (a.fixed && b.fixed) return;
     let dx = b.x - a.x;
     const dy = b.y - a.y;
     const ox = W + PAD - Math.abs(dx);
     const oy = H + PAD - Math.abs(dy);
-    if (ox <= 0 || oy <= 0) continue;
-    if (lockY && Math.abs(dy) >= H) continue; // different layers
+    if (ox <= 0 || oy <= 0) return;
+    if (lockY && Math.abs(dy) >= H) return; // different layers
     if (dx === 0) dx = nudge(i, j);
     const alongX = lockY || ox < oy;
     const push = alongX ? ox : oy;
@@ -250,7 +260,7 @@ function separate(sim: Sim): number {
       b.y += sign * push * share[1];
     }
     most = Math.max(most, push);
-  }
+  });
   return most;
 }
 

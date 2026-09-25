@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { browserLang, t, translate, useLocale } from "../src/i18n";
 import { en } from "../src/i18n/en";
 import { format, plurals } from "../src/i18n/format";
@@ -107,5 +107,19 @@ describe("interface language", () => {
     useLocale.getState().setPref("en");
     expect(t("toolbar.add")).toBe("Add concept");
     expect(useLocale.getState().pref).toBe("en");
+  });
+
+  it("loads Chinese only when asked for, and shows it once loaded", async () => {
+    vi.resetModules(); // a fresh copy of the module, before anything loaded Chinese
+    const i18n = await import("../src/i18n");
+    expect(i18n.MESSAGES.zh).toBeUndefined();
+    i18n.useLocale.getState().setPref("zh");
+    expect(i18n.useLocale.getState().pref).toBe("zh");
+    expect(i18n.t("toolbar.add")).toBe("Add concept"); // English until the messages arrive
+    await i18n.loadLang("zh");
+    await Promise.resolve();
+    expect(i18n.useLocale.getState().lang).toBe("zh");
+    expect(i18n.t("toolbar.add")).toBe("添加概念");
+    i18n.useLocale.getState().setPref("en");
   });
 });

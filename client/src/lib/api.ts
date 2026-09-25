@@ -1,6 +1,5 @@
 import {
   DEFAULT_TIMEOUT_MS,
-  createProvider,
   normalizeLanguage,
   withDeadline,
   type AbsurdChainRequest,
@@ -8,7 +7,7 @@ import {
   type ClarifyRequest,
   type ConnectRequest,
   providerMeta,
-  tasks,
+  type tasks,
   type DepsRequest,
   type DeriveRequest,
   type ExtractRequest,
@@ -40,11 +39,14 @@ import { isOnline, offlineBlocks, OfflineError } from "./online";
 /** Thrown when an AI call can't run until the user fills in Settings. */
 export class NeedsSetupError extends Error {}
 
-function browserProvider(kind: ProviderKind, cfg: ProviderConfig): Provider {
+/** The provider clients and tasks, fetched on the first browser-mode call (see aiBrowser.ts). */
+const loadAi = () => import("./aiBrowser");
+
+async function browserProvider(kind: ProviderKind, cfg: ProviderConfig): Promise<Provider> {
   if (providerMeta(kind).needsKey && !cfg.apiKey) {
     throw new NeedsSetupError(t("api.needsKey", { provider: providerMeta(kind).label }));
   }
-  return createProvider(kind, cfg);
+  return (await loadAi()).createProvider(kind, cfg);
 }
 
 async function serverFetch<T>(path: string, init: RequestInit = {}, signal?: AbortSignal, timeoutMs = 15_000): Promise<T> {
@@ -89,7 +91,8 @@ async function runNow<N extends TaskName>(name: N, req: unknown, signal?: AbortS
   const vision = name === "readPage" ? visionModel(s.provider) : undefined;
   if (s.connection === "browser") {
     const cfg = s.configs[s.provider];
-    const provider = browserProvider(s.provider, vision ? { ...cfg, model: vision } : cfg);
+    const provider = await browserProvider(s.provider, vision ? { ...cfg, model: vision } : cfg);
+    const { tasks } = await loadAi();
     return (await tasks[name](provider, req, { signal, language, onUsage: addUsage })) as unknown as TaskResult<N>;
   }
   const model = vision ?? s.serverModels[s.provider];
@@ -152,7 +155,7 @@ export const api = {
     connection: "browser" | "server",
     signal?: AbortSignal,
   ): Promise<ModelInfo[]> {
-    if (connection === "browser") return browserProvider(kind, cfg).listModels({ signal });
+    if (connection === "browser") return (await browserProvider(kind, cfg)).listModels({ signal });
     const r = await serverFetch<{ models: ModelInfo[] }>(`models?provider=${kind}`, {}, signal, 20_000);
     return r.models;
   },

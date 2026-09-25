@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { createProvider } from "../src/ai/factory";
+import { createProvider } from "../src/ai/createProvider";
 import { CancelledError, ProviderError, withDeadline, type Provider } from "../src/ai/provider";
 import { tasks } from "../src/ai/tasks";
 

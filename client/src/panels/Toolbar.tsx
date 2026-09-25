@@ -35,7 +35,6 @@ import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent }
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
-import { toLatex } from "../lib/latex";
 import { providerName } from "../lib/online";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
@@ -44,7 +43,6 @@ import { useDerive } from "../store/deriveStore";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
-import { texReview } from "../lib/texImport";
 import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog, FlashcardsDialog, GlossaryDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
@@ -339,7 +337,10 @@ function FileMenu() {
       label: "file.latex",
       title: "file.latexTitle",
       icon: Sigma,
-      action: () => download(`${base}.tex`, text(toLatex(graph, { title: graph.parentId ? `${projectName}: ${graph.name}` : projectName }), "application/x-tex")),
+      action: async () => {
+        const { toLatex } = await import("../lib/latex"); // only needed here, so a chunk of its own
+        download(`${base}.tex`, text(toLatex(graph, { title: graph.parentId ? `${projectName}: ${graph.name}` : projectName }), "application/x-tex"));
+      },
     },
     {
       label: "file.mermaid",
@@ -418,7 +419,8 @@ function FileMenu() {
           const f = e.target.files?.[0];
           e.target.value = "";
           if (!f) return;
-          const r = texReview(await f.text(), { mentions: true });
+          const [{ texReview }, src] = await Promise.all([import("../lib/texImport"), f.text()]);
+          const r = texReview(src, { mentions: true });
           if (!r.items.length) return useGraphStore.getState().setToast(tr("texImport.none", { name: f.name }), "info");
           setTexImport({ review: r, title: r.title ?? f.name.replace(/\.[^.]+$/, "") });
         }}
