@@ -6,6 +6,7 @@
 - **Share links** no longer mark a concept whose check was running or failed as "ok": it arrives "not checked" (or "needs a definition").
 - **Symbol names** such as "∇" or "∫" are recognised as the same concept when added again, and as different prerequisites from each other.
 - **Markdown and LaTeX exports** name the site of a looked-up definition ("Wikidata: Q83478"), and Markdown links its page.
+- **Full browser storage** no longer breaks editing: changes still apply (a new concept no longer stays "checking"), and a notice says they can't be saved and suggests exporting the project.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

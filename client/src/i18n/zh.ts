@@ -587,6 +587,7 @@ export const zh: Record<MessageKey, string> = {
   "toast.cycle": "循环依赖：{chain}。其中某条连线多半有误——请查看详情面板。",
   "toast.senseMerged": "“{name}”已在图谱中——已关联到现有概念。",
   "toast.exists": "“{name}”已在图谱中",
+  "toast.storageFull": "无法保存更改：浏览器存储空间已满或被禁用。请导出项目（JSON）以保留它，或删除旧版本或项目来腾出空间。",
   "install.cancelled": "全部安装已取消，此前已新增 {n} 个概念。",
   "install.done": "已为 {name} 安装 {n} 个前置知识（共 {depth} 层）。",
   "install.nothing": "{name} 没有需要安装的新内容。",
