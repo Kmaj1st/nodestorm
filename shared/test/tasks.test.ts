@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { extractJson, tasks } from "../src/ai/tasks";
+import { activeOnly, extractJson, passiveKind, tasks } from "../src/ai/tasks";
 import { MockProvider } from "../src/ai/mock";
 import type { ChatMessage, Provider } from "../src/ai/provider";
 
@@ -44,10 +44,25 @@ describe("tasks with mock provider", () => {
     expect(chain).toEqual(["Quotient group", "Normal subgroup", "Subgroup", "Group"]);
   });
 
-  it("relates in both directions", async () => {
+  it("relates in both directions, with one active label for a one-way relation", async () => {
     const r = await tasks.relate(mock, { a: { name: "First Isomorphism Theorem" }, b: { name: "Homomorphism" } });
-    expect(r.aToB.kind).toBe("uses definition of");
-    expect(r.bToA.kind).toBe("is used by");
+    expect(r.aToB.kind).toBe("using");
+    expect(r.bToA.kind).toBe("none");
+  });
+
+  it("turns a passive label from the AI into \"none\" when the other side says it actively", async () => {
+    expect(["is used by", "used by", "quoted by", "is derived from", "was solved with", "被使用"].every(passiveKind)).toBe(true);
+    expect(["using", "quoting", "generalizing", "always being a", "arising as", "building on", "none"].some(passiveKind)).toBe(false);
+    const d = (kind: string) => ({ kind, explanation: "e" });
+    expect(activeOnly(d("using"), d("is used by"))).toEqual([d("using"), d("none")]);
+    expect(activeOnly(d("quoted by"), d("quoting"))).toEqual([d("none"), d("quoting")]);
+    expect(activeOnly(d("generalizing"), d("specializing"))).toEqual([d("generalizing"), d("specializing")]);
+    const spy: Provider = {
+      id: "spy", label: "Spy", model: "m", configured: true, listModels: async () => [],
+      complete: async () => '{"aToB":{"kind":"uses","explanation":"x"},"bToA":{"kind":"is used by","explanation":"y"}}',
+    };
+    const r = await tasks.relate(spy, { a: { name: "A" }, b: { name: "B" } });
+    expect([r.aToB.kind, r.bToA.kind]).toEqual(["uses", "none"]);
   });
 
   it("asks for clarification only when a name is ambiguous, with the requested number of options", async () => {
@@ -119,7 +134,8 @@ describe("tasks with mock provider", () => {
     expect(system.content).toMatch(/Never give URLs/);
     expect(system.content).toMatch(/Output language: .* in Deutsch/);
     expect(user.content).toContain("- Homomorphism");
-    expect(user.content).toContain("it is trivial for Isomorphism; Isomorphism has it");
+    expect(user.content).toContain("- it → Isomorphism: is trivial for");
+    expect(user.content).toContain("- Isomorphism → it: has");
     expect(user.content).toContain("Level: example-driven");
   });
 

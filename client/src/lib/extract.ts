@@ -63,16 +63,8 @@ export function buildReview(g: Graph, res: ExtractResponse): ExtractReview {
   return { items, links };
 }
 
-const FORWARD: Record<DepRole, string> = { uses: "uses definition of", derives: "derives", assumes: "assumes" };
-const BACKWARD: Record<DepRole, string> = { uses: "is used by", derives: "is derived by", assumes: "is assumed by" };
-
 /** The two directions of a prerequisite link, as graphOps.depRelation words them. */
-function depDirections(dependent: string, prereq: string, role: DepRole, reason: string) {
-  return {
-    aToB: { kind: FORWARD[role], explanation: reason },
-    bToA: { kind: BACKWARD[role], explanation: `${prereq} is a prerequisite of ${dependent}: ${reason}` },
-  };
-}
+const depDirections = ops.depKinds;
 
 /** What a name in a relation stands for: a candidate (by its original or current name) or an existing concept. */
 export type Endpoint = { kind: "item"; index: number } | { kind: "existing"; node: ConceptNode } | null;

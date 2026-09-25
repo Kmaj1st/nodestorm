@@ -4,12 +4,14 @@ import {
   ArrowLeftRight,
   ArrowRight,
   BookOpen,
+  Check,
   ChevronRight,
   Drama,
   FileText,
   ExternalLink,
   GraduationCap,
   PenLine,
+  Pencil,
   Pin,
   PinOff,
   Highlighter,
@@ -190,20 +192,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         </button>
       )}
 
-      <label className="field">
-        {t("node.definition")}
-        <textarea
-          rows={3}
-          value={node.definition}
-          data-testid="definition"
-          readOnly={viewing}
-          // Typing into the field is one undo step.
-          onChange={(e) =>
-            // Once it's the user's own text, an encyclopedia no longer vouches for it.
-            mutate((g) => updateNode(g, node.id, { definition: e.target.value, ...(node.source?.url ? { source: undefined } : {}) }), graphId, { key: `def:${node.id}` })}
-        />
-      </label>
-      <MathPreview text={node.definition} testId="definition-preview" />
+      <DefinitionField key={`def:${node.id}`} node={node} graphId={graphId} viewing={viewing} />
       <SourceLine node={node} viewing={viewing} />
 
       {node.status === "error" && (
@@ -269,13 +258,18 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         <ul className="links links--rows">
           {graph.relations.filter((r) => r.a === node.id || r.b === node.id).map((r) => {
             const other = byId(r.a === node.id ? r.b : r.a);
-            const dir = r.a === node.id ? "aToB" : "bToA";
+            const mine = r.a === node.id ? "aToB" : "bToA";
+            const theirs = mine === "aToB" ? "bToA" : "aToB";
+            // A one-way relation ("using") is listed on both ends: here from the other side when this side is "none".
+            const incoming = r[mine].kind.trim() === "none" && r[theirs].kind.trim() !== "none";
+            const dir = incoming ? theirs : mine;
             return (
               <li key={r.id}>
                 <button className="link rel-link" onClick={() => setInspect({ kind: "edge", relationId: r.id, dir })}>
+                  {incoming && <span className="rel-link__to">{other?.name}</span>}
                   <span className="rel-link__kind">{r[dir].kind}</span>
                   <Icon icon={ArrowRight} size={14} className="rel-link__arrow" />
-                  <span className="rel-link__to">{other?.name}</span>
+                  <span className="rel-link__to">{incoming ? t("rel.this") : other?.name}</span>
                 </button>
               </li>
             );
@@ -555,6 +549,75 @@ function AnatomySection({ node, graphId }: { node: ConceptNode; graphId: string 
  * The typeset version of a text field that contains LaTeX, shown under the field (which stays plain text, so editing
  * is an ordinary textarea). Nothing at all for text without a formula.
  */
+/**
+ * The definition: always shown formatted (formulas typeset) in a box; Edit opens the LaTeX source, with a live
+ * preview, until Done, Escape or Ctrl+Enter. Typing is one undo step. The read-only viewer has no Edit.
+ */
+function DefinitionField({ node, graphId, viewing }: { node: ConceptNode; graphId: string; viewing: boolean }) {
+  const t = useT();
+  const mutate = useGraphStore((s) => s.mutate);
+  const [editing, setEditing] = useState(false);
+  const editButton = useRef<HTMLButtonElement>(null);
+  const done = () => {
+    setEditing(false);
+    requestAnimationFrame(() => editButton.current?.focus());
+  };
+  return (
+    <div className="field def-field">
+      <div className="def-field__head">
+        <span id={`def-label-${node.id}`}>{t("node.definition")}</span>
+        {!viewing && (
+          <button
+            ref={editButton}
+            className={`small-btn${editing ? " small-btn--on" : ""}`}
+            onClick={() => (editing ? done() : setEditing(true))}
+            aria-expanded={editing}
+            data-testid="definition-edit"
+          >
+            <Icon icon={editing ? Check : Pencil} size={14} />
+            {t(editing ? "def.done" : "def.edit")}
+          </button>
+        )}
+      </div>
+      {editing ? (
+        <>
+          <textarea
+            rows={4}
+            value={node.definition}
+            data-testid="definition"
+            aria-labelledby={`def-label-${node.id}`}
+            autoFocus
+            placeholder={t("def.placeholder")}
+            onKeyDown={(e) => {
+              if (e.key === "Escape" || (e.key === "Enter" && (e.ctrlKey || e.metaKey))) {
+                e.preventDefault();
+                e.stopPropagation();
+                done();
+              }
+            }}
+            // Typing into the field is one undo step.
+            onChange={(e) =>
+              // Once it's the user's own text, an encyclopedia no longer vouches for it.
+              mutate((g) => updateNode(g, node.id, { definition: e.target.value, ...(node.source?.url ? { source: undefined } : {}) }), graphId, { key: `def:${node.id}` })}
+          />
+          <MathPreview text={node.definition} testId="definition-preview" />
+        </>
+      ) : (
+        <div
+          className={`def-box${node.definition.trim() ? "" : " def-box--empty"}`}
+          data-testid="definition-view"
+          aria-labelledby={`def-label-${node.id}`}
+          role="group"
+          // Double-click is a shortcut into editing.
+          onDoubleClick={viewing ? undefined : () => setEditing(true)}
+        >
+          {node.definition.trim() ? <MathText text={node.definition} /> : <span className="muted">{t("def.empty")}</span>}
+        </div>
+      )}
+    </div>
+  );
+}
+
 function MathPreview({ text, testId }: { text: string; testId: string }) {
   const t = useT();
   if (!hasMath(text)) return null;

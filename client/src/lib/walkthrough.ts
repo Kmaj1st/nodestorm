@@ -53,7 +53,8 @@ export function buildWalkthrough(g: Graph, rootId?: string): Walkthrough {
   return { slides: order.map((n) => slideFor(g, n, byId)), cyclic };
 }
 
-const hasText = (d: DirRel) => Boolean(d.kind.trim() || d.explanation.trim());
+/** A direction worth showing: it says something, and isn't the "none" side of a one-way relation. */
+const hasText = (d: DirRel) => d.kind.trim() !== "none" && Boolean(d.kind.trim() || d.explanation.trim());
 
 function slideFor(g: Graph, n: ConceptNode, byId: Map<string, ConceptNode>): Slide {
   const relations: SlideRelation[] = [];

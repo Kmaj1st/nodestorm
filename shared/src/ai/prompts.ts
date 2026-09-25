@@ -66,7 +66,7 @@ export function languageInstruction(language: string | undefined): string {
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
   return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes, hypotheses, conclusions and proof ideas, referee summaries, comments and praise) in ${target}.
-Keep the JSON keys, the "role" values, the referee "verdict" and "severity" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+Keep the JSON keys, the "role" values, the referee "verdict" and "severity" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. Relation kinds in another language are active verb phrases too, without a passive marker (e.g. no 被). When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
 }
 
 /** Add the output-language paragraph to the system message of a task prompt. */
@@ -105,14 +105,17 @@ Schema: {"ambiguous":boolean,"senses":[{"name":string,"domain":string,"definitio
   ];
 }
 
+/** How relation labels are worded: one active label, never a passive "is used by". */
+const RELATION_KIND = `"kind" is a short active label in the -ing form (1-4 words), e.g. "using", "generalizing", "implying", "quoting", "providing an example of". Never a passive form ("used by", "is derived from", "quoted by", "is a special case of"): say it from the side that acts. If a direction is only the passive of the other, use kind "none" for it.`;
+
 export function relatePrompt(req: RelateRequest): ChatMessage[] {
   return [
     sys(
       "relate",
       `Describe how two concepts relate, separately in each direction.
-"aToB" = what A does to / for B (e.g. "uses definition of", "generalizes", "is a special case of", "implies", "is derived from", "provides an example of").
+"aToB" = what A does to / for B (e.g. "using", "generalizing", "specializing", "implying", "deriving", "providing an example of").
 "bToA" = what B does to / for A.
-"kind" is a short verb phrase (2-5 words); "explanation" is 1-3 sentences that are concrete about the mechanism.
+${RELATION_KIND} "explanation" is 1-3 sentences that are concrete about the mechanism.
 If there is genuinely no relation in a direction, use kind "none" and explain briefly.
 Schema: {"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}`,
     ),
@@ -142,6 +145,7 @@ export function derivePrompt(req: DeriveRequest): ChatMessage[] {
       `Propose 1-4 new concepts that follow from, combine, or naturally extend the selected concepts (e.g. a consequence, a construction, a generalization, a conjecture worth checking).
 Do not repeat concepts already in the graph. For each proposal give links to the selected concepts by exact name:
 "fromNew" = what the new concept does to that concept, "toNew" = what that concept does to the new one.
+${RELATION_KIND}
 ${KIND_GUIDE} A consequence you are not sure is true is a "conjecture".
 Schema: {"proposals":[{"name":string,"definition":string,"aliases":string[],"kind":${KIND_VALUES}|null,"links":[{"to":string,"fromNew":{"kind":string,"explanation":string},"toNew":{"kind":string,"explanation":string}}]}]}`,
     ),
@@ -186,7 +190,10 @@ export function explainPrompt(req: ExplainRequest): ChatMessage[] {
     : "It has no prerequisites in the graph.";
   const rels = req.relations.length
     ? `How it relates to other concepts in the graph:\n${req.relations
-        .map((r) => `- it ${r.toOther.kind} ${r.other}; ${r.other} ${r.fromOther.kind} it`)
+        .flatMap((r) => [
+          ...(r.toOther.kind !== "none" ? [`- it → ${r.other}: ${r.toOther.kind}`] : []),
+          ...(r.fromOther.kind !== "none" ? [`- ${r.other} → it: ${r.fromOther.kind}`] : []),
+        ])
         .join("\n")}`
     : "";
   return [
@@ -218,7 +225,7 @@ export function extractPrompt(req: ExtractRequest): ChatMessage[] {
 For each: "name" = its standard name (singular); "definition" = one or two sentences, from the text where it defines the concept, else the standard one; "aliases" = other names the text uses; "quote" = a short excerpt (at most ~25 words) copied verbatim from the text, in its original language, that supports it.
 If a concept is already in the graph (even under another name), use the graph's exact name for it.
 ${KIND_GUIDE} Where the text labels a statement ("Theorem 2.1", "Lemma", "Definition"), follow its label.
-"relations": relations the text states or clearly implies between two concepts (extracted ones or ones already in the graph), by exact name, separately in each direction: "aToB" = what "from" does to "to", "bToA" = what "to" does to "from"; "kind" is a short verb phrase (2-5 words), "explanation" 1-2 sentences.
+"relations": relations the text states or clearly implies between two concepts (extracted ones or ones already in the graph), by exact name, separately in each direction: "aToB" = what "from" does to "to", "bToA" = what "to" does to "from"; ${RELATION_KIND} "explanation" 1-2 sentences.
 "prerequisites": only where the text says one concept needs another to be stated or understood: "dependent" needs "prerequisite"; role "uses" | "derives" | "assumes"; "reason" is one sentence.
 Schema: {"concepts":[{"name":string,"definition":string,"aliases":string[],"quote":string,"kind":${KIND_VALUES}|null}],"relations":[{"from":string,"to":string,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}],"prerequisites":[{"dependent":string,"prerequisite":string,"role":"uses"|"derives"|"assumes","reason":string}]}`,
     ),
@@ -465,7 +472,7 @@ THE FACTS ARE REAL. Every hop must be a genuinely true, checkable relation betwe
 THE COMEDY IS IN THE TELLING. "quip" narrates the same hop in the requested style, in one or two sentences; "title" is a funny title for the whole chain (at most about 10 words); "moral" is a funny closing line. A quip may overdramatise the reasoning but must not contradict or embellish the fact. Keep it kind: no insults, no mocking of people or groups, nothing offensive, political, sexual or about tragedies.
 Style: ${ABSURD_STYLE[req.style]}
 Chain rules: the first hop's "from" is exactly "${req.from.name}"; the last hop's "to" is exactly "${req.to.name}"; each hop's "from" is exactly the previous hop's "to"; no concept appears twice.${avoid}
-"kind" is a short relation label (2-4 words, e.g. "was invented to solve", "browns through"). "plausibility" is one sober sentence for the reader on how solid the links are (name the loosest one, if any).
+"kind" is a short active relation label in the -ing form, read from "from" to "to" (2-5 words, e.g. "inventing a fix for", "browning", "laying"); never a passive "… by" form. "plausibility" is one sober sentence for the reader on how solid the links are (name the loosest one, if any).
 Schema: {"title":string,"chain":[{"from":string,"to":string,"kind":string,"fact":string,"quip":string}],"moral":string,"plausibility":string}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nFrom:\n${brief(req.from)}\n\nTo:\n${brief(req.to)}\n\nStyle: ${req.style}`),

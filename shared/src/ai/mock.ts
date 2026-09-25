@@ -209,27 +209,28 @@ const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples
 
 /**
  * True facts linking the KB with a few everyday things, for the offline "absurd chain": a Homomorphism is three
- * links from the Fourier transform, which is four from Toast. `kind` reads from a to b, `back` from b to a.
+ * links from the Fourier transform, which is four from Toast. `kind` reads from a to b, `back` from b to a; both are
+ * active labels (never "is … by"), since a chain can walk a link either way.
  */
 const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string }[] = [
-  { a: "Subgroup", b: "Group", kind: "lives inside", back: "contains", fact: "A subgroup is a subset of a group that is itself a group under the same operation." },
-  { a: "Normal subgroup", b: "Subgroup", kind: "is a kind of", back: "narrows down to", fact: "A normal subgroup is a subgroup that is invariant under conjugation." },
-  { a: "Quotient group", b: "Normal subgroup", kind: "is built from", back: "gives rise to", fact: "The quotient group $G/N$ is made of the cosets of a normal subgroup $N$." },
-  { a: "Group", b: "Homomorphism", kind: "is respected by", back: "preserves", fact: "A homomorphism is a map between groups that preserves the group operation." },
-  { a: "Kernel", b: "Homomorphism", kind: "is defined by", back: "determines", fact: "The kernel of a homomorphism is the set of elements it sends to the identity." },
-  { a: "Isomorphism", b: "Homomorphism", kind: "is a kind of", back: "specialises to", fact: "An isomorphism is a bijective homomorphism." },
-  { a: "First isomorphism theorem", b: "Homomorphism", kind: "starts from", back: "is the subject of", fact: "The first isomorphism theorem starts from a homomorphism $\\varphi: G \\to H$ and describes its image." },
-  { a: "Homomorphism", b: "Exponential function", kind: "is exemplified by", back: "is an example of", fact: "The exponential $x \\mapsto e^x$ is a homomorphism from $(\\mathbb{R}, +)$ to $(\\mathbb{R}_{>0}, \\times)$, since $e^{x+y} = e^x e^y$." },
-  { a: "Exponential function", b: "Fourier transform", kind: "is the building block of", back: "is built from", fact: "The Fourier transform writes a function as a superposition of complex exponentials $e^{2\\pi i \\xi x}$." },
-  { a: "Fourier transform", b: "Heat equation", kind: "was invented to solve", back: "was solved with", fact: "Joseph Fourier developed Fourier analysis to solve the heat equation, in his 1822 book on the theory of heat." },
-  { a: "Heat equation", b: "Heat", kind: "describes the flow of", back: "flows by", fact: "The heat equation $u_t = \\alpha \\nabla^2 u$ describes how heat diffuses through a material." },
-  { a: "Heat", b: "Maillard reaction", kind: "speeds up", back: "needs", fact: "The Maillard reaction between amino acids and reducing sugars becomes fast at around 140 to 165 °C." },
-  { a: "Maillard reaction", b: "Toast", kind: "browns", back: "browns through", fact: "Toast turns brown mainly through the Maillard reaction at the surface of the bread." },
-  { a: "Egg", b: "Heat", kind: "is set by", back: "sets", fact: "When an egg is heated, its proteins denature and it sets." },
-  { a: "Chicken", b: "Egg", kind: "lays", back: "is laid by", fact: "Hens lay eggs." },
+  { a: "Subgroup", b: "Group", kind: "living inside", back: "containing", fact: "A subgroup is a subset of a group that is itself a group under the same operation." },
+  { a: "Normal subgroup", b: "Subgroup", kind: "being a kind of", back: "narrowing down to", fact: "A normal subgroup is a subgroup that is invariant under conjugation." },
+  { a: "Quotient group", b: "Normal subgroup", kind: "building on", back: "giving rise to", fact: "The quotient group $G/N$ is made of the cosets of a normal subgroup $N$." },
+  { a: "Group", b: "Homomorphism", kind: "setting the rules for", back: "preserving", fact: "A homomorphism is a map between groups that preserves the group operation." },
+  { a: "Kernel", b: "Homomorphism", kind: "measuring the injectivity of", back: "determining", fact: "The kernel of a homomorphism is the set of elements it sends to the identity." },
+  { a: "Isomorphism", b: "Homomorphism", kind: "being a kind of", back: "specialising to", fact: "An isomorphism is a bijective homomorphism." },
+  { a: "First isomorphism theorem", b: "Homomorphism", kind: "starting from", back: "anchoring", fact: "The first isomorphism theorem starts from a homomorphism $\\varphi: G \\to H$ and describes its image." },
+  { a: "Homomorphism", b: "Exponential function", kind: "including", back: "exemplifying", fact: "The exponential $x \\mapsto e^x$ is a homomorphism from $(\\mathbb{R}, +)$ to $(\\mathbb{R}_{>0}, \\times)$, since $e^{x+y} = e^x e^y$." },
+  { a: "Exponential function", b: "Fourier transform", kind: "building up", back: "building on", fact: "The Fourier transform writes a function as a superposition of complex exponentials $e^{2\\pi i \\xi x}$." },
+  { a: "Fourier transform", b: "Heat equation", kind: "inventing a fix for", back: "inspiring", fact: "Joseph Fourier developed Fourier analysis to solve the heat equation, in his 1822 book on the theory of heat." },
+  { a: "Heat equation", b: "Heat", kind: "describing the flow of", back: "flowing according to", fact: "The heat equation $u_t = \\alpha \\nabla^2 u$ describes how heat diffuses through a material." },
+  { a: "Heat", b: "Maillard reaction", kind: "speeding up", back: "needing", fact: "The Maillard reaction between amino acids and reducing sugars becomes fast at around 140 to 165 °C." },
+  { a: "Maillard reaction", b: "Toast", kind: "browning", back: "getting its colour from", fact: "Toast turns brown mainly through the Maillard reaction at the surface of the bread." },
+  { a: "Egg", b: "Heat", kind: "firming up in", back: "setting", fact: "When an egg is heated, its proteins denature and it sets." },
+  { a: "Chicken", b: "Egg", kind: "laying", back: "hatching", fact: "Hens lay eggs." },
   // Anything the demo doesn't know joins through the page it is written on.
-  { a: "Written language", b: "Paper", kind: "is recorded on", back: "carries", fact: "Written language has been recorded on paper for about two thousand years." },
-  { a: "Paper", b: "Heat", kind: "is ignited by", back: "ignites", fact: "Paper catches fire when heated to roughly 230 °C." },
+  { a: "Written language", b: "Paper", kind: "living on", back: "carrying", fact: "Written language has been recorded on paper for about two thousand years." },
+  { a: "Paper", b: "Heat", kind: "burning in", back: "igniting", fact: "Paper catches fire when heated to roughly 230 °C." },
 ];
 const WRITTEN = "Written language";
 
@@ -453,8 +454,8 @@ export class MockProvider implements Provider {
     for (const end of [from, to]) {
       if (known(end)) continue;
       const fact = `The name “${end}” is written with the letters of a writing system.`;
-      add(end, { next: WRITTEN, kind: "is written in", fact });
-      add(WRITTEN, { next: end, kind: "is used to write", fact });
+      add(end, { next: WRITTEN, kind: "using the letters of", fact });
+      add(WRITTEN, { next: end, kind: "writing", fact });
     }
     const route = (avoid: Set<string>) => {
       const prev = new Map<string, { at: string; edge: Edge }>();
@@ -662,8 +663,9 @@ export class MockProvider implements Provider {
     const depOf = (x?: string, y?: string) => (x && y ? KB[x].deps.find((d) => normalizeName(d.name) === normalizeName(y)) : undefined);
     const ab = depOf(ka, kb);
     const ba = depOf(kb, ka);
-    const phrase = (d: Dep) => (d.role === "derives" ? "derives an instance of" : d.role === "uses" ? "uses definition of" : "assumes");
-    const inverse = (d: Dep) => (d.role === "derives" ? "is produced by" : d.role === "uses" ? "is used by" : "is assumed by");
+    // One active label on the side that does something; the other side is "none" (no passive "is used by").
+    const phrase = (d: Dep) => (d.role === "derives" ? "deriving an instance of" : d.role === "uses" ? "using" : "assuming");
+    const inverse = (_d: Dep) => "none";
     return {
       aToB: ab
         ? { kind: phrase(ab), explanation: ab.reason }
@@ -817,8 +819,8 @@ export class MockProvider implements Provider {
         relations.push({
           from: title(term),
           to: display(near.key),
-          aToB: { kind: "is introduced with", explanation: `The text introduces ${title(term)} alongside ${display(near.key)}.` },
-          bToA: { kind: "is context for", explanation: `${display(near.key)} is the setting in which the text introduces ${title(term)}.` },
+          aToB: { kind: "appearing alongside", explanation: `The text introduces ${title(term)} alongside ${display(near.key)}.` },
+          bToA: { kind: "setting the context for", explanation: `${display(near.key)} is the setting in which the text introduces ${title(term)}.` },
         });
       }
     }
@@ -848,8 +850,8 @@ export class MockProvider implements Provider {
             links: [
               {
                 to: names.find((n) => kbGet(n)?.key === "homomorphism")!,
-                fromNew: { kind: "is defined by", explanation: "The kernel is the preimage of the identity under a homomorphism." },
-                toNew: { kind: "determines", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
+                fromNew: { kind: "measuring the injectivity of", explanation: "The kernel is the preimage of the identity under a homomorphism." },
+                toNew: { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
               },
             ],
           },
@@ -865,8 +867,8 @@ export class MockProvider implements Provider {
           kind: "other",
           links: names.map((n) => ({
             to: n,
-            fromNew: { kind: "builds on", explanation: `Extends ${n}.` },
-            toNew: { kind: "contributes to", explanation: `${n} supplies part of the synthesis.` },
+            fromNew: { kind: "building on", explanation: `Extends ${n}.` },
+            toNew: { kind: "contributing to", explanation: `${n} supplies part of the synthesis.` },
           })),
         },
       ],

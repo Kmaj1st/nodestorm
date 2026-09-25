@@ -204,6 +204,25 @@ const MAX_QUOTE = 300;
  * Tidy an extraction: one entry per concept name (case/plural-insensitive, first wins), quotes kept short, and only
  * relations and prerequisites whose two ends are different known concepts (extracted or already in the graph).
  */
+/**
+ * A passive relation label ("is used by", "quoted by", "is derived from", 被…): relation labels are active, said from
+ * the side that acts.
+ */
+export function passiveKind(kind: string): boolean {
+  const k = kind.trim().toLowerCase();
+  return /\bby$/.test(k) || /^(is|was|are|were|gets?|got|being|been)\s+(\w+ )?\w+(ed|en|wn)\s+(by|from|with|in|through)\b/.test(k) || /^被/.test(k);
+}
+
+type Dir = { kind: string; explanation: string };
+/** One active label per relation: a passive side becomes "none" when the other side says it actively. */
+export function activeOnly<T extends Dir>(a: T, b: T): [T, T] {
+  const pa = passiveKind(a.kind);
+  const pb = passiveKind(b.kind);
+  if (pa && !pb) return [{ ...a, kind: "none" }, b];
+  if (pb && !pa) return [a, { ...b, kind: "none" }];
+  return [a, b];
+}
+
 export function cleanExtraction(res: ExtractResponse, existing: { name: string; aliases?: string[] }[] = []): ExtractResponse {
   const concepts: ExtractResponse["concepts"] = [];
   for (const c of res.concepts) {
@@ -216,7 +235,10 @@ export function cleanExtraction(res: ExtractResponse, existing: { name: string; 
   const pair = (a: string, b: string) => known(a) && known(b) && normalizeName(a) !== normalizeName(b);
   return {
     concepts,
-    relations: res.relations.filter((r) => pair(r.from, r.to)),
+    relations: res.relations.filter((r) => pair(r.from, r.to)).map((r) => {
+      const [aToB, bToA] = activeOnly(r.aToB, r.bToA);
+      return { ...r, aToB, bToA };
+    }),
     prerequisites: res.prerequisites.filter((p) => pair(p.dependent, p.prerequisite)),
   };
 }
@@ -252,12 +274,26 @@ export const tasks = {
     const ambiguous = res.ambiguous && res.senses.length > 1;
     return { ambiguous, senses: ambiguous ? res.senses.slice(0, req.count) : res.senses.slice(0, 1) };
   },
-  relate: async (p: Provider, body: unknown, o?: RequestOptions) =>
-    runStructured(p, relatePrompt(RelateRequest.parse(body)), RelateResponse, { ...o, search: true }),
+  relate: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const res = await runStructured(p, relatePrompt(RelateRequest.parse(body)), RelateResponse, { ...o, search: true });
+    const [aToB, bToA] = activeOnly(res.aToB, res.bToA);
+    return { ...res, aToB, bToA };
+  },
   deps: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, depsPrompt(DepsRequest.parse(body)), DepsResponse, o),
-  derive: async (p: Provider, body: unknown, o?: RequestOptions) =>
-    runStructured(p, derivePrompt(DeriveRequest.parse(body)), DeriveResponse, o),
+  derive: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const res = await runStructured(p, derivePrompt(DeriveRequest.parse(body)), DeriveResponse, o);
+    return {
+      ...res,
+      proposals: res.proposals.map((pr) => ({
+        ...pr,
+        links: pr.links.map((l) => {
+          const [fromNew, toNew] = activeOnly(l.fromNew, l.toNew);
+          return { ...l, fromNew, toNew };
+        }),
+      })),
+    };
+  },
   explain: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, explainPrompt(ExplainRequest.parse(body)), ExplainResponse, o),
   extract: async (p: Provider, body: unknown, o?: RequestOptions) => {

@@ -44,11 +44,13 @@ describe("markdown", () => {
     expect(md).toContain("**Prerequisites:** Homomorphism, Isomorphism");
   });
 
-  it("describes each relation in both directions", () => {
+  it("describes each relation in both directions, leaving out a one-way relation's \"none\" side", () => {
     const md = toMarkdown(scenario().g);
     expect(md).toContain("- Homomorphism → Isomorphism: generalizes — every iso is a hom");
     expect(md).toContain("- Isomorphism → Homomorphism: specializes — adds bijectivity");
-    expect(md).toContain("- First Isomorphism Theorem → Homomorphism: uses definition of — starts from φ");
+    expect(md).toContain("- First Isomorphism Theorem → Homomorphism: using — starts from φ");
+    expect(md).not.toMatch(/: none\b/);
+    expect(md).not.toMatch(/ by\b/);
   });
 
   it("escapes markdown syntax and newlines", () => {
@@ -102,8 +104,9 @@ describe("mermaid", () => {
     expect(mm).toContain('n2["Homomorphism"]');
     expect(mm).toContain('n2 -->|"generalizes"| n1');
     expect(mm).toContain('n1 -->|"specializes"| n2');
-    expect(mm).toContain('n0 -.->|"derives"| n1'); // dependency relations are dotted
-    expect(mm).toContain('n1 -.->|"is derived by"| n0');
+    expect(mm).toContain('n0 -.->|"deriving"| n1'); // dependency relations are dotted, one way
+    expect(mm).not.toContain('n1 -.->');
+    expect(mm).not.toContain('"none"');
   });
 
   it("escapes quotes, brackets, newlines and entity syntax in labels", () => {

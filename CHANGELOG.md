@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-25: active relation labels, definition box
+
+- **Relation labels are active and one-way:**
+  - A prerequisite link now reads "using", "deriving" or "assuming", from the concept that needs it. The prerequisite's side is "none", so a dependency is one arrow with one label, never "is used by".
+  - The AI is asked for active -ing labels ("using", "generalizing", "quoting"). If it still answers with a passive form ("… by") where the other side has an active one, that side becomes "none".
+  - The example graph and the offline demo use active labels too.
+  - Exports, flashcards and the walkthrough skip a "none" side.
+  - In the inspector, a relation that only runs the other way is listed as "First Isomorphism Theorem using → this concept".
+  - Graphs you've already saved keep their labels.
+- **Definition box:** the inspector shows the definition formatted (formulas typeset) in a box. **Edit** opens the source, with a live preview; **Done**, Escape or Ctrl+Enter close it, and a double-click on the box also opens it.
+
 ## 2026-09-25: layers in 2.5D and 3D, and Physics
 
 - **Physics** (the magnet button in the toolbar):

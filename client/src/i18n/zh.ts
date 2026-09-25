@@ -216,7 +216,7 @@ export const zh: Record<MessageKey, string> = {
   "badge.missing": "缺少：{names}",
   "badge.cycle": "循环依赖",
   "badge.cycleTitle": "这个概念（间接地）成了自己的前置知识。打开它来修正连线。",
-  "edge.arrow": "{a} 对 {b} 的作用：{kind}",
+  "edge.arrow": "{a} → {b}：{kind}",
   "edge.aToB": "A 对 B 的作用",
   "edge.bToA": "B 对 A 的作用",
 
@@ -233,6 +233,10 @@ export const zh: Record<MessageKey, string> = {
   // 详情面板：概念
   "node.rename": "重命名概念",
   "node.aliases": "又称：{aliases}",
+  "def.edit": "编辑",
+  "def.done": "完成",
+  "def.empty": "还没有定义。",
+  "def.placeholder": "定义，公式用 $…$",
   "node.definition": "定义",
   "node.retry": "重试",
   "node.unclear": "“{name}”有多种含义。",
@@ -343,6 +347,7 @@ export const zh: Record<MessageKey, string> = {
   "rel.mix": "混合关系",
   "rel.extract": "从文本提取",
   "rel.kind": "关系类型",
+  "rel.this": "此概念",
   "rel.kindEmpty": "请说明它的作用（或填“none”）。",
   "rel.explanation": "关系说明",
   "rel.switch": "查看 {to} 对 {from} 的作用",

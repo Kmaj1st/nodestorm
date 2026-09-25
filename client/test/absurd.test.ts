@@ -76,7 +76,7 @@ describe("applyAbsurdChain", () => {
     const id = (name: string) => graph.nodes.find((n) => n.name === name)!.id;
     const rel = ops.findRelation(graph, id("Heat"), id("Toast"))!;
     expect(rel.a).toBe(id("Heat"));
-    expect(rel.aToB).toEqual({ kind: "leads to", explanation: "Heat is linked to Toast.\n\n“Behold, Toast!”" });
+    expect(rel.aToB).toEqual({ kind: "leading to", explanation: "Heat is linked to Toast.\n\n“Behold, Toast!”" });
     expect(rel.bToA.kind).toBe("none");
     // New concepts say where they came from; the user's own concepts are left as they were.
     expect(graph.nodes.find((n) => n.name === "Toast")?.notes).toBe("Added by the absurd chain “The Saga of Homomorphism and Toast”.");

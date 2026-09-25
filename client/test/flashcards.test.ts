@@ -63,8 +63,10 @@ describe("buildCards", () => {
     const cards = buildCards(scenario().g, { kinds: ["relation"] });
     expect(cards.find((c) => c.front === "How does Homomorphism relate to Isomorphism?")?.back).toBe("generalizes\nevery iso is a hom");
     expect(cards.find((c) => c.front === "How does Isomorphism relate to Homomorphism?")?.back).toBe("specializes\nadds bijectivity");
-    // Dependency links are relations too; every relation between the three concepts gives two cards.
-    expect(cards).toHaveLength(scenario().g.relations.length * 2);
+    // Dependency links are relations too: one card each (their other side is "none"), two for a two-way relation.
+    const sides = scenario().g.relations.flatMap((r) => [r.aToB, r.bToA]).filter((d) => d.kind !== "none");
+    expect(cards).toHaveLength(sides.length);
+    expect(cards.some((c) => c.back.startsWith("none"))).toBe(false);
     const all = buildCards(scenario().g);
     const pos = (front: string) => all.findIndex((c) => c.front === front);
     expect(pos("How does Homomorphism relate to Isomorphism?")).toBeGreaterThan(pos("Isomorphism"));

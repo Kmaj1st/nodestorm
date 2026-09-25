@@ -63,7 +63,8 @@ describe("buildWalkthrough", () => {
     expect(isoSlide.notes).toBe("Remember the inverse.");
     const homSlide = slides[0];
     expect(homSlide.relations.map((r) => `${r.dir}:${r.kind}`)).toEqual(["out:generalizes", "in:specializes"]);
-    expect(isoSlide.relations.filter((r) => r.otherId === thm).map((r) => r.dir)).toEqual(["out", "in"]);
+    // A dependency is one-way: the theorem derives from Isomorphism, and the "none" side isn't shown.
+    expect(isoSlide.relations.filter((r) => r.otherId === thm).map((r) => `${r.dir}:${r.kind}`)).toEqual(["in:deriving"]);
     expect(homSlide.explanation).toBeUndefined();
     expect(homSlide.notes).toBeUndefined();
     expect(slides[2].missing).toEqual([{ name: "Kernel", reason: "quotients by it" }]);

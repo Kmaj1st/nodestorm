@@ -110,7 +110,9 @@ export function toMarkdown(g: Graph): string {
       const b = mdEscape(byId.get(r.b)!.name);
       const dir = (x: string, y: string, d: { kind: string; explanation: string }) =>
         `- ${x} → ${y}: ${mdEscape(d.kind)}${d.explanation.trim() ? ` — ${mdEscape(d.explanation)}` : ""}`;
-      lines.push(dir(a, b, r.aToB), dir(b, a, r.bToA));
+      // A "none" side (a one-way relation) isn't written out.
+      if (r.aToB.kind.trim() !== "none") lines.push(dir(a, b, r.aToB));
+      if (r.bToA.kind.trim() !== "none") lines.push(dir(b, a, r.bToA));
     }
     lines.push("");
   }
@@ -175,8 +177,8 @@ export function toMermaid(g: Graph): string {
     const b = mid.get(r.b);
     if (!a || !b) continue;
     const arrow = r.origin === "dependency" ? "-.->" : "-->";
-    lines.push(`  ${a} ${arrow}|"${mermaidEscape(r.aToB.kind)}"| ${b}`);
-    lines.push(`  ${b} ${arrow}|"${mermaidEscape(r.bToA.kind)}"| ${a}`);
+    if (r.aToB.kind.trim() !== "none") lines.push(`  ${a} ${arrow}|"${mermaidEscape(r.aToB.kind)}"| ${b}`);
+    if (r.bToA.kind.trim() !== "none") lines.push(`  ${b} ${arrow}|"${mermaidEscape(r.bToA.kind)}"| ${a}`);
   }
   return lines.join("\n") + "\n";
 }

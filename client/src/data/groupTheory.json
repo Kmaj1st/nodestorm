@@ -64,14 +64,14 @@
     {
       "a": "Kernel",
       "b": "Normal subgroup",
-      "aToB": { "kind": "is always a", "explanation": "The kernel of any homomorphism is a normal subgroup of its domain." },
-      "bToA": { "kind": "arises as", "explanation": "Every normal subgroup N is the kernel of the projection $G \\to G/N$." }
+      "aToB": { "kind": "always being a", "explanation": "The kernel of any homomorphism is a normal subgroup of its domain." },
+      "bToA": { "kind": "arising as", "explanation": "Every normal subgroup N is the kernel of the projection $G \\to G/N$." }
     },
     {
       "a": "Quotient group",
       "b": "Homomorphism",
-      "aToB": { "kind": "comes with", "explanation": "$G/N$ comes with the canonical projection $g \\mapsto gN$, a surjective homomorphism." },
-      "bToA": { "kind": "produces", "explanation": "Up to isomorphism, the image of a homomorphism is a quotient of its domain." }
+      "aToB": { "kind": "coming with", "explanation": "$G/N$ comes with the canonical projection $g \\mapsto gN$, a surjective homomorphism." },
+      "bToA": { "kind": "producing", "explanation": "Up to isomorphism, the image of a homomorphism is a quotient of its domain." }
     }
   ]
 }

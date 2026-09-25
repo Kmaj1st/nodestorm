@@ -59,7 +59,7 @@ describe("extract review", () => {
     expect(duplicateOf(g, items[2])?.name).toBe("Homomorphism");
     // Prerequisites first, worded like dependency links; then relations. All ticked.
     expect(links.map((l) => [l.from, l.to, l.role, l.aToB.kind, l.include])).toEqual([
-      ["Kernel", "Widget", "uses", "uses definition of", true],
+      ["Kernel", "Widget", "uses", "using", true],
       ["Coset", "Kernel", undefined, "partitions by", true],
       ["Coset", "Group", undefined, "lives in", true],
     ]);

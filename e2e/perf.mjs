@@ -38,7 +38,7 @@ function bigWorkspace() {
     if (origin === "dependency") nodes[a].dependsOn.push(`n${b}`);
     relations.push({
       id: `r${relations.length}`, a: `n${a}`, b: `n${b}`, origin,
-      aToB: { kind: "uses", explanation: "…" }, bToA: { kind: "is used by", explanation: "…" },
+      aToB: { kind: "using", explanation: "…" }, bToA: { kind: "none", explanation: "…" },
     });
   }
   const graph = { id: "gbig", name: "Main", nodes, relations };

@@ -1100,3 +1100,13 @@ span.paper__title { color: var(--text); }
   .graph3d__body { grid-template-columns: 1fr; grid-template-rows: 1fr auto; }
   .graph3d__list { max-height: 30vh; }
 }
+
+/* The definition in the inspector: formatted in a box, with Edit for the source. */
+.def-field { display: flex; flex-direction: column; gap: var(--space-1); }
+.def-field__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.def-box {
+  padding: var(--space-2) 10px; border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--surface);
+  font-size: var(--text-sm); color: var(--text); line-height: 1.5; overflow-wrap: anywhere; min-height: 2.4em;
+}
+.def-box--empty { display: flex; align-items: center; }
+.def-field .math-preview { margin-top: 0; }

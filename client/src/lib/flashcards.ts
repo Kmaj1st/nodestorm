@@ -133,7 +133,7 @@ export function buildCards(g: Graph, opts: CardOptions = {}): Flashcard[] {
       for (const { from, to, dir } of relsAt.get(n.id) ?? []) {
         const kind = dir.kind.trim();
         const why = dir.explanation.trim();
-        if (!kind && !why) continue;
+        if ((!kind && !why) || kind === "none") continue; // no card for the side that does nothing
         cards.push({
           kind: "relation",
           front: t("flash.cardRelationFront", { a: from.name, b: to.name }),

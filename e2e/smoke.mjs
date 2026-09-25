@@ -58,6 +58,13 @@ try {
   await page.getByTestId("welcome").waitFor();
 
   const node = (name) => page.getByTestId(`node-${name}`);
+  /** The inspector's definition source. The definition shows formatted until Edit opens the source, so open it. */
+  const definitionField = async (scope = page) => {
+    const field = scope.getByTestId("definition");
+    if (!(await field.count())) await scope.getByTestId("definition-edit").click();
+    await field.waitFor();
+    return field;
+  };
   const addByName = async (name) => {
     await page.getByRole("button", { name: "Add concept", exact: true }).click();
     await page.getByLabel("Concept name").fill(name);
@@ -205,9 +212,10 @@ try {
   const mdText = md.data.toString("utf8");
   assert(md.name.endsWith(".md") && mdText.includes("### Homomorphism"), "Markdown notes contain the concepts");
   assert(
-    mdText.includes("- First Isomorphism Theorem → Isomorphism: derives") &&
-      mdText.includes("- Isomorphism → First Isomorphism Theorem: is derived by"),
-    "Markdown describes a relation in both directions",
+    mdText.includes("- First Isomorphism Theorem → Isomorphism: deriving") &&
+      !mdText.includes("- Isomorphism → First Isomorphism Theorem:") &&
+      !/ by\b/.test(mdText.split("## Relations")[1] ?? ""),
+    "Markdown describes a dependency once, with its active label (no passive \"… by\" side)",
   );
   const mmd = await exportAs("Mermaid diagram");
   assert(mmd.data.toString("utf8").startsWith("flowchart"), "Mermaid export is a flowchart");
@@ -699,7 +707,7 @@ try {
   assert(await summary.isHidden(), "the explanation collapses");
   await nodePanel.locator(".explain summary").click();
   await page.screenshot({ path: `${shots}10-explain.png` });
-  const definition = nodePanel.getByTestId("definition");
+  const definition = await definitionField(nodePanel);
   // The offline summary is the KB definition the node already has, so change that first. (Compared as source text:
   // the summary on screen has its formula typeset.)
   const summarySource = await definition.inputValue();
@@ -1497,7 +1505,10 @@ try {
     assert(tex.includes("\\ker\\varphi"), `the card typesets $\\ker\\varphi$ with KaTeX (${tex.join(", ")})`);
     assert(!(await card.locator(".concept__def").innerText()).includes("$"), "…and shows no dollar delimiters");
     await card.click();
-    const definition = page.getByTestId("definition");
+    const view = page.getByTestId("definition-view");
+    await view.locator(".katex").first().waitFor();
+    assert(!(await view.innerText()).includes("$\\ker"), "the inspector shows the definition formatted, in a box");
+    const definition = await definitionField();
     const source = await definition.inputValue();
     assert(source.includes("$\\ker\\varphi$"), "the inspector edits the LaTeX source");
     const preview = page.getByTestId("definition-preview");
@@ -1781,7 +1792,7 @@ try {
     await addByName("Kernel");
     await waitBadge("Kernel", "blocked"); // looked up, then the AI found its prerequisites
     await node("Kernel").click();
-    const def = await page.getByTestId("definition").inputValue();
+    const def = await (await definitionField()).inputValue();
     assert(def.startsWith("Let $\\phi: G \\to H$ be a group homomorphism.") && def.includes("\\left\\{x \\in G"), "a new concept's definition comes from ProofWiki, macros turned into standard LaTeX");
     const link = page.getByTestId("definition-source").getByRole("link");
     assert((await link.textContent()) === "ProofWiki: Definition:Kernel" && (await link.getAttribute("href")) === "https://proofwiki.org/wiki/Definition:Kernel", "…with a link to its source");
@@ -1795,7 +1806,7 @@ try {
     await sense.getByText("Expected value", { exact: true }).click();
     await sense.getByRole("button", { name: "Use this meaning" }).click();
     await node("Expected value").click();
-    assert((await page.getByTestId("definition").inputValue()).startsWith("In probability theory"), "the chosen meaning brings its definition");
+    assert((await (await definitionField()).inputValue()).startsWith("In probability theory"), "the chosen meaning brings its definition");
 
     const st = await openSettings();
     await st.getByText("ProofWiki refused recent requests").waitFor();
@@ -1806,7 +1817,7 @@ try {
     await addByName("Normal Subgroup");
     await waitBadge("Normal Subgroup", "blocked");
     await node("Normal Subgroup").click();
-    assert((await page.getByTestId("definition").inputValue()).startsWith("A subgroup $N$"), "with lookups off, the AI defines new concepts again");
+    assert((await (await definitionField()).inputValue()).startsWith("A subgroup $N$"), "with lookups off, the AI defines new concepts again");
     await context.unrouteAll();
     await blockLookups(context);
   }
@@ -1845,7 +1856,7 @@ try {
     );
     const first = hops.first();
     assert(
-      (await first.textContent()).includes("was invented to solve") && (await first.textContent()).includes("Joseph Fourier developed Fourier analysis"),
+      (await first.textContent()).includes("inventing a fix for") && (await first.textContent()).includes("Joseph Fourier developed Fourier analysis"),
       "each link shows its relation and its sober fact",
     );
     assert(
@@ -1869,7 +1880,7 @@ try {
     await page.locator(".toast").filter({ hasText: "Chain copied" }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     assert(
-      copied.startsWith("What they don't want you to know") && copied.includes("1. Fourier transform → Heat equation (was invented to solve)") && copied.includes("Moral: "),
+      copied.startsWith("What they don't want you to know") && copied.includes("1. Fourier transform → Heat equation (inventing a fix for)") && copied.includes("Moral: "),
       "Copy as text puts the whole chain on the clipboard",
     );
     await page.screenshot({ path: `${shots}30-absurd-chain.png` });
@@ -2293,7 +2304,7 @@ try {
     assert(
       (await hops.count()) === 6 && (await score.textContent()) === "Score 0 / 15" &&
         (await board.textContent()).includes("6 links, 5 hidden concepts") &&
-        (await hops.first().textContent()).includes("is exemplified by"),
+        (await hops.first().textContent()).includes("including"),
       "Guess the chain shows the two ends, six links with their relations and five hidden concepts",
     );
     const boardText = await board.textContent();

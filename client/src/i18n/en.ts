@@ -217,7 +217,7 @@ export const en = {
   "badge.missing": "missing: {names}",
   "badge.cycle": "dependency cycle",
   "badge.cycleTitle": "This concept is (indirectly) its own prerequisite. Open it to fix the links.",
-  "edge.arrow": "What {a} does to {b}: {kind}",
+  "edge.arrow": "{a} → {b}: {kind}",
   "edge.aToB": "What A does to B",
   "edge.bToA": "What B does to A",
 
@@ -235,6 +235,10 @@ export const en = {
   // Inspector: concept
   "node.rename": "Rename concept",
   "node.aliases": "also: {aliases}",
+  "def.edit": "Edit",
+  "def.done": "Done",
+  "def.empty": "No definition yet.",
+  "def.placeholder": "Definition, with $…$ for formulas",
   "node.definition": "Definition",
   "node.retry": "Retry",
   "node.unclear": "“{name}” has several meanings.",
@@ -347,6 +351,7 @@ export const en = {
   "rel.mix": "Mixed relation",
   "rel.extract": "Extracted from text",
   "rel.kind": "Relation kind",
+  "rel.this": "this concept",
   "rel.kindEmpty": "Say what it does (or “none”).",
   "rel.explanation": "Relation explanation",
   "rel.switch": "Show what {to} does to {from}",
@@ -968,7 +973,7 @@ export const en = {
   "absurd.added": "{n, plural, one {Added the chain to the sandbox “{name}” with # new concept.} other {Added the chain to the sandbox “{name}” with # new concepts.}}",
   "absurd.note": "Added by the absurd chain “{title}”.",
   "absurd.hint": "Part of a chain of facts: {fact}",
-  "absurd.defaultKind": "leads to",
+  "absurd.defaultKind": "leading to",
   // Guess the chain (game mode): panels/ChainGame.tsx, lib/chainGame.ts
   "absurd.play": "Guess the chain",
   "absurd.playAgain": "Play again",

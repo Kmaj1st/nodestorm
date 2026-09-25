@@ -30,22 +30,26 @@ export interface NewNodeInput {
   kind?: ConceptKind | null;
 }
 
-const forward: Record<DepRole, string> = {
-  uses: "uses definition of",
-  derives: "derives",
-  assumes: "assumes",
-};
-const backward: Record<DepRole, string> = {
-  uses: "is used by",
-  derives: "is derived by",
-  assumes: "is assumed by",
+/**
+ * Labels of a prerequisite link: one active label from the dependent ("using", never "is used by"); the prerequisite's
+ * side is "none", so the link reads as a single arrow.
+ */
+export const DEP_KIND: Record<DepRole, string> = {
+  uses: "using",
+  derives: "deriving",
+  assumes: "assuming",
 };
 
-export function depRelation(dependent: ConceptNode, prereq: ConceptNode, role: DepRole, reason: string) {
+/** The two directions of a prerequisite link between two names. */
+export function depKinds(dependent: string, prereq: string, role: DepRole, reason: string) {
   return {
-    aToB: { kind: forward[role], explanation: reason },
-    bToA: { kind: backward[role], explanation: `${prereq.name} is a prerequisite of ${dependent.name}: ${reason}` },
+    aToB: { kind: DEP_KIND[role], explanation: reason },
+    bToA: { kind: "none", explanation: `${prereq} is a prerequisite of ${dependent}: ${reason}` },
   };
+}
+
+export function depRelation(dependent: ConceptNode, prereq: ConceptNode, role: DepRole, reason: string) {
+  return depKinds(dependent.name, prereq.name, role, reason);
 }
 
 export function findRelation(g: Graph, x: string, y: string): Relation | undefined {

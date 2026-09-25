@@ -26,7 +26,9 @@ describe("dependencies", () => {
     const rel = ops.findRelation(g, thmId, homId)!;
     expect(rel.origin).toBe("dependency");
     expect(rel.a).toBe(thmId);
-    expect(rel.aToB.kind).toBe("uses definition of");
+    // One active label from the dependent; the prerequisite's side is "none" (no passive "is used by").
+    expect(rel.aToB.kind).toBe("using");
+    expect(rel.bToA.kind).toBe("none");
   });
 
   it("installing the missing node unblocks the dependent and links it", () => {
@@ -36,7 +38,7 @@ describe("dependencies", () => {
     expect(thm.status).toBe("ok");
     expect(thm.missingDeps).toEqual([]);
     expect(thm.dependsOn).toContain(iso.id);
-    expect(ops.findRelation(iso.graph, thmId, iso.id)?.aToB.kind).toBe("derives");
+    expect(ops.findRelation(iso.graph, thmId, iso.id)?.aToB.kind).toBe("deriving");
   });
 
   it("does not add duplicate nodes", () => {
