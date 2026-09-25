@@ -110,6 +110,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     onClose();
   };
 
+  // Anything changed and not saved: Escape, the backdrop and X ask before throwing it away.
+  const draft = { connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language, aiConcurrency };
+  const stored = Object.fromEntries(Object.keys(draft).map((k) => [k, saved[k as keyof typeof draft]]));
+  const dirty =
+    uiLang !== useLocale.getState().pref ||
+    theme !== useTheme.getState().pref ||
+    JSON.stringify(edgeColors) !== JSON.stringify(useTheme.getState().edgeColors) ||
+    JSON.stringify(draft) !== JSON.stringify(stored);
+
   const modelKnown = models.status !== "ok" || !model || models.models.some((m) => m.id === model);
   // While typing a partial name, narrow the list to matches.
   const q = model.toLowerCase();
@@ -117,7 +126,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     models.status !== "ok" ? [] : modelKnown ? models.models : models.models.filter((m) => `${m.id} ${m.label ?? ""}`.toLowerCase().includes(q));
 
   return (
-    <Modal label={t("settings.title")} title={t("settings.title")} onClose={onClose} className="settings">
+    <Modal label={t("settings.title")} title={t("settings.title")} onClose={onClose} className="settings" dirty={dirty}>
 
       {/* Interface first: it is about this app, not the AI (whose answer language is under "AI answers"). */}
       <fieldset className="choice">

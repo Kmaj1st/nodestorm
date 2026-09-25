@@ -741,6 +741,11 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .modal__title { margin: 0; font-size: var(--text-lg); font-weight: 600; letter-spacing: -0.01em; min-width: 0; overflow-wrap: anywhere; }
 .modal__body h3 { margin: 0; font-size: var(--text-lg); font-weight: 600; }
 .modal__body p { margin: 0; }
+/* "Discard what you typed?" under the header, when Escape, the backdrop or X would lose unsaved text. */
+.modal__discard {
+  display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--border); border-radius: var(--radius-md); background: var(--surface); font-size: var(--text-sm);
+}
 /* Footer: the last actions row sticks to the bottom of a long dialog, right-aligned. */
 .form__actions { display: flex; gap: var(--space-2); justify-content: flex-end; align-items: center; flex-wrap: wrap; }
 .form__lead { margin-right: auto; }

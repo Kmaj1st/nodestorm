@@ -19,6 +19,12 @@
 - A test checks that no Chinese message is left in English and that every plural form resolves.
 - **Basic concepts:** Inspector → **Basic concept** marks a concept as taken as given (a small mark on its card). It needs no prerequisites: its missing ones go, it is never blocked, and no prerequisite check (no AI call) runs for it. The links it already has stay. Unmarking leaves it "not checked", ready for **Check prerequisites with AI**. A blocked concept's missing list also offers "take it as given". Undo, share links, files and sandboxes keep the mark.
 - **Hide concepts for now.** The eye button in the inspector's header, **H** on the canvas (the selected concepts) or **Shift+H** (all but the selected ones), and **View → Hide selected / Hide others** take concepts and their relations off the canvas, the minimap, fit-view, Tidy and the 3D view. It is only a view choice for this browser tab: nothing is deleted, undone, exported or shared, and a new tab shows everything. **"N hidden · Show all"** in the canvas corner lists them, each with its own **Show** button; finding, opening or walking through a hidden concept shows it again.
+- **Damaged saved projects load:** graphs saved in the browser are checked like imports when the page opens. A missing list or field is filled in, a broken entry dropped, and the rest of the project kept; a notice says what was repaired.
+- **A saved AI provider that no longer exists** goes back to the default one, so AI actions open Settings instead of failing.
+- **Aliases stay unambiguous:** a new concept's alias (or one found by a look-up, or kept on renaming) that is another concept's name or alias is dropped; the concept is added as usual.
+- **Extracting without an AI set up** leaves the new concepts "not checked" (their badge checks them later) instead of one error per concept.
+- **C, C++ and C#** (and f / f′, A / A*, A†) are different concepts: symbols such as + # * ′ † count in names, while case, spaces, hyphens, underscores and trailing punctuation still don't.
+- **Escape doesn't lose typed text:** in the definitions pop-up (your own definition), Add concept (definition or description) and Settings (unsaved changes), Escape, a click outside or X first asks "Discard what you typed?"; focus is on **Keep editing**, and Escape again goes back to the text.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

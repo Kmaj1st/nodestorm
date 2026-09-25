@@ -2020,7 +2020,26 @@ try {
       (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Your definition",
       "…with “My own definition” open and its definition box focused, to write one right away",
     );
-    await dlg.getByRole("button", { name: "Later" }).click();
+    // Escape with a typed definition: asks before discarding it; Escape again keeps editing.
+    await page.keyboard.type("A subset closed under the operation");
+    await page.keyboard.press("Escape");
+    const discard = dlg.getByTestId("modal-discard");
+    await discard.waitFor();
+    assert(
+      (await page.evaluate(() => document.activeElement?.textContent)) === "Keep editing",
+      "Escape with a typed definition asks “Discard what you typed?”, focus on Keep editing",
+    );
+    await page.keyboard.press("Escape");
+    await discard.waitFor({ state: "detached" });
+    assert(
+      (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Your definition" &&
+        (await dlg.getByLabel("Your definition").inputValue()) === "A subset closed under the operation",
+      "…Escape again keeps editing: the text is still there and focused",
+    );
+    await page.keyboard.press("Escape");
+    await discard.getByRole("button", { name: "Discard" }).click();
+    await dlg.waitFor({ state: "detached" });
+    assert(true, "…and Discard closes the pop-up");
     await waitBadge("Subgroup", "needs a definition");
     await badge("Subgroup").click();
     await dlg.getByTestId("sense-ask-ai").click();
