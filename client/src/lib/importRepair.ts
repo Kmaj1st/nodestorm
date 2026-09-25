@@ -1,4 +1,5 @@
 import {
+  AiConceptKind,
   ConceptKind,
   DepRole,
   GraphExport,
@@ -139,7 +140,15 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
       : [],
   );
   const senses: Sense[] | undefined = Array.isArray(n.senses)
-    ? n.senses.flatMap((s) => (isObj(s) && str(s.name) ? [{ name: str(s.name), domain: str(s.domain), definition: str(s.definition) }] : []))
+    ? n.senses.flatMap((s): Sense[] => {
+        if (!isObj(s) || !str(s.name)) return [];
+        const sense: Sense = { name: str(s.name), domain: str(s.domain), definition: str(s.definition) };
+        // Where a meaning was looked up, and its kind, are kept (an unsafe link or unknown kind is left out).
+        const src = SourceRef.safeParse(s.source);
+        if (src.success) sense.source = src.data;
+        if (s.kind !== undefined) sense.kind = AiConceptKind.parse(s.kind);
+        return [sense];
+      })
     : undefined;
   const node: ConceptNode = {
     id: str(n.id) || uid("n"),
@@ -201,9 +210,9 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     if (m.success) node.mastery = m.data;
     else fixes.add(t("repair.droppedMastery"));
   }
-  // Nothing left to block on / choose from: don't leave the node stuck.
+  // Nothing left to block on: don't leave the node stuck. (An "unclear" concept without meanings is one that needs a
+  // definition; its badge offers the look-ups again, so it stays as it is.)
   if (node.status === "blocked" && !missingDeps.length) node.status = "ok";
-  if (node.status === "unclear" && !node.senses) node.status = "ok";
   return node;
 }
 

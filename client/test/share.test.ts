@@ -68,7 +68,8 @@ describe("share links", () => {
       relations: [],
     };
     const out = await decodeShare(await encodeShare(g, "x"));
-    expect(out.graph.nodes.map((n) => [n.status, n.error])).toEqual([["ok", undefined], ["blocked", undefined]]);
+    // Without a definition or missing prerequisites, the interrupted concept still needs a definition.
+    expect(out.graph.nodes.map((n) => [n.status, n.error])).toEqual([["unclear", undefined], ["blocked", undefined]]);
   });
 
   it("shares a sandbox as a standalone graph", async () => {

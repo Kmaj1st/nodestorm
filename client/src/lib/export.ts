@@ -9,7 +9,9 @@ import { splitMath } from "./math";
 export function sourceLabel(s: SourceRef): string {
   if (s.site === "AI") return `AI (${s.title})`;
   if (s.site === "you") return "own words";
-  return s.page ? `${s.title}, p. ${s.page}` : s.title;
+  // A looked-up definition names its site ("Wikidata: Q83478" means little without it).
+  const title = s.site && s.title ? `${s.site}: ${s.title}` : s.site || s.title;
+  return s.page ? `${title}, p. ${s.page}` : title;
 }
 
 /**
@@ -94,7 +96,10 @@ export function toMarkdown(g: Graph): string {
     if (n.missingDeps.length) {
       lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
-    if (n.source) lines.push(`*Source:* ${mdEscape(sourceLabel(n.source))}`, "");
+    if (n.source) {
+      const label = mdEscape(sourceLabel(n.source));
+      lines.push(`*Source:* ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}`, "");
+    }
     if (n.formal?.decls.length) lines.push(`*In Lean's Mathlib:* ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
     if (n.papers?.works.length) lines.push("**Further reading** (from OpenAlex):", "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");
     if (n.anatomy) lines.push(...anatomyMd(n.anatomy));

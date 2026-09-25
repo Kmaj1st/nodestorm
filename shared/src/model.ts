@@ -763,16 +763,19 @@ export interface ProvidersResponse {
 // ---------- Helpers ----------
 
 export function normalizeName(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // Latin accents: "Poincaré" ~ "poincare"
-      // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
-      .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
-      .trim()
-      .replace(/([a-z])s(?=\s|$)/g, "$1") // crude plural folding for Latin words: "groups" ~ "group"
-  );
+  const folded = s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, ""); // Latin accents: "Poincaré" ~ "poincare"
+  const words = folded
+    // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
+    .trim()
+    .replace(/([a-z])s(?=\s|$)/g, "$1"); // crude plural folding for Latin words: "groups" ~ "group"
+  if (words) return words;
+  // A name made only of symbols ("∇", "∫", "⊗") keeps them, so symbols differ from each other and from "" (no
+  // name); punctuation alone ("!!!", "-") still counts as no name.
+  return folded.replace(/[^\p{S}]+/gu, " ").trim();
 }
 
 /** Find the node matching a name via name or aliases (case/plural-insensitive). */

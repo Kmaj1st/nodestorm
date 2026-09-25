@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Imports and share links keep more:** the meanings of a concept waiting for a choice keep their source (encyclopedia link or AI) and kind, and a concept that "needs a definition" still needs one after the round trip instead of turning "ok".
+- **Share links** no longer mark a concept whose check was running or failed as "ok": it arrives "not checked" (or "needs a definition").
+- **Symbol names** such as "∇" or "∫" are recognised as the same concept when added again, and as different prerequisites from each other.
+- **Markdown and LaTeX exports** name the site of a looked-up definition ("Wikidata: Q83478"), and Markdown links its page.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.

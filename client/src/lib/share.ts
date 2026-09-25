@@ -41,8 +41,10 @@ export function packGraph(g: Graph, name: string): unknown {
   // notebook rather than part of the graph, and whoever saves a copy starts their own quiz from scratch. Stored lookups
   // (Mathlib declarations, papers) are bulky and can be fetched again, so they stay out too.
   const nodes = g.nodes.map((n) => {
-    // A check that's running or failed here can't be resumed by the viewer: show what's known.
-    const status = n.status === "checking" || n.status === "error" ? (n.missingDeps.length ? "blocked" : "ok") : n.status;
+    // A check that's running or failed here can't be resumed by the viewer: show what's known. Without missing
+    // prerequisites that is "not checked" (or "needs a definition"), never "ok", which would claim the check passed.
+    const settled = n.missingDeps.length ? "blocked" : n.definition.trim() ? "pending" : "unclear";
+    const status = n.status === "checking" || n.status === "error" ? settled : n.status;
     const out: Record<string, unknown> = {
       id: ids.get(n.id),
       name: n.name,
