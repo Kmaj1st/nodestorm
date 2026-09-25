@@ -467,6 +467,7 @@ export const en = {
   "extract.back": "Edit text",
   "extract.add": "Add selected ({n, plural, one {# concept} other {# concepts}}, {links, plural, one {# relation} other {# relations}})",
   "extract.done": "Added {n, plural, one {# concept} other {# concepts}} and {links, plural, one {# relation} other {# relations}} from the text. Undo removes them all at once.",
+  "extract.notChecked": "Their prerequisites aren't checked yet: set up an AI in Settings, then use their “check with AI” badge.",
 
   // Find concept
   "find.dialog": "Find concept",

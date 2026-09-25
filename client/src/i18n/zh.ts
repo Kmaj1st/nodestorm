@@ -463,6 +463,7 @@ export const zh: Record<MessageKey, string> = {
   "extract.back": "修改文本",
   "extract.add": "添加所选（{n} 个概念，{links} 条关系）",
   "extract.done": "已从文本添加 {n} 个概念和 {links} 条关系。撤销会一次全部移除。",
+  "extract.notChecked": "尚未检查它们的前置知识：请先在设置中配置 AI，再点击它们的“用 AI 检查”标记。",
 
   // 查找概念
   "find.dialog": "查找概念",

@@ -162,4 +162,21 @@ describe("extract flow (store + mock AI)", () => {
     store().redo();
     expect(graph().nodes).toHaveLength(before.nodes.length + 4);
   });
+
+  it("without an AI set up, leaves the new concepts not checked instead of failing each one", async () => {
+    useSettings.setState({ connection: "browser", provider: "siliconflow" });
+    useSettings.getState().forgetKeys();
+    store().setSettingsOpen(false);
+    const added = insertExtraction(buildReview(graph(), answer));
+    expect(added.length).toBeGreaterThan(0);
+    await new Promise((r) => setTimeout(r, 20));
+    const fresh = graph().nodes.filter((n) => added.includes(n.id));
+    expect(fresh.map((n) => n.status)).toEqual(added.map(() => "pending"));
+    expect(fresh.every((n) => !n.error)).toBe(true);
+    expect(store().toastKind).toBe("info");
+    expect(store().settingsOpen).toBe(false);
+    // Still one undo step.
+    store().undo();
+    expect(graph().nodes.some((n) => added.includes(n.id))).toBe(false);
+  });
 });
