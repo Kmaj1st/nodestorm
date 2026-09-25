@@ -42,6 +42,7 @@ function seedCycle(): string[] {
 beforeEach(() => {
   store().reset();
   useSettings.setState({
+    newConcepts: "auto", // these tests follow the automatic flow (lookupFlow.test.ts has the asking one)
     connection: "browser",
     provider: "mock",
     autoResolveCycles: true,

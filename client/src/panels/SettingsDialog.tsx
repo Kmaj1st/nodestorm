@@ -43,6 +43,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [installAll, setInstallAll] = useState(saved.installAll);
   const [autoResolveCycles, setAutoResolveCycles] = useState(saved.autoResolveCycles);
   const [lookup, setLookup] = useState(saved.lookup);
+  const [newConcepts, setNewConcepts] = useState(saved.newConcepts);
   const [language, setLanguage] = useState(saved.language);
   // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
   const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
@@ -102,7 +103,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setEdgeColors(edgeColors);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, autoResolveCycles, language: lang, aiConcurrency,
+      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language: lang, aiConcurrency,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
@@ -363,6 +364,15 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
       <fieldset className="choice">
         <legend>{t("settings.lookup")}</legend>
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={newConcepts === "ask"}
+            onChange={(e) => setNewConcepts(e.target.checked ? "ask" : "auto")}
+            data-testid="new-concepts-ask"
+          />
+          {t("settings.newConceptsAsk")}
+        </label>
         <label className="check">
           <input type="checkbox" checked={lookup.enabled} onChange={(e) => setLookup({ ...lookup, enabled: e.target.checked })} />
           {t("settings.lookupEnabled")}

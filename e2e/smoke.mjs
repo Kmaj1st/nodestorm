@@ -114,6 +114,9 @@ try {
   // Switch to the offline demo provider for the rest of the flow.
   await page.getByRole("button", { name: "Settings", exact: true }).click();
   await settings.getByLabel("Provider", { exact: true }).selectOption("mock");
+  // These sections follow the automatic flow; "Add with look-ups" below tests asking first (the default).
+  assert(await settings.getByTestId("new-concepts-ask").isChecked(), "adding a concept asks first by default");
+  await settings.getByTestId("new-concepts-ask").uncheck();
   await settings.getByRole("button", { name: "Save", exact: true }).click();
 
   console.log("Naming from a description");
@@ -1855,9 +1858,74 @@ try {
     await page.getByTestId("derive-together").click();
     await panel.getByRole("tab", { name: "Library" }).click();
     await panel.getByRole("heading", { name: "Your derivations" }).waitFor();
+    // The library fills in from IndexedDB after the heading shows.
+    await page
+      .waitForFunction(() => document.querySelectorAll(".derive-session").length === 2 && document.querySelectorAll(".derive-doc").length === 3, null, { timeout: 5000 })
+      .catch(() => {});
     assert((await panel.locator(".derive-session").count()) === 2 && (await panel.locator(".derive-doc").count()) === 3, "documents and derivations survive a reload");
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
+  }
+
+  console.log("Add with look-ups");
+  {
+    const json = (body) => ({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
+    const kernel = "== Definition ==\nThe '''kernel''' of $\\phi$ is $\\map {\\phi^{-1} } {e_H}$.";
+    // The offline demo answers in the browser, so count its answers by the status-bar tasks' names instead.
+    await context.unrouteAll();
+    await context.route(LOOKUP_SITES, (route) => {
+      const url = decodeURIComponent(route.request().url()).replace(/\+/g, " ");
+      if (url.includes("proofwiki") && url.includes("page=Definition:Kernel")) return route.fulfill(json({ parse: { title: "Definition:Kernel", wikitext: kernel } }));
+      if (url.includes("minecraft.fandom.com") && url.includes("titles=Kernel")) {
+        return route.fulfill(json({ query: { pages: [{ title: "Kernel", extract: "The Kernel is a block found deep underground that powers the old machines." }] } }));
+      }
+      return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
+    });
+    const s1 = await openSettings();
+    await s1.getByTestId("new-concepts-ask").check();
+    await s1.getByTestId("lookup-fandom").fill("minecraft");
+    await s1.getByRole("button", { name: "Save", exact: true }).click();
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    await addByName("Kernel");
+    const dlg = page.getByRole("dialog", { name: "Definitions" });
+    await dlg.getByText("Definitions for “Kernel”").waitFor();
+    const sources = await dlg.locator(".sense__source").allTextContents();
+    assert(JSON.stringify(sources) === JSON.stringify(["ProofWiki", "Fandom (minecraft)"]), `the pop-up lists each source's definition: ${sources}`);
+    assert((await dlg.getByTestId("sense-searched").textContent()).includes("Nothing in Wikipedia"), "…and says where nothing was found");
+    await audit("definitions pop-up");
+    await page.screenshot({ path: `${shots}lookups-popup.png` });
+    await dlg.getByRole("radio").first().check();
+    await dlg.getByRole("button", { name: "Use this meaning" }).click();
+    await waitBadge("Kernel", "check with AI");
+    assert(!(await node("Kernel").textContent()).includes("missing"), "adding and choosing a definition doesn't check prerequisites (no AI)");
+    await node("Kernel").click();
+    await page.getByTestId("pending-box").waitFor();
+    await node("Kernel").getByRole("button", { name: "Check the prerequisites of Kernel with the AI" }).click();
+    await waitBadge("Kernel", "blocked");
+    assert((await node("Kernel").textContent()).includes("missing: Homomorphism"), "“Check with AI” checks its prerequisites");
+
+    // Nothing found: the pop-up says so, and "Ask the AI" defines it.
+    await addByName("Subgroup");
+    await dlg.getByText("Nothing found in ProofWiki, Wikipedia, Fandom (minecraft).").waitFor();
+    assert(true, "an unknown name: the pop-up says nothing was found");
+    await dlg.getByRole("button", { name: "Later" }).click();
+    await waitBadge("Subgroup", "needs a definition");
+    await badge("Subgroup").click();
+    await dlg.getByTestId("sense-ask-ai").click();
+    await page.waitForFunction(() => {
+      const b = document.querySelector('[data-testid="node-Subgroup"] .concept__badge')?.textContent;
+      return b && !["needs a definition", "checking…"].includes(b);
+    });
+    assert((await node("Subgroup").locator(".concept__def").count()) === 1, "“Ask the AI” writes a definition");
+
+    const s2 = await openSettings();
+    await s2.getByTestId("new-concepts-ask").uncheck();
+    await s2.getByTestId("lookup-fandom").fill("");
+    await s2.getByRole("button", { name: "Save", exact: true }).click();
+    await context.unrouteAll();
+    await blockLookups(context);
   }
 
   console.log("Definitions from encyclopedias");
@@ -1910,9 +1978,10 @@ try {
 
     // ProofWiki refuses this one (a bot check), so Wikipedia and Wikidata answer: two meanings to choose from.
     await addByName("Expectation");
-    const sense = page.getByRole("dialog", { name: "What do you mean?" });
+    const sense = page.getByRole("dialog", { name: "Definitions" });
     await sense.waitFor();
-    assert((await sense.textContent()).includes("from Wikipedia") && (await sense.textContent()).includes("from Wikidata"), "several looked-up meanings go to “what do you mean?”, each naming its site");
+    const sites = await sense.locator(".sense__source").allTextContents();
+    assert(sites.includes("Wikipedia") && sites.includes("Wikidata"), `several looked-up meanings go to the definitions pop-up, each naming its site: ${sites}`);
     await sense.getByText("Expected value", { exact: true }).click();
     await sense.getByRole("button", { name: "Use this meaning" }).click();
     await node("Expected value").click();

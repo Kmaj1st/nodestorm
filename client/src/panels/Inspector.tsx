@@ -37,6 +37,7 @@ import {
   applyProposal,
   type AiProposal,
   analyzeNode,
+  checkWithAi,
   anatomyKey,
   connectKey,
   suggestConnections,
@@ -213,9 +214,17 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       )}
       {node.status === "unclear" && (
         <div className="error-box error-box--unclear">
-          <p className="small">{t("node.unclear", { name: node.name })}</p>
+          <p className="small">{t(node.senses?.length ? "node.unclear" : "node.noDefinition", { name: node.name })}</p>
           <button className="primary" onClick={() => setClarifying({ graphId, nodeId: node.id })}>
-            {t("node.chooseMeaning")}
+            {t(node.senses?.length ? "node.chooseMeaning" : "node.chooseDefinition")}
+          </button>
+        </div>
+      )}
+      {node.status === "pending" && !viewing && (
+        <div className="error-box error-box--pending" data-testid="pending-box">
+          <p className="small">{t("node.pending")}</p>
+          <button className="primary" onClick={() => checkWithAi(node.id, graphId)} title={t("node.checkTitle", { model: aiSource().title })}>
+            {t("node.check")}
           </button>
         </div>
       )}
@@ -349,6 +358,7 @@ const STATUS_LABEL: Record<ConceptNode["status"], MessageKey> = {
   checking: "state.checking",
   unclear: "state.unclear",
   error: "state.error",
+  pending: "state.pending",
 };
 
 /** A stored result's date, in the interface language. */

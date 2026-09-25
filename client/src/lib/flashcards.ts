@@ -39,6 +39,7 @@ const STATUS_TAG: Record<NodeStatus, string> = {
   checking: "checking",
   unclear: "unclear",
   error: "error",
+  pending: "not_checked",
 };
 
 /** A name usable as one Anki tag: tags are separated by spaces, so whitespace becomes "_" ("::" nests them). */

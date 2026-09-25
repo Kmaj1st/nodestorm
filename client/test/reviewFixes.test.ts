@@ -26,7 +26,7 @@ const idle = async () => {
 
 beforeEach(() => {
   store().reset();
-  useSettings.setState({ connection: "browser", provider: "mock", clarify: { enabled: true, options: 3 } });
+  useSettings.setState({ newConcepts: "auto", connection: "browser", provider: "mock", clarify: { enabled: true, options: 3 } });
 });
 
 describe("sandboxes and running checks", () => {

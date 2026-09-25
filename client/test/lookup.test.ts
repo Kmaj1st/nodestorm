@@ -38,6 +38,7 @@ beforeEach(() => {
   store().reset();
   resetLookup();
   useSettings.setState({
+    newConcepts: "auto", // the automatic flow (lookupFlow.test.ts has the asking one)
     connection: "browser",
     provider: "mock",
     language: "auto",

@@ -1,5 +1,14 @@
 # Changelog
 
+## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
+
+- **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.
+  - It says which sources had nothing, or couldn't be reached. Pick one, write your own, or **Ask the AI** (the tooltip names the provider and model).
+  - **Later** leaves the concept marked "needs a definition"; its badge reopens the pop-up.
+- **Prerequisites are checked only when you ask.** A concept with a chosen or typed definition is "not checked"; its **check with AI** badge (or **Check prerequisites with AI** in the inspector) runs the check.
+- **Install** takes an encyclopedia page of exactly that name without asking; otherwise the concept needs a definition. **Install all** still follows the chain with the AI, as its button says.
+- Settings → Definitions has a switch to go back to the automatic flow (best look-up or the AI's definition, prerequisites checked right away).
+
 ## 2026-09-25: Baidu Baike, Moegirl, Fandom, BWIKI; AI look-ups proposed
 
 - **Baidu Baike (百度百科):** concepts with Chinese names are looked up there after ProofWiki and Wikipedia (there's a switch in Settings), and it is in "Look up in…".

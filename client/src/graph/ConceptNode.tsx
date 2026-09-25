@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
-import { analyzeNode } from "../lib/actions";
+import { analyzeNode, checkWithAi } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
 import { Icon } from "../ui/Icon";
@@ -18,6 +18,7 @@ const badge: Record<CN["status"], MessageKey> = {
   checking: "state.checking",
   unclear: "badge.unclear",
   error: "badge.error",
+  pending: "badge.pending",
 };
 
 function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
@@ -25,7 +26,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
   const c = data.concept;
   const graphId = useGraphStore((s) => s.activeId);
   const setClarifying = useGraphStore((s) => s.setClarifying);
-  // Error and unclear badges are buttons: retry, or reopen the "what do you mean?" dialog.
+  // Error, unclear and pending badges are buttons: retry, reopen the "what do you mean?" dialog, or check with the AI.
   // In the read-only share viewer the badges are plain labels (not buttons you can Tab to).
   const viewing = useGraphStore(isViewing);
   const action = viewing
@@ -34,7 +35,12 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       ? () => analyzeNode(c.id, graphId)
       : c.status === "unclear"
         ? () => setClarifying({ graphId, nodeId: c.id })
-        : undefined;
+        : c.status === "pending"
+          ? () => checkWithAi(c.id, graphId)
+          : undefined;
+  // An unclear concept with nothing to choose from yet needs a definition, not a choice.
+  const label: MessageKey = c.status === "unclear" && !c.senses?.length ? "badge.noDefinition" : badge[c.status];
+  const aria: MessageKey = c.status === "error" ? "badge.retryAria" : c.status === "pending" ? "badge.pendingAria" : "badge.chooseAria";
   return (
     <div
       className={`concept concept--${c.status}${data.inCycle ? " concept--cycle" : ""}${selected ? " concept--selected" : ""}`}
@@ -59,14 +65,14 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
               action();
             }}
             title={c.error}
-            aria-label={t(c.status === "error" ? "badge.retryAria" : "badge.chooseAria", { name: c.name })}
+            aria-label={t(aria, { name: c.name })}
           >
             <StatusMark status={c.status} />
-            {t(badge[c.status])}
+            {t(label)}
             {c.status === "error" && <Icon icon={RotateCcw} size={12} />}
           </button>
         ) : (
-          <span className={`concept__badge concept__badge--${c.status}`}><StatusMark status={c.status} />{t(badge[c.status])}</span>
+          <span className={`concept__badge concept__badge--${c.status}`}><StatusMark status={c.status} />{t(label)}</span>
         )}
       </div>
       {c.definition && <div className="concept__def"><MathText text={c.definition} inline /></div>}

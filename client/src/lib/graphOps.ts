@@ -92,7 +92,7 @@ export function upsertRelation(
 }
 
 function withStatus(n: ConceptNode): ConceptNode {
-  if (n.status === "checking" || n.status === "error" || n.status === "unclear") return n;
+  if (n.status === "checking" || n.status === "error" || n.status === "unclear" || n.status === "pending") return n;
   return { ...n, status: n.missingDeps.length ? "blocked" : "ok" };
 }
 

@@ -28,6 +28,11 @@ interface SettingsState {
    * `bwiki`: the Fandom subdomain / BWIKI game offered in "Look up in…" ("" for none).
    */
   lookup: { enabled: boolean; proofwiki: boolean; wikipedia: boolean; baidu: boolean; fandom: string; bwiki: string };
+  /**
+   * Adding a concept by name: "ask" shows what the encyclopedias and wikis found and uses the AI only when the user
+   * asks; "auto" takes the best look-up (or the AI's definition) and checks prerequisites right away.
+   */
+  newConcepts: "ask" | "auto";
   /** When a prerequisite check closes a dependency cycle, let the AI pick the wrong link and remove it. */
   autoResolveCycles: boolean;
   /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
@@ -114,6 +119,7 @@ export const useSettings = create<SettingsStore>()(
       clarify: { enabled: true, options: 3 },
       installAll: { maxDepth: 3, maxNodes: 15 },
       lookup: { enabled: true, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" },
+      newConcepts: "ask",
       autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,

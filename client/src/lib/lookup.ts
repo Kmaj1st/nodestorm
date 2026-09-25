@@ -109,14 +109,18 @@ export async function lookupDefinitions(
   opts: { fresh?: boolean; sites?: Site[] } = {},
 ): Promise<LookupSense[]> {
   if (opts.sites ? !isOnline() : !lookupReady()) return [];
+  return (await lookupCached(name, opts.sites ?? activeSites(Date.now(), name), max, signal, opts.fresh)).senses;
+}
+
+/** `sites` asked in order (see askSites), through the cache; sites that refused are paused. */
+async function lookupCached(name: string, sites: Site[], max: number, signal?: AbortSignal, fresh = false) {
   const { language, lookup } = useSettings.getState();
   const lang = lookupLanguage(language, name);
-  const sites = opts.sites ?? activeSites(Date.now(), name);
   // A different Fandom wiki or BWIKI game is a different answer.
   const wikis = sites.includes("fandom") || sites.includes("bwiki") ? `:${lookup.fandom}|${lookup.bwiki}` : "";
   const key = `${lang}:${sites.join(",")}${wikis}:${max}:${normalizeName(name)}`;
   const hit = loadCache()[key];
-  if (hit && !opts.fresh && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return hit.senses;
+  if (hit && !fresh && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return { senses: hit.senses, blocked: [] as Site[] };
   const res = await askSites(name, lang, sites, max, signal);
   for (const s of res.blocked) paused[s] = Date.now() + PAUSE_MS;
   // Only a clean answer is cached: a miss caused by a refusing site should be retried later.
@@ -124,7 +128,65 @@ export async function lookupDefinitions(
     loadCache()[key] = { at: Date.now(), senses: res.senses };
     saveCache();
   }
-  return res.senses;
+  return res;
+}
+
+/**
+ * Every enabled non-AI source for a new concept, for the user to choose from: the encyclopedias, Baidu Baike and
+ * Moegirl for a Chinese (or Japanese, for Moegirl) name, and the Fandom / BWIKI wiki named in Settings.
+ */
+export function everySite(name: string): Site[] {
+  const { lookup, language } = useSettings.getState();
+  if (!lookup.enabled) return [];
+  const lang = lookupLanguage(language, name);
+  const sites: Site[] = [];
+  if (lookup.proofwiki) sites.push("proofwiki");
+  if (lookup.wikipedia) sites.push("wikipedia");
+  if (lookup.baidu && lang === "zh") sites.push("baidu");
+  if (lang === "zh" || lang === "ja") sites.push("moegirl");
+  if (lookup.fandom.trim()) sites.push("fandom");
+  if (lookup.bwiki.trim()) sites.push("bwiki");
+  return sites;
+}
+
+export interface LookupEverywhere {
+  senses: LookupSense[];
+  /** The sites asked (a paused one is not asked, and counts as failed). */
+  asked: Site[];
+  failed: Site[];
+}
+
+/**
+ * Meanings of `name` from every source in `everySite`, asked side by side (up to `max` each): exact matches first,
+ * one entry per source and title. Nothing throws but a cancel; a site that fails is listed in `failed`.
+ */
+export async function lookupEverywhere(name: string, max: number, signal?: AbortSignal): Promise<LookupEverywhere> {
+  const sites = isOnline() ? everySite(name) : [];
+  const now = Date.now();
+  const failed: Site[] = sites.filter((s) => paused[s] && paused[s]! > now);
+  const asked = sites.filter((s) => !failed.includes(s));
+  const results = await Promise.all(
+    asked.map((site) =>
+      lookupCached(name, [site], max, signal).catch((e) => {
+        if (e instanceof CancelledError || signal?.aborted) throw new CancelledError();
+        return { senses: [] as LookupSense[], blocked: [site] };
+      }),
+    ),
+  );
+  const seen = new Set<string>();
+  const senses: LookupSense[] = [];
+  for (const r of results) {
+    failed.push(...r.blocked);
+    for (const s of r.senses) {
+      const id = `${s.source?.site ?? ""}|${normalizeName(s.name)}`;
+      if (seen.has(id)) continue;
+      seen.add(id);
+      senses.push(s);
+    }
+  }
+  // Exact matches first; otherwise the order of the sites (a stable sort).
+  senses.sort((a, b) => Number(b.exact) - Number(a.exact));
+  return { senses, asked, failed: [...new Set(failed)] };
 }
 
 /** Ask `sites` in order until one has an answer; sites that fail are reported in `blocked`. */

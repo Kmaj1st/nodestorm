@@ -28,7 +28,7 @@ import { applyAbsurdChain, sandboxName } from "./absurd";
 import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
-import { lookupDefinitions, lookupReady, type Site } from "./lookup";
+import { lookupDefinitions, lookupEverywhere, lookupReady, SITE_NAME, type Site } from "./lookup";
 import { isOnline } from "./online";
 import { viewport } from "./viewport";
 import * as cycles from "./cycles";
@@ -191,8 +191,9 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     // meaning) the AI works out the meaning below.
   }
   // Without AI set up, a looked-up definition is still worth keeping: finish here instead of opening Settings.
+  // (Not for "Check with AI" on a concept waiting for that: the user asked for the AI.)
   const fromEncyclopedia = lookedUp || Boolean(find()?.source?.url && find()?.definition.trim());
-  if (fromEncyclopedia && !isReady(useSettings.getState())) {
+  if (fromEncyclopedia && node.status !== "pending" && !isReady(useSettings.getState())) {
     set({ status: "ok" });
     if (!noAiNoticeShown) {
       noAiNoticeShown = true;
@@ -440,16 +441,101 @@ export async function findPapers(nodeId: string, graphId = store().activeId) {
 export function chooseSense(graphId: string, nodeId: string, sense: Pick<Sense, "name" | "definition" | "source" | "kind">) {
   let id = nodeId;
   let merged = false;
+  // A meaning from a look-up or the user's own waits for "Check with AI"; one the AI gave (the user asked it) goes on
+  // to the prerequisite check, as does every meaning when Settings says to use the AI right away.
+  const wait = askFirst() && sense.source?.site !== "AI";
   store().mutate((g) => {
     const r = ops.applySense(g, nodeId, sense);
     id = r.id;
     merged = r.merged;
-    return r.graph;
+    return wait && !r.merged ? ops.updateNode(r.graph, r.id, { status: "pending" }) : r.graph;
   }, graphId);
   store().setClarifying(null);
   store().setInspect({ kind: "node", id });
   if (merged) store().setToast(t("toast.senseMerged", { name: sense.name }), "info");
-  else void analyzeNode(id, graphId);
+  else if (!wait) void analyzeNode(id, graphId);
+}
+
+/**
+ * The user's go-ahead for the AI on a concept: "Check with AI" (its prerequisites) or "Ask the AI" (its meaning too).
+ * Without an AI set up, Settings opens and the concept stays as it is.
+ */
+export function checkWithAi(nodeId: string, graphId = store().activeId, opts: AnalyzeOptions = {}): boolean {
+  if (!isReady(useSettings.getState())) {
+    store().setToast(t("toast.setUpAi"), "info");
+    store().setSettingsOpen(true);
+    return false;
+  }
+  void analyzeNode(nodeId, graphId, undefined, opts);
+  return true;
+}
+
+/** Settings: show what the look-ups found and use the AI only when asked (the default), instead of right away. */
+export const askFirst = () => useSettings.getState().newConcepts !== "auto";
+
+/** A looked-up meaning as a sense to choose from. */
+const lookedUpSense = (s: { name: string; domain: string; definition: string; source?: SourceRef }): Sense => ({
+  name: s.name,
+  domain: s.domain,
+  definition: s.definition,
+  source: s.source,
+});
+
+/**
+ * A new concept's meanings from every enabled encyclopedia and wiki (no AI): the concept waits as "unclear" with
+ * what was found (maybe nothing), and "what do you mean?" opens with it (unless `quiet`). The AI is used only when
+ * the user picks "Ask the AI" there.
+ */
+export async function lookUpChoices(nodeId: string, graphId = store().activeId, opts: { quiet?: boolean } = {}) {
+  if (inViewer(graphId)) return;
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  const set = (patch: Parameters<typeof ops.updateNode>[2]) =>
+    store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId, { history: "background" });
+  set({ status: "checking", error: undefined });
+  const res = await withBusy(
+    analyzeKey(graphId, nodeId),
+    t("task.lookup", { name: node.name }),
+    (signal) => lookupEverywhere(node.name, useSettings.getState().clarify.options, signal),
+    { onError: () => {}, onCancel: () => {} },
+  );
+  set({ status: "unclear", senses: (res?.senses ?? []).map(lookedUpSense) });
+  if (!res || opts.quiet || !graph(graphId)?.nodes.some((n) => n.id === nodeId)) return;
+  const names = (sites: Site[]) => sites.map((x) => siteName(x));
+  store().setClarifying({ graphId, nodeId, searched: { asked: names(res.asked), failed: names(res.failed) } });
+}
+
+/** A site's name as shown, with the wiki for Fandom and BWIKI. */
+function siteName(site: Site): string {
+  const { lookup } = useSettings.getState();
+  if (site === "fandom" && lookup.fandom) return `Fandom (${lookup.fandom})`;
+  if (site === "bwiki" && lookup.bwiki) return `BWIKI (${lookup.bwiki})`;
+  return SITE_NAME[site];
+}
+
+/**
+ * An installed prerequisite, without the AI: an encyclopedia page of exactly its name is taken (waiting for "Check
+ * with AI"); anything else leaves it "unclear" with what was found, its badge one click from choosing.
+ */
+async function defineInstalled(nodeId: string, graphId: string) {
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node || inViewer(graphId)) return;
+  const set = (patch: Parameters<typeof ops.updateNode>[2]) =>
+    store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId, { history: "background" });
+  set({ status: "checking", error: undefined });
+  const found =
+    (await withBusy(
+      analyzeKey(graphId, nodeId),
+      t("task.lookup", { name: node.name }),
+      (signal) => lookupDefinitions(node.name, useSettings.getState().clarify.options, signal),
+      { onError: () => {}, onCancel: () => {} },
+    )) ?? [];
+  const exact = found.filter((s) => s.exact);
+  if (exact.length === 1 && found.length === 1) {
+    const [s] = exact;
+    const alias = s.name.trim() && normalizeName(s.name) !== normalizeName(node.name) ? [s.name.trim()] : [];
+    set({ definition: s.definition, source: s.source, aliases: [...new Set([...node.aliases, ...alias])], status: "pending" });
+  } else set({ status: "unclear", senses: found.map(lookedUpSense) });
 }
 
 /** The source recorded for a definition the AI wrote: "AI" with the provider and model it came from. */
@@ -460,7 +546,12 @@ export function aiSource(): SourceRef {
   return { site: "AI", title: (model ? `${meta.label} · ${model}` : meta.label).slice(0, 300) };
 }
 
-export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, hint?: string): string {
+/**
+ * Add a concept. Typed by the user (the default), it goes by Settings' "ask first": a name alone opens what the
+ * look-ups found, a typed definition waits for "Check with AI". `ai`: the AI already wrote it at the user's request
+ * ("Describe it", a derived concept), so its prerequisites are checked right away.
+ */
+export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, hint?: string, opts: { ai?: boolean } = {}): string {
   let id = "";
   let existed = false;
   // Without a preferred spot, new concepts go where the user is looking (addNode then avoids overlaps).
@@ -474,8 +565,12 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
   }, graphId);
   if (existed) {
     store().setToast(t("toast.exists", { name: input.name }), "info");
-  } else {
+  } else if (opts.ai || !askFirst()) {
     void analyzeNode(id, graphId, hint);
+  } else if (input.definition?.trim()) {
+    store().mutate((g) => ops.updateNode(g, id, { status: "pending" }), graphId, { history: "merge" });
+  } else {
+    void lookUpChoices(id, graphId);
   }
   store().setInspect({ kind: "node", id });
   if (graphId === store().activeId) viewport.reveal(id);
@@ -498,7 +593,7 @@ export function suggestNames(description: string) {
 }
 
 export function addCandidate(c: NameCandidate) {
-  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind, source: aiSource() });
+  return addConcept({ name: c.name, definition: c.definition, aliases: c.aliases, kind: c.kind, source: aiSource() }, undefined, undefined, { ai: true });
 }
 
 /**
@@ -530,7 +625,8 @@ export function installDep(dependentId: string, depName: string) {
   if (r.existed) store().setToast(t("toast.exists", { name: depName }), "info");
   else {
     viewport.reveal(r.id);
-    void analyzeNode(r.id, graphId, r.hint);
+    if (askFirst()) void defineInstalled(r.id, graphId);
+    else void analyzeNode(r.id, graphId, r.hint);
   }
   store().setInspect({ kind: "node", id: dependentId });
   return r.id;
@@ -871,6 +967,8 @@ export function acceptProposal(p: DerivedProposal, anchorIds: string[]) {
   const id = addConcept(
     { name: p.name, definition: p.definition, aliases: p.aliases, kind: p.kind, source: aiSource(), position: { x: cx, y: cy + 200 } },
     graphId,
+    undefined,
+    { ai: true },
   );
   store().mutate((g) => {
     let out = g;

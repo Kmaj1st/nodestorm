@@ -12,8 +12,11 @@ export const MissingDep = z.object({
 });
 export type MissingDep = z.infer<typeof MissingDep>;
 
-/** "unclear": the name has several meanings and the user hasn't picked one yet. */
-export const NodeStatus = z.enum(["ok", "blocked", "checking", "unclear", "error"]);
+/**
+ * "unclear": the name has several meanings (or none found yet) and the user hasn't picked one. "pending": it has a
+ * definition, but its prerequisites haven't been checked (the AI is asked only when the user says so).
+ */
+export const NodeStatus = z.enum(["ok", "blocked", "checking", "unclear", "error", "pending"]);
 export type NodeStatus = z.infer<typeof NodeStatus>;
 
 /** How an "Explain more" answer is pitched. */

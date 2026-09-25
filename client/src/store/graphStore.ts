@@ -29,7 +29,8 @@ interface State {
   toastKind: ToastKind;
   settingsOpen: boolean;
   /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
-  clarifying: { graphId: string; nodeId: string } | null;
+  /** The concept whose meaning is being chosen; `searched`: the sites a fresh look-up asked, and those that failed. */
+  clarifying: { graphId: string; nodeId: string; searched?: { asked: string[]; failed: string[] } } | null;
   /** Node whose learning path is highlighted on the canvas (everything else is dimmed). */
   highlight: { graphId: string; nodeId: string } | null;
   /** Undo/redo stacks per graph id (in memory only). */
