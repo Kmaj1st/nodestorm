@@ -14,7 +14,7 @@ export function sourceLabel(s: SourceRef, lang: Lang = useLocale.getState().lang
   if (s.site === "AI") return translate(lang, "source.ai", { model: s.title });
   if (s.site === "you") return translate(lang, "source.you");
   // A looked-up definition names its site ("Wikidata: Q83478" means little without it).
-  const title = s.site && s.title ? `${s.site}: ${s.title}` : s.site || s.title;
+  const title = s.site && s.title ? `${translate(lang, "common.label", { label: s.site })} ${s.title}` : s.site || s.title;
   return s.page ? translate(lang, "dt.sourcePage", { title, page: s.page }) : title;
 }
 
@@ -127,10 +127,10 @@ export function toMarkdown(g: Graph): string {
       const a = mdEscape(byId.get(r.a)!.name);
       const b = mdEscape(byId.get(r.b)!.name);
       const dir = (x: string, y: string, d: { kind: string; explanation: string }) =>
-        `- ${x} → ${y}: ${mdEscape(d.kind)}${d.explanation.trim() ? ` — ${mdEscape(d.explanation)}` : ""}`;
+        `- ${t("edge.arrow", { a: x, b: y, kind: mdEscape(d.kind) })}${d.explanation.trim() ? ` — ${mdEscape(d.explanation)}` : ""}`;
       // Mix found nothing either way: said once. Otherwise a "none" side (a one-way relation) isn't written out.
       if (isUnrelated(r)) {
-        lines.push(`- ${a} — ${b}: ${t("md.unrelated")}${r.aToB.explanation.trim() ? ` — ${mdEscape(r.aToB.explanation)}` : ""}`);
+        lines.push(`- ${t("common.label", { label: `${a} — ${b}` })} ${t("md.unrelated")}${r.aToB.explanation.trim() ? ` — ${mdEscape(r.aToB.explanation)}` : ""}`);
         continue;
       }
       if (r.aToB.kind.trim() !== "none") lines.push(dir(a, b, r.aToB));

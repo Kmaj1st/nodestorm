@@ -1,7 +1,9 @@
 import { createProvider, ProviderError, withDeadline } from "@nodestorm/shared";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { listJoin, useLocale } from "../src/i18n";
+import { chainToText, FUN_ENDS, FUN_ENDS_ZH, surprisePair } from "../src/lib/absurd";
 import { errorMessage } from "../src/lib/errors";
+import { sourceLabel } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
 import * as proj from "../src/lib/projects";
 import { texReview } from "../src/lib/texImport";
@@ -107,6 +109,24 @@ describe("text the app writes into the graph", () => {
     for (const w of ["none", " None ", "无", "没有", "无关系"]) expect(ops.typedKind(w)).toBe("none");
     expect(ops.typedKind(" generalizing ")).toBe("generalizing");
     expect(ops.typedKind("无穷")).toBe("无穷");
+  });
+});
+
+describe("small Chinese details", () => {
+  it("“Surprise me” picks Chinese ends for an empty graph in Chinese", () => {
+    zh();
+    const [a, b] = surprisePair([]);
+    expect(FUN_ENDS_ZH).toContain(a);
+    expect(FUN_ENDS_ZH).toContain(b);
+    expect(FUN_ENDS_ZH.length).toBe(FUN_ENDS.length);
+  });
+
+  it("labels take the Chinese colon", () => {
+    zh();
+    expect(sourceLabel({ site: "Wikidata", title: "Q83478" })).toBe("Wikidata： Q83478");
+    const text = chainToText({ title: "T", chain: [{ from: "A", to: "B", kind: "", fact: "F", quip: "" }], moral: "M", plausibility: "" });
+    expect(text).toContain("事实： F");
+    expect(text).not.toMatch(/[^\s]: /);
   });
 });
 

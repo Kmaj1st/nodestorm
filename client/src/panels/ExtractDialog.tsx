@@ -167,7 +167,7 @@ export function ExtractDialog({
                   const usable = linkUsable(graph, review.items, l);
                   const label = l.role
                     ? t("extract.needs", { a: l.from, b: l.to, role: t(ROLE[l.role]) })
-                    : `${l.from} → ${l.to}: ${l.aToB.kind}`;
+                    : t("edge.arrow", { a: l.from, b: l.to, kind: l.aToB.kind });
                   return (
                     <li key={i} className="extract__link">
                       <label className="check" title={usable ? l.aToB.explanation : t("extract.linkUnusable")}>

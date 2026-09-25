@@ -1,5 +1,5 @@
 import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle, type Graph } from "@nodestorm/shared";
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 import * as ops from "./graphOps";
 
 /**
@@ -56,11 +56,11 @@ export function chainToText(res: AbsurdChainResponse): string {
   const lines = [res.title, ""];
   res.chain.forEach((h, i) => {
     lines.push(`${i + 1}. ${h.from} → ${h.to}${h.kind ? ` (${h.kind})` : ""}`);
-    lines.push(`   ${t("absurd.factLabel")}: ${h.fact}`);
+    lines.push(`   ${t("common.label", { label: t("absurd.factLabel") })} ${h.fact}`);
     if (h.quip) lines.push(`   “${h.quip}”`);
   });
-  if (res.moral) lines.push("", `${t("absurd.moralLabel")}: ${res.moral}`);
-  if (res.plausibility) lines.push(`${t("absurd.plausibilityLabel")}: ${res.plausibility}`);
+  if (res.moral) lines.push("", `${t("common.label", { label: t("absurd.moralLabel") })} ${res.moral}`);
+  if (res.plausibility) lines.push(`${t("common.label", { label: t("absurd.plausibilityLabel") })} ${res.plausibility}`);
   return lines.join("\n");
 }
 
@@ -134,6 +134,24 @@ export const FUN_ENDS = [
   "Pizza",
 ] as const;
 
+/** The same ends in Chinese, for a Chinese interface (the pair is typed into the dialog and may become concepts). */
+export const FUN_ENDS_ZH = [
+  "傅里叶变换",
+  "吐司",
+  "素数",
+  "蝉",
+  "黄金分割",
+  "向日葵",
+  "莫比乌斯带",
+  "传送带",
+  "热方程",
+  "鸡",
+  "勾股定理",
+  "吉他",
+  "欧拉恒等式",
+  "披萨",
+] as const;
+
 /**
  * Two different random ends for "Surprise me": concepts of the graph when it has at least two, else its one concept
  * (always one of the ends then) and fun ends. Avoids handing back the pair already shown, either way round.
@@ -150,7 +168,8 @@ export function surprisePair(
       return Boolean(k) && !seen.has(k) && Boolean(seen.add(k));
     });
   const own = unique(names);
-  const pool = own.length >= 2 ? own : [...own, ...unique(FUN_ENDS)];
+  const fun = useLocale.getState().lang === "zh" ? FUN_ENDS_ZH : FUN_ENDS;
+  const pool = own.length >= 2 ? own : [...own, ...unique(fun)];
   const same = (a: string, b: string) => normalizeName(a) === normalizeName(b);
   const shown = ([a, b]: [string, string]) =>
     (same(a, current[0]) && same(b, current[1])) || (same(a, current[1]) && same(b, current[0]));
