@@ -6,8 +6,9 @@
  * - `pages`: one `DocPage` per page, keyed `[docId, page]` and indexed by `docId`.
  * - `sessions`: tutoring sessions as plain JSON (their shape belongs to the caller), indexed by `projectId`.
  * Modelled on `snapshotDb.ts`: every call rejects rather than throws, so callers can treat any failure (IndexedDB
- * missing, blocked in a private window, quota exceeded) the same way.
+ * missing, blocked in a private window, quota exceeded) the same way. Failures are coded (lib/storageError.ts).
  */
+import { storageError } from "./storageError";
 
 export interface DocMeta {
   id: string;
@@ -45,20 +46,20 @@ let opening: Promise<IDBDatabase> | null = null;
 const done = <T>(req: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB request failed"));
+    req.onerror = () => reject(storageError("request", req.error));
   });
 
 const finished = (tx: IDBTransaction) =>
   new Promise<void>((resolve, reject) => {
     tx.oncomplete = () => resolve();
-    tx.onerror = () => reject(tx.error ?? new Error("IndexedDB transaction failed"));
-    tx.onabort = () => reject(tx.error ?? new Error("IndexedDB transaction aborted"));
+    tx.onerror = () => reject(storageError("transaction", tx.error));
+    tx.onabort = () => reject(storageError("aborted", tx.error));
   });
 
 function open(): Promise<IDBDatabase> {
   if (opening) return opening;
   opening = new Promise<IDBDatabase>((resolve, reject) => {
-    if (typeof indexedDB === "undefined") throw new Error("IndexedDB is not available");
+    if (typeof indexedDB === "undefined") throw storageError("unavailable");
     const req = indexedDB.open(DB_NAME, VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
@@ -76,8 +77,8 @@ function open(): Promise<IDBDatabase> {
       db.onversionchange = () => { db.close(); opening = null; };
       resolve(db);
     };
-    req.onerror = () => reject(req.error ?? new Error("IndexedDB can't be opened"));
-    req.onblocked = () => reject(new Error("IndexedDB is blocked by another tab"));
+    req.onerror = () => reject(storageError("cantOpen", req.error));
+    req.onblocked = () => reject(storageError("blocked"));
   });
   // A failed open is retried next time (e.g. after the user allowed storage).
   opening.catch(() => { opening = null; });

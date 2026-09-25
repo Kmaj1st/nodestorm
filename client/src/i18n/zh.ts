@@ -672,6 +672,14 @@ export const zh: Record<MessageKey, string> = {
   "aiErr.noValidLink": "{provider} 没有指出要移除循环中的哪条连线。",
   "aiErr.chainBroken": "AI 给出的链条接不上。",
   "aiErr.unknownProvider": "服务器不认识 AI 服务商“{provider}”。",
+  // Browser storage (IndexedDB) failures
+  "storageErr.unavailable": "这个浏览器无法在这里保存数据（例如无痕窗口或网站数据被阻止）。",
+  "storageErr.cantOpen": "无法打开浏览器存储。",
+  "storageErr.blocked": "浏览器存储正被另一个 NodeStorm 标签页占用。请关闭或刷新其他标签页后再试。",
+  "storageErr.request": "读写浏览器存储失败。",
+  "storageErr.transaction": "保存到浏览器存储失败。",
+  "storageErr.aborted": "保存到浏览器存储时被中断。",
+  "storageErr.quota": "浏览器存储空间已满。请删除旧版本或项目来腾出空间。",
   // Import repair summary
   "repair.wrappedList": "把一组图包装成导入文件",
   "repair.wrappedGraph": "把单个图包装成导入文件",

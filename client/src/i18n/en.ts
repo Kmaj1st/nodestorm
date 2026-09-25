@@ -685,6 +685,14 @@ export const en = {
   "aiErr.noValidLink": "{provider} didn't name a link of the cycle to remove.",
   "aiErr.chainBroken": "The AI's chain doesn't hold together.",
   "aiErr.unknownProvider": "The server doesn't know the AI provider \"{provider}\".",
+  // Browser storage (IndexedDB) failures: versions and Derive together's documents
+  "storageErr.unavailable": "This browser can't store data here (a private window, or site data is blocked).",
+  "storageErr.cantOpen": "The browser's storage can't be opened.",
+  "storageErr.blocked": "The browser's storage is busy in another NodeStorm tab. Close or reload the other tabs and try again.",
+  "storageErr.request": "Reading or writing the browser's storage failed.",
+  "storageErr.transaction": "Saving to the browser's storage failed.",
+  "storageErr.aborted": "Saving to the browser's storage was interrupted.",
+  "storageErr.quota": "The browser's storage is full. Free space by deleting old versions or projects.",
   // Import repair summary
   "repair.wrappedList": "wrapped a bare list of graphs",
   "repair.wrappedGraph": "wrapped a single graph",
