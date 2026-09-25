@@ -56,9 +56,10 @@ export function usePhysics(opts: {
     if (!s) return;
     const { graph: g, toStore } = latest.current;
     const moved = new Map<string, XY>();
+    const positions = new Map(g.nodes.map((n) => [n.id, n.position]));
     for (const [id, at] of simPositions(s)) {
       const stored = toStore(id, at);
-      const now = g.nodes.find((n) => n.id === id)?.position;
+      const now = positions.get(id);
       if (now && (now.x !== stored.x || now.y !== stored.y)) moved.set(id, stored);
     }
     if (moved.size) useGraphStore.getState().mutate((x) => setPositions(x, moved), g.id, { key: key() });
