@@ -907,6 +907,88 @@ try {
   await page.keyboard.press("Escape");
   await page.locator(".edge-label").first().waitFor();
 
+  console.log("Hide concepts");
+  {
+    // Hiding is a view choice for this tab: the concept and its relations leave the canvas; nothing is deleted.
+    const theme = async (value) => {
+      const st = await openSettings();
+      const select = st.getByLabel("Theme", { exact: true });
+      const was = await select.inputValue();
+      await select.selectOption(value);
+      await st.getByRole("button", { name: "Save", exact: true }).click();
+      await st.waitFor({ state: "detached" });
+      return was;
+    };
+    const themeBefore = await theme("light");
+    await waitCounts("7/11");
+    // How many relations stay when these concepts are hidden (from the saved graph).
+    const linksWithout = (names) => page.evaluate((names) => {
+      const s = JSON.parse(localStorage.getItem("nodestorm")).state;
+      const g = s.graphs[s.activeId];
+      const ids = g.nodes.filter((n) => names.includes(n.name)).map((n) => n.id);
+      return g.relations.filter((r) => !ids.includes(r.a) && !ids.includes(r.b)).length;
+    }, names);
+    const kernelLinks = 11 - (await linksWithout(["Kernel"]));
+    await node("Kernel").click();
+    await page.getByTestId("hide-concept").click();
+    await waitCounts(`6/${11 - kernelLinks}`);
+    const count = page.getByTestId("hidden-count");
+    assert(
+      kernelLinks > 0 && (await node("Kernel").count()) === 0 && (await count.textContent()) === "1 hidden" && (await page.getByTestId("node-panel").count()) === 0,
+      "Hide in the inspector takes the concept and its relations off the canvas, closes the inspector and shows “1 hidden”",
+    );
+    await page.reload();
+    await waitCounts(`6/${11 - kernelLinks}`);
+    assert((await count.textContent()) === "1 hidden", "hidden concepts stay hidden after a reload (same tab)");
+    await count.click();
+    const list = page.getByRole("dialog", { name: "Hidden concepts" });
+    await list.waitFor();
+    assert((await list.getByRole("button", { name: "Show Kernel" }).count()) === 1, "the popover lists the hidden concept with a Show button");
+    const { violations } = await new AxeBuilder({ page }).include(".hidden-bar").withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+    assert(!violations.length, `axe finds no WCAG A/AA violations in the hidden-concepts popover${violations.map((v) => ` ${v.id}`).join("")}`);
+    await page.keyboard.press("Escape");
+    await list.waitFor({ state: "detached" });
+    assert((await page.evaluate(() => document.activeElement?.dataset.testid)) === "hidden-count", "Escape closes the popover and hands focus back");
+    await count.click();
+    await list.getByRole("button", { name: "Show Kernel" }).click();
+    await waitCounts("7/11");
+    assert((await page.getByTestId("hidden-bar").count()) === 0, "Show brings it back with its relations, and the indicator goes");
+
+    await node("Group").click();
+    await node("Homomorphism").click({ modifiers: ["Shift"] });
+    await page.keyboard.press("h");
+    await waitCounts(`5/${await linksWithout(["Group", "Homomorphism"])}`);
+    await page.waitForFunction(() => document.querySelector("[data-testid=hidden-count]")?.textContent === "2 hidden");
+    assert((await node("Group").count()) === 0 && (await node("Homomorphism").count()) === 0, "H hides the selected concepts");
+    await count.click();
+    await page.screenshot({ path: `${shots}11b-hidden.png` });
+    await page.keyboard.press("Escape");
+    // Find goes to a hidden concept by showing it again.
+    await page.keyboard.press("Control+k");
+    await page.getByRole("dialog", { name: "Find concept" }).getByRole("combobox").fill("Homomorphism");
+    await page.keyboard.press("Enter");
+    await node("Homomorphism").waitFor();
+    assert((await count.textContent()) === "1 hidden", "Find shows a hidden concept again");
+    await page.getByTestId("hidden-show-all").click();
+    await waitCounts("7/11");
+    assert((await page.getByTestId("hidden-bar").count()) === 0, "Show all brings everything back");
+
+    // Phone, dark: the indicator in the canvas corner.
+    await theme("dark");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await page.keyboard.press("Control+k");
+    await page.getByRole("dialog", { name: "Find concept" }).getByRole("combobox").fill("Kernel");
+    await page.keyboard.press("Enter");
+    await page.getByTestId("hide-concept").click();
+    await count.waitFor();
+    await page.screenshot({ path: `${shots}11b-hidden-mobile.png` });
+    await page.getByTestId("hidden-show-all").click();
+    await page.getByTestId("hidden-bar").waitFor({ state: "detached" });
+    await page.setViewportSize({ width: 1400, height: 900 });
+    await waitCounts("7/11");
+    await theme(themeBefore);
+  }
+
   console.log("Shortcuts & offline");
   const help = page.getByRole("dialog", { name: "Keyboard shortcuts" });
   await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });

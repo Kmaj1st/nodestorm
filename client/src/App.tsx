@@ -20,7 +20,7 @@ import { UpdateNotice } from "./panels/UpdateNotice";
 import { useAbsurd } from "./store/absurdStore";
 import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
 import { autoSnapshot } from "./store/snapshotStore";
-import { toggleFocus, useView, visibleNow } from "./store/viewStore";
+import { hideConcepts, hideOthers, toggleFocus, useView, visibleNow } from "./store/viewStore";
 import { Icon } from "./ui/Icon";
 
 export function App() {
@@ -73,6 +73,15 @@ export function App() {
         if (t && t !== document.body && !t.closest(".react-flow")) return;
         e.preventDefault();
         toggleFocus();
+      } else if (key === "h" && !mod && !e.altKey) {
+        // Hide the selected concepts (Shift+H: all the others), from the canvas only. A view choice, not an edit.
+        if (t && t !== document.body && !t.closest(".react-flow")) return;
+        const shown = visibleNow(s);
+        const selected = s.selection.filter((id) => shown.nodes.has(id));
+        if (!selected.length) return;
+        e.preventDefault();
+        if (e.shiftKey) hideOthers();
+        else hideConcepts(selected);
       } else if ((e.key === "Delete" || e.key === "Backspace") && !mod) {
         // Only from the canvas (or nothing focused): not while a menu, popover or inspector button has focus.
         if (t && t !== document.body && !t.closest(".react-flow")) return;

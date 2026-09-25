@@ -1,6 +1,6 @@
 /**
  * The keyboard shortcuts that exist in the app, for the "?" help dialog. Keep this in step with the handlers:
- * App.tsx (undo/redo, Delete, F, Esc, Ctrl/Cmd+K), GraphCanvas.tsx (multi-select), BiRelationEdge.tsx
+ * App.tsx (undo/redo, Delete, F, H, Esc, Ctrl/Cmd+K), GraphCanvas.tsx (multi-select), BiRelationEdge.tsx
  * (arrowheads), FindDialog.tsx, Inspector.tsx (text fields) and Modal.tsx.
  */
 
@@ -46,6 +46,8 @@ export const SHORTCUTS: ShortcutGroup[] = [
     title: "shortcuts.canvas",
     items: [
       { keys: [["F"]], action: "shortcuts.focus" },
+      { keys: [["H"]], action: "shortcuts.hide" },
+      { keys: [["Shift", "H"]], action: "shortcuts.hideOthers" },
       { keys: [["Shift", "click"], ["Mod", "click"]], action: "shortcuts.multi" },
       { keys: [["Shift", "drag"]], action: "shortcuts.box" },
       { keys: [["Tab"], ["Enter"], ["Space"]], action: "shortcuts.arrows" },

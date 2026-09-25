@@ -540,6 +540,23 @@ button.edge-label--active:hover:not(:disabled) {
 .focus-bar__label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .focus-bar select { min-height: var(--control-h-dense); font-size: var(--text-sm); padding-top: 2px; padding-bottom: 2px; }
 .focus-bar__close { min-width: var(--control-h-dense); min-height: var(--control-h-dense); }
+/* Concepts hidden by hand: "3 hidden · Show all" in the canvas's top-left corner (panels/HiddenBar.tsx). */
+.canvas .hidden-bar {
+  position: absolute; top: var(--space-3); left: var(--space-3); z-index: 6; display: flex; align-items: center;
+  gap: 2px; padding: 3px; background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-md);
+  box-shadow: var(--shadow-md); font-size: var(--text-sm);
+}
+.hidden-bar > button {
+  min-height: var(--control-h-dense); padding: 0 var(--space-2); gap: 6px; font-size: var(--text-sm);
+  border-color: transparent; background: transparent; box-shadow: none;
+}
+.hidden-bar > button:hover:not(:disabled) { background: var(--hover); border-color: transparent; }
+.hidden-bar__all { color: var(--accent); font-weight: 600; }
+.hidden-bar__list { min-width: 240px; max-width: min(340px, calc(100vw - 48px)); }
+.hidden-bar__list ul { list-style: none; margin: 0; padding: 0; }
+.hidden-bar__list li { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-2); }
+.hidden-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.hidden-bar__list button { flex-shrink: 0; }
 
 /* ==========================================================================================================
    Inspector
@@ -884,6 +901,7 @@ button.sense__ask-ai:hover:not(:disabled) { background: var(--accent-soft); bord
 .view-menu { min-width: 250px; padding: var(--space-2) var(--space-3); gap: var(--space-2); }
 .view-menu__head { font-size: 11px; font-weight: 600; color: var(--muted); }
 .view-menu .check { font-size: var(--text-sm); min-height: 24px; }
+.view-menu__hide { display: flex; flex-wrap: wrap; gap: var(--space-2); }
 .view-menu__kinds { display: grid; grid-template-columns: 1fr 1fr; column-gap: var(--space-3); }
 
 /* ==========================================================================================================

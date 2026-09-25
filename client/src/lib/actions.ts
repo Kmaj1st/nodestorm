@@ -23,6 +23,7 @@ import {
 import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
 import { autoSnapshot } from "../store/snapshotStore";
+import { hiddenIn, useView } from "../store/viewStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import { applyAbsurdChain, sandboxName, type AbsurdStop } from "./absurd";
@@ -31,6 +32,7 @@ import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { lookupDefinitions, lookupEverywhere, lookupReady, SITE_NAME, type Site } from "./lookup";
 import { isOnline } from "./online";
+import { withoutHidden } from "./view";
 import { viewport } from "./viewport";
 import * as cycles from "./cycles";
 import * as paths from "./paths";
@@ -613,10 +615,14 @@ export function addConcept(input: ops.NewNodeInput, graphId = store().activeId, 
   return id;
 }
 
-/** "Tidy": lay the active graph out in layers, prerequisites above their dependents. */
+/**
+ * "Tidy": lay the active graph out in layers, prerequisites above their dependents. Concepts hidden by hand are left
+ * out and keep their places (the layout is for what is on the canvas).
+ */
 export function tidy() {
   autoSnapshot("tidy"); // moves every concept at once
-  store().mutate((g) => ops.setPositions(g, layeredLayout(g)));
+  const hidden = new Set(hiddenIn(store().activeId)(useView.getState()));
+  store().mutate((g) => ops.setPositions(g, layeredLayout(withoutHidden(g, hidden))));
   viewport.fit();
 }
 

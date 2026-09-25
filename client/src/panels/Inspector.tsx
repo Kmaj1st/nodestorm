@@ -8,6 +8,7 @@ import {
   Check,
   ChevronRight,
   Drama,
+  EyeOff,
   FileText,
   ExternalLink,
   GraduationCap,
@@ -26,7 +27,7 @@ import {
   Wand2,
   Waypoints,
 } from "lucide-react";
-import { useView } from "../store/viewStore";
+import { hideConcepts, useView } from "../store/viewStore";
 import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog } from "./lazy";
 import type { Site } from "../lib/lookup";
@@ -177,6 +178,16 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           <StatusMark status={node.status} />
           {t(node.status === "unclear" && lookedUp ? "badge.noDefinition" : STATUS_LABEL[node.status])}
         </span>
+        {/* Hide from the canvas for now: a view choice, so also in the read-only viewer. */}
+        <button
+          className="icon-btn inspector__hide"
+          onClick={() => hideConcepts([node.id])}
+          aria-label={t("hide.button")}
+          title={t("hide.title")}
+          data-testid="hide-concept"
+        >
+          <Icon icon={EyeOff} size={16} />
+        </button>
       </div>
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
       </header>

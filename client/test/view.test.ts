@@ -1,6 +1,21 @@
 import type { Graph, NodeStatus, RelationOrigin } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
-import { DEFAULT_VIEW, isFiltered, KIND_FILTERS, kindFilterOf, neighbourhood, sanitizeView, showsEverything, visibleParts, type ViewPrefs } from "../src/lib/view";
+import {
+  DEFAULT_VIEW,
+  hideIds,
+  isFiltered,
+  KIND_FILTERS,
+  kindFilterOf,
+  neighbourhood,
+  parseHidden,
+  pruneHidden,
+  sanitizeView,
+  showIds,
+  showsEverything,
+  visibleParts,
+  withoutHidden,
+  type ViewPrefs,
+} from "../src/lib/view";
 
 /**
  * A chain A – B – C – D – E (mixed, dependency, derived, mixed) plus F linked to A by a dependency.
@@ -141,5 +156,56 @@ describe("kind filter", () => {
     const v = visibleParts(typed(), prefs({ kinds: { ...DEFAULT_VIEW.kinds, theorem: false } }), { nodeId: "C", hops: 1 });
     expect(sorted(v.nodes)).toEqual(["B", "C", "D"]);
     expect(KIND_FILTERS).toContain("none");
+  });
+});
+
+describe("concepts hidden by hand", () => {
+  const g = chain();
+
+  it("leaves hidden concepts and every relation touching them off the canvas", () => {
+    const v = visibleParts(g, prefs(), null, new Set(["C"]));
+    expect(sorted(v.nodes)).toEqual(["A", "B", "D", "E", "F"]);
+    expect(sorted(v.relations)).toEqual(["ab", "de", "fa"]);
+    expect(showsEverything(prefs(), null, new Set())).toBe(true);
+    expect(showsEverything(prefs(), null, new Set(["C"]))).toBe(false);
+  });
+
+  it("focus mode doesn't reach through a hidden concept", () => {
+    // From B, C is the way to D; with C hidden only A (and F behind it) are near.
+    expect(sorted(visibleParts(g, prefs(), { nodeId: "B", hops: 2 }, new Set(["C"])).nodes)).toEqual(["A", "B", "F"]);
+  });
+
+  it("hides, shows and shows all, per graph", () => {
+    let m = hideIds({}, "g", ["A", "B", "A"]);
+    expect(m).toEqual({ g: ["A", "B"] });
+    m = hideIds(m, "g", ["B", "C"]);
+    expect(m).toEqual({ g: ["A", "B", "C"] });
+    expect(hideIds(m, "g", ["A"])).toBe(m); // nothing new: the same map
+    m = hideIds(m, "other", ["X"]);
+    expect(showIds(m, "g", ["B"])).toEqual({ g: ["A", "C"], other: ["X"] });
+    expect(showIds(m, "g")).toEqual({ other: ["X"] });
+    expect(showIds(showIds(m, "other", ["X"]), "g", ["A", "B", "C"])).toEqual({});
+    expect(showIds(m, "nope")).toBe(m);
+    expect(showIds(m, "g", ["Z"])).toBe(m);
+  });
+
+  it("forgets concepts and graphs that no longer exist", () => {
+    const m = { g: ["A", "gone"], deleted: ["X"] };
+    expect(pruneHidden(m, { g })).toEqual({ g: ["A"] });
+    expect(pruneHidden({ g: ["gone"] }, { g })).toEqual({});
+    const ok = { g: ["A", "B"] };
+    expect(pruneHidden(ok, { g })).toBe(ok); // unchanged: the same map
+  });
+
+  it("tolerates anything stored", () => {
+    for (const bad of [null, "x", 3, [], ["A"], true]) expect(parseHidden(bad)).toEqual({});
+    expect(parseHidden({ g: ["A", 2, "", "A", null, "B"], h: "A", i: [], j: { 0: "A" } })).toEqual({ g: ["A", "B"] });
+  });
+
+  it("drops hidden concepts and their relations from a graph (3D view, Tidy)", () => {
+    const w = withoutHidden(g, new Set(["A"]));
+    expect(w.nodes.map((n) => n.id)).toEqual(["B", "C", "D", "E", "F"]);
+    expect(w.relations.map((r) => r.id)).toEqual(["bc", "cd", "de"]);
+    expect(withoutHidden(g, new Set())).toBe(g);
   });
 });

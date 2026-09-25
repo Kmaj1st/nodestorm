@@ -1,12 +1,12 @@
 import type { RelationOrigin } from "@nodestorm/shared";
-import { Box, ChevronDown, Eye, Focus, Magnet } from "lucide-react";
+import { Box, ChevronDown, Eye, EyeOff, Focus, Magnet } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { KIND_LABEL } from "../lib/kinds";
 import { isFiltered, KIND_FILTERS, kindFilterOf, type CanvasLayout } from "../lib/view";
 import { PHYSICS_MAX_NODES } from "../graph/usePhysics";
 import { activeGraph, useGraphStore } from "../store/graphStore";
-import { focusTarget, toggleFocus, useView } from "../store/viewStore";
+import { focusTarget, hideConcepts, hideOthers, toggleFocus, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 
 const KINDS: { origin: RelationOrigin; label: MessageKey; title: MessageKey }[] = [
@@ -61,13 +61,17 @@ const LAYOUTS: { value: CanvasLayout; label: MessageKey; title: MessageKey }[] =
   { value: "layered", label: "layers.layered", title: "layers.layeredTitle" },
 ];
 
-/** "View" popover: which relation kinds to draw, edge labels, and the to-do view. Remembered per browser. */
+/**
+ * "View" popover: which relation kinds to draw, edge labels, and the to-do view (remembered per browser); and hiding
+ * the selected concepts, or all the others, for now.
+ */
 export function ViewMenu() {
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const view = useView();
   const filtered = isFiltered(view);
+  const selected = useGraphStore((s) => s.selection.length);
   // Kind filters for the kinds this graph uses, plus any that are hidden now (so they can be shown again). A graph
   // without any kinds gets no kind section at all.
   const graph = useGraphStore(activeGraph);
@@ -172,6 +176,29 @@ export function ViewMenu() {
             <input type="checkbox" checked={view.todoOnly} onChange={(e) => view.setPrefs({ todoOnly: e.target.checked })} />
             {t("view.todo")}
           </label>
+          {/* Hiding by hand (H, Shift+H on the canvas); "N hidden · Show all" on the canvas shows them again. */}
+          <hr className="menu__sep" />
+          <div className="view-menu__head">{t("hide.head")}</div>
+          <div className="view-menu__hide">
+            <button
+              className="small-btn"
+              onClick={() => { setOpen(false); hideConcepts(useGraphStore.getState().selection); }}
+              disabled={!selected}
+              title={t(selected ? "hide.selectedTitle" : "hide.selectedNone")}
+              data-testid="hide-selected"
+            >
+              <Icon icon={EyeOff} size={14} />
+              {t("hide.selected")}
+            </button>
+            <button
+              className="small-btn"
+              onClick={() => { setOpen(false); hideOthers(); }}
+              disabled={!selected}
+              title={t(selected ? "hide.othersTitle" : "hide.selectedNone")}
+            >
+              {t("hide.othersButton")}
+            </button>
+          </div>
         </div>
       )}
     </div>

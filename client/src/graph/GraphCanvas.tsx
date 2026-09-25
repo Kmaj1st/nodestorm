@@ -22,7 +22,8 @@ import { DEFAULT_VIEW, MAX_HOPS, showsEverything, visibleParts } from "../lib/vi
 import { registerViewport, viewport } from "../lib/viewport";
 import { ShortcutsButton } from "../panels/ShortcutsHelp";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
-import { activeFocus, useView } from "../store/viewStore";
+import { HiddenBar } from "../panels/HiddenBar";
+import { activeFocus, hiddenIn, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
 import { ConceptNode, type ConceptFlowNode } from "./ConceptNode";
@@ -70,10 +71,13 @@ export function GraphCanvas() {
   const focusState = useView((v) => v.focus);
   const setFocus = useView((v) => v.setFocus);
   const focus = useMemo(() => activeFocus({ focus: focusState, hops }, graph), [focusState, hops, graph]);
+  // Concepts hidden by hand (the inspector's Hide, H): gone from the canvas, the minimap and fit-view alike.
+  const hiddenIds = useView(hiddenIn(graph.id));
   const visible = useMemo(() => {
     const prefs = { ...DEFAULT_VIEW, origins, todoOnly, hops, kinds };
-    return showsEverything(prefs, focus) ? null : visibleParts(graph, prefs, focus);
-  }, [graph, origins, todoOnly, hops, kinds, focus]);
+    const hidden = new Set(hiddenIds);
+    return showsEverything(prefs, focus, hidden) ? null : visibleParts(graph, prefs, focus, hidden);
+  }, [graph, origins, todoOnly, hops, kinds, focus, hiddenIds]);
 
   // Layered (2.5D) view: each concept is drawn on its dependency layer's plate (lib/layout.ts layeredView); the
   // stored positions stay as they are, so switching back to the flat view restores the layout.
@@ -366,6 +370,7 @@ export function GraphCanvas() {
           </button>
         </div>
       )}
+      <HiddenBar />
       {graph.nodes.length === 0 && (
         <div className="canvas__empty">
           <div className="canvas__emptyCard">
