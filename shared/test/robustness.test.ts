@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createProvider } from "../src/ai/factory";
+import { createProvider } from "../src/ai/createProvider";
 import { languageInstruction } from "../src/ai/prompts";
 import {
   CancelledError,

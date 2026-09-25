@@ -2,7 +2,6 @@ import { createElement, Fragment, type ReactNode } from "react";
 import { create } from "zustand";
 import { en, type MessageKey } from "./en";
 import { format, plurals, splitPlaceholders, type Params } from "./format";
-import { zh } from "./zh";
 
 /**
  * A tiny i18n layer for the interface (not for user content or AI output; the AI's answer language is the separate
@@ -16,7 +15,25 @@ export type Lang = "en" | "zh";
 export type LangPref = "auto" | Lang;
 
 export const LANG_NAMES: Record<Lang, string> = { en: "English", zh: "中文" };
-export const MESSAGES: Record<Lang, Record<MessageKey, string>> = { en, zh };
+/**
+ * Messages per language. English is built in (it is also the fallback for a missing key); Chinese is a chunk of its
+ * own, fetched by loadLang() when first needed, so an English interface never downloads it.
+ */
+export const MESSAGES: Partial<Record<Lang, Record<MessageKey, string>>> = { en };
+
+let zhLoading: Promise<void> | null = null;
+/** Fetch a language's messages (once). Resolves when t() can show that language. */
+export function loadLang(lang: Lang): Promise<void> {
+  if (MESSAGES[lang]) return Promise.resolve();
+  zhLoading ??= import("./zh").then(
+    (m) => void (MESSAGES.zh = m.zh),
+    (e) => {
+      zhLoading = null; // let a later switch try again
+      throw e;
+    },
+  );
+  return zhLoading;
+}
 
 const KEY = "nodestorm-ui-language";
 
@@ -47,7 +64,7 @@ export const useLocale = create<LocaleState>()((set) => {
   const pref = load();
   return {
     pref,
-    lang: resolve(pref),
+    lang: resolve(pref), // main.tsx waits for localeReady before the first render
     setPref(pref) {
       try {
         if (pref === "auto") localStorage.removeItem(KEY);
@@ -55,14 +72,31 @@ export const useLocale = create<LocaleState>()((set) => {
       } catch {
         /* the choice just won't survive a reload */
       }
-      set({ pref, lang: resolve(pref) });
+      set({ pref });
+      show(resolve(pref));
     },
   };
 });
 
+/**
+ * Show a language: at once if its messages are loaded, else once they are. Until then the current language stays (for
+ * good if the fetch fails, e.g. offline on a first visit before the service worker cached it).
+ */
+function show(lang: Lang) {
+  if (MESSAGES[lang]) return useLocale.setState({ lang });
+  void loadLang(lang).then(
+    () => useLocale.setState({ lang: resolve(useLocale.getState().pref) }), // the choice may have changed meanwhile
+    () => {},
+  );
+}
+
+/** Resolves once the starting language's messages are loaded (at once for English); never rejects, English being the
+ * fallback. */
+export const localeReady: Promise<void> = loadLang(useLocale.getState().lang).catch(() => useLocale.setState({ lang: "en" }));
+
 /** A message in a given language (tests, and anything that must not depend on the current choice). */
 export function translate(lang: Lang, key: MessageKey, params?: Params): string {
-  return format(MESSAGES[lang][key] ?? en[key], params);
+  return format(MESSAGES[lang]?.[key] ?? en[key], params);
 }
 
 /** A message in the current interface language. */
@@ -84,7 +118,7 @@ export const useLang = () => useLocale((s) => s.lang);
  * elements. Plural forms read numeric parameters, as in `t`.
  */
 export function rich(key: MessageKey, params: Record<string, ReactNode> = {}): ReactNode {
-  const text = plurals(MESSAGES[useLocale.getState().lang][key] ?? en[key], params);
+  const text = plurals(MESSAGES[useLocale.getState().lang]?.[key] ?? en[key], params);
   const fill = (s: string) =>
     splitPlaceholders(s).map((part, i) =>
       createElement(Fragment, { key: i }, i % 2 ? (part in params ? params[part] : `{${part}}`) : part),
@@ -105,6 +139,6 @@ useLocale.subscribe((s) => applyHtmlLang(s.lang));
 if (typeof window !== "undefined") {
   window.addEventListener("languagechange", () => {
     const { pref } = useLocale.getState();
-    if (pref === "auto") useLocale.setState({ lang: resolve(pref) });
+    if (pref === "auto") show(resolve(pref));
   });
 }
