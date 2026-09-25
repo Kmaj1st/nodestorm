@@ -1,9 +1,10 @@
 import type { ConceptNode as CN } from "@nodestorm/shared";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { BrickWall, CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
-import { memo } from "react";
+import { memo, useMemo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode, checkWithAi, sensesLookedUp } from "../lib/actions";
+import { nameWrap } from "../lib/nameWrap";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
 import { Icon } from "../ui/Icon";
@@ -57,6 +58,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
         : lookedUp
           ? "badge.chooseDefinitionAria"
           : "badge.chooseAria";
+  const wrap = useMemo(() => nameWrap(c.name), [c.name]);
   return (
     <div
       className={`concept concept--${c.status}${data.inCycle ? " concept--cycle" : ""}${selected ? " concept--selected" : ""}`}
@@ -77,7 +79,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       )}
       {c.kind && <div className="concept__kind"><KindTag kind={c.kind} /></div>}
       <div className="concept__head">
-        <span className="concept__name">{c.name}{c.mastery && <MasteryDot mastery={c.mastery} name={c.name} />}</span>
+        <span className={`concept__name${wrap.size ? ` concept__name--${wrap.size}` : ""}`} lang={wrap.lang}>{c.name}{c.mastery && <MasteryDot mastery={c.mastery} name={c.name} />}</span>
         {action ? (
           <button
             className={`concept__badge concept__badge--${c.status} nodrag`}

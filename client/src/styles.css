@@ -433,8 +433,15 @@ fieldset { min-width: 0; }
   border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--focus-ring), var(--shadow-md);
 }
 .concept__handle { opacity: 0; pointer-events: none; top: 50% !important; left: 50% !important; }
-.concept__head { display: flex; justify-content: space-between; gap: var(--space-2); align-items: flex-start; }
-.concept__name { font-weight: 600; font-size: var(--text-sm); line-height: 1.35; min-width: 0; overflow-wrap: anywhere; letter-spacing: -0.005em; }
+.concept__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-2); align-items: flex-start; }
+/* The name takes the row when it and the status pill don't fit side by side (the pill goes under it), so a name
+   breaks between words, not mid-word. A single word wider than the card is hyphenated (the span's lang is the
+   name's), and one of 13+ / 20+ letters is set a little smaller; cutting it anywhere is the last resort. */
+.concept__name {
+  flex: 1 1 auto; font-weight: 600; font-size: var(--text-sm); line-height: 1.35; min-width: 0; letter-spacing: -0.005em;
+  overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto;
+}
+.concept__name--xlong { font-size: var(--text-xs); letter-spacing: -0.02em; }
 .concept__def {
   color: var(--muted); font-size: var(--text-xs); line-height: 1.45; margin-top: 6px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -1202,6 +1209,8 @@ span.paper__title { color: var(--text); }
 .canvas--far .concept__cycle span { display: none; }
 .canvas--far .concept__missing, .canvas--far .concept__cycle { border-top: none; padding-top: 0; }
 .canvas--far .concept__name { font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; }
+.canvas--far .concept__name--long { font-size: 18px; }
+.canvas--far .concept__name--xlong { font-size: 15px; }
 
 /* "Look up in…" next to the definition's source. */
 .popover.lookup-menu { left: 0; right: auto; width: auto; min-width: 190px; padding: var(--space-1); gap: 2px; }
