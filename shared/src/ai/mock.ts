@@ -440,42 +440,48 @@ export class MockProvider implements Provider {
    * The shortest route through BRIDGES (avoiding earlier rolls' concepts when another route exists). An end the demo
    * doesn't know joins through "Written language" (its name is written with letters, which is true of anything).
    * The narration comes from the style's templates; a "Roll again" (with an avoid list) starts one template later.
+   * The user's stops (`via`) are visited in order, one shortest route per leg, never through a concept an earlier leg
+   * used; a leg with no such route (two unknown stops in a row both need "Written language") is one generic hop.
    */
-  private absurdChain(inp: { from: { name: string }; to: { name: string }; style?: string; avoid?: string[] }) {
+  private absurdChain(inp: { from: { name: string }; to: { name: string }; via?: { name: string }[]; style?: string; avoid?: string[] }) {
     const from = inp.from.name;
     const to = inp.to.name;
+    const via = (inp.via ?? []).map((v) => v.name);
+    const stops = [from, ...via, to];
     const known = (name: string) =>
       [...new Set(BRIDGES.flatMap((l) => [l.a, l.b]))].find((n) => normalizeName(n) === normalizeName(name));
     type Edge = { next: string; kind: string; fact: string };
+    type Hop = { from: string; to: string; kind: string; fact: string };
     const edges = new Map<string, Edge[]>();
     const add = (x: string, e: Edge) => edges.set(normalizeName(x), [...(edges.get(normalizeName(x)) ?? []), e]);
     for (const l of BRIDGES) {
       add(l.a, { next: l.b, kind: l.kind, fact: l.fact });
       add(l.b, { next: l.a, kind: l.back, fact: l.fact });
     }
-    for (const end of [from, to]) {
+    for (const end of stops) {
       if (known(end)) continue;
       const fact = `The name “${end}” is written with the letters of a writing system.`;
       add(end, { next: WRITTEN, kind: "using the letters of", fact });
       add(WRITTEN, { next: end, kind: "writing", fact });
     }
-    const route = (avoid: Set<string>) => {
+    /** The shortest route from `a` to `b` that passes through none of `blocked`. */
+    const route = (a: string, b: string, blocked: Set<string>): Hop[] | null => {
       const prev = new Map<string, { at: string; edge: Edge }>();
-      const queue = [from];
-      const seen = new Set([normalizeName(from)]);
+      const queue = [a];
+      const seen = new Set([normalizeName(a)]);
       while (queue.length) {
         const at = queue.shift()!;
-        if (normalizeName(at) === normalizeName(to)) break;
+        if (normalizeName(at) === normalizeName(b)) break;
         for (const e of edges.get(normalizeName(at)) ?? []) {
           const k = normalizeName(e.next);
-          if (seen.has(k) || (avoid.has(k) && k !== normalizeName(to))) continue;
+          if (seen.has(k) || (blocked.has(k) && k !== normalizeName(b))) continue;
           seen.add(k);
           prev.set(k, { at, edge: e });
           queue.push(e.next);
         }
       }
-      const hops: { from: string; to: string; kind: string; fact: string }[] = [];
-      for (let k = normalizeName(to); prev.has(k); ) {
+      const hops: Hop[] = [];
+      for (let k = normalizeName(b); prev.has(k); ) {
         const { at, edge } = prev.get(k)!;
         hops.unshift({ from: at, to: edge.next, kind: edge.kind, fact: edge.fact });
         k = normalizeName(at);
@@ -483,15 +489,26 @@ export class MockProvider implements Provider {
       return hops.length ? hops : null;
     };
     const avoid = inp.avoid ?? [];
-    const hops = route(new Set(avoid.map(normalizeName))) ?? route(new Set())!;
+    const avoided = avoid.map(normalizeName);
+    const used = new Set<string>();
+    const hops: Hop[] = [];
+    for (let s = 0; s + 1 < stops.length; s++) {
+      const [a, b] = [stops[s], stops[s + 1]];
+      // Never through a concept already on the chain, nor through a stop still to come.
+      const blocked = new Set([...used, ...stops.slice(s + 2).map(normalizeName)]);
+      const leg = route(a, b, new Set([...blocked, ...avoided])) ??
+        route(a, b, blocked) ?? [{ from: a, to: b, kind: "sharing a sentence with", fact: `“${a}” and “${b}” can be named in the same sentence, as this one does.` }];
+      leg[0] = { ...leg[0], from: a };
+      leg[leg.length - 1] = { ...leg[leg.length - 1], to: b };
+      for (const h of leg) used.add(normalizeName(h.from));
+      hops.push(...leg);
+    }
     const voice = ABSURD_VOICE[inp.style ?? "deadpan"] ?? ABSURD_VOICE.deadpan;
     const n = voice.quips.length;
     return {
       title: voice.title(from, to),
       chain: hops.map((h, i) => ({
         ...h,
-        from: i === 0 ? from : h.from,
-        to: i === hops.length - 1 ? to : h.to,
         quip: voice.quips[(i + (avoid.length ? 1 : 0)) % n](h.from, h.to),
       })),
       moral: voice.moral,

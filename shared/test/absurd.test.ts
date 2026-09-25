@@ -1,20 +1,23 @@
 import { describe, expect, it } from "vitest";
-import { AbsurdChainRequest, AbsurdChainResponse } from "../src/model";
+import { AbsurdChainRequest, AbsurdChainResponse, normalizeName } from "../src/model";
 import { cleanAbsurdChain, tasks } from "../src/ai/tasks";
 import { MockProvider } from "../src/ai/mock";
 import { absurdChainPrompt } from "../src/ai/prompts";
-import { ProviderError, textOf, type Provider } from "../src/ai/provider";
+import { ProviderError, textOf, type ChatMessage, type Provider } from "../src/ai/provider";
 
 const hop = (from: string, to: string, fact = `${from} relates to ${to}.`) => ({ from, to, kind: "leads to", fact, quip: "Wow." });
 const req = { from: { name: "Fourier transform" }, to: { name: "Toast", aliases: ["toasted bread"] } };
 const res = (...chain: ReturnType<typeof hop>[]) => AbsurdChainResponse.parse({ title: "T", chain, moral: "M" });
 
-/** A provider that answers each call with the next canned reply. */
-function scripted(...replies: unknown[]): Provider & { calls: number } {
+/** A provider that answers each call with the next canned reply (and keeps the last message of each call). */
+function scripted(...replies: unknown[]): Provider & { calls: number; last: string[] } {
   const p = {
-    id: "s", label: "Scripted", model: "m", configured: true, calls: 0,
+    id: "s", label: "Scripted", model: "m", configured: true, calls: 0, last: [] as string[],
     listModels: async () => [],
-    complete: async () => JSON.stringify(replies[Math.min(p.calls++, replies.length - 1)]),
+    complete: async (msgs: ChatMessage[]) => {
+      p.last.push(textOf(msgs[msgs.length - 1].content));
+      return JSON.stringify(replies[Math.min(p.calls++, replies.length - 1)]);
+    },
   };
   return p;
 }
@@ -122,5 +125,83 @@ describe("absurdChain task", () => {
     const hopeless = scripted(bad);
     await expect(tasks.absurdChain(hopeless, req)).rejects.toThrow(/malformed output.*never reaches/);
     await expect(tasks.absurdChain(hopeless, req)).rejects.toBeInstanceOf(ProviderError);
+  });
+});
+
+describe("absurd chain stops (via)", () => {
+  const mock = new MockProvider();
+  const viaReq = { ...req, via: [{ name: "Heat equation" }, { name: "Crumb", aliases: ["bread crumb"] }] };
+  const names = (r: { chain: { from: string; to: string }[] }) => [r.chain[0].from, ...r.chain.map((h) => h.to)];
+
+  it("defaults to no stops, rejects repeated or empty ones, and widens the hop range to fit them", () => {
+    expect(AbsurdChainRequest.parse(req).via).toEqual([]);
+    const four = [{ name: "A" }, { name: "B" }, { name: "C" }, { name: "D" }];
+    expect(AbsurdChainRequest.parse({ ...req, via: four, hops: { min: 3, max: 4 } }).hops).toEqual({ min: 5, max: 5 });
+    expect(AbsurdChainRequest.parse({ ...req, via: [{ name: "A" }], hops: { min: 3, max: 5 } }).hops).toEqual({ min: 3, max: 5 });
+    expect(() => AbsurdChainRequest.parse({ ...req, via: [{ name: "toast" }] })).toThrow(/differ/);
+    expect(() => AbsurdChainRequest.parse({ ...req, via: [{ name: "A" }, { name: "a" }] })).toThrow(/differ/);
+    expect(() => AbsurdChainRequest.parse({ ...req, via: [{ name: " " }] })).toThrow(/every stop/);
+    expect(() => AbsurdChainRequest.parse({ ...req, via: Array.from({ length: 7 }, (_, i) => ({ name: `S${i}` })) })).toThrow();
+  });
+
+  it("keeps a chain through every stop in order, giving the stops their exact names", () => {
+    const out = cleanAbsurdChain(
+      res(hop("Fourier transform", "heat equations"), hop("heat equations", "Bread crumb"), hop("Bread crumb", "Toast")),
+      viaReq,
+    );
+    expect(out.chain.map((h) => `${h.from}>${h.to}`)).toEqual(["Fourier transform>Heat equation", "Heat equation>Crumb", "Crumb>Toast"]);
+    // Other concepts may sit between the stops.
+    const longer = cleanAbsurdChain(
+      res(hop("Fourier transform", "Heat equation"), hop("Heat equation", "Oven"), hop("Oven", "Crumb"), hop("Crumb", "Toast")),
+      viaReq,
+    );
+    expect(longer.chain).toHaveLength(4);
+  });
+
+  it("rejects a chain that misses a stop or takes them out of order", () => {
+    expect(() => cleanAbsurdChain(res(hop("Fourier transform", "Heat equation"), hop("Heat equation", "Toast")), viaReq)).toThrow(
+      /never passes through the stop "Crumb".*in this order: "Heat equation", "Crumb"/,
+    );
+    expect(() =>
+      cleanAbsurdChain(res(hop("Fourier transform", "Crumb"), hop("Crumb", "Heat equation"), hop("Heat equation", "Toast")), viaReq),
+    ).toThrow(/the stop "Crumb" comes before "Heat equation"/);
+    // A stop cut out with a loop no longer counts.
+    const loop = res(hop("Fourier transform", "Heat equation"), hop("Heat equation", "Crumb"), hop("Crumb", "Heat equation"), hop("Heat equation", "Toast"));
+    expect(() => cleanAbsurdChain(loop, viaReq)).toThrow(ProviderError);
+  });
+
+  it("asks the model again with a note naming the missed stop, then gives up", async () => {
+    const bad = { title: "T", chain: [hop("Fourier transform", "Toast")] };
+    const good = { title: "T", chain: [hop("Fourier transform", "Heat equation"), hop("Heat equation", "Crumb"), hop("Crumb", "Toast")] };
+    const p = scripted(bad, good);
+    expect((await tasks.absurdChain(p, viaReq)).chain.map((h) => h.to)).toEqual(["Heat equation", "Crumb", "Toast"]);
+    expect(p.last[1]).toMatch(/never passes through the stop "Heat equation"/);
+    await expect(tasks.absurdChain(scripted(bad), viaReq)).rejects.toThrow(/malformed output.*stop/);
+  });
+
+  it("tells the model the stops, in order, with the user's descriptions, and never to avoid them", () => {
+    const oven = { name: "Grandma's oven", definition: "The oven in my grandmother's kitchen." };
+    const [system, user] = absurdChainPrompt(AbsurdChainRequest.parse({ ...req, via: [{ name: "Heat" }, oven], avoid: ["Heat", "Egg"] }));
+    const text = textOf(system.content);
+    expect(text).toContain('these 2 stops, in this order: "Heat" → "Grandma\'s oven"');
+    expect(text).toContain('do not use "Egg" as');
+    expect(textOf(user.content)).toContain("Stops, in order:\n- Heat\n- Grandma's oven: The oven in my grandmother's kitchen.");
+    expect(textOf(absurdChainPrompt(AbsurdChainRequest.parse(req))[0].content)).not.toContain("Stops");
+  });
+
+  it("offline, passes through known and custom stops in order", async () => {
+    const out = await tasks.absurdChain(mock, { from: { name: "Homomorphism" }, to: { name: "Toast" }, via: [{ name: "Group" }, { name: "Grandma's oven" }] });
+    const all = names(out);
+    expect(all.indexOf("Group")).toBeGreaterThan(0);
+    expect(all.indexOf("Grandma's oven")).toBeGreaterThan(all.indexOf("Group"));
+    expect(all.at(-1)).toBe("Toast");
+    expect(new Set(all.map(normalizeName)).size).toBe(all.length);
+    // Two unknown stops in a row: the second can't also go through "Written language", so it gets a generic link.
+    const two = await tasks.absurdChain(mock, { from: { name: "Opera" }, to: { name: "Toast" }, via: [{ name: "Jazz" }, { name: "Blues" }] });
+    expect(names(two).slice(0, 4)).toEqual(["Opera", "Written language", "Jazz", "Blues"]);
+    expect(two.chain[2].fact).toContain("same sentence");
+    // With no stops it is the chain it always was.
+    const plain = await tasks.absurdChain(mock, { from: { name: "Chicken" }, to: { name: "Toast" }, via: [] });
+    expect(plain.chain.map((h) => h.to)).toEqual(["Egg", "Heat", "Maillard reaction", "Toast"]);
   });
 });

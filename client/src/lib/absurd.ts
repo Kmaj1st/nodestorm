@@ -13,6 +13,21 @@ export const ABSURD_STYLES: AbsurdStyle[] = ["deadpan", "conspiracy", "epic", "b
 export const ABSURD_LENGTHS = { short: { min: 3, max: 4 }, medium: { min: 4, max: 5 }, long: { min: 5, max: 7 } } as const;
 export type AbsurdLength = keyof typeof ABSURD_LENGTHS;
 
+/**
+ * A stop the user puts on the chain: a concept of the graph (by name or alias), or a custom one with the user's own
+ * description (what it means; sent to the AI as its definition, and its definition if it is added to a sandbox).
+ */
+export interface AbsurdStop {
+  name: string;
+  description: string;
+}
+
+/** Whether a concept of the chain is one of the user's stops. */
+export function isStop(name: string, stops: readonly Pick<AbsurdStop, "name">[]): boolean {
+  const key = normalizeName(name);
+  return stops.some((s) => normalizeName(s.name) === key);
+}
+
 /** Every concept on the chain, in order: its start, the intermediate concepts, its end. */
 export function chainConcepts(res: Pick<AbsurdChainResponse, "chain">): string[] {
   return res.chain.length ? [res.chain[0].from, ...res.chain.map((h) => h.to)] : [];
@@ -56,12 +71,15 @@ const STEP = { x: 140, y: ops.NODE_SIZE.h + 70 };
  * so the chain's ends are normally the user's own concepts), placed along the line between the ends when they
  * exist, else in a staircase from `center`; each hop becomes a relation whose forward direction is the fact (with
  * its narration) and whose other direction is "none". An existing relation between two concepts is kept as it is.
- * New concepts carry a note naming the chain. Returns the new concepts' ids with the hop fact that introduced them.
+ * New concepts carry a note naming the chain. A custom stop of the user's (`stops`) that is new gets the user's
+ * description as its definition, with "you" as its source. Returns the new concepts' ids with the hop fact that
+ * introduced them.
  */
 export function applyAbsurdChain(
   g: Graph,
   res: AbsurdChainResponse,
   center: { x: number; y: number } = { x: 0, y: 0 },
+  stops: readonly AbsurdStop[] = [],
 ): { graph: Graph; added: { id: string; fact: string }[]; linked: number } {
   const names = chainConcepts(res);
   const n = names.length;
@@ -79,7 +97,8 @@ export function applyAbsurdChain(
   const ids: string[] = [];
   const added: { id: string; fact: string }[] = [];
   names.forEach((name, i) => {
-    const r = ops.addNode(out, { name, position: at(i) });
+    const own = stops.find((s) => normalizeName(s.name) === normalizeName(name))?.description.trim();
+    const r = ops.addNode(out, { name, position: at(i), ...(own ? { definition: own, source: ops.OWN_SOURCE } : {}) });
     out = r.existed ? r.graph : ops.updateNode(r.graph, r.id, { notes: note });
     ids.push(r.id);
     if (!r.existed) added.push({ id: r.id, fact: res.chain[Math.max(i - 1, 0)].fact });

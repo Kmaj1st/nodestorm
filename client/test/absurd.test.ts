@@ -1,7 +1,8 @@
 import type { AbsurdChainResponse, Graph } from "@nodestorm/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyAbsurdChain, chainConcepts, chainToText, hopExplanation, intermediates, sandboxName } from "../src/lib/absurd";
+import { applyAbsurdChain, chainConcepts, chainToText, hopExplanation, intermediates, isStop, sandboxName } from "../src/lib/absurd";
 import { absurdChain, addAbsurdChainToSandbox } from "../src/lib/actions";
+import { api } from "../src/lib/api";
 import * as ops from "../src/lib/graphOps";
 import { useAbsurd } from "../src/store/absurdStore";
 import { useGraphStore } from "../src/store/graphStore";
@@ -96,6 +97,25 @@ describe("applyAbsurdChain", () => {
     expect(graph.nodes.filter((n) => n.name.toLowerCase() === "group")).toHaveLength(1); // matched by name
   });
 
+  it("gives a new custom stop the user's description as its definition, from you", () => {
+    const g = base();
+    const stops = [{ name: "heat", description: "  What the toaster makes.  " }, { name: "Group", description: "ignored: already mine" }];
+    const { graph } = applyAbsurdChain(g, { ...chain, chain: [hop("Homomorphism", "Group"), hop("Group", "Heat"), hop("Heat", "Toast")] }, undefined, stops);
+    const by = (name: string) => graph.nodes.find((n) => n.name === name)!;
+    expect(by("Heat")).toMatchObject({ definition: "What the toaster makes.", source: ops.OWN_SOURCE });
+    expect(by("Group").definition).toBe("");
+    expect(by("Toast")).toMatchObject({ definition: "" });
+    expect(by("Toast").source).toBeUndefined();
+    // A stop without a description is left for the AI to define, like any new concept.
+    const bare = applyAbsurdChain(g, chain, undefined, [{ name: "Heat", description: " " }]).graph;
+    expect(bare.nodes.find((n) => n.name === "Heat")?.definition).toBe("");
+  });
+
+  it("knows the user's stops by name, whatever the spelling", () => {
+    expect(isStop("heat ", [{ name: "Heat" }])).toBe(true);
+    expect(isStop("Toast", [{ name: "Heat" }])).toBe(false);
+  });
+
   it("places a chain whose ends are both new in a staircase around the given centre", () => {
     const { graph } = applyAbsurdChain(ops.emptyGraph(), { ...chain, chain: [hop("Opera", "Paper"), hop("Paper", "Jazz")] }, { x: 1000, y: 1000 });
     const ys = graph.nodes.map((n) => n.position.y);
@@ -120,6 +140,31 @@ describe("absurd chain actions", () => {
     expect(res.chain.at(-1)?.to).toBe("Toast");
     expect(res.title).toBe("Form 27-B: request to connect Homomorphism to Toast");
     expect(store().busy).toEqual({});
+  });
+
+  it("builds the chain through the user's stops, a graph concept and a custom one", async () => {
+    const via = [{ name: "group", description: "" }, { name: "Grandma's oven", description: "The oven in my grandmother's kitchen." }];
+    const res = (await absurdChain("Homomorphism", "Toast", "deadpan", { min: 3, max: 4 }, [], via))!;
+    const names = chainConcepts(res);
+    expect(names.indexOf("Group")).toBeGreaterThan(0);
+    expect(names.indexOf("Grandma's oven")).toBeGreaterThan(names.indexOf("Group"));
+    // The custom stop's description survives into the sandbox as its definition, from the user.
+    const sandboxId = addAbsurdChainToSandbox(res, via)!;
+    const oven = store().graphs[sandboxId].nodes.find((n) => n.name === "Grandma's oven")!;
+    expect(oven).toMatchObject({ definition: "The oven in my grandmother's kitchen.", source: { site: "you" } });
+    await vi.waitFor(() => expect(store().graphs[sandboxId].nodes.every((n) => n.status !== "checking")).toBe(true));
+    expect(store().graphs[sandboxId].nodes.find((n) => n.name === "Grandma's oven")?.definition).toBe("The oven in my grandmother's kitchen.");
+  });
+
+  it("says in the user's language when the AI keeps missing a stop", async () => {
+    const spy = vi.spyOn(api, "absurdChain").mockRejectedValueOnce(
+      new Error('Mock returned malformed output: The chain is broken: it never passes through the stop "X". It must pass through every stop, in this order: "X".'),
+    );
+    expect(await absurdChain("Homomorphism", "Toast", "deadpan", { min: 3, max: 4 }, [], [{ name: "X", description: "" }])).toBeUndefined();
+    expect(store().toast).toBe("The AI couldn't build a chain through all your stops in order. Try again, or change the stops.");
+    spy.mockRestore();
+    // A stop that is also an end is refused by the request itself (the dialog prevents it); no chain comes back.
+    expect(await absurdChain("Homomorphism", "Toast", "deadpan", { min: 3, max: 4 }, [], [{ name: "Toast", description: "" }])).toBeUndefined();
   });
 
   it("adds a chain to a new sandbox as one undo step, leaving the graph it came from alone", async () => {

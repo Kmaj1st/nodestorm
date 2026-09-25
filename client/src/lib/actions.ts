@@ -25,7 +25,7 @@ import { useGraphStore } from "../store/graphStore";
 import { autoSnapshot } from "../store/snapshotStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
-import { applyAbsurdChain, sandboxName } from "./absurd";
+import { applyAbsurdChain, sandboxName, type AbsurdStop } from "./absurd";
 import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
@@ -1017,6 +1017,7 @@ export const absurdKey = "absurd";
 /**
  * "Absurd chain": ask the AI for a chain of true links from one concept to another, narrated in `style`. The ends
  * are names: a concept of the active graph (by name or alias) goes with its definition, anything else as typed.
+ * The user's stops (`via`) go the same way, a custom one with the description the user wrote as its definition.
  * Nothing changes in the graph; see addAbsurdChainToSandbox.
  */
 export function absurdChain(
@@ -1025,34 +1026,44 @@ export function absurdChain(
   style: AbsurdStyle,
   hops: { min: number; max: number },
   avoid: string[] = [],
+  via: AbsurdStop[] = [],
   graphId = store().activeId,
 ) {
   if (inViewer(graphId)) return Promise.resolve(undefined);
   const nodes = graph(graphId)?.nodes ?? [];
-  const brief = (name: string) => {
+  const brief = (name: string, description = "") => {
     const n = findByName(nodes, name);
-    return n ? toBrief(n) : { name: name.trim(), definition: "", aliases: [] };
+    return n ? toBrief(n) : { name: name.trim(), definition: description.trim(), aliases: [] };
   };
   const [a, b] = [brief(from), brief(to)];
+  const stops = via.map((s) => brief(s.name, s.description));
   const context = nodes.slice(0, 80).map(toBrief);
-  return withBusy(absurdKey, t("task.absurd", { a: a.name, b: b.name }), (signal) =>
-    api.absurdChain({ from: a, to: b, style, hops, context, avoid }, signal),
+  return withBusy(
+    absurdKey,
+    t("task.absurd", { a: a.name, b: b.name }),
+    (signal) => api.absurdChain({ from: a, to: b, style, hops, context, avoid, via: stops }, signal),
+    {
+      // Still missing a stop after the retry (see checkAbsurdStops): say so in the user's language.
+      onError: (e) =>
+        e instanceof Error && /must pass through every stop/.test(e.message) ? store().setToast(t("absurd.via.missed")) : reportError(e),
+    },
   );
 }
 
 /**
  * Put an absurd chain into a new sandbox forked from the active graph and named after the chain, as one undo step
  * there, and switch to it: the user's graph only changes if they merge the sandbox back. The new concepts are then
- * checked quietly, like extracted ones (the hop that introduced each one tells the AI which meaning is meant).
+ * checked quietly, like extracted ones (the hop that introduced each one tells the AI which meaning is meant). A new
+ * custom stop of the user's (`via`) with a description keeps it as its definition (source: you).
  */
-export function addAbsurdChainToSandbox(res: AbsurdChainResponse): string | undefined {
+export function addAbsurdChainToSandbox(res: AbsurdChainResponse, via: AbsurdStop[] = []): string | undefined {
   const s = store();
   if (inViewer(s.activeId)) return undefined;
   s.forkActive(sandboxName(res.title));
   const sandboxId = store().activeId;
   let added: { id: string; fact: string }[] = [];
   store().mutate((g) => {
-    const r = applyAbsurdChain(g, res, viewport.center());
+    const r = applyAbsurdChain(g, res, viewport.center(), via);
     added = r.added;
     return r.graph;
   }, sandboxId);

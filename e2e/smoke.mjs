@@ -2096,6 +2096,58 @@ try {
     await page.screenshot({ path: `${shots}31-absurd-chain-dark.png` });
     await dlg.getByRole("button", { name: "Close" }).click();
     await setTheme("light");
+
+    // Stops along the way: one concept of the graph (typed in lower case) and one of the user's own, with what it means.
+    await page.getByRole("button", { name: "File", exact: true }).click();
+    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    await dlg.waitFor();
+    await dlg.getByLabel("From", { exact: true }).fill("Fourier transform");
+    await dlg.getByLabel("To", { exact: true }).fill("Toast");
+    const via = dlg.getByRole("group", { name: "Stops along the way" });
+    const stopRows = via.getByTestId("absurd-stop");
+    const newStop = via.getByLabel("New stop", { exact: true });
+    await newStop.fill("Grandma's oven");
+    await newStop.press("Enter");
+    await stopRows.nth(0).waitFor();
+    await newStop.fill("homomorphism");
+    await via.getByRole("button", { name: "Add stop" }).click();
+    await stopRows.nth(1).waitFor();
+    assert(
+      (await stopRows.nth(1).textContent()).includes("Homomorphism") && (await stopRows.nth(1).textContent()).includes("In your graph"),
+      "a stop typed as a concept of the graph takes its name and is marked as in the graph",
+    );
+    await newStop.fill("Toast");
+    await newStop.press("Enter");
+    await via.getByText("“Toast” is one of the ends").waitFor();
+    assert((await stopRows.count()) === 2, "an end can't also be a stop");
+    await newStop.fill("");
+    // Reorder with the keyboard: Homomorphism first, then the custom stop; the focus stays on the moved row.
+    await via.getByRole("button", { name: "Move “Homomorphism” up" }).focus();
+    await page.keyboard.press("Enter");
+    await page.waitForFunction(() => document.activeElement?.getAttribute("aria-label") === "Move “Homomorphism” down");
+    assert((await stopRows.nth(0).textContent()).includes("Homomorphism"), "Move up reorders the stops and keeps the focus on the moved one");
+    await via.getByLabel("What “Grandma's oven” means").fill("The oven in my grandmother's kitchen, which also makes toast.");
+    await dlg.getByRole("button", { name: "Build the chain" }).click();
+    await result.waitFor();
+    const onChain = await hops.evaluateAll((els) => els.map((el) => [...el.querySelectorAll(".absurd-hop__ends strong")].map((s) => s.textContent)));
+    const names = [onChain[0][0], ...onChain.map((h) => h[1])];
+    assert(
+      names[0] === "Fourier transform" && names.at(-1) === "Toast" && names.indexOf("Homomorphism") > 0 && names.indexOf("Grandma's oven") > names.indexOf("Homomorphism"),
+      `the chain passes through both stops, in order (${names.join(" → ")})`,
+    );
+    assert((await result.getByText("your stop").count()) === 2, "the user's stops are marked in the chain");
+    await audit("Absurd chain dialog with stops");
+    await page.screenshot({ path: `${shots}31b-absurd-chain-stops.png` });
+    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.waitFor({ state: "detached" });
+    await node("Grandma's oven").click();
+    assert(
+      (await (await definitionField()).inputValue()) === "The oven in my grandmother's kitchen, which also makes toast." &&
+        (await page.getByTestId("node-panel").textContent()).includes("written by you"),
+      "in the sandbox, the custom stop's definition is the user's description, written by you",
+    );
+    await page.getByRole("combobox", { name: "Graph" }).selectOption({ label: "Main graph" });
+    await page.getByTestId("sandbox-banner").waitFor({ state: "detached" });
   }
 
   console.log("Lean / Mathlib");

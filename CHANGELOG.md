@@ -12,6 +12,7 @@
 - **Merging a sandbox** where both sides added the same concept keeps the sandbox's prerequisites of it (linked and missing), so its dependency links still count in study order and learning paths. Folding a concept into an existing one does the same.
 - **A prerequisite that is one of the concept's own aliases** is ignored instead of staying "missing" for good (installing it only said the concept already exists).
 - **AI answers** that write a prerequisite's role with capitals ("Uses") are read instead of failing the check.
+- **Absurd chain: stops along the way.** Put up to 6 of your own stops between the two ends: concepts of your graph, or your own with a short description of what they mean. The chain passes through them in order (the AI is asked again if it skips one), they are marked "your stop", and a custom stop added to a sandbox keeps your description as its definition. Stops can be reordered with the up/down buttons.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
