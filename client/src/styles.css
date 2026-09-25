@@ -66,6 +66,12 @@
   --sandbox-border: #a5e8f6;
   --edge: #9ca3af;
   --edge-none: #d5d8de;
+  /* Relation lines by kind (Settings → Relation colours overrides them with inline values on <html>). */
+  --edge-dependency: var(--edge);
+  --edge-mix: var(--edge);
+  --edge-derive: var(--sandbox);
+  --edge-extract: var(--edge);
+  --edge-unrelated: #db2777;
   /* Concept kinds (tags on cards): definitions, proved results, axioms, conjectures, examples */
   --kind-def: #1d4ed8;
   --kind-def-soft: #eaf1ff;
@@ -139,6 +145,11 @@
   --sandbox-border: #175e6b;
   --edge: #5f6674;
   --edge-none: #343944;
+  --edge-dependency: var(--edge);
+  --edge-mix: var(--edge);
+  --edge-derive: var(--sandbox);
+  --edge-extract: var(--edge);
+  --edge-unrelated: #f472b6;
   --kind-def: #9dbbff;
   --kind-def-soft: #172340;
   --kind-result: #d4acff;
@@ -476,17 +487,26 @@ button.concept__badge--unclear:hover:not(:disabled) { background: var(--accent-s
 :lang(zh) .kind-tag { letter-spacing: 0; text-transform: none; font-size: 11px; }
 
 /* ---- Edges ---- */
-.relation { stroke: var(--edge); stroke-width: 1.5; fill: none; }
-.relation--dependency { stroke-dasharray: 5 4; }
-.relation--derive { stroke: var(--sandbox); }
-.relation--extract { stroke-dasharray: 1 5; stroke-linecap: round; stroke-width: 2.25; }
+.relation { --line: var(--edge); stroke: var(--line); stroke-width: 1.5; fill: none; }
+.relation--dependency { --line: var(--edge-dependency); stroke-dasharray: 5 4; }
+.relation--mix { --line: var(--edge-mix); }
+.relation--derive { --line: var(--edge-derive); }
+.relation--extract { --line: var(--edge-extract); stroke-dasharray: 1 5; stroke-linecap: round; stroke-width: 2.25; }
+/* Mix found no relation either way: its own colour and a long dash (not colour alone). */
+.relation--unrelated { --line: var(--edge-unrelated); stroke-dasharray: 10 6; stroke-linecap: butt; stroke-width: 1.75; }
 .relation--cycle { stroke: var(--checking); stroke-width: 2; }
 .arrow { cursor: pointer; pointer-events: all; }
 .arrow__hit { fill: transparent; }
-.arrow__head { fill: var(--edge); transition: fill 0.1s; }
+.arrow__head { fill: var(--line, var(--edge)); transition: fill 0.1s; }
+.arrow--dependency { --line: var(--edge-dependency); }
+.arrow--mix { --line: var(--edge-mix); }
+.arrow--derive { --line: var(--edge-derive); }
+.arrow--extract { --line: var(--edge-extract); }
 .arrow:hover .arrow__head { fill: var(--accent); }
 .arrow--active .arrow__head { fill: var(--accent); }
 .arrow--none .arrow__head { fill: var(--edge-none); }
+.arrow--unrelated .arrow__head { fill: var(--edge-unrelated); }
+button.edge-label.edge-label--unrelated { color: var(--edge-unrelated); border-style: dashed; }
 button.edge-label {
   position: absolute; display: block; pointer-events: all; min-height: 0; font-size: 11px; font-weight: 500;
   line-height: 16px; padding: 1px 8px; border-radius: var(--radius-full); background: var(--panel);
@@ -1110,3 +1130,28 @@ span.paper__title { color: var(--text); }
 }
 .def-box--empty { display: flex; align-items: center; }
 .def-field .math-preview { margin-top: 0; }
+
+/* Settings → Relation colours. */
+.edge-colors { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-2); }
+.edge-colors__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.edge-colors__title { font-size: var(--text-sm); font-weight: 600; }
+.edge-colors__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.edge-colors__label { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
+.edge-colors__label input[type="color"] {
+  width: 32px; height: 24px; padding: 0; border: 1px solid var(--border-strong); border-radius: var(--radius-sm); background: none; cursor: pointer;
+}
+/* Legend swatches in the View menu: a short line in the relation type's colour and dash. */
+.edge-swatch { display: inline-block; width: 22px; height: 0; border-top: 2px solid var(--line, var(--edge)); vertical-align: middle; margin-right: 2px; }
+.edge-swatch--dependency { --line: var(--edge-dependency); border-top-style: dashed; }
+.edge-swatch--mix { --line: var(--edge-mix); }
+.edge-swatch--derive { --line: var(--edge-derive); }
+.edge-swatch--extract { --line: var(--edge-extract); border-top-style: dotted; border-top-width: 3px; }
+.edge-swatch--unrelated { --line: var(--edge-unrelated); border-top-style: dashed; }
+.view-menu__legend { display: flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); color: var(--muted); padding-left: 2px; }
+
+/* Zoomed out (below FAR_ZOOM in GraphCanvas): descriptions would be unreadable, so a card shows its name, larger. */
+.canvas--far .concept__def,
+.canvas--far .concept__missing span,
+.canvas--far .concept__cycle span { display: none; }
+.canvas--far .concept__missing, .canvas--far .concept__cycle { border-top: none; padding-top: 0; }
+.canvas--far .concept__name { font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; }

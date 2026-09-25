@@ -1192,6 +1192,46 @@ try {
   await page.getByLabel("Project name").press("Enter");
   await page.getByRole("button", { name: "Load example: Group theory" }).click();
   await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+  {
+    console.log("No relation found, and relation colours");
+    // The offline demo knows no direct link between Subgroup and Homomorphism: Mix finds none either way.
+    await node("Subgroup").click();
+    await node("Homomorphism").click({ modifiers: ["Shift"] });
+    await page.getByRole("button", { name: /Mix/ }).click();
+    await page.getByText(/No relation found between “Subgroup” and “Homomorphism”/).waitFor();
+    const line = page.locator("path.relation--unrelated");
+    assert((await line.count()) === 1, "a Mix that finds nothing draws a “no relation” link");
+    const stroke = () => line.evaluate((el) => getComputedStyle(el).stroke);
+    const token = await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--edge-unrelated").trim());
+    const before = await stroke();
+    assert(before !== (await page.locator("path.relation--mix").first().evaluate((el) => getComputedStyle(el).stroke)), "…in its own colour, not the mixed-relation grey");
+    assert(token === "#db2777" && before === "rgb(219, 39, 119)", `…the theme's “no relation” colour (${token}, ${before})`);
+    {
+      const st = await openSettings();
+      await st.getByTestId("edge-color-unrelated").fill("#00aa00");
+      await st.getByRole("button", { name: "Save", exact: true }).click();
+    }
+    assert((await stroke()) === "rgb(0, 170, 0)", "a colour chosen in Settings → Relation colours is used at once");
+    {
+      const st = await openSettings();
+      await st.getByTestId("edge-colors-reset-all").click();
+      await st.getByRole("button", { name: "Save", exact: true }).click();
+    }
+    assert((await stroke()) === before, "Reset all goes back to the theme's colour");
+    await page.getByRole("button", { name: /^View/ }).click();
+    assert(await page.locator(".view-menu__legend").getByText("No relation found").isVisible(), "the View menu shows the colour legend");
+    await page.keyboard.press("Escape");
+
+    // Zoomed far out, descriptions would be unreadable: cards show just their name, larger.
+    const nameSize = () => node("Group").locator(".concept__name").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));
+    const near = await nameSize();
+    for (let i = 0; i < 6; i++) await page.getByRole("button", { name: "Zoom Out" }).click();
+    await page.waitForFunction(() => document.querySelector(".canvas")?.classList.contains("canvas--far"));
+    assert(await node("Group").locator(".concept__def").isHidden(), "zoomed out, a card hides its description");
+    assert((await nameSize()) > near, "…and shows its name larger");
+    await page.screenshot({ path: `${shots}5e-zoomed-out.png` });
+    await page.getByRole("button", { name: "Fit View" }).click();
+  }
   await node("First Isomorphism Theorem").click(); // blocked, with a learning path in the inspector
   await audit("main screen with a graph and a concept open in the inspector");
   {

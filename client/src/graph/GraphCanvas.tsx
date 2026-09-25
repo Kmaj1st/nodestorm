@@ -5,6 +5,7 @@ import {
   MiniMap,
   ReactFlow,
   useReactFlow,
+  useStore,
   type NodeChange,
   type NodePositionChange,
   type OnSelectionChangeParams,
@@ -33,6 +34,8 @@ const edgeTypes = { bi: BiRelationEdge };
 
 /** From this many concepts on, only what is on screen is rendered (React Flow's onlyRenderVisibleElements). */
 const LARGE_GRAPH = 150;
+/** Below this zoom a card's description is too small to read: cards then show just their name, larger. */
+export const FAR_ZOOM = 0.6;
 
 export function GraphCanvas() {
   const t = useT();
@@ -42,6 +45,8 @@ export function GraphCanvas() {
   const setInspect = useGraphStore((s) => s.setInspect);
   const theme = useTheme((s) => s.theme);
   const viewing = useGraphStore(isViewing);
+  // A boolean selector: the canvas re-renders when the zoom crosses the threshold, not on every zoom step.
+  const far = useStore((st) => st.transform[2] < FAR_ZOOM);
   const loadExample = useCallback(() => {
     useGraphStore.getState().loadExample();
     viewport.fit();
@@ -305,7 +310,7 @@ export function GraphCanvas() {
   return (
     <div
       ref={wrapper}
-      className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}${layers ? " canvas--layered" : ""}`}
+      className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}${layers ? " canvas--layered" : ""}${far ? " canvas--far" : ""}`}
       data-settled={physicsOn ? String(!physics.settling) : undefined}
     >
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>

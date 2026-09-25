@@ -136,9 +136,15 @@ export function ViewMenu() {
                 checked={view.origins[k.origin]}
                 onChange={(e) => view.setPrefs({ origins: { ...view.origins, [k.origin]: e.target.checked } })}
               />
+              <span className={`edge-swatch edge-swatch--${k.origin}`} aria-hidden="true" />
               {t(k.label)}
             </label>
           ))}
+          {/* Not a filter (these are Mix links): a legend entry for the colour of a "no relation found" link. */}
+          <div className="view-menu__legend">
+            <span className="edge-swatch edge-swatch--unrelated" aria-hidden="true" />
+            {t("view.unrelated")}
+          </div>
           {kinds.length > 0 && (
             <>
               <hr className="menu__sep" />

@@ -1,5 +1,11 @@
 # Changelog
 
+## 2026-09-25: "no relation" links, relation colours, zoomed-out cards
+
+- **No relation found:** when Mix finds no relation either way, the link stays but is drawn in its own colour (rose) with a long dash, marked "no relation". A notice says so. Exports write the pair once ("no relation found"); the 3D view uses the same colour.
+- **Relation colours:** Settings → Relation colours sets the colour of dependency, mixed, derived, extracted and "no relation" links, in both themes, each with Reset (and Reset all). The View menu shows a legend with the current colours.
+- **Zoomed out:** when descriptions would be too small to read, cards hide them and show the name larger.
+
 ## 2026-09-25: active relation labels, definition box
 
 - **Relation labels are active and one-way:**

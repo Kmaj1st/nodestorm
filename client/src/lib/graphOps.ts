@@ -48,6 +48,9 @@ export function depKinds(dependent: string, prereq: string, role: DepRole, reaso
   };
 }
 
+/** Mix looked and found no relation in either direction (both sides "none"). */
+export const isUnrelated = (r: Pick<Relation, "aToB" | "bToA">) => r.aToB.kind.trim() === "none" && r.bToA.kind.trim() === "none";
+
 export function depRelation(dependent: ConceptNode, prereq: ConceptNode, role: DepRole, reason: string) {
   return depKinds(dependent.name, prereq.name, role, reason);
 }

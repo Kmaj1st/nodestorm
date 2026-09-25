@@ -645,6 +645,8 @@ export async function mix(aId: string, bId: string) {
   store().mutate((g) => (both(g) ? ops.upsertRelation(g, aId, bId, res.aToB, res.bToA, "mix") : g), graphId);
   const rel = ops.findRelation(graph(graphId), aId, bId);
   if (rel) store().setInspect({ kind: "edge", relationId: rel.id, dir: rel.a === aId ? "aToB" : "bToA" });
+  // Kept as a "no relation" link (its own colour on the canvas), so the pair isn't mixed again by mistake.
+  if (rel && ops.isUnrelated(rel)) store().setToast(t("mix.unrelated", { a: a.name, b: b.name }), "info");
 }
 
 export const explainKey = (graphId: string, nodeId: string) => `explain:${graphId}:${nodeId}`;

@@ -11,10 +11,10 @@ import {
 import { Check, Eye, EyeOff, RefreshCw } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
-import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref } from "../i18n";
+import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref, type MessageKey } from "../i18n";
 import { api } from "../lib/api";
 import { pausedSites } from "../lib/lookup";
-import { useTheme, type ThemePref } from "../lib/theme";
+import { EDGE_COLOR_KEYS, useTheme, type EdgeColorKey, type EdgeColors, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
 import { formatTokens, useUsage } from "../store/usageStore";
@@ -32,6 +32,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   // Edit a draft; nothing is stored until Save.
   const [uiLang, setUiLang] = useState<LangPref>(useLocale.getState().pref);
   const [theme, setTheme] = useState<ThemePref>(useTheme.getState().pref);
+  const [edgeColors, setEdgeColors] = useState<EdgeColors>(useTheme.getState().edgeColors);
   const [connection, setConnection] = useState<Connection>(saved.connection);
   const [provider, setProvider] = useState<ProviderKind>(saved.provider);
   const [configs, setConfigs] = useState(saved.configs);
@@ -98,6 +99,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const save = () => {
     useLocale.getState().setPref(uiLang);
     useTheme.getState().setPref(theme);
+    useTheme.getState().setEdgeColors(edgeColors);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
       connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, autoResolveCycles, language: lang, aiConcurrency,
@@ -142,6 +144,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           </label>
         </div>
         <span className="muted small">{t("settings.uiHint")}</span>
+        <EdgeColorsField value={edgeColors} onChange={setEdgeColors} />
       </fieldset>
 
       <h4 className="settings__head">{t("settings.ai")}</h4>
@@ -454,5 +457,74 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <button type="button" className="primary" onClick={save}>{t("common.save")}</button>
       </div>
     </Modal>
+  );
+}
+
+const EDGE_COLOR_LABEL: Record<EdgeColorKey, MessageKey> = {
+  dependency: "view.dependency",
+  mix: "view.mix",
+  derive: "view.derive",
+  extract: "view.extract",
+  unrelated: "view.unrelated",
+};
+
+/** A colour as `#rrggbb` (computed custom properties may come back as `rgb(…)`). */
+function toHex(c: string): string {
+  const v = c.trim();
+  if (/^#[0-9a-f]{6}$/i.test(v)) return v.toLowerCase();
+  if (/^#[0-9a-f]{3}$/i.test(v)) return `#${[...v.slice(1)].map((x) => x + x).join("")}`.toLowerCase();
+  const m = /rgba?\((\d+)[ ,]+(\d+)[ ,]+(\d+)/.exec(v);
+  return m ? `#${m.slice(1, 4).map((x) => Number(x).toString(16).padStart(2, "0")).join("")}` : "#888888";
+}
+
+/** The theme's own colour for a relation type (ignoring any custom colour set on <html>). */
+function themeColor(key: EdgeColorKey): string {
+  const root = document.documentElement;
+  const custom = root.style.getPropertyValue(`--edge-${key}`);
+  if (custom) root.style.removeProperty(`--edge-${key}`);
+  const value = getComputedStyle(root).getPropertyValue(`--edge-${key}`);
+  if (custom) root.style.setProperty(`--edge-${key}`, custom);
+  return toHex(value);
+}
+
+/** Settings → Relation colours: one picker per relation type, each resettable to the theme's colour. */
+function EdgeColorsField({ value, onChange }: { value: EdgeColors; onChange: (c: EdgeColors) => void }) {
+  const t = useT();
+  const custom = Object.keys(value).length > 0;
+  return (
+    <div className="edge-colors" role="group" aria-labelledby="edge-colors-head">
+      <div className="edge-colors__head">
+        <span id="edge-colors-head" className="edge-colors__title">{t("settings.edgeColors")}</span>
+        <button type="button" className="link small" onClick={() => onChange({})} disabled={!custom} data-testid="edge-colors-reset-all">
+          {t("settings.edgeColorsResetAll")}
+        </button>
+      </div>
+      {EDGE_COLOR_KEYS.map((k) => (
+        <div key={k} className="edge-colors__row">
+          <label className="edge-colors__label">
+            <input
+              type="color"
+              value={value[k] ?? themeColor(k)}
+              onChange={(e) => onChange({ ...value, [k]: e.target.value })}
+              data-testid={`edge-color-${k}`}
+            />
+            {t(EDGE_COLOR_LABEL[k])}
+          </label>
+          <button
+            type="button"
+            className="small-btn"
+            disabled={!value[k]}
+            onClick={() => {
+              const { [k]: _gone, ...rest } = value;
+              onChange(rest);
+            }}
+            aria-label={t("settings.edgeColorReset", { name: t(EDGE_COLOR_LABEL[k]) })}
+          >
+            {t("settings.edgeColorResetShort")}
+          </button>
+        </div>
+      ))}
+      <span className="muted small">{t("settings.edgeColorsHint")}</span>
+    </div>
   );
 }

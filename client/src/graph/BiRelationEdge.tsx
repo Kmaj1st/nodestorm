@@ -3,6 +3,7 @@ import { useInternalNode, useStore, type Edge, type EdgeProps, type InternalNode
 import { memo, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../i18n";
+import { isUnrelated } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
 import { useView } from "../store/viewStore";
 
@@ -56,8 +57,10 @@ function useLabelLayer() {
  * Arrowhead with its tip at `tip`, pointing along angle `ang`. Wide invisible hit area for easy clicking.
  * It is also a keyboard button (Tab to it, Enter/Space opens that direction in the inspector).
  */
-function Arrow({ tip, ang, active, kind, onClick, testId, label }: {
+function Arrow({ tip, ang, active, kind, onClick, testId, label, tone }: {
   tip: Pt; ang: number; active: boolean; kind: string; onClick: () => void; testId: string; label: string;
+  /** Colour class: the relation's origin, or "unrelated" when Mix found nothing either way. */
+  tone: string;
 }) {
   const back = { x: tip.x - Math.cos(ang) * HEAD, y: tip.y - Math.sin(ang) * HEAD };
   const nx = -Math.sin(ang) * (HEAD / 2);
@@ -66,7 +69,7 @@ function Arrow({ tip, ang, active, kind, onClick, testId, label }: {
   const none = kind === "none";
   return (
     <g
-      className={`arrow${active ? " arrow--active" : ""}${none ? " arrow--none" : ""}`}
+      className={`arrow arrow--${tone}${active ? " arrow--active" : ""}${none && tone !== "unrelated" ? " arrow--none" : ""}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       onKeyDown={(e) => {
         if (e.key !== "Enter" && e.key !== " ") return;
@@ -101,6 +104,8 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
   const labelLayer = useLabelLayer();
   if (!s || !t || !data) return null;
   const rel = data.relation;
+  const unrelated = isUnrelated(rel);
+  const tone = unrelated ? "unrelated" : rel.origin;
   const nameOf = (n: InternalNode) => (n.data as { concept?: { name: string } }).concept?.name ?? "?";
   const [aName, bName] = [nameOf(s), nameOf(t)];
 
@@ -120,26 +125,31 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
 
   return (
     <>
-      <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${data.cycle ? " relation--cycle" : ""}`} />
+      <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${unrelated ? " relation--unrelated" : ""}${data.cycle ? " relation--cycle" : ""}`} />
       <Arrow
-        tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")}
-        testId={`arrow-${rel.id}-aToB`} label={tr("edge.arrow", { a: aName, b: bName, kind: rel.aToB.kind })}
+        tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} tone={tone}
+        testId={`arrow-${rel.id}-aToB`}
+        label={unrelated ? tr("edge.unrelated", { a: aName, b: bName }) : tr("edge.arrow", { a: aName, b: bName, kind: rel.aToB.kind })}
       />
       <Arrow
-        tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")}
-        testId={`arrow-${rel.id}-bToA`} label={tr("edge.arrow", { a: bName, b: aName, kind: rel.bToA.kind })}
+        tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} tone={tone}
+        testId={`arrow-${rel.id}-bToA`}
+        label={unrelated ? tr("edge.unrelated", { a: bName, b: aName }) : tr("edge.arrow", { a: bName, b: aName, kind: rel.bToA.kind })}
       />
       {labelLayer &&
         showLabels &&
         createPortal(
-          [
-            { dir: "aToB" as const, at: nearB, kind: rel.aToB.kind },
-            { dir: "bToA" as const, at: nearA, kind: rel.bToA.kind },
-          ].map(({ dir, at, kind }) =>
+          (unrelated
+            ? [{ dir: "aToB" as const, at: lerp(0.5), kind: tr("edge.unrelatedLabel") }]
+            : [
+                { dir: "aToB" as const, at: nearB, kind: rel.aToB.kind },
+                { dir: "bToA" as const, at: nearA, kind: rel.bToA.kind },
+              ]
+          ).map(({ dir, at, kind }) =>
             kind === "none" ? null : (
               <button
                 key={dir}
-                className={`edge-label nodrag nopan${activeDir === dir ? " edge-label--active" : ""}`}
+                className={`edge-label nodrag nopan${unrelated ? " edge-label--unrelated" : ""}${activeDir === dir ? " edge-label--active" : ""}`}
                 style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
                 onClick={() => open(dir)}
                 title={tr(dir === "aToB" ? "edge.aToB" : "edge.bToA")}

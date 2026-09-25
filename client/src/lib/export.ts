@@ -1,4 +1,5 @@
 import type { ConceptNode, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
+import { isUnrelated } from "./graphOps";
 import { KIND_NAME } from "./kinds";
 import { splitMath } from "./math";
 
@@ -110,7 +111,11 @@ export function toMarkdown(g: Graph): string {
       const b = mdEscape(byId.get(r.b)!.name);
       const dir = (x: string, y: string, d: { kind: string; explanation: string }) =>
         `- ${x} → ${y}: ${mdEscape(d.kind)}${d.explanation.trim() ? ` — ${mdEscape(d.explanation)}` : ""}`;
-      // A "none" side (a one-way relation) isn't written out.
+      // Mix found nothing either way: said once. Otherwise a "none" side (a one-way relation) isn't written out.
+      if (isUnrelated(r)) {
+        lines.push(`- ${a} — ${b}: no relation found${r.aToB.explanation.trim() ? ` — ${mdEscape(r.aToB.explanation)}` : ""}`);
+        continue;
+      }
       if (r.aToB.kind.trim() !== "none") lines.push(dir(a, b, r.aToB));
       if (r.bToA.kind.trim() !== "none") lines.push(dir(b, a, r.bToA));
     }
@@ -177,6 +182,10 @@ export function toMermaid(g: Graph): string {
     const b = mid.get(r.b);
     if (!a || !b) continue;
     const arrow = r.origin === "dependency" ? "-.->" : "-->";
+    if (isUnrelated(r)) {
+      lines.push(`  ${a} -.-x ${b}`); // no relation found
+      continue;
+    }
     if (r.aToB.kind.trim() !== "none") lines.push(`  ${a} ${arrow}|"${mermaidEscape(r.aToB.kind)}"| ${b}`);
     if (r.bToA.kind.trim() !== "none") lines.push(`  ${b} ${arrow}|"${mermaidEscape(r.bToA.kind)}"| ${a}`);
   }

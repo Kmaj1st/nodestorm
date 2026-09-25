@@ -1,7 +1,7 @@
 import type { ConceptNode, Graph } from "@nodestorm/shared";
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
-import { NODE_SIZE } from "../lib/graphOps";
+import { isUnrelated, NODE_SIZE } from "../lib/graphOps";
 import { KIND_TONE } from "../lib/kinds";
 
 /**
@@ -19,6 +19,8 @@ export interface SceneColors {
   accent: string;
   accentSoft: string;
   edge: string;
+  /** "No relation found" links (Mix found nothing either way). */
+  unrelated: string;
   blocked: string;
   kind: Record<string, string>;
 }
@@ -35,7 +37,8 @@ export function themeColors(): SceneColors {
     border: v("--border-strong", "#d1d5dc"),
     accent: v("--accent", "#4f46e5"),
     accentSoft: v("--accent-soft", "#eef0ff"),
-    edge: v("--edge", "#9aa1ad"),
+    edge: v("--edge-mix", v("--edge", "#9aa1ad")),
+    unrelated: v("--edge-unrelated", "#db2777"),
     blocked: v("--blocked", "#b42318"),
     kind: Object.fromEntries(["def", "result", "axiom", "conj", "example", "other"].map((k) => [k, v(`--kind-${k}`, v("--muted", "#5b6270"))])),
   };
@@ -206,21 +209,23 @@ export function createScene(opts: {
     disposables.push(mat, lineMat, label.material, label.material.map!);
   }
 
-  // Relations: dependency links in the accent colour, the others in the edge colour.
+  // Relations: dependency links in the accent colour, "no relation" links in their own colour, the others in the
+  // edge colour.
   const deps = new Map(graph.nodes.map((n) => [n.id, new Set(n.dependsOn)]));
-  const points: Record<"dep" | "rel", number[]> = { dep: [], rel: [] };
+  const points: Record<"dep" | "rel" | "unrelated", number[]> = { dep: [], rel: [], unrelated: [] };
   for (const r of graph.relations) {
     const a = at.get(r.a);
     const b = at.get(r.b);
     if (!a || !b || r.a === r.b) continue;
     const dep = deps.get(r.a)?.has(r.b) || deps.get(r.b)?.has(r.a);
-    points[dep ? "dep" : "rel"].push(a.x, a.y + 0.05, a.z, b.x, b.y + 0.05, b.z);
+    points[isUnrelated(r) ? "unrelated" : dep ? "dep" : "rel"].push(a.x, a.y + 0.05, a.z, b.x, b.y + 0.05, b.z);
   }
   for (const [kind, list] of Object.entries(points)) {
     if (!list.length) continue;
     const geo = new THREE.BufferGeometry();
     geo.setAttribute("position", new THREE.Float32BufferAttribute(list, 3));
-    const mat = new THREE.LineBasicMaterial({ color: kind === "dep" ? colors.accent : colors.edge, transparent: true, opacity: kind === "dep" ? 0.8 : 0.55 });
+    const color = kind === "dep" ? colors.accent : kind === "unrelated" ? colors.unrelated : colors.edge;
+    const mat = new THREE.LineBasicMaterial({ color, transparent: true, opacity: kind === "rel" ? 0.55 : 0.8 });
     scene.add(new THREE.LineSegments(geo, mat));
     disposables.push(geo, mat);
   }
