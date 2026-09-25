@@ -552,9 +552,13 @@ is graph content, not personal), import repair and the Markdown export.
 
 Toolbar (theatre-masks button next to Mix) or File → Absurd chain… → `useAbsurd.openAbsurd()` → `AbsurdChainDialog`
 (lazy, mounted by `App.tsx`; ends prefilled from the selection, editable, with the graph's names as suggestions) →
-`absurdChain(from, to, style, hops, avoid)` in actions.ts: an end that names a concept of the graph goes with its
-definition, anything else as typed; `withBusy("absurd", …)`, cancelled when the dialog closes. Nothing touches the
-graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res)`: `forkActive(sandboxName(title))` (switches to the
+`absurdChain(from, to, style, hops, avoid, via)` in actions.ts: an end that names a concept of the graph goes with its
+definition, anything else as typed; `withBusy("absurd", …)`, cancelled when the dialog closes. **Stops along the way**
+(`via`, at most `ABSURD_MAX_VIA`, reordered in the dialog's `StopsEditor`) go the same way, a custom stop with the
+user's description as its definition; `absurdHops` widens the hop range to at least stops + 1, and `checkAbsurdStops`
+(in `cleanAbsurdChain`) rejects an answer that misses a stop or takes them out of order, so `runStructured` asks once
+more with that note. Nothing touches the graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res, via)` (a new
+custom stop keeps the user's description, source "you"): `forkActive(sandboxName(title))` (switches to the
 new sandbox), one `mutate(applyAbsurdChain)` there (one undo step), then quiet `analyzeNode` for each new concept with
 the hop's fact as the clarify hint. The user's graph only changes through **Merge back**.
 

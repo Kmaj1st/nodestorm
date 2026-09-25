@@ -6,8 +6,56 @@
 .absurd__surprise { display: flex; justify-content: flex-end; margin-top: calc(-1 * var(--space-1)); }
 .absurd__options { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-3); }
 .absurd__options select { width: 100%; }
+.absurd__hint { margin-top: calc(-1 * var(--space-1)); line-height: 1.45; }
+
+/* "Stops along the way": the user's own concepts between the ends, as a small numbered list. */
+.absurd-via {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: 10px var(--space-3);
+  border: 1px dashed var(--border-strong); border-radius: var(--radius-md); background: var(--surface);
+}
+.absurd-via__head { display: flex; flex-direction: column; gap: 2px; }
+.absurd-via__label { display: inline-flex; align-items: center; gap: 6px; font-size: var(--text-xs); font-weight: 600; color: var(--text); }
+.absurd-via__label .icon { color: var(--accent); }
+.absurd-via__head .muted { line-height: 1.45; }
+.absurd-via__list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-1); }
+/* Number, name and buttons on one line; a custom stop's description field below, as wide as the row allows. */
+.absurd-stop {
+  display: grid; grid-template-columns: 22px 1fr auto; grid-template-areas: "n head actions" ". desc desc";
+  gap: 4px var(--space-2); align-items: center;
+  padding: 6px var(--space-2); border: 1px solid var(--border); border-radius: var(--radius-sm); background: var(--panel);
+}
+.absurd-stop__n { grid-area: n; }
+.absurd-stop__head { grid-area: head; min-width: 0; }
+.absurd-stop__actions { grid-area: actions; }
+.absurd-stop__desc { grid-area: desc; }
+.absurd-stop__n {
+  width: 22px; height: 22px; border-radius: var(--radius-full); display: grid; place-items: center;
+  background: var(--accent-soft); color: var(--accent); border: 1px solid var(--accent-border);
+  font-size: var(--text-xs); font-weight: 600; font-variant-numeric: tabular-nums;
+}
+.absurd-stop__head { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-2); }
+.absurd-stop__name { font-size: var(--text-sm); font-weight: 600; overflow-wrap: anywhere; }
+.absurd-stop__tag {
+  font-size: var(--text-xs); font-weight: 500; color: var(--muted); background: var(--surface);
+  border: 1px solid var(--border); border-radius: var(--radius-full); padding: 0 8px;
+}
+.absurd-stop__desc { width: 100%; min-width: 0; min-height: var(--control-h-dense); font-size: var(--text-sm); }
+.absurd-stop__actions { display: flex; gap: 2px; }
+.absurd-stop__actions .icon-btn { min-width: 28px; min-height: 28px; padding: 0 4px; }
+.absurd-via__add { display: flex; align-items: flex-end; gap: var(--space-2); }
+.absurd-via__add .field { flex: 1; min-width: 0; }
+.absurd-via__add input { width: 100%; min-width: 0; }
+.absurd-via__add-btn { flex: none; }
+/* The user's own stops in the finished chain. */
+.absurd-hop__stop {
+  display: inline-flex; align-items: center; gap: 3px; font-size: var(--text-xs); font-weight: 600; color: var(--accent);
+  background: var(--accent-soft); border: 1px solid var(--accent-border); border-radius: var(--radius-full); padding: 0 7px;
+}
+
 @media (max-width: 520px) {
   .absurd__ends { grid-template-columns: 1fr; }
+  .absurd-stop { grid-template-areas: "n head actions" "desc desc desc"; }
+  .absurd-via__add-btn { padding: 0 var(--space-2); }
   .absurd__swap { justify-self: center; transform: rotate(90deg); }
   .absurd__options { grid-template-columns: 1fr; }
 }

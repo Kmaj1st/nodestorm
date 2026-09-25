@@ -459,14 +459,47 @@ export function cleanProblems(res: SplitProblemsResponse, pages: number[]): Spli
 }
 
 /**
+ * The user's stops on a (tidied) chain: each must be one of its intermediate concepts (by name or alias), in the
+ * given order. Found stops get their exact names (in the hop that arrives and the one that leaves); a stop that is
+ * missing or out of order throws, saying what to fix, so runStructured asks the model once more with that note.
+ */
+export function checkAbsurdStops(hops: AbsurdHop[], via: { name: string; aliases?: string[] }[]): AbsurdHop[] {
+  if (!via.length) return hops;
+  const order = via.map((v) => `"${v.name}"`).join(", ");
+  const broken = (why: string) =>
+    new ProviderError(`The chain is broken: ${why}. It must pass through every stop, in this order: ${order}.`);
+  const out = hops.map((h) => ({ ...h }));
+  // Intermediate concept i is where hop i arrives and hop i + 1 leaves.
+  const middle = out.slice(0, -1).map((h) => h.to);
+  let at = -1;
+  via.forEach((stop, k) => {
+    const brief = [{ name: stop.name, aliases: stop.aliases ?? [] }];
+    const i = middle.findIndex((name, j) => j > at && findByName(brief, name));
+    if (i < 0) {
+      const earlier = k > 0 && middle.some((name) => findByName(brief, name));
+      throw broken(earlier ? `the stop "${stop.name}" comes before "${via[k - 1].name}"` : `it never passes through the stop "${stop.name}"`);
+    }
+    out[i].to = stop.name;
+    out[i + 1].from = stop.name;
+    at = i;
+  });
+  return out;
+}
+
+/**
  * Check and tidy an absurd chain: it must start at `from` and reach `to` (by name or alias), each hop starting where
  * the previous one ended. Repairs what is only a matter of spelling (ends get the request's exact names, a hop's
  * "from" the previous hop's exact "to"), cuts the chain where it first reaches `to`, and cuts out loops (a concept
- * visited twice). Anything else (a gap between hops, the wrong start, never arriving, far too long) throws.
+ * visited twice). Anything else (a gap between hops, the wrong start, never arriving, far too long) throws, and so
+ * does a chain that misses one of the user's stops (`via`) or takes them out of order (see checkAbsurdStops).
  */
 export function cleanAbsurdChain(
   res: AbsurdChainResponse,
-  req: { from: { name: string; aliases?: string[] }; to: { name: string; aliases?: string[] } },
+  req: {
+    from: { name: string; aliases?: string[] };
+    to: { name: string; aliases?: string[] };
+    via?: { name: string; aliases?: string[] }[];
+  },
 ): AbsurdChainResponse {
   const broken = (why: string) => new ProviderError(`The chain is broken: ${why}.`);
   const hops: AbsurdHop[] = res.chain.map((h) => ({
@@ -505,7 +538,7 @@ export function cleanAbsurdChain(
   if (out.length > ABSURD_HARD_MAX) throw broken(`it has ${out.length} links, more than ${ABSURD_HARD_MAX}`);
   return {
     title: res.title.trim() || `${req.from.name} → ${req.to.name}`,
-    chain: out,
+    chain: checkAbsurdStops(out, req.via ?? []),
     moral: res.moral.trim(),
     plausibility: res.plausibility.trim(),
   };

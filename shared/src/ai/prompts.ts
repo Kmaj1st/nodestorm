@@ -24,6 +24,7 @@ import type {
   MathlibRequest,
   ConnectRequest,
 } from "../model";
+import { normalizeName } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
@@ -462,8 +463,14 @@ const ABSURD_STYLE: Record<AbsurdStyle, string> = {
 
 export function absurdChainPrompt(req: AbsurdChainRequest): ChatMessage[] {
   const { min, max } = req.hops;
-  const avoid = req.avoid.length
-    ? ` Take a different route than before: do not use ${req.avoid.map((a) => `"${a}"`).join(", ")} as intermediate concepts.`
+  // A stop is never on the avoid list, whatever earlier rolls went through.
+  const stops = new Set(req.via.map((v) => normalizeName(v.name)));
+  const avoided = req.avoid.filter((a) => !stops.has(normalizeName(a)));
+  const avoid = avoided.length
+    ? ` Take a different route than before: do not use ${avoided.map((a) => `"${a}"`).join(", ")} as intermediate concepts.`
+    : "";
+  const via = req.via.length
+    ? `\nStops: the chain must pass through ${req.via.length === 1 ? "this stop" : `these ${req.via.length} stops, in this order`}: ${req.via.map((v) => `"${v.name}"`).join(" → ")}. Each stop is an intermediate concept of the chain, named exactly as given: the "to" of one hop and the "from" of the next. The links into and out of a stop are true relations of that stop as its description (under "Stops" below) defines it; a description the user wrote is what the stop means, even if the name usually means something else. There may be other concepts between stops.`
     : "";
   return [
     sys(
@@ -472,11 +479,14 @@ export function absurdChainPrompt(req: AbsurdChainRequest): ChatMessage[] {
 THE FACTS ARE REAL. Every hop must be a genuinely true, checkable relation between its two concepts: standard knowledge that a reference work or textbook would confirm. "fact" states it soberly and accurately in one sentence: no jokes, no exaggeration, no invented dates, names, numbers or quotes. If you are not sure a link is true, take another route. Intermediate concepts are real, established things (concepts, objects, people, places, phenomena), named as they usually are, without $.
 THE COMEDY IS IN THE TELLING. "quip" narrates the same hop in the requested style, in one or two sentences; "title" is a funny title for the whole chain (at most about 10 words); "moral" is a funny closing line. A quip may overdramatise the reasoning but must not contradict or embellish the fact. Keep it kind: no insults, no mocking of people or groups, nothing offensive, political, sexual or about tragedies.
 Style: ${ABSURD_STYLE[req.style]}
-Chain rules: the first hop's "from" is exactly "${req.from.name}"; the last hop's "to" is exactly "${req.to.name}"; each hop's "from" is exactly the previous hop's "to"; no concept appears twice.${avoid}
+Chain rules: the first hop's "from" is exactly "${req.from.name}"; the last hop's "to" is exactly "${req.to.name}"; each hop's "from" is exactly the previous hop's "to"; no concept appears twice.${avoid}${via}
 "kind" is a short active relation label in the -ing form, read from "from" to "to" (2-5 words, e.g. "inventing a fix for", "browning", "laying"); never a passive "… by" form. "plausibility" is one sober sentence for the reader on how solid the links are (name the loosest one, if any).
 Schema: {"title":string,"chain":[{"from":string,"to":string,"kind":string,"fact":string,"quip":string}],"moral":string,"plausibility":string}`,
     ),
-    input(req, `${contextBlock(req.context)}\n\nFrom:\n${brief(req.from)}\n\nTo:\n${brief(req.to)}\n\nStyle: ${req.style}`),
+    input(
+      req,
+      `${contextBlock(req.context)}\n\nFrom:\n${brief(req.from)}${req.via.length ? `\n\nStops, in order:\n${req.via.map(brief).join("\n")}` : ""}\n\nTo:\n${brief(req.to)}\n\nStyle: ${req.style}`,
+    ),
   ];
 }
 

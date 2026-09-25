@@ -515,6 +515,17 @@ export const ABSURD_MIN_HOPS = 1;
 export const ABSURD_MAX_HOPS = 7;
 /** A model answer longer than this is rejected rather than shown (cleanAbsurdChain first cuts out loops). */
 export const ABSURD_HARD_MAX = 10;
+/** Most stops ("via") the user may put between the ends; each needs a link before it, so 6 stops fill 7 hops. */
+export const ABSURD_MAX_VIA = ABSURD_MAX_HOPS - 1;
+
+/**
+ * The hop range for a chain through `stops` stops: every stop needs a link before it and the end one after the last,
+ * so both bounds are raised to at least stops + 1 (never past ABSURD_MAX_HOPS).
+ */
+export function absurdHops(hops: { min: number; max: number }, stops: number): { min: number; max: number } {
+  const need = Math.min(stops + 1, ABSURD_MAX_HOPS);
+  return { min: Math.max(hops.min, need), max: Math.max(hops.max, need) };
+}
 
 export const AbsurdChainRequest = z
   .object({
@@ -532,9 +543,21 @@ export const AbsurdChainRequest = z
     context: z.array(NodeBrief).max(80).default([]),
     /** Intermediate concepts of earlier rolls, so "Roll again" takes a different route. */
     avoid: z.array(z.string().max(200)).max(40).default([]),
+    /**
+     * The user's stops, in order: the chain passes through each one. A concept of the graph comes with its own
+     * definition; a custom stop with the description the user wrote (what the stop means).
+     */
+    via: z.array(NodeBrief).max(ABSURD_MAX_VIA).default([]),
   })
   .refine((r) => normalizeName(r.from.name) !== "" && normalizeName(r.to.name) !== "", "Name both ends of the chain.")
-  .refine((r) => normalizeName(r.from.name) !== normalizeName(r.to.name), "The two ends of the chain must be different concepts.");
+  .refine((r) => normalizeName(r.from.name) !== normalizeName(r.to.name), "The two ends of the chain must be different concepts.")
+  .refine((r) => r.via.every((v) => normalizeName(v.name) !== ""), "Name every stop of the chain.")
+  .refine((r) => {
+    const names = [r.from, r.to, ...r.via].map((n) => normalizeName(n.name));
+    return new Set(names).size === names.length;
+  }, "Each stop must differ from the ends and from the other stops.")
+  // Older callers ask for a hop range without thinking of stops: it grows to leave a link before every stop.
+  .transform((r) => ({ ...r, hops: absurdHops(r.hops, r.via.length) }));
 export type AbsurdChainRequest = z.infer<typeof AbsurdChainRequest>;
 
 /** One link of the chain: a true, checkable relation (`fact`), narrated comically (`quip`). */

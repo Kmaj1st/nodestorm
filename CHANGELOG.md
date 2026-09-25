@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Absurd chain: stops along the way.** Put up to 6 of your own stops between the two ends: concepts of your graph, or your own with a short description of what they mean. The chain passes through them in order (the AI is asked again if it skips one), they are marked "your stop", and a custom stop added to a sandbox keeps your description as its definition. Stops can be reordered with the up/down buttons.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.
