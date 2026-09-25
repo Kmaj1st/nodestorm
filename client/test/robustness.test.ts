@@ -1,6 +1,7 @@
 import { findByName, normalizeName } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import * as ops from "../src/lib/graphOps";
+import { isReady, useSettings } from "../src/store/settingsStore";
 
 describe("normalizeName keeps meaningful symbols", () => {
   it("tells C, C++ and C# apart", () => {
@@ -37,6 +38,25 @@ describe("normalizeName keeps meaningful symbols", () => {
     expect(findByName(nodes, "c++")?.name).toBe("C++");
     expect(findByName(nodes, "c")?.name).toBe("C");
     expect(findByName(nodes, "C#")).toBeUndefined();
+  });
+});
+
+describe("a saved provider that no longer exists", () => {
+  it("is not ready, so AI calls open Settings instead of failing", () => {
+    const s = { ...useSettings.getState(), connection: "browser" as const, provider: "gone" as never };
+    expect(isReady(s)).toBe(false);
+    expect(isReady({ ...s, connection: "server" })).toBe(false);
+  });
+
+  it("is replaced by the default provider when settings load", () => {
+    const merge = useSettings.persist.getOptions().merge!;
+    const current = useSettings.getState();
+    const out = merge({ provider: "gone", connection: "carrier-pigeon", clarify: { options: 2 } }, current) as typeof current;
+    expect(out.provider).toBe(current.provider);
+    expect(out.connection).toBe(current.connection);
+    expect(out.clarify.options).toBe(2);
+    const kept = merge({ provider: "mock" }, current) as typeof current;
+    expect(kept.provider).toBe("mock");
   });
 });
 
