@@ -21,7 +21,7 @@ export const KIND_LABEL: Record<ConceptKind, MessageKey> = {
   other: "kind.other",
 };
 
-/** English names, for exports that aren't localised (Markdown, LaTeX). */
+/** English names, for the LaTeX export (which isn't localised). */
 export const KIND_NAME: Record<ConceptKind, string> = {
   definition: "Definition",
   theorem: "Theorem",

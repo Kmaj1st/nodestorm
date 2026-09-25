@@ -3,6 +3,8 @@ import { browserLang, t, translate, useLocale } from "../src/i18n";
 import { en } from "../src/i18n/en";
 import { format, plurals } from "../src/i18n/format";
 import { zh } from "../src/i18n/zh";
+import { toMarkdown } from "../src/lib/export";
+import * as ops from "../src/lib/graphOps";
 
 /** The `{name}` placeholders a message uses (plural variables included), sorted. */
 const placeholders = (msg: string) =>
@@ -18,6 +20,23 @@ describe("interface messages", () => {
       expect(zh[key].trim(), key).not.toBe("");
       expect(placeholders(zh[key]), key).toEqual(placeholders(en[key]));
     }
+  });
+
+  it("leaves nothing in Chinese untranslated, except names", () => {
+    // Messages that are only names (products, sites) or symbols read the same in both languages.
+    const names = ["walk.progress", "settings.ai", "source.fromProofwiki", "source.fromAi", "absurd.game.blank", "formal.title"];
+    const same = (Object.keys(en) as (keyof typeof en)[]).filter((k) => en[k] === zh[k] && !names.includes(k));
+    expect(same).toEqual([]);
+  });
+
+  it("writes plural forms that resolve completely, and none in Chinese", () => {
+    for (const [key, msg] of Object.entries(en)) {
+      for (const n of [0, 1, 2]) {
+        const params = Object.fromEntries([...msg.matchAll(/\{(\w+), plural,/g)].map((m) => [m[1], n]));
+        expect(format(msg, params), key).not.toMatch(/plural,|#/);
+      }
+    }
+    for (const [key, msg] of Object.entries(zh)) expect(msg, key).not.toContain("plural,");
   });
 
   it("keeps markup balanced, so rich() renders it", () => {
@@ -50,6 +69,26 @@ describe("format", () => {
   it("has no plural syntax in Chinese messages", () => {
     expect(translate("zh", "share.intro", { n: 1 })).toContain("1 个概念");
     expect(translate("zh", "install.done", { n: 2, name: "商群", depth: 2 })).toBe("已为 商群 安装 2 个前置知识（共 2 层）。");
+  });
+});
+
+describe("Markdown notes in the interface language", () => {
+  afterEach(() => useLocale.setState({ pref: "auto", lang: "en" }));
+
+  it("writes headings and labels in 中文, keeping the user's text", () => {
+    let g = ops.emptyGraph("代数");
+    const a = ops.addNode(g, { name: "群", definition: "带有结合运算的集合。" });
+    g = ops.updateNode(a.graph, a.id, { kind: "definition", source: { site: "you", title: "" } });
+    const b = ops.addNode(g, { name: "子群" });
+    g = ops.updateNode(b.graph, b.id, { dependsOn: [a.id] });
+    useLocale.getState().setPref("zh");
+    const md = toMarkdown(g);
+    expect(md).toContain("## 学习顺序");
+    expect(md).toContain("*类型：* 定义");
+    expect(md).toContain("*来源：* 由你撰写");
+    expect(md).toContain("**前置知识：** 群");
+    expect(md).toContain("_还没有定义。_");
+    expect(md).not.toMatch(/Study order|Kind|Prerequisites|No definition/);
   });
 });
 

@@ -36,6 +36,7 @@ import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
 import { toLatex } from "../lib/latex";
+import { providerName } from "../lib/online";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useAbsurd } from "../store/absurdStore";
@@ -179,7 +180,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
             onClick={() => s.setSettingsOpen(true)}
             data-tour="settings"
             // The button shows just the model; the tooltip adds the provider.
-            title={`${ready && !viewing ? `${meta.label} · ${model}\n` : ""}${t("toolbar.settingsTitle")}`}
+            title={`${ready && !viewing ? `${providerName(settings.provider)} · ${model}\n` : ""}${t("toolbar.settingsTitle")}`}
             aria-label={t("toolbar.settings")}
           >
             {viewing ? (

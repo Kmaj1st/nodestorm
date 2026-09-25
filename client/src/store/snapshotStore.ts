@@ -3,6 +3,7 @@ import { uid } from "../lib/graphOps";
 import * as db from "../lib/snapshotDb";
 import { capture, keepMastery, periodicDue, planPrune, readSnapshot, type AutoReason, type SnapshotMeta } from "../lib/snapshots";
 import { projectGraphs, rootOf } from "../lib/projects";
+import { t } from "../i18n";
 import { useGraphStore } from "./graphStore";
 
 /**
@@ -119,7 +120,7 @@ export function autoSnapshot(reason: AutoReason, graphId = graphs().activeId) {
 
 async function loadGraphs(id: string) {
   const data = await db.getSnapshotData(id);
-  if (typeof data !== "string") throw new Error("snapshot data missing");
+  if (typeof data !== "string") throw new Error(t("versions.gone"));
   return readSnapshot(data);
 }
 
@@ -134,11 +135,11 @@ export async function snapshotMain(id: string) {
  */
 export async function restoreSnapshot(id: string): Promise<void> {
   const meta = useSnapshots.getState().metas.find((m) => m.id === id);
-  if (!meta) throw new Error("snapshot not found");
+  if (!meta) throw new Error(t("versions.gone"));
   const { graphs: restored } = await loadGraphs(id);
   const s = graphs();
   const project = s.projects[meta.projectId];
-  if (!project) throw new Error("project not found");
+  if (!project) throw new Error(t("versions.projectGone"));
   const before = takeSnapshot({ reason: "restore", projectId: meta.projectId }); // captured now, stored below
   s.restoreProject(meta.projectId, keepMastery(restored, projectGraphs(s, project)));
   await before;

@@ -1,5 +1,12 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **中文 throughout:** the Markdown notes export and "Copy as Markdown" in Derive together are written in the interface language (headings, labels, verdicts, sources). The LaTeX document stays English. The offline demo provider is called 离线演示, and errors about a missing version are translated.
+- **Wording:** "prerequisites" (not "dependencies") for what a concept needs, "concept" (not "node"), and counts read "1 new concept", "1 layer". Chinese wording made consistent (连线 for graph links, 循环依赖, 定理解剖/假设), with Chinese colons and quotes.
+- **Settings on a phone:** the Fandom / BWIKI fields no longer stick out of the dialog.
+- A test checks that no Chinese message is left in English and that every plural form resolves.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.

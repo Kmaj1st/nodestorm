@@ -94,9 +94,9 @@ describe("referee report on a derivation", () => {
     expect(d.referee).toMatchObject({ verdict: "major revisions", createdAt: 5 });
     expect(refereeOutdated(d)).toBe(false);
     const md = toMarkdown(d);
-    expect(md).toContain("**Referee report (Reviewer 2): major revisions.** The author appears to believe in magic.");
-    expect(md).toContain("- Step 1 (major): Uses normality without saying so.");
-    expect(md).toContain("- General (pedantic): Too many commas.");
+    expect(md).toContain("**Referee report (Reviewer 2): Major revisions.** The author appears to believe in magic.");
+    expect(md).toContain("- Step 1 (Major): Uses normality without saying so.");
+    expect(md).toContain("- Whole derivation (Pedantic): Too many commas.");
     expect(md).toContain("*Step 1 is not wrong.*");
     // Not in the graph's notes.
     expect(toMarkdown(d, { hints: false })).not.toContain("Referee");
@@ -134,7 +134,7 @@ describe("voiced explanations in files", () => {
     g = ops.updateNode(r.graph, r.id, {
       explanation: { summary: "S", intuition: "", keyPoints: [], examples: [], pitfalls: [], furtherReading: [], level: "rigorous", voice: "noir-detective", createdAt: 1 },
     });
-    expect(graphMarkdown(g)).toContain("#### Explanation (rigorous, noir detective voice)");
+    expect(graphMarkdown(g)).toContain("#### Rigorous explanation (Noir detective)");
   });
 });
 

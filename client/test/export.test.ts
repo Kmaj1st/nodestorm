@@ -81,7 +81,7 @@ describe("markdown", () => {
     });
     const md = toMarkdown(withExtras);
     const section = md.slice(md.indexOf("### Homomorphism"), md.indexOf("### Isomorphism"));
-    expect(section).toContain("#### Explanation (rigorous)\n\nMaps that keep the operation.\n");
+    expect(section).toContain("#### Rigorous explanation\n\nMaps that keep the operation.\n");
     expect(section).toContain("*Intuition:* Map, then combine = combine, then map.");
     expect(section).toContain("**Key points:**\n\n- φ(e) = e\n");
     expect(section).toContain("**Examples:**\n\n- *exp*: e^(x+y) = eˣeʸ\n");
@@ -89,7 +89,7 @@ describe("markdown", () => {
     expect(section).toContain("**Further reading:**\n\n- An algebra textbook — chapter on homomorphisms\n");
     // Notes keep their own Markdown, quoted so a heading in them stays inside the concept.
     expect(section).toContain("**My notes:**\n\n> # Ask\n> why *kernels*?\n>\n> see lecture 3\n");
-    expect(toMarkdown(g)).not.toMatch(/Explanation|My notes/);
+    expect(toMarkdown(g)).not.toMatch(/explanation|My notes/);
   });
 
   it("handles an empty graph", () => {
