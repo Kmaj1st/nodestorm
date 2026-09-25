@@ -191,6 +191,12 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
   }
   if (n.kindByUser === true) node.kindByUser = true;
   if (n.pinned === true) node.pinned = true;
+  if (n.basic === true) {
+    // Taken as given: a file that still lists missing prerequisites for it (edited by hand) loses them.
+    node.basic = true;
+    node.missingDeps = [];
+    if (node.status === "pending") node.status = "ok";
+  }
   if (n.anatomy !== undefined) {
     const an = NodeAnatomy.safeParse(n.anatomy);
     if (an.success) node.anatomy = an.data;
@@ -202,7 +208,7 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     else fixes.add(t("repair.droppedMastery"));
   }
   // Nothing left to block on / choose from: don't leave the node stuck.
-  if (node.status === "blocked" && !missingDeps.length) node.status = "ok";
+  if (node.status === "blocked" && !node.missingDeps.length) node.status = "ok";
   if (node.status === "unclear" && !node.senses) node.status = "ok";
   return node;
 }

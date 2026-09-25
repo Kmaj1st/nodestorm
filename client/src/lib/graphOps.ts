@@ -191,10 +191,14 @@ export function setPositions(g: Graph, positions: Map<string, XY>): Graph {
   return { ...g, nodes: g.nodes.map((n) => (positions.has(n.id) ? { ...n, position: positions.get(n.id)! } : n)) };
 }
 
-/** Apply the AI's prerequisite list to a node: link what exists, record what is missing. */
+/**
+ * Apply the AI's prerequisite list to a node: link what exists, record what is missing. A basic concept takes
+ * nothing from it (a check started before it was marked basic): it is just settled as checked.
+ */
 export function applyDeps(g: Graph, nodeId: string, prereqs: Prerequisite[]): Graph {
   const self = g.nodes.find((n) => n.id === nodeId);
   if (!self) return g;
+  if (self.basic) return updateNode(g, nodeId, { missingDeps: [], status: "ok", error: undefined });
   const selfKey = normalizeName(self.name);
   const missing: ConceptNode["missingDeps"] = [];
   let out = g;
@@ -219,7 +223,34 @@ export function setNodeError(g: Graph, nodeId: string, error: string): Graph {
 }
 
 export function updateNode(g: Graph, nodeId: string, patch: Partial<ConceptNode>): Graph {
-  return { ...g, nodes: g.nodes.map((n) => (n.id === nodeId ? { ...n, ...patch } : n)) };
+  return { ...g, nodes: g.nodes.map((n) => (n.id === nodeId ? settleBasic({ ...n, ...patch }) : n)) };
+}
+
+/**
+ * A basic concept is never blocked and never waits for a prerequisite check ("pending"): it has no missing
+ * prerequisites. Running checks, unclear meanings and errors are left alone (they are about its definition).
+ */
+export function settleBasic(n: ConceptNode): ConceptNode {
+  if (!n.basic) return n;
+  const status = n.status === "blocked" || n.status === "pending" ? "ok" : n.status;
+  return n.missingDeps.length || status !== n.status ? { ...n, missingDeps: [], status } : n;
+}
+
+/**
+ * Mark a concept as basic (taken as given: no prerequisites needed) or not. Marking drops its missing
+ * prerequisites; the links it already has, found by a check or made by hand, stay. Unmarking runs nothing: a
+ * concept that was "ok" becomes "not checked" (pending), so "Check prerequisites with AI" finds what it needs.
+ */
+export function setBasic(g: Graph, nodeId: string, basic: boolean): Graph {
+  return {
+    ...g,
+    nodes: g.nodes.map((n) => {
+      if (n.id !== nodeId || Boolean(n.basic) === basic) return n;
+      if (basic) return settleBasic({ ...n, basic: true });
+      const { basic: _b, ...rest } = n;
+      return rest.status === "ok" ? { ...rest, status: "pending" } : rest;
+    }),
+  };
 }
 
 /**

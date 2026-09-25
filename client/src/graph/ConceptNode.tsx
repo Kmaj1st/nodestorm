@@ -1,6 +1,6 @@
 import type { ConceptNode as CN } from "@nodestorm/shared";
 import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
-import { CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
+import { BrickWall, CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
 import { analyzeNode, checkWithAi } from "../lib/actions";
@@ -52,6 +52,11 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       {c.pinned && (
         <span className="concept__pin" title={t("physics.pinnedTitle")} role="img" aria-label={t("physics.pinned")}>
           <Icon icon={Pin} size={12} />
+        </span>
+      )}
+      {c.basic && (
+        <span className="concept__basic" title={t("basic.cardTitle")} role="img" aria-label={t("basic.label")} data-testid="basic-mark">
+          <Icon icon={BrickWall} size={12} />
         </span>
       )}
       {c.kind && <div className="concept__kind"><KindTag kind={c.kind} /></div>}

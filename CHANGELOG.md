@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Basic concepts:** Inspector → **Basic concept** marks a concept as taken as given (a small mark on its card). It needs no prerequisites: its missing ones go, it is never blocked, and no prerequisite check (no AI call) runs for it. The links it already has stay. Unmarking leaves it "not checked", ready for **Check prerequisites with AI**. A blocked concept's missing list also offers "take it as given". Undo, share links, files and sandboxes keep the mark.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.

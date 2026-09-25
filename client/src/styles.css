@@ -1082,6 +1082,13 @@ span.paper__title { color: var(--text); }
   width: 20px; height: 20px; border-radius: 50%; background: var(--accent); color: var(--on-accent); box-shadow: var(--shadow-sm);
 }
 .pin-toggle { align-self: flex-start; }
+/* A basic concept (taken as given): a mark on the card's top-left corner, and its toggle in the inspector. */
+.concept__basic {
+  position: absolute; top: -9px; left: -9px; display: inline-flex; align-items: center; justify-content: center;
+  width: 20px; height: 20px; border-radius: 50%; background: var(--panel); color: var(--text);
+  border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm);
+}
+.basic-toggle { display: flex; flex-direction: column; gap: 2px; }
 
 /* Layered (2.5D) view: slanted plates, one per dependency layer, behind the cards; cards cast a deeper shadow. */
 .layer-plates { position: absolute; top: 0; left: 0; pointer-events: none; }
