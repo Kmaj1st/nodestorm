@@ -1897,7 +1897,7 @@ try {
     await audit("definitions pop-up");
     await page.screenshot({ path: `${shots}lookups-popup.png` });
     await dlg.getByRole("radio").first().check();
-    await dlg.getByRole("button", { name: "Use this meaning" }).click();
+    await dlg.getByRole("button", { name: "Use this definition" }).click();
     await waitBadge("Kernel", "check with AI");
     assert(!(await node("Kernel").textContent()).includes("missing"), "adding and choosing a definition doesn't check prerequisites (no AI)");
     await node("Kernel").click();
@@ -1910,6 +1910,10 @@ try {
     await addByName("Subgroup");
     await dlg.getByText("Nothing found in ProofWiki, Wikipedia, Fandom (minecraft).").waitFor();
     assert(true, "an unknown name: the pop-up says nothing was found");
+    assert(
+      (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Your definition",
+      "…with “My own definition” open and its definition box focused, to write one right away",
+    );
     await dlg.getByRole("button", { name: "Later" }).click();
     await waitBadge("Subgroup", "needs a definition");
     await badge("Subgroup").click();
@@ -1983,7 +1987,7 @@ try {
     const sites = await sense.locator(".sense__source").allTextContents();
     assert(sites.includes("Wikipedia") && sites.includes("Wikidata"), `several looked-up meanings go to the definitions pop-up, each naming its site: ${sites}`);
     await sense.getByText("Expected value", { exact: true }).click();
-    await sense.getByRole("button", { name: "Use this meaning" }).click();
+    await sense.getByRole("button", { name: "Use this definition" }).click();
     await node("Expected value").click();
     assert((await (await definitionField()).inputValue()).startsWith("In probability theory"), "the chosen meaning brings its definition");
 

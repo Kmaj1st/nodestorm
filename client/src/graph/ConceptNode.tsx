@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo } from "react";
 import { useT, type MessageKey } from "../i18n";
-import { analyzeNode, checkWithAi } from "../lib/actions";
+import { analyzeNode, checkWithAi, sensesLookedUp } from "../lib/actions";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
 import { Icon } from "../ui/Icon";
@@ -38,9 +38,25 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
         : c.status === "pending"
           ? () => checkWithAi(c.id, graphId)
           : undefined;
-  // An unclear concept with nothing to choose from yet needs a definition, not a choice.
-  const label: MessageKey = c.status === "unclear" && !c.senses?.length ? "badge.noDefinition" : badge[c.status];
-  const aria: MessageKey = c.status === "error" ? "badge.retryAria" : c.status === "pending" ? "badge.pendingAria" : "badge.chooseAria";
+  // An unclear concept with nothing to choose from yet needs a definition; with what the look-ups found, a choice of
+  // definitions. The viewer names the state, not an action it can't take.
+  const lookedUp = c.status === "unclear" && sensesLookedUp(c.senses);
+  const label: MessageKey =
+    lookedUp && (viewing || !c.senses?.length)
+      ? "badge.noDefinition"
+      : lookedUp
+        ? "badge.chooseDefinition"
+        : viewing && c.status === "pending"
+          ? "state.pending"
+          : badge[c.status];
+  const aria: MessageKey =
+    c.status === "error"
+      ? "badge.retryAria"
+      : c.status === "pending"
+        ? "badge.pendingAria"
+        : lookedUp
+          ? "badge.chooseDefinitionAria"
+          : "badge.chooseAria";
   return (
     <div
       className={`concept concept--${c.status}${data.inCycle ? " concept--cycle" : ""}${selected ? " concept--selected" : ""}`}

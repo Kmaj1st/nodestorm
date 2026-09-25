@@ -1,7 +1,7 @@
 import type { ConceptNode } from "@nodestorm/shared";
 import { useState } from "react";
 import { useT } from "../i18n";
-import { aiSource, checkWithAi, chooseSense } from "../lib/actions";
+import { aiSource, checkWithAi, chooseSense, sensesLookedUp } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
 import { useSettings } from "../store/settingsStore";
@@ -31,11 +31,14 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
   const mutate = useGraphStore((s) => s.mutate);
   const clarifying = { graphId, nodeId: node.id };
   const optionCount = useSettings((s) => s.clarify.options);
-  const [choice, setChoice] = useState<string | null>(null);
+  const senses = node.senses ?? [];
+  // Meanings from look-ups (or none found) rather than the AI's.
+  const lookedUp = sensesLookedUp(senses);
+  // Nothing found: "Something else" is open, so the user can write a definition right away (or ask the AI).
+  const [choice, setChoice] = useState<string | null>(() => (senses.length ? null : OTHER));
   const [otherName, setOtherName] = useState("");
   const [otherDef, setOtherDef] = useState("");
 
-  const senses = node.senses ?? [];
   const picked = choice !== null && choice !== OTHER ? senses[Number(choice)] : undefined;
   const close = () => setClarifying(null); // node stays "unclear"; its badge reopens this dialog
 
@@ -47,13 +50,11 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
       chooseSense(clarifying.graphId, node.id, picked);
     }
   };
-  // Meanings from look-ups (or none found) rather than the AI's.
-  const lookedUp = !senses.length || senses.every((s) => s.source?.site && s.source.site !== "AI");
   const found = new Set(senses.map((s) => s.source?.site).filter(Boolean));
   const quiet = searched?.asked.filter((x) => !found.has(x) && !searched.failed.includes(x)) ?? [];
   const moreOptions = () => {
-    // Ask the AI for meanings (not the encyclopedias again, which would give the same list).
-    setChoice(null);
+    // Ask the AI for meanings (not the encyclopedias again, which would give the same list). Without an AI set up,
+    // Settings opens over this dialog and what the user picked or typed stays.
     if (checkWithAi(node.id, clarifying.graphId, { askAi: true })) setClarifying(null);
   };
   const remove = () => {
@@ -94,7 +95,7 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
         <label className={`sense${choice === OTHER ? " sense--on" : ""}`}>
           <input type="radio" name="sense" checked={choice === OTHER} onChange={() => setChoice(OTHER)} />
           <span className="sense__other">
-            <b>{t("sense.other")}</b>
+            <b>{t(lookedUp ? "sense.own" : "sense.other")}</b>
             {choice === OTHER && (
               <>
                 <input
@@ -108,8 +109,8 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
                   rows={3}
                   value={otherDef}
                   onChange={(e) => setOtherDef(e.target.value)}
-                  placeholder={t("sense.otherDef")}
-                  aria-label={t("sense.otherDefAria")}
+                  placeholder={t(lookedUp ? "def.placeholder" : "sense.otherDef")}
+                  aria-label={t(lookedUp ? "sense.ownDefAria" : "sense.otherDefAria")}
                 />
               </>
             )}
@@ -120,7 +121,12 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
         <button className="link small" onClick={remove}>{t("sense.remove")}</button>
         <span className="spacer" />
         {lookedUp ? (
-          <button onClick={moreOptions} title={t("sense.askAiTitle", { model: aiSource().title })} data-testid="sense-ask-ai">
+          <button
+            className={senses.length ? undefined : "sense__ask-ai"}
+            onClick={moreOptions}
+            title={t("sense.askAiTitle", { model: aiSource().title })}
+            data-testid="sense-ask-ai"
+          >
             {t("sense.askAi")}
           </button>
         ) : (
@@ -132,7 +138,7 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
           onClick={confirm}
           disabled={choice === OTHER ? !otherDef.trim() : !picked}
         >
-          {t("sense.use")}
+          {t(lookedUp ? "sense.useDefinition" : "sense.use")}
         </button>
       </div>
     </Modal>

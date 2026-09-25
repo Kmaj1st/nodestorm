@@ -8,6 +8,7 @@ import {
   type DerivedProposal,
   type ExplainLevel,
   type ExplainVoice,
+  type ConceptNode,
   type Graph,
   type NameCandidate,
   type QuizStyle,
@@ -481,28 +482,64 @@ const lookedUpSense = (s: { name: string; domain: string; definition: string; so
   source: s.source,
 });
 
+/** The meanings to choose from came from the encyclopedias and wikis (or none were found), not from the AI. */
+export const sensesLookedUp = (senses: readonly Sense[] | undefined) =>
+  !senses?.length || senses.every((s) => Boolean(s.source?.site) && s.source!.site !== "AI");
+
+type Stale = "defined" | "renamed";
+
+/**
+ * A look-up (no AI) started for a concept: `set` writes its result only while the concept is still the one it was
+ * started for (still "checking", under the same name, no definition written meanwhile), in the graph and in undo
+ * snapshots. `run` says whether it ended by itself (false: a newer task on this concept superseded it and owns the
+ * outcome); `stale` tells what changed meanwhile.
+ */
+async function lookUpFor<T>(nodeId: string, graphId: string, fn: (name: string, signal: AbortSignal) => Promise<T>) {
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return null;
+  const startName = normalizeName(node.name);
+  const same = (n: ConceptNode) => n.status === "checking" && normalizeName(n.name) === startName && !n.definition.trim();
+  const set = (patch: Parameters<typeof ops.updateNode>[2]) =>
+    store().mutate(
+      (g) => {
+        const n = g.nodes.find((x) => x.id === nodeId);
+        return n && same(n) ? ops.updateNode(g, nodeId, patch) : g;
+      },
+      graphId,
+      { history: "background" },
+    );
+  store().mutate((g) => ops.updateNode(g, nodeId, { status: "checking", error: undefined }), graphId, { history: "background" });
+  let ended = false;
+  const res = await withBusy(analyzeKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) => fn(node.name, signal), {
+    onError: () => void (ended = true),
+    onCancel: () => void (ended = true),
+  });
+  const cur = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  // Renamed or given a definition while this ran (it is still "checking", waiting for this look-up).
+  const stale: Stale | null = cur && cur.status === "checking" && !same(cur) ? (cur.definition.trim() ? "defined" : "renamed") : null;
+  return { res, run: res !== undefined || ended, set, cur, stale };
+}
+
+/** A look-up's concept that changed meanwhile: a definition typed waits for "Check with AI"; a new name is looked up. */
+function afterStale(nodeId: string, graphId: string, stale: Stale, again: () => void) {
+  if (stale === "defined") store().mutate((g) => ops.updateNode(g, nodeId, { status: "pending" }), graphId, { history: "background" });
+  else again();
+}
+
 /**
  * A new concept's meanings from every enabled encyclopedia and wiki (no AI): the concept waits as "unclear" with
  * what was found (maybe nothing), and "what do you mean?" opens with it (unless `quiet`). The AI is used only when
- * the user picks "Ask the AI" there.
+ * the user picks "Ask the AI" there. A result for a concept renamed or undone meanwhile isn't written over it.
  */
 export async function lookUpChoices(nodeId: string, graphId = store().activeId, opts: { quiet?: boolean } = {}) {
   if (inViewer(graphId)) return;
-  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
-  if (!node) return;
-  const set = (patch: Parameters<typeof ops.updateNode>[2]) =>
-    store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId, { history: "background" });
-  set({ status: "checking", error: undefined });
-  const res = await withBusy(
-    analyzeKey(graphId, nodeId),
-    t("task.lookup", { name: node.name }),
-    (signal) => lookupEverywhere(node.name, useSettings.getState().clarify.options, signal),
-    { onError: () => {}, onCancel: () => {} },
-  );
-  set({ status: "unclear", senses: (res?.senses ?? []).map(lookedUpSense) });
-  if (!res || opts.quiet || !graph(graphId)?.nodes.some((n) => n.id === nodeId)) return;
+  const r = await lookUpFor(nodeId, graphId, (name, signal) => lookupEverywhere(name, useSettings.getState().clarify.options, signal));
+  if (!r?.run) return;
+  if (r.stale) return afterStale(nodeId, graphId, r.stale, () => void lookUpChoices(nodeId, graphId, opts));
+  r.set({ status: "unclear", senses: (r.res?.senses ?? []).map(lookedUpSense) });
+  if (!r.res || opts.quiet || !r.cur) return;
   const names = (sites: Site[]) => sites.map((x) => siteName(x));
-  store().setClarifying({ graphId, nodeId, searched: { asked: names(res.asked), failed: names(res.failed) } });
+  store().setClarifying({ graphId, nodeId, searched: { asked: names(r.res.asked), failed: names(r.res.failed) } });
 }
 
 /** A site's name as shown, with the wiki for Fandom and BWIKI. */
@@ -518,24 +555,18 @@ function siteName(site: Site): string {
  * with AI"); anything else leaves it "unclear" with what was found, its badge one click from choosing.
  */
 async function defineInstalled(nodeId: string, graphId: string) {
-  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
-  if (!node || inViewer(graphId)) return;
-  const set = (patch: Parameters<typeof ops.updateNode>[2]) =>
-    store().mutate((g) => ops.updateNode(g, nodeId, patch), graphId, { history: "background" });
-  set({ status: "checking", error: undefined });
-  const found =
-    (await withBusy(
-      analyzeKey(graphId, nodeId),
-      t("task.lookup", { name: node.name }),
-      (signal) => lookupDefinitions(node.name, useSettings.getState().clarify.options, signal),
-      { onError: () => {}, onCancel: () => {} },
-    )) ?? [];
+  if (inViewer(graphId)) return;
+  const r = await lookUpFor(nodeId, graphId, (name, signal) => lookupDefinitions(name, useSettings.getState().clarify.options, signal));
+  if (!r?.run) return;
+  if (r.stale) return afterStale(nodeId, graphId, r.stale, () => void defineInstalled(nodeId, graphId));
+  const found = r.res ?? [];
   const exact = found.filter((s) => s.exact);
   if (exact.length === 1 && found.length === 1) {
     const [s] = exact;
-    const alias = s.name.trim() && normalizeName(s.name) !== normalizeName(node.name) ? [s.name.trim()] : [];
-    set({ definition: s.definition, source: s.source, aliases: [...new Set([...node.aliases, ...alias])], status: "pending" });
-  } else set({ status: "unclear", senses: found.map(lookedUpSense) });
+    const aliases = r.cur?.aliases ?? [];
+    const alias = s.name.trim() && r.cur && normalizeName(s.name) !== normalizeName(r.cur.name) ? [s.name.trim()] : [];
+    r.set({ definition: s.definition, source: s.source, aliases: [...new Set([...aliases, ...alias])], status: "pending" });
+  } else r.set({ status: "unclear", senses: found.map(lookedUpSense) });
 }
 
 /** The source recorded for a definition the AI wrote: "AI" with the provider and model it came from. */

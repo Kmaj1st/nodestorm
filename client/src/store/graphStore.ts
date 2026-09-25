@@ -322,7 +322,7 @@ export const useGraphStore = create<GraphStore>()(
         set({ ...next, ...cleared });
         return next.projects[next.projectId].name;
       },
-      reset: () => set({ ...initial(), ...cleared, history: {} }),
+      reset: () => set({ ...initial(), ...cleared, clarifying: null, history: {} }),
     }),
     {
       name: "nodestorm",

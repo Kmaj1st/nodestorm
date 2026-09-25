@@ -38,6 +38,7 @@ import {
   type AiProposal,
   analyzeNode,
   checkWithAi,
+  sensesLookedUp,
   anatomyKey,
   connectKey,
   suggestConnections,
@@ -152,6 +153,8 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const deps = graph.nodes.filter((n) => node.dependsOn.includes(n.id));
   const dependents = graph.nodes.filter((n) => n.dependsOn.includes(node.id));
   const byId = (id: string) => graph.nodes.find((n) => n.id === id);
+  // Definitions the look-ups found (or none yet), not the AI's meanings: a definition to choose or write.
+  const lookedUp = sensesLookedUp(node.senses);
 
   return (
     <aside className="inspector" data-testid="node-panel">
@@ -171,7 +174,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         />
         <span className={`concept__badge concept__badge--${node.status}`}>
           <StatusMark status={node.status} />
-          {t(STATUS_LABEL[node.status])}
+          {t(node.status === "unclear" && lookedUp ? "badge.noDefinition" : STATUS_LABEL[node.status])}
         </span>
       </div>
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: node.aliases.join(", ") })}</div>}
@@ -214,9 +217,11 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       )}
       {node.status === "unclear" && (
         <div className="error-box error-box--unclear">
-          <p className="small">{t(node.senses?.length ? "node.unclear" : "node.noDefinition", { name: node.name })}</p>
+          <p className="small">
+            {t(!node.senses?.length ? "node.noDefinition" : lookedUp ? "node.definitionsFound" : "node.unclear", { name: node.name })}
+          </p>
           <button className="primary" onClick={() => setClarifying({ graphId, nodeId: node.id })}>
-            {t(node.senses?.length ? "node.chooseMeaning" : "node.chooseDefinition")}
+            {t(lookedUp ? "node.chooseDefinition" : "node.chooseMeaning")}
           </button>
         </div>
       )}

@@ -64,15 +64,21 @@ export function lookupLanguage(language: string, name: string): string {
 }
 
 /**
+ * The language a name is written in, by its script (whatever language Settings has the AI answer in): Baidu Baike
+ * and Moegirl only know names in Chinese (or Japanese, for Moegirl).
+ */
+const nameLanguage = (name: string) => lookupLanguage("auto", name);
+
+/**
  * Sites the user enabled and that aren't paused right now, most precise first. Baidu Baike only knows Chinese names,
  * so it is asked last, and only for a name in Chinese (`name` given).
  */
 export function activeSites(now = Date.now(), name?: string): Site[] {
-  const { lookup, language } = useSettings.getState();
+  const { lookup } = useSettings.getState();
   const sites: Site[] = [];
   if (lookup.proofwiki) sites.push("proofwiki");
   if (lookup.wikipedia) sites.push("wikipedia");
-  if (lookup.baidu && name !== undefined && lookupLanguage(language, name) === "zh") sites.push("baidu");
+  if (lookup.baidu && name !== undefined && nameLanguage(name) === "zh") sites.push("baidu");
   return sites.filter((s) => !(paused[s] && paused[s]! > now));
 }
 
@@ -136,9 +142,9 @@ async function lookupCached(name: string, sites: Site[], max: number, signal?: A
  * Moegirl for a Chinese (or Japanese, for Moegirl) name, and the Fandom / BWIKI wiki named in Settings.
  */
 export function everySite(name: string): Site[] {
-  const { lookup, language } = useSettings.getState();
+  const { lookup } = useSettings.getState();
   if (!lookup.enabled) return [];
-  const lang = lookupLanguage(language, name);
+  const lang = nameLanguage(name);
   const sites: Site[] = [];
   if (lookup.proofwiki) sites.push("proofwiki");
   if (lookup.wikipedia) sites.push("wikipedia");

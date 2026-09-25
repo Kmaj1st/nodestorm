@@ -1,9 +1,9 @@
 import type { Graph } from "@nodestorm/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addConcept, checkWithAi, chooseSense, installDep } from "../src/lib/actions";
+import { addConcept, checkWithAi, chooseSense, installDep, sensesLookedUp } from "../src/lib/actions";
 import { api } from "../src/lib/api";
 import * as ops from "../src/lib/graphOps";
-import { lookupEverywhere, resetLookup } from "../src/lib/lookup";
+import { everySite, lookupEverywhere, resetLookup } from "../src/lib/lookup";
 import { useGraphStore } from "../src/store/graphStore";
 import { useSettings } from "../src/store/settingsStore";
 
@@ -44,7 +44,6 @@ beforeEach(() => {
     return routes.find(([re]) => re.test(url))?.[1]() ?? new Response("{}", { status: 404, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
   store().reset();
-  store().setClarifying(null);
   resetLookup();
   useSettings.setState({
     newConcepts: "ask",
@@ -83,6 +82,13 @@ describe("look-ups everywhere", () => {
     const res = await lookupEverywhere("Kernel", 3);
     expect(res.senses).toEqual([]);
     expect(res.failed).toContain("proofwiki");
+  });
+
+  it("asks Baidu Baike and Moegirl for a name in Chinese, whatever language the AI answers in", () => {
+    useSettings.setState({ language: "English" });
+    expect(everySite("正规子群")).toEqual(["proofwiki", "wikipedia", "baidu", "moegirl", "fandom"]);
+    useSettings.setState({ language: "Chinese (中文)" });
+    expect(everySite("Kernel")).toEqual(["proofwiki", "wikipedia", "fandom"]);
   });
 
   it("asks nothing when look-ups are off", async () => {
@@ -125,6 +131,54 @@ describe("adding a concept, asking first", () => {
     expect(node(id)).toMatchObject({ status: "unclear", senses: [] });
     expect(store().clarifying?.nodeId).toBe(id);
     expect(clarify).not.toHaveBeenCalled();
+  });
+
+  it("a concept renamed during the look-up isn't given the old name's results: the new name is looked up", async () => {
+    kernelRoutes();
+    routes.push([/fandom.*Kernal/, () => json({ query: { pages: [{ title: "Kernal", missing: true }] } })]);
+    const id = addConcept({ name: "Kernal" });
+    store().mutate((g) => ops.renameNode(g, id, "Kernel").graph);
+    await idle();
+    expect(node(id)).toMatchObject({ name: "Kernel", status: "unclear" });
+    expect(node(id).senses?.map((s) => s.source?.site)).toEqual(["ProofWiki", "Fandom (minecraft)"]);
+    expect(store().clarifying?.nodeId).toBe(id);
+  });
+
+  it("a definition typed during the look-up is kept, waiting for “Check with AI”", async () => {
+    kernelRoutes();
+    const id = addConcept({ name: "Kernel" });
+    store().mutate((g) => ops.updateNode(g, id, { definition: "My own." }));
+    await idle();
+    expect(node(id)).toMatchObject({ status: "pending", definition: "My own." });
+    expect(node(id).senses ?? []).toEqual([]);
+    expect(store().clarifying).toBe(null);
+  });
+
+  it("an add undone during the look-up opens no dialog; redoing it brings the result", async () => {
+    kernelRoutes();
+    const id = addConcept({ name: "Kernel" });
+    store().undo();
+    await idle();
+    expect(graph().nodes.some((n) => n.id === id)).toBe(false);
+    expect(store().clarifying).toBe(null);
+    store().redo();
+    expect(node(id).status).toBe("unclear");
+    expect(node(id).senses).toHaveLength(2);
+  });
+
+  it("tells looked-up definitions from the AI's meanings", () => {
+    expect(sensesLookedUp([])).toBe(true);
+    expect(sensesLookedUp([{ name: "K", domain: "", definition: "d", source: { site: "ProofWiki", title: "Definition:K" } }])).toBe(true);
+    expect(sensesLookedUp([{ name: "K", domain: "", definition: "d", source: { site: "AI", title: "Demo" } }])).toBe(false);
+    expect(sensesLookedUp([{ name: "K", domain: "algebra", definition: "d" }])).toBe(false); // older AI meanings
+  });
+
+  it("reset closes the dialog", async () => {
+    const id = addConcept({ name: "Zorblax" });
+    await idle();
+    expect(store().clarifying?.nodeId).toBe(id);
+    store().reset();
+    expect(store().clarifying).toBe(null);
   });
 
   it("a typed definition waits without any look-up or AI", async () => {

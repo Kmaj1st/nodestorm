@@ -1,5 +1,10 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Definitions pop-up polish:** with look-up results it says **Use this definition** (and the inspector "Definitions were found for …" / **Choose a definition…**; the card badge "choose a definition", the status "needs a definition"). When nothing was found, **My own definition** is open and focused, with **Ask the AI** highlighted beside it. The inspector's "not checked" and other boxes wrap their button under the text on narrow panels and phones; the share viewer shows "not checked" instead of an action.
+- **Look-ups don't overwrite a changed concept:** renaming a concept while its look-up runs looks the new name up; a definition typed meanwhile is kept (waiting for "Check with AI"); an undone add opens no pop-up. Baidu Baike and Moegirl are asked for Chinese (or Japanese) names whatever language the AI answers in.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.
