@@ -11,10 +11,13 @@ import { createScene, themeColors, type Scene3D } from "../graph3d/scene";
 import { Modal } from "./Modal";
 
 const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(prefers-reduced-motion: reduce)").matches;
+/** A touch screen (no mouse): the hint names finger gestures instead. */
+const touchScreen = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
 
 /**
  * "3D view": the active graph's dependency layers as stacked plates in 3D (graph3d/scene.ts). Look-only: drag to
- * rotate, scroll to zoom, right-drag to pan, arrow keys and +/- too; clicking a concept (on a card, or in the list of
+ * rotate, scroll to zoom, right-drag to pan (one finger rotates, a pinch zooms and two fingers pan on a touch screen),
+ * arrow keys and +/- too; clicking a concept (on a card, or in the list of
  * layers beside it) closes the view and opens that concept on the canvas. Concepts hidden on the canvas are left out.
  */
 export function Graph3DDialog({ onClose }: { onClose: () => void }) {
@@ -111,7 +114,7 @@ export function Graph3DDialog({ onClose }: { onClose: () => void }) {
             />
           )}
           <div className="graph3d__hud">
-            <span className="graph3d__hint small">{hover ?? t("view3d.hint")}</span>
+            <span className="graph3d__hint small">{hover ?? t(touchScreen() ? "view3d.hintTouch" : "view3d.hint")}</span>
             <button className="small-btn" onClick={() => scene.current?.resetView()} title={t("view3d.resetTitle")}>
               <Icon icon={RotateCcw} size={14} />
               {t("view3d.reset")}

@@ -272,9 +272,16 @@ export function createScene(opts: {
     canvas.style.cursor = s ? "pointer" : "grab";
     opts.onHover(s ? cards.get(s)!.name : null);
   };
+  // Touch: one finger rotates, two pinch (zoom) and pan (OrbitControls' defaults). A tap is one finger that didn't
+  // move; lifting a finger at the end of a pinch opens nothing.
   let down: { x: number; y: number } | null = null;
-  const onDown = (e: PointerEvent) => (down = { x: e.clientX, y: e.clientY });
+  const touching = new Set<number>();
+  const onDown = (e: PointerEvent) => {
+    touching.add(e.pointerId);
+    down = touching.size === 1 ? { x: e.clientX, y: e.clientY } : null;
+  };
   const onUp = (e: PointerEvent) => {
+    touching.delete(e.pointerId);
     if (down && Math.hypot(e.clientX - down.x, e.clientY - down.y) < 5) {
       const s = hit(e);
       if (s) opts.onPick(cards.get(s)!.id);
@@ -285,8 +292,13 @@ export function createScene(opts: {
     if (!down) setHover(hit(e));
   };
   const onLeave = () => setHover(null);
+  const onCancel = (e: PointerEvent) => {
+    touching.delete(e.pointerId);
+    down = null;
+  };
   canvas.addEventListener("pointerdown", onDown);
   canvas.addEventListener("pointerup", onUp);
+  canvas.addEventListener("pointercancel", onCancel);
   canvas.addEventListener("pointermove", onMove);
   canvas.addEventListener("pointerleave", onLeave);
 
@@ -336,6 +348,7 @@ export function createScene(opts: {
       canvas.removeEventListener("wheel", stopSpin);
       canvas.removeEventListener("pointerdown", onDown);
       canvas.removeEventListener("pointerup", onUp);
+      canvas.removeEventListener("pointercancel", onCancel);
       canvas.removeEventListener("pointermove", onMove);
       canvas.removeEventListener("pointerleave", onLeave);
       controls.dispose();
