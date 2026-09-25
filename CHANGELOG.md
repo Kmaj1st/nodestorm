@@ -1,5 +1,34 @@
 # Changelog
 
+## 2026-09-25 (overnight): formal sciences and parody
+
+### Formal sciences
+- **Definitions from encyclopedias**:
+  - ProofWiki, then Wikipedia and Wikidata, are asked before the AI.
+  - Every definition keeps a link to its source.
+  - It works without an AI key.
+- **Lean / Mathlib**:
+  - Mathlib declarations are verified with Loogle.
+  - Each one has a "Try it in the Lean editor" link.
+- **Real papers** from OpenAlex.
+- **Concept kinds and theorem anatomy**, plus anatomy flashcards.
+- **LaTeX**:
+  - Import a paper, with `\ref`-based links.
+  - Export a compilable document.
+  - A notation glossary.
+- **Derive together**: a hints-only tutor over imported PDFs. It checks each step and cites references by page.
+
+### Parody (true facts, told absurdly)
+- **Absurd chain** between any two concepts, in five styles. It has Surprise me, and a **Guess the chain** game.
+- **Narrator voices** for Explain more.
+- **Reviewer 2**: a pedantic but accurate referee report on a derivation.
+
+### Quality
+- Three code-review passes. Every confirmed finding in the first two was fixed with a regression test; so were the
+  third's most important ones.
+- The intermittent Find failure in CI was root-caused and fixed: a still pointer used to take over the keyboard's
+  choice.
+
 ## 2026-09-24
 
 Everything below landed on `claude/hopeful-pascal-bc67up` in one day. Most features were built on their own
