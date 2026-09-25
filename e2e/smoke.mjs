@@ -982,6 +982,14 @@ try {
     await page.getByTestId("hide-concept").click();
     await count.waitFor();
     await page.screenshot({ path: `${shots}11b-hidden-mobile.png` });
+    await count.click();
+    const popover = page.locator("#hidden-list");
+    await popover.waitFor();
+    const [pop, zoom] = await Promise.all([popover.boundingBox(), page.locator(".react-flow__controls").boundingBox()]);
+    const apart = pop.x >= zoom.x + zoom.width || pop.y >= zoom.y + zoom.height || pop.y + pop.height <= zoom.y;
+    assert(apart && (await noHScroll()), "on a phone the hidden-concepts list opens beside the zoom controls, not over them");
+    await page.keyboard.press("Escape");
+    await popover.waitFor({ state: "detached" });
     await page.getByTestId("hidden-show-all").click();
     await page.getByTestId("hidden-bar").waitFor({ state: "detached" });
     await page.setViewportSize({ width: 1400, height: 900 });

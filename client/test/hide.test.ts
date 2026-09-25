@@ -131,7 +131,8 @@ describe("hiding concepts", () => {
     const [a, b] = setup();
     const main = store().activeId;
     hideConcepts([a, b]);
-    store().mutate((g) => ops.removeNode(g, a));
+    // Gone from the graph and from every undo snapshot: nothing can bring it back.
+    store().mutate((g) => (g.nodes.some((n) => n.id === a) ? ops.removeNode(g, a) : g), main, { history: "background" });
     expect(hidden()).toEqual([b]);
     store().forkActive();
     const sandbox = store().activeId;
@@ -140,6 +141,38 @@ describe("hiding concepts", () => {
     hideConcepts([b]);
     store().discardSandbox(sandbox);
     expect(useView.getState().hidden).toEqual({ [main]: [b] });
+  });
+
+  it("a deleted hidden concept comes back hidden on Undo, and goes again on Redo", () => {
+    const [a, b, c] = setup();
+    hideConcepts([b]);
+    store().mutate((g) => ops.removeNode(g, b));
+    expect(visibleNow().nodes.has(b)).toBe(false);
+    store().undo();
+    expect(store().graphs[store().activeId].nodes.some((n) => n.id === b)).toBe(true);
+    expect(hidden()).toEqual([b]);
+    expect([...visibleNow().nodes].sort()).toEqual([a, c].sort());
+    store().redo();
+    expect(store().graphs[store().activeId].nodes.some((n) => n.id === b)).toBe(false);
+    store().undo(); // still hidden after a round trip
+    expect(hidden()).toEqual([b]);
+    // A new step after the delete keeps it in the undo history, so it is still remembered…
+    store().redo();
+    store().mutate((g) => ops.updateNode(g, a, { notes: "x" }));
+    store().undo();
+    store().undo();
+    expect(hidden()).toEqual([b]);
+    expect(visibleNow().nodes.has(b)).toBe(false);
+  });
+
+  it("forgets a deleted hidden concept once no undo snapshot has it", () => {
+    const [, b] = setup();
+    hideConcepts([b]);
+    store().mutate((g) => ops.removeNode(g, b));
+    expect(hidden()).toEqual([b]); // Undo could bring it back
+    const id = store().activeId;
+    useGraphStore.setState({ history: { ...store().history, [id]: { past: [], future: [], lastKey: null } } });
+    expect(hidden()).toEqual([]);
   });
 
   it("is kept for the tab session, and still works when storage is blocked", () => {

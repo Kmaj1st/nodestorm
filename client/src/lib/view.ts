@@ -152,12 +152,29 @@ export function showIds(map: HiddenMap, graphId: string, ids?: readonly string[]
   return left.length ? { ...rest, [graphId]: left } : rest;
 }
 
-/** Forget graphs and concepts that no longer exist (deleted, or a discarded sandbox). Unchanged: the same map. */
-export function pruneHidden(map: HiddenMap, graphs: Readonly<Record<string, Pick<Graph, "nodes"> | undefined>>): HiddenMap {
+type Snapshots = { past: readonly Pick<Graph, "nodes">[]; future: readonly Pick<Graph, "nodes">[] };
+
+/**
+ * Forget graphs and concepts that no longer exist (deleted, or a discarded sandbox). A deleted concept that Undo or
+ * Redo can still bring back (it is in one of the graph's `history` snapshots) stays hidden, so it returns hidden.
+ * Unchanged: the same map.
+ */
+export function pruneHidden(
+  map: HiddenMap,
+  graphs: Readonly<Record<string, Pick<Graph, "nodes"> | undefined>>,
+  history?: Readonly<Record<string, Snapshots | undefined>>,
+): HiddenMap {
   let out: Record<string, readonly string[]> | null = null;
   for (const [gid, ids] of Object.entries(map)) {
     const g = graphs[gid];
-    const keep = g ? ids.filter((id) => g.nodes.some((n) => n.id === id)) : [];
+    let inHistory: Set<string> | undefined; // built only when a hidden concept is missing now
+    const known = (id: string) => {
+      if (g!.nodes.some((n) => n.id === id)) return true;
+      const h = history?.[gid];
+      inHistory ??= new Set([...(h?.past ?? []), ...(h?.future ?? [])].flatMap((s) => s.nodes.map((n) => n.id)));
+      return inHistory.has(id);
+    };
+    const keep = g ? ids.filter(known) : [];
     if (keep.length === ids.length) continue;
     out ??= { ...map };
     if (keep.length) out[gid] = keep;
