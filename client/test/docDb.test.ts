@@ -128,3 +128,80 @@ describe("docDb", () => {
     expect(await listSessions("p2")).toHaveLength(1);
   });
 });
+
+describe("docDb and a reload right after a change", () => {
+  // localStorage keeps a note of each background write until its transaction completes.
+  const data = new Map<string, string>();
+  const g = globalThis as { localStorage?: unknown };
+  beforeEach(() => {
+    data.clear();
+    g.localStorage = {
+      getItem: (k: string) => data.get(k) ?? null,
+      setItem: (k: string, v: string) => void data.set(k, v),
+      removeItem: (k: string) => void data.delete(k),
+    };
+  });
+  afterEach(() => delete g.localStorage);
+
+  const useDb = async (db: IDBFactory) => {
+    await closeDocDb();
+    (globalThis as { indexedDB?: unknown }).indexedDB = db;
+  };
+
+  /**
+   * What the next page finds when this one went before `writes` committed: localStorage as it was the moment they
+   * started, and the database as `before` left it, without them.
+   */
+  async function reloadLosing(writes: () => Promise<unknown>, before: () => Promise<unknown> = async () => {}) {
+    const lost = new IDBFactory();
+    await useDb(lost);
+    await before();
+    await useDb(new IDBFactory()); // where the writes go: a database the next page never sees
+    const running = writes();
+    const noted = new Map(data); // taken synchronously, as the page unloads
+    await running;
+    await useDb(lost);
+    data.clear();
+    for (const [k, v] of noted) data.set(k, v);
+  }
+
+  it("a session saved just before the reload is still there, and the note is gone once written", async () => {
+    await reloadLosing(() => putSession({ id: "s1", projectId: "p1", updatedAt: 3, steps: ["a"] }));
+    expect(data.size).toBe(1);
+    expect(await listSessions("p1")).toEqual([{ id: "s1", projectId: "p1", updatedAt: 3, steps: ["a"] }]);
+    expect(data.size).toBe(0);
+  });
+
+  it("a session or document deleted just before the reload stays deleted", async () => {
+    await reloadLosing(
+      () => Promise.all([deleteSession("s1"), deleteDoc("a")]),
+      async () => {
+        await putSession({ id: "s1", projectId: "p1", updatedAt: 1 });
+        await putDoc(meta("a"), [page("a", 1)]);
+      },
+    );
+    expect(await listSessions("p1")).toEqual([]);
+    expect(await listDocs("p1")).toEqual([]);
+    expect(await getPages("a")).toEqual([]);
+  });
+
+  it("a document's new metadata survives it too; a note left by a deleted project is dropped", async () => {
+    await reloadLosing(
+      () => updateDoc({ ...meta("a"), title: "With problems" }),
+      () => putDoc(meta("a"), [page("a", 1)]),
+    );
+    expect((await listDocs("p1"))[0].title).toBe("With problems");
+    // A session of project p2 noted, then p2 deleted: the note must not bring it back.
+    const running = putSession({ id: "s9", projectId: "p2", updatedAt: 1 });
+    await deleteProjectData("p2");
+    await running;
+    expect(await listSessions("p2")).toEqual([]);
+    expect(data.size).toBe(0);
+  });
+
+  it("drops a garbled note instead of failing", async () => {
+    data.set("nodestorm-docs-pending", JSON.stringify({ sessions: { x: { id: "other" } }, docs: "no" }));
+    expect(await docsAvailable()).toBe(true);
+    expect(await listSessions("p1")).toEqual([]);
+  });
+});
