@@ -1,5 +1,6 @@
 import { findByName, normalizeName } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
+import * as ops from "../src/lib/graphOps";
 
 describe("normalizeName keeps meaningful symbols", () => {
   it("tells C, C++ and C# apart", () => {
@@ -36,5 +37,38 @@ describe("normalizeName keeps meaningful symbols", () => {
     expect(findByName(nodes, "c++")?.name).toBe("C++");
     expect(findByName(nodes, "c")?.name).toBe("C");
     expect(findByName(nodes, "C#")).toBeUndefined();
+  });
+});
+
+describe("aliases never answer for another concept", () => {
+  const base = () => {
+    let g = ops.addNode(ops.emptyGraph(), { name: "Group", aliases: ["Gruppe"] }).graph;
+    g = ops.addNode(g, { name: "Ring" }).graph;
+    return g;
+  };
+
+  it("drops a new concept's alias that is another concept's name or alias, and keeps the concept", () => {
+    const r = ops.addNode(base(), { name: "Monoid", aliases: ["groups", "Gruppe", "Halbgruppe", "monoid", "Halbgruppe ", ""] });
+    expect(r.existed).toBe(false);
+    const n = r.graph.nodes.find((x) => x.id === r.id)!;
+    expect(n.aliases).toEqual(["Halbgruppe"]);
+    expect(findByName(r.graph.nodes, "Gruppe")?.name).toBe("Group");
+  });
+
+  it("drops a clashing alias set on an existing concept (look-ups, hand edits)", () => {
+    const g = base();
+    const ring = g.nodes.find((n) => n.name === "Ring")!;
+    const out = ops.updateNode(g, ring.id, { aliases: ["Group", "Gruppe", "Rng"] });
+    expect(out.nodes.find((n) => n.id === ring.id)!.aliases).toEqual(["Rng"]);
+  });
+
+  it("renaming keeps the old name as an alias but no alias of another concept", () => {
+    const g = base();
+    const ring = g.nodes.find((n) => n.name === "Ring")!;
+    // An older graph where "Ring" wrongly carries another concept's alias.
+    const bad = { ...g, nodes: g.nodes.map((n) => (n.id === ring.id ? { ...n, aliases: ["Gruppe"] } : n)) };
+    const r = ops.renameNode(bad, ring.id, "Ring (algebra)");
+    expect(r.error).toBeUndefined();
+    expect(r.graph.nodes.find((n) => n.id === ring.id)!.aliases).toEqual(["Ring"]);
   });
 });
