@@ -70,6 +70,30 @@ try {
     await page.getByLabel("Concept name").fill(name);
     await page.getByRole("button", { name: "Add", exact: true }).click();
   };
+  /**
+   * Open a toolbar menu (`button` toggles `menu`) and return the menu once it is really open. A dialog that is still
+   * closing takes the click (its backdrop) or hands focus back after it, so wait for it to go first; then click while
+   * the button says it is closed until the menu shows (never toggling an open one shut).
+   */
+  const openMenu = async (button, menu, pg = page) => {
+    await pg.waitForFunction(() => !document.querySelector(".modal"));
+    for (let i = 0; i < 5 && !(await menu.isVisible()); i++) {
+      if ((await button.getAttribute("aria-expanded")) !== "true") await button.click();
+      await menu.waitFor({ timeout: 2000 }).catch(() => {});
+    }
+    await menu.waitFor({ timeout: 1000 });
+    return menu;
+  };
+  const openFile = (pg = page) =>
+    openMenu(pg.getByRole("button", { name: "File", exact: true }), pg.getByRole("menu", { name: "File" }), pg);
+  /** File → `item` (a menuitem, matched exactly), in `pg` (the page, or a share viewer). */
+  const fromFile = async (item, pg = page) => (await openFile(pg)).getByRole("menuitem", { name: item, exact: true }).click();
+  /** Waits (up to 5 s) until `locator`'s whole text is `want`; says whether it is (for asserting right after an action). */
+  const textIs = (locator, want) =>
+    locator
+      .filter({ hasText: new RegExp(`^${want.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}$`) })
+      .waitFor({ timeout: 5000 })
+      .then(() => true, () => false);
   // Is the node fully inside the visible canvas? (waits out the pan animation first)
   const inView = async (name) => {
     await page.waitForTimeout(600);
@@ -180,7 +204,7 @@ try {
   assert(await inView("Kernel"), "accepted proposal placed in view");
   await page.screenshot({ path: `${shots}4-sandbox.png` });
   await page.getByLabel("Graph").selectOption({ label: "Main graph" });
-  await page.waitForTimeout(300);
+  await page.getByTestId("sandbox-banner").waitFor({ state: "detached" }); // the main graph is on screen
   assert((await node("Kernel").count()) === 0, "main graph unaffected by sandbox");
   await page.getByLabel("Graph").selectOption({ index: 1 });
   await page.getByRole("button", { name: "Merge back" }).click();
@@ -207,7 +231,7 @@ try {
 
   console.log("Export");
   const exportAs = async (label) => {
-    await page.getByRole("button", { name: "File", exact: true }).click();
+    await openFile();
     const [dl] = await Promise.all([page.waitForEvent("download"), page.getByRole("menuitem", { name: label }).click()]);
     return { name: dl.suggestedFilename(), data: readFileSync(await dl.path()) };
   };
@@ -339,11 +363,18 @@ try {
     assert(!overlapping(await cards()), "Physics settles with no overlapping cards");
     const after = await stored();
     assert(JSON.stringify(after) !== JSON.stringify(before), "the settled positions are saved");
+    // Waits until the saved positions are `want` (or 5 s went by); says whether they are.
+    const storedBecomes = (want) =>
+      page
+        .waitForFunction((w) => {
+          const st = JSON.parse(localStorage.getItem("nodestorm") ?? "{}").state;
+          return JSON.stringify(Object.fromEntries(st.graphs[st.activeId].nodes.map((n) => [n.name, n.position]))) === w;
+        }, JSON.stringify(want), { timeout: 5000 })
+        .then(() => true, () => false);
     await page.getByRole("button", { name: "Undo", exact: true }).click();
-    await page.waitForTimeout(300);
-    assert(JSON.stringify(await stored()) === JSON.stringify(before), "one Undo takes the whole arrangement back");
+    assert(await storedBecomes(before), "one Undo takes the whole arrangement back");
     await page.getByRole("button", { name: "Redo", exact: true }).click();
-    await page.waitForTimeout(300);
+    await storedBecomes(after);
     // A drag holds the card at the pointer; its neighbours follow and the result is again one undo step.
     const iso = await node("Isomorphism").boundingBox();
     await page.mouse.move(iso.x + 60, iso.y + 20);
@@ -359,8 +390,8 @@ try {
     await page.getByRole("button", { name: /^View/ }).click();
     await page.getByLabel("Layered (2.5D)").check();
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(400);
-    assert(await page.locator(".layer-plate").first().isVisible(), "the layered view draws its layer plates");
+    const drawn = await page.locator(".layer-plate").first().waitFor({ timeout: 5000 }).then(() => true, () => false);
+    assert(drawn, "the layered view draws its layer plates");
     assert((await page.locator(".layer-plate").count()) >= 3, "…one per dependency layer");
     const layered = await cards();
     assert(layered["Homomorphism"].y < layered["Isomorphism"].y && layered["Isomorphism"].y < layered["First Isomorphism Theorem"].y, "prerequisites stand on the layers above");
@@ -372,7 +403,13 @@ try {
     await page.mouse.down();
     await page.mouse.move(b.x + 180, b.y + 220, { steps: 6 });
     await page.mouse.up();
-    await page.waitForTimeout(200);
+    // The drop is saved when the drag ends.
+    await page
+      .waitForFunction((x) => {
+        const st = JSON.parse(localStorage.getItem("nodestorm") ?? "{}").state;
+        return st.graphs[st.activeId].nodes.find((n) => n.name === "Isomorphism")?.position.x !== x;
+      }, flat["Isomorphism"].x, { timeout: 5000 })
+      .catch(() => {});
     const moved = (await cards())["Isomorphism"];
     assert(Math.abs(moved.y - b.y) < 2 && moved.x > b.x + 60, "a card dragged in the layered view stays on its layer");
     const s2 = await stored();
@@ -382,8 +419,8 @@ try {
     await page.getByRole("button", { name: /^View/ }).click();
     await page.getByLabel("Flat").check();
     await page.keyboard.press("Escape");
-    await page.waitForTimeout(300);
-    assert((await page.locator(".layer-plate").count()) === 0, "the flat view has no plates");
+    const plain = await page.locator(".layer-plate").first().waitFor({ state: "detached", timeout: 5000 }).then(() => true, () => false);
+    assert(plain && (await page.locator(".layer-plate").count()) === 0, "the flat view has no plates");
     assert(JSON.stringify(await stored()) === JSON.stringify(flat), "back to flat, the layout is as it was");
 
     console.log("3D view");
@@ -629,10 +666,10 @@ try {
   console.log("Projects");
   const projectButton = page.getByRole("button", { name: /^Project: / });
   const projectMenu = async (item) => {
-    await projectButton.click();
+    const menu = await openMenu(projectButton, page.getByRole("menu", { name: "Projects" }));
     // Commands are menuitems; projects (other than the current one, marked ✓) are menuitemradios.
     const role = ["New project", "Rename…", "Duplicate", "Delete…"].includes(item) ? "menuitem" : "menuitemradio";
-    await page.getByRole("menu", { name: "Projects" }).getByRole(role, { name: item, exact: true }).click();
+    await menu.getByRole(role, { name: item, exact: true }).click();
   };
   const nodeCount = () => page.locator(".react-flow__node").count();
   assert((await projectButton.getAttribute("aria-label")) === "Project: My brainstorm", "existing work lives in the first project");
@@ -765,8 +802,7 @@ try {
   console.log("Share link");
   await page.setViewportSize({ width: 1400, height: 900 });
   const sharedCount = await nodeCount();
-  await page.getByRole("button", { name: "File", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Share link…" }).click();
+  await fromFile("Share link…");
   const link = await page.getByTestId("share-link").inputValue();
   assert(link.includes("#share=1.") && /[\d,]+ characters/.test(await page.getByTestId("share-size").textContent()), "Share link… shows the link and its length");
   await page.keyboard.press("Escape");
@@ -800,8 +836,7 @@ try {
       "notes and Explain more can't be used in the viewer",
     );
     await viewer.screenshot({ path: `${shots}11-shared-viewer.png` });
-    await viewer.getByRole("button", { name: "File", exact: true }).click();
-    await viewer.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
+    await fromFile("Flashcards (Anki)…", viewer);
     const viewerCards = viewer.getByRole("dialog", { name: "Flashcards" });
     assert(/^[1-9]\d* cards$/.test(await viewerCards.getByTestId("flash-count").textContent()), "flashcards can be exported from a shared graph");
     await viewerCards.getByRole("button", { name: "Close" }).click();
@@ -1055,7 +1090,7 @@ try {
   await page.setViewportSize({ width: 1400, height: 900 });
   assert(await oneRow(), "…and at 1400px (the brand and button labels come back from 1440px)");
   await toolbar.screenshot({ path: `${shots}14-toolbar-en.png` });
-  await page.getByRole("button", { name: "File", exact: true }).click();
+  await openFile();
   const fileItems = await page.getByRole("menu", { name: "File" }).getByRole("menuitem").allTextContents();
   assert(
     JSON.stringify(fileItems) ===
@@ -1117,8 +1152,7 @@ try {
   await addByName("Group");
   await addByName("Homomorphism");
   await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 2);
-  await page.getByRole("button", { name: "File", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Extract from text…" }).click();
+  await fromFile("Extract from text…");
   const extract = page.getByRole("dialog", { name: "Extract from text" });
   const extractText = extract.getByLabel("Text", { exact: true });
   await extractText.fill("x".repeat(12_001));
@@ -1484,7 +1518,7 @@ try {
     await addByName(name);
     await waitBadge(name, "ready");
   }
-  await page.getByRole("button", { name: "File", exact: true }).click();
+  await openFile();
   assert(await page.getByRole("menuitem", { name: "Quiz me…" }).isVisible(), "File has a Quiz me… entry");
   await page.keyboard.press("Escape");
   await node("Normal Subgroup").click();
@@ -1551,8 +1585,7 @@ try {
   );
   {
     // A second quiz over the whole graph starts on the weak spot: Group is known well, so Subgroup needn't wait for it.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Quiz me…" }).click();
+    await fromFile("Quiz me…");
     await quizDialog.waitFor();
     await quizDialog.getByRole("radio", { name: /^The whole graph/ }).check();
     await quizDialog.getByLabel("Multiple choice (4 options)").check();
@@ -1581,8 +1614,7 @@ try {
     await page.getByRole("button", { name: "Load example: Group theory" }).click();
     await page.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
     const fileItem = async (name) => {
-      await page.getByRole("button", { name: "File", exact: true }).click();
-      await page.getByRole("menuitem", { name, exact: true }).click();
+      await fromFile(name);
     };
     const versions = page.getByRole("dialog", { name: "Versions" });
     const entries = () => versions.getByTestId("version").locator(".versions__title").allTextContents();
@@ -1640,7 +1672,7 @@ try {
     await versions.getByTestId("version").last().getByRole("button", { name: "Preview" }).click();
     await page.getByTestId("viewer-banner").waitFor();
     assert((await page.getByTestId("viewer-banner").textContent()).includes("Previewing an earlier version"), "Preview opens the version read-only");
-    await page.getByRole("button", { name: "File", exact: true }).click();
+    await openFile();
     assert(!(await page.getByRole("menuitem", { name: "Versions…" }).count()), "Versions is hidden in the read-only viewer");
     await page.keyboard.press("Escape");
     await page.getByTestId("viewer-banner").getByRole("button", { name: "Close" }).click();
@@ -1667,8 +1699,7 @@ try {
   console.log("Flashcards");
   {
     // The Group theory example from the Versions section: export it as Anki cards, then as CSV.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Flashcards (Anki)…" }).click();
+    await fromFile("Flashcards (Anki)…");
     const cards = page.getByRole("dialog", { name: "Flashcards" });
     await cards.waitFor();
     await audit("Flashcards dialog");
@@ -1742,14 +1773,16 @@ try {
     await preview.locator(".katex").first().waitFor();
     assert(await preview.isVisible(), "…and shows the typeset definition under the field");
     await definition.fill("Costs \\$5, or $10 with $a^2$ and $x");
-    await page.waitForTimeout(100);
+    await preview.getByText("Costs $5, or $10 with").waitFor(); // the preview shows the new text…
+    await preview.locator(".katex").first().waitFor(); // …typeset
     assert((await preview.locator(".katex").count()) === 1, "an escaped \\$, prices and an unclosed $ stay text; only $a^2$ is a formula");
     assert((await preview.innerText()).includes("Costs $5, or $10 with"), "…and \\$ shows as a dollar");
     await definition.fill("Broken: $\\frac{1}{$ here");
     await preview.getByText("$\\frac{1}{$").waitFor();
     assert(!(await preview.locator(".katex").count()), "a formula KaTeX can't parse is shown as its source");
     await definition.fill("Plain text again");
-    assert(!(await preview.count()), "text without a formula has no preview");
+    const noPreview = await preview.waitFor({ state: "detached", timeout: 5000 }).then(() => true, () => false);
+    assert(noPreview, "text without a formula has no preview");
     await definition.fill(source);
     await card.locator(".katex").first().waitFor();
 
@@ -1782,18 +1815,18 @@ try {
     await opener.click();
     const walk = page.getByRole("dialog", { name: "Walkthrough: learning path of Normal Subgroup" });
     await walk.waitFor();
-    const slideName = () => walk.getByTestId("walk-name").textContent();
+    const slideIs = (name) => textIs(walk.getByTestId("walk-name"), name);
     assert(
-      (await slideName()) === "Group" && (await walk.getByTestId("walk-progress").textContent()) === "1 / 3",
+      (await slideIs("Group")) && (await textIs(walk.getByTestId("walk-progress"), "1 / 3")),
       "the inspector's walkthrough starts with the deepest prerequisite (1 / 3)",
     );
     await page.keyboard.press("ArrowRight");
-    assert((await slideName()) === "Subgroup", "→ advances to the next concept");
+    assert(await slideIs("Subgroup"), "→ advances to the next concept");
     assert((await walk.getByRole("button", { name: "Group", exact: true }).count()) === 1, "…which lists what it builds on");
     await page.keyboard.press("End");
-    assert((await slideName()) === "Normal Subgroup" && (await walk.getByTestId("walk-next").isDisabled()), "End jumps to the concept itself");
+    assert((await slideIs("Normal Subgroup")) && (await walk.getByTestId("walk-next").isDisabled()), "End jumps to the concept itself");
     await walk.getByTestId("walk-prev").click();
-    assert((await slideName()) === "Subgroup", "the Previous button goes back");
+    assert(await slideIs("Subgroup"), "the Previous button goes back");
     await audit("walkthrough slide (light)");
     await page.setViewportSize({ width: 390, height: 800 });
     const [scrollW, clientW] = await page.evaluate(() => [document.documentElement.scrollWidth, document.documentElement.clientWidth]);
@@ -1804,12 +1837,11 @@ try {
     assert(await opener.evaluate((el) => el === document.activeElement), "Escape closes it and focus returns to the button");
 
     await setTheme("dark");
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Walkthrough…" }).click();
+    await fromFile("Walkthrough…");
     const whole = page.getByRole("dialog", { name: "Walkthrough" });
     await whole.waitFor();
     await audit("walkthrough slide (dark)");
-    assert((await whole.getByTestId("walk-progress").textContent()) === "1 / 3", "File → Walkthrough… covers the whole graph");
+    assert(await textIs(whole.getByTestId("walk-progress"), "1 / 3"), "File → Walkthrough… covers the whole graph");
     await whole.getByTestId("walk-show").click();
     await whole.waitFor({ state: "detached" });
     const shown = await page
@@ -1820,8 +1852,7 @@ try {
     await setTheme("light");
 
     // Presenting a shared graph: the read-only viewer has the walkthrough too.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Share link…" }).click();
+    await fromFile("Share link…");
     const link = await page.getByTestId("share-link").inputValue();
     await page.keyboard.press("Escape");
     const viewer = await context.newPage();
@@ -1833,7 +1864,7 @@ try {
     const shared = viewer.getByRole("dialog", { name: "Walkthrough: learning path of Normal Subgroup" });
     await shared.waitFor();
     await viewer.keyboard.press("Space");
-    assert((await shared.getByTestId("walk-name").textContent()) === "Subgroup", "the share viewer walks through a learning path too");
+    assert(await textIs(shared.getByTestId("walk-name"), "Subgroup"), "the share viewer walks through a learning path too");
     await viewer.close();
   }
 
@@ -1976,7 +2007,8 @@ try {
     await page
       .waitForFunction(() => document.querySelectorAll(".derive-session").length === 2 && document.querySelectorAll(".derive-doc").length === 3, null, { timeout: 5000 })
       .catch(() => {});
-    assert((await panel.locator(".derive-session").count()) === 2 && (await panel.locator(".derive-doc").count()) === 3, "documents and derivations survive a reload");
+    const [sessionsKept, docsKept] = [await panel.locator(".derive-session").count(), await panel.locator(".derive-doc").count()];
+    assert(sessionsKept === 2 && docsKept === 3, `documents and derivations survive a reload (${sessionsKept}/2 derivations, ${docsKept}/3 documents)`);
     await panel.getByRole("button", { name: "Close" }).click();
     await panel.waitFor({ state: "detached" });
   }
@@ -2132,8 +2164,7 @@ try {
     const mainNodes = await page.locator(".react-flow__node").count();
 
     // Free-form, from the File menu: two ends that aren't in the graph at all.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    await fromFile("Absurd chain…");
     const dlg = page.getByRole("dialog", { name: "Absurd chain" });
     await dlg.waitFor();
     assert(await dlg.getByRole("button", { name: "Build the chain" }).isDisabled(), "the chain needs two ends");
@@ -2212,8 +2243,7 @@ try {
     await setTheme("light");
 
     // Stops along the way: one concept of the graph (typed in lower case) and one of the user's own, with what it means.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    await fromFile("Absurd chain…");
     await dlg.waitFor();
     await dlg.getByLabel("From", { exact: true }).fill("Fourier transform");
     await dlg.getByLabel("To", { exact: true }).fill("Toast");
@@ -2472,8 +2502,7 @@ try {
   console.log("Notation glossary");
   {
     const openGlossary = async () => {
-      await page.getByRole("button", { name: "File", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Notation…" }).click();
+      await fromFile("Notation…");
       const dialog = page.getByRole("dialog", { name: "Notation" });
       await dialog.waitFor();
       return dialog;
@@ -2614,8 +2643,7 @@ try {
     await panel.waitFor({ state: "detached" });
 
     // Surprise me: with one concept in the graph, it is one of the ends.
-    await page.getByRole("button", { name: "File", exact: true }).click();
-    await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+    await fromFile("Absurd chain…");
     const dlg = page.getByRole("dialog", { name: "Absurd chain" });
     await dlg.waitFor();
     await dlg.getByLabel("From", { exact: true }).fill("");
@@ -2634,8 +2662,7 @@ try {
     // The offline demo's Homomorphism → Toast chain: Exponential function, Fourier transform, Heat equation, Heat and
     // Maillard reaction are hidden between the ends.
     const openChain = async () => {
-      await page.getByRole("button", { name: "File", exact: true }).click();
-      await page.getByRole("menuitem", { name: "Absurd chain…" }).click();
+      await fromFile("Absurd chain…");
       const d = page.getByRole("dialog", { name: "Absurd chain" });
       await d.waitFor();
       await d.getByLabel("From", { exact: true }).fill("Homomorphism");

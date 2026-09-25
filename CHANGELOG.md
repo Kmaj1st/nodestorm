@@ -19,6 +19,11 @@
 - A test checks that no Chinese message is left in English and that every plural form resolves.
 - **Basic concepts:** Inspector → **Basic concept** marks a concept as taken as given (a small mark on its card). It needs no prerequisites: its missing ones go, it is never blocked, and no prerequisite check (no AI call) runs for it. The links it already has stay. Unmarking leaves it "not checked", ready for **Check prerequisites with AI**. A blocked concept's missing list also offers "take it as given". Undo, share links, files and sandboxes keep the mark.
 - **Hide concepts for now.** The eye button in the inspector's header, **H** on the canvas (the selected concepts) or **Shift+H** (all but the selected ones), and **View → Hide selected / Hide others** take concepts and their relations off the canvas, the minimap, fit-view, Tidy and the 3D view. It is only a view choice for this browser tab: nothing is deleted, undone, exported or shared, and a new tab shows everything. **"N hidden · Show all"** in the canvas corner lists them, each with its own **Show** button; finding, opening or walking through a hidden concept shows it again.
+  - Deleting a hidden concept and then **Undo** brings it back still hidden (and Redo takes it away again).
+  - On a phone the open "N hidden" list sits beside the canvas zoom buttons instead of covering them.
+- **Derive together keeps the last change across a quick reload:** a derivation started (or a document's problems found, or something deleted) just before the page reloads or the tab closes is no longer lost when its IndexedDB write hadn't finished. Each such write is noted in localStorage first and written through when the library next opens.
+- **Undo keeps an AI explanation or theorem anatomy exactly as it was stored** (its time could differ by a millisecond before).
+- Tests: the flaky theorem-anatomy unit test is deterministic, and the end-to-end test waits for menus, dialogs and saved state instead of fixed pauses.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
