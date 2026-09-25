@@ -158,7 +158,7 @@ export function labels(nodes: Pick<ConceptNode, "id" | "name">[]): Map<string, s
   return out;
 }
 
-const CJK = /[぀-ヿ㐀-鿿가-힯]/;
+const CJK = /[\u3000-\u303f\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af\uff00-\uffef\u{20000}-\u{2fa1f}]/u;
 
 export interface LatexOptions {
   /** Document title; defaults to the graph's name. */

@@ -222,6 +222,8 @@ export const NodeFormal = z.object({
   decls: z.array(FormalDecl).max(12),
   /** Names the AI suggested that Mathlib doesn't have (so the user sees what was checked). */
   unverified: z.array(z.string().max(300)).max(12).default([]),
+  /** Names that couldn't be checked (Loogle timed out or failed for them): neither kept nor ruled out. */
+  unchecked: z.array(z.string().max(300)).max(12).optional(),
   checkedAt: z.number(),
 });
 export type NodeFormal = z.infer<typeof NodeFormal>;

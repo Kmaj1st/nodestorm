@@ -20,7 +20,7 @@ import {
   TriangleAlert,
   Wand2,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   analyzeNode,
@@ -328,6 +328,9 @@ const STATUS_LABEL: Record<ConceptNode["status"], MessageKey> = {
   error: "state.error",
 };
 
+/** A stored result's date, in the interface language. */
+const shortDate = (at: number, lang: string) => new Date(at).toLocaleDateString(lang === "zh" ? "zh-CN" : "en");
+
 const LEVELS: { value: ExplainLevel; label: MessageKey }[] = [
   { value: "intuitive", label: "explain.intuitive" },
   { value: "rigorous", label: "explain.rigorous" },
@@ -360,6 +363,11 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
       <div className="section-head">
         <h4>{t("explain.title")}</h4>
         <div className="explain__controls">
+          {running && (
+            <button className="small-btn" onClick={() => cancelTask(explainKey(graphId, node.id))} data-testid="explain-cancel">
+              {t("common.cancel")}
+            </button>
+          )}
           <button
             className="small-btn"
             onClick={() => void explainNode(node.id, level, graphId, voice)}
@@ -391,7 +399,7 @@ function ExplainSection({ node, graphId }: { node: ConceptNode; graphId: string 
                 {t(voiceLabel(ex.voice))}
               </span>
             )}
-            <span className="muted small">· {new Date(ex.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
+            <span className="muted small">· {shortDate(ex.createdAt, lang)}</span>
           </summary>
           <p className="explain__summary" data-testid="explanation-summary"><MathText text={ex.summary} /></p>
           {ex.intuition && <p className="small"><MathText text={ex.intuition} /></p>}
@@ -481,7 +489,7 @@ function AnatomySection({ node, graphId }: { node: ConceptNode; graphId: string 
           <summary>
             <Icon icon={ChevronRight} size={14} className="explain__chevron" />
             {t("anatomy.heading")}{" "}
-            <span className="muted small">· {new Date(an.createdAt).toLocaleDateString(lang === "zh" ? "zh-CN" : "en")}</span>
+            <span className="muted small">· {shortDate(an.createdAt, lang)}</span>
           </summary>
           <h5>{t("anatomy.hypotheses")}</h5>
           {an.hypotheses.length === 0 ? (
@@ -548,9 +556,29 @@ function InstallAll({ node, graphId }: { node: ConceptNode; graphId: string }) {
   const [open, setOpen] = useState(false);
   const running = useGraphStore((s) => Boolean(s.busy[installAllKey(graphId, node.id)]));
   const { maxDepth, maxNodes } = useSettings((s) => s.installAll);
+  const ref = useRef<HTMLDivElement>(null);
+  const button = useRef<HTMLButtonElement>(null);
+  // Escape or a click elsewhere closes the confirm popover, like the other menus.
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => {
+      if (e instanceof KeyboardEvent) {
+        if (e.key !== "Escape") return;
+        e.stopPropagation();
+        button.current?.focus();
+      } else if (ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+    };
+    document.addEventListener("mousedown", close);
+    document.addEventListener("keydown", close, true);
+    return () => {
+      document.removeEventListener("mousedown", close);
+      document.removeEventListener("keydown", close, true);
+    };
+  }, [open]);
   return (
-    <div className="popover-anchor">
-      <button className="small-btn" onClick={() => setOpen(!open)} disabled={running} aria-expanded={open} data-testid="install-all">
+    <div className="popover-anchor" ref={ref}>
+      <button ref={button} className="small-btn" onClick={() => setOpen(!open)} disabled={running} aria-expanded={open} data-testid="install-all">
         {t(running ? "installAll.running" : "installAll.button")}
       </button>
       {open && !running && (
@@ -769,7 +797,9 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
  */
 function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId: string; viewing: boolean }) {
   const t = useT();
-  const running = useGraphStore((s) => Boolean(s.busy[mathlibKey(graphId, node.id)]));
+  const lang = useLang();
+  const key = mathlibKey(graphId, node.id);
+  const running = useGraphStore((s) => Boolean(s.busy[key]));
   const f = node.formal;
   if (viewing && !f?.decls.length) return null;
   return (
@@ -777,10 +807,17 @@ function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
       <div className="section-head">
         <h4>{t("formal.title")}</h4>
         {!viewing && (
-          <button className="small-btn" onClick={() => void findInMathlib(node.id, graphId)} disabled={running} data-testid="formal-button">
-            {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Search} size={14} />}
-            {t(running ? "formal.running" : f ? "formal.again" : "formal.run")}
-          </button>
+          <div className="explain__controls">
+            {running && (
+              <button className="small-btn" onClick={() => cancelTask(key)} data-testid="formal-cancel">
+                {t("common.cancel")}
+              </button>
+            )}
+            <button className="small-btn" onClick={() => void findInMathlib(node.id, graphId)} disabled={running} data-testid="formal-button">
+              {running ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Search} size={14} />}
+              {t(running ? "formal.running" : f ? "formal.again" : "formal.run")}
+            </button>
+          </div>
         )}
       </div>
       {!f && !running && <p className="muted small">{t("formal.empty")}</p>}
@@ -805,7 +842,10 @@ function FormalSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
               ))}
             </ul>
           )}
+          {!f.decls.length && <p className="small">{t("formal.none", { name: node.name })}</p>}
+          {f.unchecked?.length ? <p className="small warn">{t("formal.unchecked", { names: f.unchecked.join(", ") })}</p> : null}
           <p className="muted small">
+            {t("common.checkedOn", { date: shortDate(f.checkedAt, lang) })}{" · "}
             {f.unverified.length > 0 && <>{t("formal.unverified", { names: f.unverified.join(", ") })} </>}
             <a href={loogleSearchUrl(`"${node.name}"`)} target="_blank" rel="noopener noreferrer">
               {t("formal.searchYourself")}
@@ -884,7 +924,9 @@ function PapersSection({ node, graphId, viewing }: { node: ConceptNode; graphId:
               })}
             </ul>
           )}
+          {!p.works.length && <p className="small">{t("papers.none", { name: node.name })}</p>}
           <p className="muted small">
+            {t("common.checkedOn", { date: shortDate(p.checkedAt, lang) })}{" · "}
             {p.works.length > 0 && p.query && <>{t("papers.searched", { query: p.query })} </>}
             <a href={openAlexSearchUrl(node.name)} target="_blank" rel="noopener noreferrer">
               {t("papers.searchYourself")}

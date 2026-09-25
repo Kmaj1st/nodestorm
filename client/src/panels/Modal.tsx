@@ -29,6 +29,7 @@ export function Modal({ label, title, onClose, className, top, children }: {
 }) {
   const t = useT();
   const body = useRef<HTMLDivElement>(null);
+  const downOnBackdrop = useRef(false);
   // Captured during the first render, before any autoFocus inside the dialog moves focus.
   const [opener] = useState(() => (document.activeElement instanceof HTMLElement ? document.activeElement : null));
   const close = useRef(onClose);
@@ -74,7 +75,15 @@ export function Modal({ label, title, onClose, className, top, children }: {
   }, [opener]);
 
   return (
-    <div className={`modal${top ? " modal--top" : ""}`} onClick={onClose}>
+    <div
+      className={`modal${top ? " modal--top" : ""}`}
+      // Only a click that starts and ends on the backdrop closes: dragging a text selection out of a field doesn't.
+      onMouseDown={(e) => (downOnBackdrop.current = e.target === e.currentTarget)}
+      onClick={(e) => {
+        if (e.target === e.currentTarget && downOnBackdrop.current) onClose();
+        downOnBackdrop.current = false;
+      }}
+    >
       <div
         ref={body}
         className={`modal__body${className ? ` ${className}` : ""}`}

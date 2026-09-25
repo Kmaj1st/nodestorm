@@ -1005,8 +1005,8 @@ kbd {
 /* Lean / Mathlib declarations in the inspector. */
 .formal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .formal-decl { border: 1px solid var(--border); border-radius: var(--radius-md); padding: var(--space-2) var(--space-3); background: var(--surface); }
-.formal-decl__name { display: inline-flex; align-items: center; gap: 4px; color: var(--accent); font-weight: 500; }
-.formal-decl__name code { font-family: var(--font-mono); font-size: var(--text-sm); }
+.formal-decl__name { display: inline-flex; align-items: center; gap: 4px; max-width: 100%; min-width: 0; color: var(--accent); font-weight: 500; }
+.formal-decl__name code { font-family: var(--font-mono); font-size: var(--text-sm); overflow-wrap: anywhere; min-width: 0; }
 .formal-decl__type {
   margin: var(--space-1) 0 0; font-family: var(--font-mono); font-size: var(--text-xs); white-space: pre-wrap; overflow-wrap: anywhere;
   color: var(--text); max-height: 7.5em; overflow: auto;

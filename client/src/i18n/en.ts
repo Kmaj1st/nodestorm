@@ -8,6 +8,8 @@
 export const en = {
   // Shared words
   "common.cancel": "Cancel",
+  "common.checkedOn": "Checked {date}",
+  "common.undo": "Undo",
   "common.close": "Close",
   "common.save": "Save",
   "common.add": "Add",
@@ -817,6 +819,7 @@ export const en = {
   "dt.steps.edit": "Edit step {n}",
   "dt.steps.editTitle": "Edit",
   "dt.steps.delete": "Delete step {n}",
+  "dt.steps.deleted": "Step {n} deleted.",
   "dt.verdict.ok": "Correct",
   "dt.verdict.gap": "Gap",
   "dt.verdict.error": "Error",
@@ -981,6 +984,7 @@ export const en = {
   "formal.none": "No Mathlib declaration found for “{name}”.",
   "formal.unverified": "Not in Mathlib (dropped): {names}.",
   "formal.searchYourself": "Search Loogle yourself",
+  "formal.unchecked": "Could not be checked (Loogle didn't answer): {names}. Search again to retry.",
   "repair.droppedFormal": "dropped Mathlib results that weren't valid",
   "task.papers": "Finding papers on “{name}”…",
   "papers.title": "Papers",

@@ -335,21 +335,26 @@ export async function findInMathlib(nodeId: string, graphId = store().activeId) 
   if (!node) return;
   const res = await withBusy(mathlibKey(graphId, nodeId), t("task.mathlib", { name: node.name }), async (signal) => {
     const { candidates } = await api.mathlib({ node: toBrief(node), context: g.nodes.filter((n) => n.id !== nodeId).slice(0, 80).map(toBrief) }, signal);
+    // All names at once; one that can't be checked (timeout, Loogle down) doesn't throw away the others.
+    const found = await Promise.all(
+      candidates.map((c) =>
+        loogleDeclaration(c.name, { signal }).catch((e) => {
+          if (signal.aborted) throw e;
+          return undefined;
+        }),
+      ),
+    );
     const decls: FormalDecl[] = [];
     const unverified: string[] = [];
-    let failed = 0;
-    for (const c of candidates) {
-      // One name that can't be checked (timeout, Loogle down) doesn't throw away the others.
-      const d = await loogleDeclaration(c.name, { signal }).catch((e) => {
-        if (signal.aborted) throw e;
-        failed++;
-        return undefined;
-      });
+    const unchecked: string[] = [];
+    found.forEach((d, i) => {
+      const c = candidates[i];
       if (d) decls.push({ ...d, ...(c.why ? { why: c.why } : {}) });
       else if (d === null) unverified.push(c.name);
-    }
-    if (failed && failed === candidates.length) throw new Error(t("formal.unreachable"));
-    return { decls, unverified, checkedAt: Date.now() };
+      else unchecked.push(c.name);
+    });
+    if (unchecked.length && unchecked.length === candidates.length) throw new Error(t("formal.unreachable"));
+    return { decls, unverified, ...(unchecked.length ? { unchecked } : {}), checkedAt: Date.now() };
   });
   if (!res) return;
   store().mutate((g) => (g.nodes.some((n) => n.id === nodeId) ? ops.updateNode(g, nodeId, { formal: res }) : g), graphId, { history: "background" });

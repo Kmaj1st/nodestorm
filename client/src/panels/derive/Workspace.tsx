@@ -17,7 +17,7 @@ import {
   Trash2,
   type LucideIcon,
 } from "lucide-react";
-import { lazy, Suspense, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useRef, useState } from "react";
 import { useT, type MessageKey } from "../../i18n";
 import {
   addStep,
@@ -31,6 +31,7 @@ import {
   type DerivStep,
 } from "../../lib/derivation";
 import { toMarkdown } from "../../lib/derivation";
+import { cancelTask } from "../../lib/actions";
 import { DERIVE_KEYS, useDerive } from "../../store/deriveStore";
 import { useGraphStore } from "../../store/graphStore";
 import { Icon } from "../../ui/Icon";
@@ -70,6 +71,15 @@ export function Workspace() {
   const [draft, setDraft] = useState("");
   const [adding, setAdding] = useState(false);
   const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  // The step just deleted, undoable until anything else changes the derivation (or a few seconds pass).
+  const [deleted, setDeleted] = useState<{ before: Derivation; after: Derivation; n: number } | null>(null);
+  useEffect(() => {
+    if (!deleted) return;
+    const timer = setTimeout(() => setDeleted(null), 8000);
+    return () => clearTimeout(timer);
+  }, [deleted]);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
   const solved = isSolved(d);
   const src = d.problem.source;
 
@@ -86,7 +96,8 @@ export function Workspace() {
     try {
       await navigator.clipboard.writeText(toMarkdown(d));
       setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
+      clearTimeout(copiedTimer.current);
+      copiedTimer.current = setTimeout(() => setCopied(false), 2000);
     } catch {
       useGraphStore.getState().setToast(t("dt.copyFailed"), "error");
     }
@@ -120,10 +131,15 @@ export function Workspace() {
         <div className="derive-section__head">
           <h3 id="dt-steps" className="derive-section__title">{t("dt.steps.title")}</h3>
           {/* Reviews the steps below, so it sits on their heading; the rows under them are full. */}
+          {refereeing && (
+            <button className="small-btn derive-section__cancel" onClick={() => cancelTask(DERIVE_KEYS.referee)} data-testid="dt-referee-cancel">
+              {t("common.cancel")}
+            </button>
+          )}
           <button
             className="small-btn"
             onClick={() => void useDerive.getState().referee()}
-            disabled={refereeing || viewing}
+            disabled={refereeing || viewing || !d.steps.length}
             title={t("dt.referee.runTitle")}
             data-testid="dt-referee"
           >
@@ -134,9 +150,33 @@ export function Workspace() {
         {!d.steps.length && <p className="muted small">{t("dt.steps.empty")}</p>}
         <ol className="derive-steps">
           {d.steps.map((s, i) => (
-            <Step key={s.id} step={s} n={i + 1} />
+            <Step
+              key={s.id}
+              step={s}
+              n={i + 1}
+              onDelete={() => {
+                const after = removeStep(d, s.id);
+                update(after);
+                setDeleted({ before: d, after, n: i + 1 });
+              }}
+            />
           ))}
         </ol>
+        {deleted && deleted.after === d && (
+          <p className="derive-undo small" role="status">
+            {t("dt.steps.deleted", { n: deleted.n })}
+            <button
+              className="link"
+              onClick={() => {
+                update(deleted.before);
+                setDeleted(null);
+              }}
+              data-testid="dt-undo-delete"
+            >
+              {t("common.undo")}
+            </button>
+          </p>
+        )}
         <div className="derive-new-step">
           <textarea
             value={draft}
@@ -162,6 +202,11 @@ export function Workspace() {
               {t("dt.steps.addCheck")}
             </button>
             <span className="derive-row__spacer" />
+            {hinting && (
+              <button onClick={() => cancelTask(DERIVE_KEYS.hint)} data-testid="dt-hint-cancel">
+                {t("common.cancel")}
+              </button>
+            )}
             <button onClick={() => void useDerive.getState().hint()} disabled={hinting || viewing}>
               {hinting ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={Lightbulb} size={14} />}
               {t(nextHintNumber(d) > 1 ? "dt.hint.more" : "dt.hint.get")}
@@ -210,7 +255,7 @@ export function Workspace() {
   );
 }
 
-function Step({ step, n }: { step: DerivStep; n: number }) {
+function Step({ step, n, onDelete }: { step: DerivStep; n: number; onDelete: () => void }) {
   const t = useT();
   const update = useDerive((s) => s.update);
   const d = useDerive((s) => s.sessions.find((x) => x.id === s.currentId))!;
@@ -233,7 +278,25 @@ function Step({ step, n }: { step: DerivStep; n: number }) {
               setEditing(null);
             }}
           >
-            <textarea value={editing} onChange={(e) => setEditing(e.target.value)} rows={3} maxLength={4000} aria-label={t("dt.steps.edit", { n })} autoFocus />
+            <textarea
+              value={editing}
+              onChange={(e) => setEditing(e.target.value)}
+              onKeyDown={(e) => {
+                // As in the new-step box: Ctrl/Cmd+Enter saves; Escape cancels (without closing the dialog).
+                if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) {
+                  e.preventDefault();
+                  e.currentTarget.form?.requestSubmit();
+                } else if (e.key === "Escape") {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setEditing(null);
+                }
+              }}
+              rows={3}
+              maxLength={4000}
+              aria-label={t("dt.steps.edit", { n })}
+              autoFocus
+            />
             <div className="derive-row">
               <button type="button" className="small-btn" onClick={() => setEditing(null)}>{t("common.cancel")}</button>
               <button type="submit" className="small-btn primary" disabled={!editing.trim()}>{t("common.save")}</button>
@@ -274,7 +337,7 @@ function Step({ step, n }: { step: DerivStep; n: number }) {
           <button className="icon-btn" onClick={() => setEditing(step.text)} aria-label={t("dt.steps.edit", { n })} title={t("dt.steps.editTitle")}>
             <Icon icon={Pencil} size={14} />
           </button>
-          <button className="icon-btn" onClick={() => update(removeStep(d, step.id))} aria-label={t("dt.steps.delete", { n })} title={t("common.delete")}>
+          <button className="icon-btn" onClick={onDelete} aria-label={t("dt.steps.delete", { n })} title={t("common.delete")}>
             <Icon icon={Trash2} size={14} />
           </button>
         </div>

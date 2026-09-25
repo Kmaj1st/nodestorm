@@ -7,6 +7,8 @@ import type { MessageKey } from "./en";
 export const zh: Record<MessageKey, string> = {
   // 通用
   "common.cancel": "取消",
+  "common.checkedOn": "查询于 {date}",
+  "common.undo": "撤销",
   "common.close": "关闭",
   "common.save": "保存",
   "common.add": "添加",
@@ -806,6 +808,7 @@ export const zh: Record<MessageKey, string> = {
   "dt.steps.edit": "编辑第 {n} 步",
   "dt.steps.editTitle": "编辑",
   "dt.steps.delete": "删除第 {n} 步",
+  "dt.steps.deleted": "已删除第 {n} 步。",
   "dt.verdict.ok": "正确",
   "dt.verdict.gap": "有漏洞",
   "dt.verdict.error": "错误",
@@ -968,6 +971,7 @@ export const zh: Record<MessageKey, string> = {
   "formal.none": "没有找到“{name}”对应的 Mathlib 声明。",
   "formal.unverified": "Mathlib 中不存在（已丢弃）：{names}。",
   "formal.searchYourself": "自己在 Loogle 中搜索",
+  "formal.unchecked": "未能核对（Loogle 没有响应）：{names}。重新查找即可重试。",
   "repair.droppedFormal": "丢弃了无效的 Mathlib 结果",
   "task.papers": "正在查找关于“{name}”的论文…",
   "papers.title": "论文",

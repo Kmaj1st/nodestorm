@@ -58,6 +58,23 @@ describe("Find in Mathlib", () => {
     expect(graph().nodes).toHaveLength(0);
   });
 
+  it("lists names Loogle didn't answer for as unchecked, keeping the rest", async () => {
+    const inner = globalThis.fetch;
+    globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) =>
+      String(input).includes("normal_ker") ? new Response("busy", { status: 503 }) : inner(input, init)) as typeof fetch;
+    let id = "";
+    store().mutate((g) => {
+      const r = ops.addNode(g, { name: "Kernel", definition: "Elements sent to the identity." });
+      id = r.id;
+      return r.graph;
+    });
+    await findInMathlib(id);
+    const f = graph().nodes.find((n) => n.id === id)!.formal!;
+    expect(f.decls.map((d) => d.name)).toEqual(["MonoidHom.ker"]);
+    expect(f.unchecked).toEqual(["MonoidHom.normal_ker"]);
+    expect(repairImport({ nodes: [graph().nodes[0]] }).doc.graphs[0].nodes[0].formal?.unchecked).toEqual(["MonoidHom.normal_ker"]);
+  });
+
   it("says so when nothing is found", async () => {
     let id = "";
     store().mutate((g) => {
