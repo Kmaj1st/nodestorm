@@ -65,6 +65,13 @@ no key needed) or an empty graph.
   (one undo step), so your graph only changes if you merge it back. **Surprise me** picks two random concepts of the
   graph (with fewer than two, fun ends such as *Cicada* or *Sunflower*) and builds a chain between them straight
   away. The facts come from an AI: check before quoting one.
+  **Guess the chain** builds the same kind of chain as a game: you see the two ends, how many links there are and
+  each link's relation (*is exemplified by*, *was invented to solve*…), and guess the concepts hidden in between, in
+  any order. Guessing is forgiving (case, plurals, a leading "the", the concept's aliases and small typos don't
+  matter). A right guess scores 3, or 2 after a **Clue** (the link's funny narration with the hidden names blanked
+  out); **Reveal** gives one away for nothing and **Show the answer** ends the game. The summary shows the chain's
+  title, your score, the moral and your best score for that pair of ends (kept in this browser); **Play again** takes
+  another route between the same ends. Right and wrong guesses are announced to screen readers.
 - **Fix anything by hand.** Rename a concept (the old name stays as an alias), edit a relation's text in the inspector,
   **Delete** removes the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or
   Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
