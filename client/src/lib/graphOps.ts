@@ -289,7 +289,23 @@ export function removeDependency(g: Graph, dependentId: string, prereqId: string
   return { ...out, relations: g.relations.map((r) => (r.id === rel.id ? flipped : r)) };
 }
 
-/** Point everything that referenced `fromId` at `toId` instead, then drop `fromId`. */
+/**
+ * Give `into` the prerequisites of a concept folded into it (`from`: its dependsOn, already pointing at ids that
+ * remain, and its missing prerequisites), so the dependency edges that move over still stand for dependsOn records.
+ */
+export function absorbPrerequisites(into: ConceptNode, from: Pick<ConceptNode, "dependsOn" | "missingDeps">): ConceptNode {
+  const dependsOn = [...new Set([...into.dependsOn, ...from.dependsOn])].filter((d) => d !== into.id);
+  const missingDeps = [...into.missingDeps];
+  for (const d of from.missingDeps) {
+    const key = normalizeName(d.name);
+    if (findByName([into], d.name) || missingDeps.some((m) => normalizeName(m.name) === key)) continue;
+    missingDeps.push(d);
+  }
+  if (dependsOn.length === into.dependsOn.length && missingDeps.length === into.missingDeps.length) return into;
+  return withStatus({ ...into, dependsOn, missingDeps });
+}
+
+/** Point everything that referenced `fromId` at `toId` instead, then drop `fromId` (`toId` takes its prerequisites). */
 export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
   const swap = (id: string) => (id === fromId ? toId : id);
   const relations: Relation[] = [];
@@ -298,9 +314,13 @@ export function redirectNode(g: Graph, fromId: string, toId: string): Graph {
     if (moved.a === moved.b || relations.some((x) => findRelation({ ...g, relations: [x] }, moved.a, moved.b))) continue;
     relations.push(moved);
   }
+  const from = g.nodes.find((n) => n.id === fromId);
   const nodes = g.nodes
     .filter((n) => n.id !== fromId)
-    .map((n) => ({ ...n, dependsOn: [...new Set(n.dependsOn.map(swap))].filter((d) => d !== n.id) }));
+    .map((n) => {
+      const out = { ...n, dependsOn: [...new Set(n.dependsOn.map(swap))].filter((d) => d !== n.id) };
+      return n.id === toId && from ? absorbPrerequisites(out, { dependsOn: from.dependsOn.map(swap), missingDeps: from.missingDeps }) : out;
+    });
   return { ...g, nodes, relations };
 }
 
@@ -399,11 +419,17 @@ export function fork(g: Graph, name: string): Graph {
 export function merge(parent: Graph, sandbox: Graph): Graph {
   const parentIds = new Set(parent.nodes.map((n) => n.id));
   let sb = sandbox;
+  // Sandbox concepts folded into a parent twin, by twin id: their prerequisites go to the twin.
+  const folded = new Map<string, ConceptNode[]>();
   for (const n of sandbox.nodes) {
     if (parentIds.has(n.id)) continue;
     const twin = findByName(parent.nodes, n.name) ?? n.aliases.map((a) => findByName(parent.nodes, a)).find(Boolean);
-    if (twin) sb = redirectNode(sb, n.id, twin.id);
+    if (!twin) continue;
+    sb = redirectNode(sb, n.id, twin.id);
+    folded.set(twin.id, [...(folded.get(twin.id) ?? []), n]);
   }
+  // Where each folded concept went, to point their prerequisites at what remains.
+  const foldedInto = new Map([...folded].flatMap(([to, list]) => list.map((n) => [n.id, to] as const)));
 
   const nodes = new Map(parent.nodes.map((n) => [n.id, n]));
   for (const n of sb.nodes) {
@@ -433,6 +459,13 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       ...(n.kindByUser ? {} : p.kind && !n.kind ? { kind: p.kind } : {}),
       ...(n.kindByUser || p.kindByUser ? { kindByUser: true } : {}),
     });
+  }
+  for (const [to, list] of folded) {
+    const into = nodes.get(to);
+    if (!into) continue;
+    let out = into;
+    for (const n of list) out = absorbPrerequisites(out, { dependsOn: n.dependsOn.map((d) => foldedInto.get(d) ?? d), missingDeps: n.missingDeps });
+    nodes.set(to, out);
   }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));
   for (const r of sb.relations) {
