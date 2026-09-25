@@ -1,3 +1,4 @@
+import { request } from "node:http";
 import type { AddressInfo } from "node:net";
 import { EXTRACT_MAX_CHARS, MockProvider, type ChatMessage, type Provider } from "@nodestorm/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -191,5 +192,51 @@ describe("server: provider env config", () => {
     expect(envConfig("zhipu", env)).toMatchObject({ baseURL: "https://x/v4" });
     expect(envConfig("anthropic", { ANTHROPIC_WEB_SEARCH: "1" })).toMatchObject({ webSearch: true });
     expect(envConfig("mock", env)).toEqual({});
+  });
+});
+
+describe("server: DNS rebinding and cross-site requests", () => {
+  const provider = new MockProvider();
+  const registry = { get: () => provider, info: () => ({ default: "mock", providers: [] }) } as unknown as Registry;
+  let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let port = 0;
+
+  beforeAll(async () => {
+    server = createApp(registry, { allowedHosts: ["studio.lan"] }).listen(0, "127.0.0.1");
+    await new Promise((r) => server.once("listening", r));
+    port = (server.address() as AddressInfo).port;
+  });
+  afterAll(() => server.close());
+
+  // node:http, because fetch won't let a test set Host.
+  const get = (headers: Record<string, string>) =>
+    new Promise<number>((resolve, reject) => {
+      const req = request({ host: "127.0.0.1", port, path: "/api/providers", headers, setHost: "host" in headers }, (res) => {
+        res.resume();
+        resolve(res.statusCode ?? 0);
+      });
+      req.on("error", reject);
+      req.end();
+    });
+
+  it("answers requests addressed to a loopback name", async () => {
+    expect(await get({ host: `localhost:${port}` })).toBe(200);
+    expect(await get({ host: `127.0.0.1:${port}` })).toBe(200);
+    expect(await get({ host: `[::1]:${port}` })).toBe(200);
+    expect(await get({ host: `app.localhost:${port}` })).toBe(200);
+    expect(await get({ host: `studio.lan:${port}` })).toBe(200); // named on purpose (HOST / NODESTORM_ALLOWED_HOSTS)
+  });
+
+  it("refuses a page on another name that resolves to 127.0.0.1 (DNS rebinding)", async () => {
+    expect(await get({ host: `attacker.example:${port}` })).toBe(403);
+    expect(await get({ host: "localhost.attacker.example" })).toBe(403);
+    expect(await get({})).toBeGreaterThanOrEqual(400); // no Host at all (Node itself answers 400)
+  });
+
+  it("refuses requests sent by pages from other sites", async () => {
+    expect(await get({ host: `localhost:${port}`, origin: "https://evil.example" })).toBe(403);
+    expect(await get({ host: `localhost:${port}`, origin: "null" })).toBe(403);
+    // The Vite dev server's proxy forwards the page's own (loopback) origin.
+    expect(await get({ host: `localhost:${port}`, origin: "http://localhost:5173" })).toBe(200);
   });
 });

@@ -23,8 +23,39 @@ export function parseTimeout(raw: string | undefined): number | undefined {
   return raw && Number.isFinite(ms) ? Math.min(600_000, Math.max(10_000, Math.round(ms))) : undefined;
 }
 
-export function createApp(registry: Registry) {
+/** A `Host` or `Origin` hostname, lower-cased ("[::1]" keeps its brackets); "" when it can't be parsed. */
+function hostnameOf(hostOrUrl: string): string {
+  try {
+    return new URL(hostOrUrl.includes("://") ? hostOrUrl : `http://${hostOrUrl}`).hostname.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+/** Loopback names, which no web page can point at its own server (`*.localhost` never leaves the machine). */
+const isLoopbackName = (h: string) => h === "localhost" || h.endsWith(".localhost") || h === "127.0.0.1" || h === "[::1]";
+
+export interface AppOptions {
+  /** Host names besides the loopback ones that requests may be addressed to (e.g. from HOST=my-box.lan). */
+  allowedHosts?: string[];
+}
+
+export function createApp(registry: Registry, opts: AppOptions = {}) {
   const app = express();
+  const extra = new Set((opts.allowedHosts ?? []).map((h) => hostnameOf(h)).filter(Boolean));
+  const allowed = (h: string) => Boolean(h) && (isLoopbackName(h) || extra.has(h));
+  // The server has no login and spends the keys in server/.env, so only the app on this machine may call it:
+  // - Host: a site whose name the attacker re-points at 127.0.0.1 (DNS rebinding) is then "same-origin" with the
+  //   server, but its requests still carry the attacker's name in Host.
+  // - Origin: other sites' pages can still send simple (no-preflight) requests to localhost; browsers mark them.
+  app.use((req, res, next) => {
+    const origin = req.header("origin");
+    if (!allowed(hostnameOf(req.header("host") ?? "")) || (origin !== undefined && !allowed(hostnameOf(origin)))) {
+      res.status(403).json({ error: "Forbidden: this server only answers the NodeStorm app on this computer." });
+      return;
+    }
+    next();
+  });
   // Scanned pages sent for reading are images; every other request is small.
   app.use("/api/readPage", express.json({ limit: "10mb" }));
   app.use(express.json({ limit: "1mb" }));

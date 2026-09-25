@@ -339,7 +339,9 @@ npm run dev:mock                     # the same with the offline demo AI (no key
 ```
 
 The server has no login and spends the keys in `server/.env`, so it only listens on this computer (127.0.0.1). Set
-`HOST` (e.g. `HOST=0.0.0.0`) only if you put your own authentication in front of it.
+`HOST` (e.g. `HOST=0.0.0.0`) only if you put your own authentication in front of it. It also only answers requests
+addressed to `localhost`, `127.0.0.1`, `[::1]` or `HOST`, and none sent by pages of other sites (this stops DNS
+rebinding); list any other name you reach it by in `NODESTORM_ALLOWED_HOSTS` (comma-separated).
 
 Providers are configured by env vars named `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL` and `<PROVIDER>_MODEL` (e.g.
 `SILICONFLOW_API_KEY`, `DEEPSEEK_MODEL`), plus `AI_PROVIDER` (the default) and `ANTHROPIC_WEB_SEARCH=1`; see

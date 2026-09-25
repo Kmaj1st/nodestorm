@@ -6,7 +6,10 @@ const port = Number(process.env.PORT || 8787);
 // Loopback only by default: the server has no authentication and spends the API keys in server/.env, so it must not
 // be reachable from the network unless HOST is set on purpose (e.g. HOST=0.0.0.0 behind your own auth proxy).
 const host = process.env.HOST || "127.0.0.1";
-createApp(registry).listen(port, host, () => {
+// Requests must be addressed to a loopback name, HOST itself, or a name listed in NODESTORM_ALLOWED_HOSTS
+// (comma-separated): this blocks DNS-rebinding pages (see createApp).
+const allowedHosts = [host, ...(process.env.NODESTORM_ALLOWED_HOSTS ?? "").split(",")].map((h) => h.trim()).filter(Boolean);
+createApp(registry, { allowedHosts }).listen(port, host, () => {
   const p = registry.get();
   console.log(
     `NodeStorm server on http://${host === "127.0.0.1" ? "localhost" : host}:${port} — provider: ${p.label} (${p.model})` +
