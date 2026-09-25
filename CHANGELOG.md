@@ -8,6 +8,7 @@
 - **Markdown and LaTeX exports** name the site of a looked-up definition ("Wikidata: Q83478"), and Markdown links its page.
 - **Full browser storage** no longer breaks editing: changes still apply (a new concept no longer stays "checking"), and a notice says they can't be saved and suggests exporting the project.
 - **Merging a sandbox** where both sides added the same concept keeps the sandbox's prerequisites of it (linked and missing), so its dependency links still count in study order and learning paths. Folding a concept into an existing one does the same.
+- **A prerequisite that is one of the concept's own aliases** is ignored instead of staying "missing" for good (installing it only said the concept already exists).
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

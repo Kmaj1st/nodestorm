@@ -5,6 +5,14 @@ import * as ops from "../src/lib/graphOps";
 const dep = (name: string) => ({ name, role: "uses" as const, reason: `needs ${name}`, matchesExisting: null });
 const byName = (g: Graph, name: string) => g.nodes.find((n) => n.name === name)!;
 
+describe("a concept is never its own prerequisite", () => {
+  it("skips a prerequisite that is one of the concept's aliases (it could never be installed)", () => {
+    const iso = ops.addNode(ops.emptyGraph(), { name: "Isomorphism", aliases: ["iso"], definition: "d" });
+    const g = ops.applyDeps(iso.graph, iso.id, [dep("iso"), dep("Bijection")]);
+    expect(byName(g, "Isomorphism").missingDeps.map((d) => d.name)).toEqual(["Bijection"]);
+  });
+});
+
 describe("folding a concept into its twin keeps its prerequisites", () => {
   it("merge: a concept both sides added keeps the sandbox's prerequisite links and missing prerequisites", () => {
     const base = ops.addNode(ops.emptyGraph(), { name: "Group", definition: "g" });

@@ -195,11 +195,11 @@ export function setPositions(g: Graph, positions: Map<string, XY>): Graph {
 export function applyDeps(g: Graph, nodeId: string, prereqs: Prerequisite[]): Graph {
   const self = g.nodes.find((n) => n.id === nodeId);
   if (!self) return g;
-  const selfKey = normalizeName(self.name);
   const missing: ConceptNode["missingDeps"] = [];
   let out = g;
   for (const p of prereqs) {
-    if (normalizeName(p.name) === selfKey) continue;
+    // The concept itself, by its name or an alias (installing that could never satisfy it).
+    if (findByName([self], p.name)) continue;
     const others = out.nodes.filter((n) => n.id !== nodeId);
     const match = findByName(others, p.matchesExisting) ?? findByName(others, p.name);
     if (match) out = link(out, nodeId, match.id, p.role, p.reason);
