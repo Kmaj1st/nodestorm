@@ -193,7 +193,7 @@ export function toLatex(g: Graph, opts: LatexOptions = {}): string {
     if (n.missingDeps.length) {
       extra.push(`\\emph{Also needs (not in this graph):} ${n.missingDeps.map((d) => texEscape(d.name, { inline: true })).join(", ")}.`);
     }
-    if (n.source) extra.push(`\\emph{Source:} ${texEscape(sourceLabel(n.source), { inline: true })}.`);
+    if (n.source) extra.push(`\\emph{Source:} ${texEscape(sourceLabel(n.source, "en"), { inline: true })}.`);
     if (extra.length) body.push("", ...extra.map((e, i) => (i ? `\\\\ ${e}` : `\\smallskip\\noindent ${e}`)));
     body.push(`\\end{${env}}`, "");
 

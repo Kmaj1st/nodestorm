@@ -929,7 +929,7 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
     <>
       <div className="source-line small" data-testid="definition-source">
         <span className="muted">
-          {t("node.source")}:{" "}
+          {t("common.label", { label: t("node.source") })}{" "}
           {src?.url ? (
             <a href={src.url} target="_blank" rel="noopener noreferrer">
               {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}
@@ -1004,7 +1004,7 @@ function LookupMenu({ node, graphId, busy, onProposal }: {
   const fandomName = wikiName("fandom", fandom);
   const bwikiName = wikiName("bwiki", bwiki);
   const entries: { from: Site | "ai"; label: string; disabled?: string }[] = [
-    { from: "proofwiki", label: "ProofWiki" },
+    { from: "proofwiki", label: t("source.fromProofwiki") },
     { from: "wikipedia", label: t("source.fromWikipedia") },
     { from: "baidu", label: t("source.fromBaidu") },
     { from: "moegirl", label: t("source.fromMoegirl") },

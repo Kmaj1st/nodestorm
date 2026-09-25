@@ -3,7 +3,7 @@ import { Check, Copy, TriangleAlert } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { createPortal } from "react-dom";
-import { rich, useT } from "../i18n";
+import { rich, useLang, useT } from "../i18n";
 import { encodeShare, LONG_LINK, shareUrl } from "../lib/share";
 import { Modal } from "./Modal";
 
@@ -13,6 +13,7 @@ import { Modal } from "./Modal";
  */
 export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: string; onClose: () => void }) {
   const t = useT();
+  const lang = useLang();
   const [link, setLink] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -56,7 +57,7 @@ export function ShareDialog({ graph, name, onClose }: { graph: Graph; name: stri
               {t(copied ? "share.copied" : "share.copy")}
             </button>
           </div>
-          <p className="muted small" data-testid="share-size">{t("share.chars", { n: link.length.toLocaleString() })}</p>
+          <p className="muted small" data-testid="share-size">{t("share.chars", { n: link.length.toLocaleString(lang === "zh" ? "zh-CN" : "en") })}</p>
           {link.length > LONG_LINK && (
             <p className="warn-box warn-box__head small" role="status">
               <Icon icon={TriangleAlert} size={16} className="warn-box__icon" />

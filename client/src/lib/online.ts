@@ -5,6 +5,9 @@ import { t } from "../i18n";
 /** The error shown when an AI action is tried offline, in the interface language. */
 export const offlineMessage = () => t("offline.message");
 
+/** A provider's name in the interface language (only the offline demo's name is a word to translate). */
+export const providerName = (kind: ProviderKind) => (kind === "mock" ? t("settings.providerMock") : providerMeta(kind).label);
+
 /** Thrown instead of starting an AI call that can't work without a network. */
 export class OfflineError extends Error {
   constructor() {

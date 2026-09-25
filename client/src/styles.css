@@ -1183,4 +1183,5 @@ button.lookup-menu__item:hover:not(:disabled) { background: var(--hover); }
 .ai-proposal .form__actions { margin: 0; }
 a.lookup-menu__link { display: flex; align-items: center; gap: var(--space-1); padding: 4px var(--space-2); min-height: 28px; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--text-sm); }
 a.lookup-menu__link:hover { background: var(--hover); }
-.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }
+.field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
+.field-row input { min-width: 0; }

@@ -118,7 +118,7 @@ describe("derivation sessions", () => {
     const md = toMarkdown(d);
     expect(md).toContain("**Problem 1:** Show that");
     expect(md).toContain("*Source:* Sheet 3, p. 1");
-    expect(md).toContain("2. Then $\\varphi(gkg^{-1}) = e$. — *gap*");
+    expect(md).toContain("2. Then $\\varphi(gkg^{-1}) = e$. — *Gap*");
     expect(md).toContain("   > Why is it $e$?");
   });
 });

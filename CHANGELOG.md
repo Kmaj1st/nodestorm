@@ -13,6 +13,10 @@
 - **A prerequisite that is one of the concept's own aliases** is ignored instead of staying "missing" for good (installing it only said the concept already exists).
 - **AI answers** that write a prerequisite's role with capitals ("Uses") are read instead of failing the check.
 - **Absurd chain: stops along the way.** Put up to 6 of your own stops between the two ends: concepts of your graph, or your own with a short description of what they mean. The chain passes through them in order (the AI is asked again if it skips one), they are marked "your stop", and a custom stop added to a sandbox keeps your description as its definition. Stops can be reordered with the up/down buttons.
+- **中文 throughout:** the Markdown notes export and "Copy as Markdown" in Derive together are written in the interface language (headings, labels, verdicts, sources). The LaTeX document stays English. The offline demo provider is called 离线演示, and errors about a missing version are translated.
+- **Wording:** "prerequisites" (not "dependencies") for what a concept needs, "concept" (not "node"), and counts read "1 new concept", "1 layer". Chinese wording made consistent (连线 for graph links, 循环依赖, 定理解剖/假设), with Chinese colons and quotes.
+- **Settings on a phone:** the Fandom / BWIKI fields no longer stick out of the dialog.
+- A test checks that no Chinese message is left in English and that every plural form resolves.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

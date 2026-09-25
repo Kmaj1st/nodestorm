@@ -5,11 +5,14 @@ import {
   type Graph,
   type RefChunk,
   type RefereeResponse,
+  type RefereeSeverity,
+  type RefereeVerdict,
   type StepCheckBrief,
   type SourceRef,
   type StepVerdict,
   type TutorConcept,
 } from "@nodestorm/shared";
+import { t, type MessageKey } from "../i18n";
 import { applyExtraction, duplicateOf, type ExtractReview } from "./extract";
 import { uid, updateNode } from "./graphOps";
 
@@ -268,29 +271,56 @@ export function buildGraphPlan(d: Derivation, g: Graph): GraphPlan {
   return { items: [problem, ...concepts], keepSteps: true };
 }
 
-const VERDICT_MD: Record<StepVerdict, string> = { ok: "correct", gap: "gap", error: "error", unclear: "unclear" };
+const VERDICT_MD: Record<StepVerdict, MessageKey> = {
+  ok: "dt.verdict.ok",
+  gap: "dt.verdict.gap",
+  error: "dt.verdict.error",
+  unclear: "dt.verdict.unclear",
+};
+const REFEREE_VERDICT_MD: Record<RefereeVerdict, MessageKey> = {
+  accept: "dt.referee.verdict.accept",
+  "minor revisions": "dt.referee.verdict.minor",
+  "major revisions": "dt.referee.verdict.major",
+  reject: "dt.referee.verdict.reject",
+};
+const SEVERITY_MD: Record<RefereeSeverity, MessageKey> = {
+  fatal: "dt.referee.severity.fatal",
+  major: "dt.referee.severity.major",
+  minor: "dt.referee.severity.minor",
+  pedantic: "dt.referee.severity.pedantic",
+};
 
-/** The session as Markdown: the problem, each step with its verdict, and the hints. */
+/**
+ * The session as Markdown: the problem, each step with its verdict, and the hints. The headings are in the interface
+ * language: this is what "Copy as Markdown" gives, and what the concept's notes keep.
+ */
 export function toMarkdown(d: Derivation, opts: { hints?: boolean } = {}): string {
   const lines: string[] = [];
   const src = d.problem.source;
-  lines.push(`**Problem${d.problem.label ? ` ${d.problem.label}` : ""}:** ${d.problem.statement}`);
-  if (src) lines.push(`*Source:* ${src.title}${src.page ? `, p. ${src.page}` : ""}`);
+  const problem = d.problem.label ? t("dt.problem.labelled", { label: d.problem.label }) : t("dt.problem.title");
+  lines.push(`**${t("common.label", { label: problem })}** ${d.problem.statement}`);
+  if (src) {
+    const where = src.page ? t("dt.sourcePage", { title: src.title, page: src.page }) : src.title;
+    lines.push(`*${t("common.label", { label: t("node.source") })}* ${where}`);
+  }
   lines.push("");
   d.steps.forEach((s, i) => {
-    lines.push(`${i + 1}. ${s.text}${s.check ? ` — *${VERDICT_MD[s.check.verdict]}*` : ""}`);
+    lines.push(`${i + 1}. ${s.text}${s.check ? ` — *${t(VERDICT_MD[s.check.verdict])}*` : ""}`);
     if (s.check && s.check.verdict !== "ok" && s.check.comment) lines.push(`   > ${s.check.comment}`);
   });
-  if (isSolved(d)) lines.push("", "*Solved.*");
+  if (isSolved(d)) lines.push("", `*${t("dt.md.solved")}*`);
   if (opts.hints !== false && d.hints.length) {
-    lines.push("", "**Hints:**");
+    lines.push("", `**${t("common.label", { label: t("dt.hint.title") })}**`);
     for (const h of d.hints) lines.push(`- ${h.text}`);
   }
   // The referee report goes with the copy (not into the graph's notes), and only while it is about these steps.
   const r = d.referee;
   if (opts.hints !== false && r && !refereeOutdated(d)) {
-    lines.push("", `**Referee report (Reviewer 2): ${r.verdict}.** ${r.summary}`);
-    for (const p of r.points) lines.push(`- ${p.step ? `Step ${p.step}` : "General"} (${p.severity}): ${p.comment}`);
+    lines.push("", `**${t("dt.md.referee", { verdict: t(REFEREE_VERDICT_MD[r.verdict]) })}** ${r.summary}`);
+    for (const p of r.points) {
+      const where = p.step ? t("dt.referee.step", { n: p.step }) : t("dt.referee.general");
+      lines.push(`- ${t("dt.md.point", { where, severity: t(SEVERITY_MD[p.severity]), comment: p.comment })}`);
+    }
     if (r.grudgingPraise) lines.push("", `*${r.grudgingPraise}*`);
   }
   return lines.join("\n");

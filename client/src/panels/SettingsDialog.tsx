@@ -14,6 +14,7 @@ import { Icon } from "../ui/Icon";
 import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref, type MessageKey } from "../i18n";
 import { api } from "../lib/api";
 import { pausedSites, SITE_NAME } from "../lib/lookup";
+import { providerName } from "../lib/online";
 import { EDGE_COLOR_KEYS, useTheme, type EdgeColorKey, type EdgeColors, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
@@ -175,7 +176,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             const off = connection === "server" && s !== undefined && !s.configured;
             return (
               <option key={p.kind} value={p.kind}>
-                {p.label}{off ? ` ${t("settings.noServerKey")}` : ""}
+                {providerName(p.kind)}{off ? ` ${t("settings.noServerKey")}` : ""}
               </option>
             );
           })}

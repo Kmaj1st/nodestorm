@@ -1,18 +1,28 @@
-import type { ConceptNode, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
+import type { ConceptNode, ExplainLevel, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
+import { translate, useLocale, type Lang, type MessageKey } from "../i18n";
 import { isUnrelated } from "./graphOps";
-import { KIND_NAME } from "./kinds";
+import { KIND_LABEL } from "./kinds";
 import { splitMath } from "./math";
 
-/** Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. */
+/**
+ * Pure formatters for sharing a graph outside the app. The Toolbar handles downloads/clipboard. The Markdown notes are
+ * written in the interface language (the LaTeX document stays English, see latex.ts).
+ */
 
-/** "Title, p. 3", or just the title. */
-export function sourceLabel(s: SourceRef): string {
-  if (s.site === "AI") return `AI (${s.title})`;
-  if (s.site === "you") return "own words";
+/** "Site: Title, p. 3", or just the title; in `lang` (default: the interface language). */
+export function sourceLabel(s: SourceRef, lang: Lang = useLocale.getState().lang): string {
+  if (s.site === "AI") return translate(lang, "source.ai", { model: s.title });
+  if (s.site === "you") return translate(lang, "source.you");
   // A looked-up definition names its site ("Wikidata: Q83478" means little without it).
   const title = s.site && s.title ? `${s.site}: ${s.title}` : s.site || s.title;
-  return s.page ? `${title}, p. ${s.page}` : title;
+  return s.page ? translate(lang, "dt.sourcePage", { title, page: s.page }) : title;
 }
+
+/** A message in the interface language (as `t`, without importing the component helpers). */
+const t = (key: MessageKey, params?: Record<string, string | number>) => translate(useLocale.getState().lang, key, params);
+/** `**Label:**` / `*Label:*`, with the colon of the interface language. */
+const bold = (key: MessageKey) => `**${t("common.label", { label: t(key) })}**`;
+const em = (key: MessageKey) => `*${t("common.label", { label: t(key) })}*`;
 
 /**
  * Nodes ordered so every concept comes after its (in-graph) prerequisites. Ties keep graph order;
@@ -68,51 +78,51 @@ const mdUrl = (u: string) => u.replace(/[()<>\s\\]/g, (c) => `%${c.charCodeAt(0)
 /** One stored paper as a Markdown list item's text: linked title, byline, citations, a free copy. */
 function paperMd(w: PaperWork): string {
   const by = paperByline(w);
-  const oa = w.openAccessUrl ? ` [Free copy](${mdUrl(w.openAccessUrl)})` : "";
-  return `[${mdEscape(w.title)}](${mdUrl(w.url)})${by ? ` — ${mdEscape(by)}` : ""}. Cited by ${w.citedBy}.${oa}`;
+  const oa = w.openAccessUrl ? ` [${t("papers.free")}](${mdUrl(w.openAccessUrl)})` : "";
+  return `[${mdEscape(w.title)}](${mdUrl(w.url)})${by ? ` — ${mdEscape(by)}` : ""}. ${t("md.citedBy", { n: w.citedBy })}${oa}`;
 }
 
 export function toMarkdown(g: Graph): string {
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const ordered = studyOrder(g);
   const rank = new Map(ordered.map((n, i) => [n.id, i]));
-  const lines: string[] = [`# ${mdEscape(g.name || "NodeStorm graph")}`, ""];
-  if (!g.nodes.length) return [...lines, "_No concepts yet._", ""].join("\n");
+  const lines: string[] = [`# ${mdEscape(g.name || t("md.untitled"))}`, ""];
+  if (!g.nodes.length) return [...lines, `_${t("md.empty")}_`, ""].join("\n");
 
-  lines.push("## Study order", "");
+  lines.push(`## ${t("md.studyOrder")}`, "");
   ordered.forEach((n, i) => lines.push(`${i + 1}. ${mdEscape(n.name)}`));
-  lines.push("", "## Concepts", "");
+  lines.push("", `## ${t("md.concepts")}`, "");
 
   for (const n of ordered) {
     lines.push(`### ${mdEscape(n.name)}`, "");
-    if (n.kind) lines.push(`*Kind:* ${KIND_NAME[n.kind]}`, "");
-    if (n.aliases.length) lines.push(`*Also:* ${n.aliases.map(mdEscape).join(", ")}`, "");
-    lines.push(n.definition.trim() ? mdEscape(n.definition) : "_No definition yet._", "");
+    if (n.kind) lines.push(`${em("kind.label")} ${t(KIND_LABEL[n.kind])}`, "");
+    if (n.aliases.length) lines.push(`${em("md.also")} ${n.aliases.map(mdEscape).join(", ")}`, "");
+    lines.push(n.definition.trim() ? mdEscape(n.definition) : `_${t("def.empty")}_`, "");
     const prereqs = n.dependsOn
       .map((id) => byId.get(id))
       .filter((p): p is ConceptNode => !!p)
       .sort((a, b) => rank.get(a.id)! - rank.get(b.id)!);
-    if (prereqs.length) lines.push(`**Prerequisites:** ${prereqs.map((p) => mdEscape(p.name)).join(", ")}`, "");
+    if (prereqs.length) lines.push(`${bold("md.prereqs")} ${prereqs.map((p) => mdEscape(p.name)).join(", ")}`, "");
     if (n.missingDeps.length) {
-      lines.push(`**Missing prerequisites:** ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
+      lines.push(`${bold("md.missing")} ${n.missingDeps.map((d) => mdEscape(d.name)).join(", ")}`, "");
     }
     if (n.source) {
       const label = mdEscape(sourceLabel(n.source));
-      lines.push(`*Source:* ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}`, "");
+      lines.push(`${em("node.source")} ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}`, "");
     }
-    if (n.formal?.decls.length) lines.push(`*In Lean's Mathlib:* ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
-    if (n.papers?.works.length) lines.push("**Further reading** (from OpenAlex):", "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");
+    if (n.formal?.decls.length) lines.push(`${em("md.mathlib")} ${n.formal.decls.map((d) => `\`${d.name}\``).join(", ")}`, "");
+    if (n.papers?.works.length) lines.push(t("md.papers"), "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");
     if (n.anatomy) lines.push(...anatomyMd(n.anatomy));
     if (n.explanation) lines.push(...explanationMd(n.explanation));
     if (n.notes?.trim()) {
       // The user's notes are Markdown-ish already: keep them as written, quoted so their headings stay inside.
-      lines.push("**My notes:**", "", ...n.notes.trim().split(/\r?\n/).map((l) => (l.trim() ? `> ${l}` : ">")), "");
+      lines.push(bold("node.notes"), "", ...n.notes.trim().split(/\r?\n/).map((l) => (l.trim() ? `> ${l}` : ">")), "");
     }
   }
 
   const rels = g.relations.filter((r) => byId.has(r.a) && byId.has(r.b));
   if (rels.length) {
-    lines.push("## Relations", "");
+    lines.push(`## ${t("node.relations")}`, "");
     for (const r of rels) {
       const a = mdEscape(byId.get(r.a)!.name);
       const b = mdEscape(byId.get(r.b)!.name);
@@ -120,7 +130,7 @@ export function toMarkdown(g: Graph): string {
         `- ${x} → ${y}: ${mdEscape(d.kind)}${d.explanation.trim() ? ` — ${mdEscape(d.explanation)}` : ""}`;
       // Mix found nothing either way: said once. Otherwise a "none" side (a one-way relation) isn't written out.
       if (isUnrelated(r)) {
-        lines.push(`- ${a} — ${b}: no relation found${r.aToB.explanation.trim() ? ` — ${mdEscape(r.aToB.explanation)}` : ""}`);
+        lines.push(`- ${a} — ${b}: ${t("md.unrelated")}${r.aToB.explanation.trim() ? ` — ${mdEscape(r.aToB.explanation)}` : ""}`);
         continue;
       }
       if (r.aToB.kind.trim() !== "none") lines.push(dir(a, b, r.aToB));
@@ -133,35 +143,43 @@ export function toMarkdown(g: Graph): string {
 
 /** A stored "Theorem anatomy" as a sub-section of its concept. */
 function anatomyMd(an: NodeAnatomy): string[] {
-  const out = ["#### Anatomy", ""];
+  const out = [`#### ${t("anatomy.heading")}`, ""];
   if (an.hypotheses.length) {
-    out.push("**Hypotheses:**", "");
+    out.push(bold("anatomy.hypotheses"), "");
     an.hypotheses.forEach((h, i) => {
       out.push(`${i + 1}. ${mdEscape(h.text)}`);
-      if (h.whyNeeded.trim()) out.push(`   *Why needed:* ${mdEscape(h.whyNeeded)}`);
-      if (h.counterexampleIfDropped.trim()) out.push(`   *Without it:* ${mdEscape(h.counterexampleIfDropped)}`);
+      if (h.whyNeeded.trim()) out.push(`   *${t("anatomy.why")}* ${mdEscape(h.whyNeeded)}`);
+      if (h.counterexampleIfDropped.trim()) out.push(`   *${t("anatomy.without")}* ${mdEscape(h.counterexampleIfDropped)}`);
     });
     out.push("");
   }
-  out.push(`**Conclusion:** ${mdEscape(an.conclusion)}`, "");
-  if (an.proofIdea.trim()) out.push(`**Proof idea:** ${mdEscape(an.proofIdea)}`, "");
-  if (an.examples.length) out.push("**Examples:**", "", ...an.examples.map((x) => `- ${mdEscape(x)}`), "");
-  if (an.nonExamples.length) out.push("**Non-examples:**", "", ...an.nonExamples.map((x) => `- ${mdEscape(x)}`), "");
+  out.push(`${bold("anatomy.conclusion")} ${mdEscape(an.conclusion)}`, "");
+  if (an.proofIdea.trim()) out.push(`${bold("anatomy.proofIdea")} ${mdEscape(an.proofIdea)}`, "");
+  if (an.examples.length) out.push(bold("anatomy.examples"), "", ...an.examples.map((x) => `- ${mdEscape(x)}`), "");
+  if (an.nonExamples.length) out.push(bold("anatomy.nonExamples"), "", ...an.nonExamples.map((x) => `- ${mdEscape(x)}`), "");
   return out;
 }
 
-/** A stored "Explain more" answer as a sub-section of its concept. */
+const LEVEL_LABEL: Record<ExplainLevel, MessageKey> = {
+  intuitive: "explain.intuitive",
+  rigorous: "explain.rigorous",
+  "example-driven": "explain.exampleDriven",
+};
+
+/** A stored "Explain more" answer as a sub-section of its concept: "Rigorous explanation (Noir detective)". */
 function explanationMd(ex: NodeExplanation): string[] {
-  const voice = ex.voice && ex.voice !== "plain" ? `, ${ex.voice.replace(/-/g, " ")} voice` : "";
-  const out = [`#### Explanation (${ex.level}${voice})`, "", mdEscape(ex.summary), ""];
-  if (ex.intuition.trim()) out.push(`*Intuition:* ${mdEscape(ex.intuition)}`, "");
-  const list = (heading: string, items: string[]) => {
-    if (items.length) out.push(`**${heading}:**`, "", ...items.map((i) => `- ${i}`), "");
+  const heading = t("explain.heading", { level: t(LEVEL_LABEL[ex.level]) });
+  const voiced =
+    ex.voice && ex.voice !== "plain" ? t("md.explanationVoice", { heading, voice: t(`explain.voice.${ex.voice}` as MessageKey) }) : heading;
+  const out = [`#### ${voiced}`, "", mdEscape(ex.summary), ""];
+  if (ex.intuition.trim()) out.push(`${em("md.intuition")} ${mdEscape(ex.intuition)}`, "");
+  const list = (heading: MessageKey, items: string[]) => {
+    if (items.length) out.push(bold(heading), "", ...items.map((i) => `- ${i}`), "");
   };
-  list("Key points", ex.keyPoints.map(mdEscape));
-  list("Examples", ex.examples.map((x) => `*${mdEscape(x.title)}*${x.body.trim() ? `: ${mdEscape(x.body)}` : ""}`));
-  list("Pitfalls", ex.pitfalls.map(mdEscape));
-  list("Further reading", ex.furtherReading.map((r) => `${mdEscape(r.title)}${r.hint.trim() ? ` — ${mdEscape(r.hint)}` : ""}`));
+  list("explain.keyPoints", ex.keyPoints.map(mdEscape));
+  list("explain.examples", ex.examples.map((x) => `*${mdEscape(x.title)}*${x.body.trim() ? `: ${mdEscape(x.body)}` : ""}`));
+  list("explain.pitfalls", ex.pitfalls.map(mdEscape));
+  list("explain.reading", ex.furtherReading.map((r) => `${mdEscape(r.title)}${r.hint.trim() ? ` — ${mdEscape(r.hint)}` : ""}`));
   return out;
 }
 
