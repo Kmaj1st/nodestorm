@@ -1160,3 +1160,15 @@ span.paper__title { color: var(--text); }
 .popover.lookup-menu { left: 0; right: auto; width: auto; min-width: 190px; padding: var(--space-1); gap: 2px; }
 button.lookup-menu__item { justify-content: flex-start; background: transparent; border-color: transparent; box-shadow: none; min-height: 28px; }
 button.lookup-menu__item:hover:not(:disabled) { background: var(--hover); }
+
+/* "Look up in… → AI": the AI's definition, proposed until the user uses it or keeps the current one. */
+.ai-proposal {
+  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) 10px; margin-top: var(--space-1);
+  border: 1px dashed var(--accent-border); border-radius: var(--radius-sm); background: var(--accent-soft); font-size: var(--text-sm);
+}
+.ai-proposal__head { margin: 0; color: var(--accent); font-weight: 500; }
+.ai-proposal__text { overflow-wrap: anywhere; line-height: 1.5; }
+.ai-proposal .form__actions { margin: 0; }
+a.lookup-menu__link { display: flex; align-items: center; gap: var(--space-1); padding: 4px var(--space-2); min-height: 28px; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--text-sm); }
+a.lookup-menu__link:hover { background: var(--hover); }
+.field-row { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-2); }

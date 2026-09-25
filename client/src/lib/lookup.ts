@@ -1,6 +1,15 @@
-import { lookupConcept, normalizeName, type LookupSense, type LookupSite } from "@nodestorm/shared";
+import { CancelledError, lookupConcept, normalizeName, type LookupSense, type LookupSite } from "@nodestorm/shared";
 import { useSettings } from "../store/settingsStore";
+import { baikeLookup } from "./baike";
+import { wikiLookup } from "./mediawiki";
 import { isOnline } from "./online";
+
+/**
+ * Every site a definition can come from: the encyclopedias in shared/src/lookup (ProofWiki, Wikipedia/Wikidata), and
+ * the browser-only ones: Baidu Baike (a sandboxed JSONP call, lib/baike.ts) and the community wikis Moegirl, Fandom
+ * and BWIKI (lib/mediawiki.ts).
+ */
+export type Site = LookupSite | "baidu" | "moegirl" | "fandom" | "bwiki";
 
 /**
  * Definitions from encyclopedias (ProofWiki, then Wikipedia/Wikidata) before the AI is asked, with the user's
@@ -15,7 +24,7 @@ const PAUSE_MS = 10 * 60_000;
 
 type Entry = { at: number; senses: LookupSense[] };
 let cache: Record<string, Entry> | null = null;
-const paused: Partial<Record<LookupSite, number>> = {};
+const paused: Partial<Record<Site, number>> = {};
 
 function loadCache(): Record<string, Entry> {
   if (cache) return cache;
@@ -54,17 +63,31 @@ export function lookupLanguage(language: string, name: string): string {
   return "en";
 }
 
-/** Sites the user enabled and that aren't paused right now, most precise first. */
-export function activeSites(now = Date.now()): LookupSite[] {
-  const { lookup } = useSettings.getState();
-  const sites: LookupSite[] = [];
+/**
+ * Sites the user enabled and that aren't paused right now, most precise first. Baidu Baike only knows Chinese names,
+ * so it is asked last, and only for a name in Chinese (`name` given).
+ */
+export function activeSites(now = Date.now(), name?: string): Site[] {
+  const { lookup, language } = useSettings.getState();
+  const sites: Site[] = [];
   if (lookup.proofwiki) sites.push("proofwiki");
   if (lookup.wikipedia) sites.push("wikipedia");
+  if (lookup.baidu && name !== undefined && lookupLanguage(language, name) === "zh") sites.push("baidu");
   return sites.filter((s) => !(paused[s] && paused[s]! > now));
 }
 
 /** Sites refused recently (for Settings to say so). */
-export const pausedSites = (now = Date.now()) => (Object.keys(paused) as LookupSite[]).filter((s) => paused[s]! > now);
+export const pausedSites = (now = Date.now()) => (Object.keys(paused) as Site[]).filter((s) => paused[s]! > now);
+
+/** A site's name as shown to the user. */
+export const SITE_NAME: Record<Site, string> = {
+  proofwiki: "ProofWiki",
+  wikipedia: "Wikipedia",
+  baidu: "Baidu Baike",
+  moegirl: "Moegirl",
+  fandom: "Fandom",
+  bwiki: "BWIKI",
+};
 
 /** True when a lookup can run at all: enabled, online, and some site to ask. */
 export function lookupReady(): boolean {
@@ -83,15 +106,18 @@ export async function lookupDefinitions(
    * `fresh`: skip the cache ("Look up again" should see today's page). `sites`: ask exactly these (the user picked
    * one), even when look-ups before the AI are switched off in Settings or the site refused recently.
    */
-  opts: { fresh?: boolean; sites?: LookupSite[] } = {},
+  opts: { fresh?: boolean; sites?: Site[] } = {},
 ): Promise<LookupSense[]> {
   if (opts.sites ? !isOnline() : !lookupReady()) return [];
-  const lang = lookupLanguage(useSettings.getState().language, name);
-  const sites = opts.sites ?? activeSites();
-  const key = `${lang}:${sites.join(",")}:${max}:${normalizeName(name)}`;
+  const { language, lookup } = useSettings.getState();
+  const lang = lookupLanguage(language, name);
+  const sites = opts.sites ?? activeSites(Date.now(), name);
+  // A different Fandom wiki or BWIKI game is a different answer.
+  const wikis = sites.includes("fandom") || sites.includes("bwiki") ? `:${lookup.fandom}|${lookup.bwiki}` : "";
+  const key = `${lang}:${sites.join(",")}${wikis}:${max}:${normalizeName(name)}`;
   const hit = loadCache()[key];
   if (hit && !opts.fresh && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return hit.senses;
-  const res = await lookupConcept({ name, lang, sites, max }, { signal });
+  const res = await askSites(name, lang, sites, max, signal);
   for (const s of res.blocked) paused[s] = Date.now() + PAUSE_MS;
   // Only a clean answer is cached: a miss caused by a refusing site should be retried later.
   if (res.senses.length || !res.blocked.length) {
@@ -101,8 +127,42 @@ export async function lookupDefinitions(
   return res.senses;
 }
 
+/** Ask `sites` in order until one has an answer; sites that fail are reported in `blocked`. */
+async function askSites(name: string, lang: string, sites: Site[], max: number, signal?: AbortSignal): Promise<{ senses: LookupSense[]; blocked: Site[] }> {
+  const { lookup } = useSettings.getState();
+  const blocked: Site[] = [];
+  const shared = sites.filter((s): s is LookupSite => s === "proofwiki" || s === "wikipedia");
+  // The shared encyclopedias first, together (lookupConcept tries them in order).
+  if (shared.length && shared[0] === sites[0]) {
+    const res = await lookupConcept({ name, lang, sites: shared, max }, { signal });
+    blocked.push(...res.blocked);
+    if (res.senses.length) return { senses: res.senses, blocked };
+  }
+  for (const site of sites) {
+    if (site === "proofwiki" || site === "wikipedia") {
+      if (shared[0] === sites[0]) continue; // already asked above
+      const res = await lookupConcept({ name, lang, sites: [site], max }, { signal });
+      blocked.push(...res.blocked);
+      if (res.senses.length) return { senses: res.senses, blocked };
+      continue;
+    }
+    try {
+      const senses =
+        site === "baidu"
+          ? await baikeLookup(name, signal)
+          : await wikiLookup({ site, wiki: site === "fandom" ? lookup.fandom : site === "bwiki" ? lookup.bwiki : undefined }, name, max, signal);
+      if (senses.length) return { senses, blocked };
+    } catch (e) {
+      if (e instanceof CancelledError || signal?.aborted) throw e instanceof CancelledError ? e : new CancelledError();
+      blocked.push(site);
+      console.warn(`Lookup on ${site} failed:`, e);
+    }
+  }
+  return { senses: [], blocked };
+}
+
 /** For tests. */
 export function resetLookup() {
   cache = {};
-  for (const k of Object.keys(paused)) delete paused[k as LookupSite];
+  for (const k of Object.keys(paused)) delete paused[k as Site];
 }

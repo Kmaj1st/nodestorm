@@ -22,7 +22,7 @@ const graph = (): Graph => store().graphs[store().activeId];
 
 beforeEach(() => {
   store().reset();
-  useSettings.setState({ connection: "browser", provider: "mock", lookup: { enabled: false, proofwiki: true, wikipedia: true } });
+  useSettings.setState({ connection: "browser", provider: "mock", lookup: { enabled: false, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" } });
 });
 
 describe("mentionedIn", () => {

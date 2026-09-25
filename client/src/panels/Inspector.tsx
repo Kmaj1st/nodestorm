@@ -28,10 +28,14 @@ import {
 import { useView } from "../store/viewStore";
 import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog } from "./lazy";
+import type { Site } from "../lib/lookup";
+import { wikiName } from "../lib/mediawiki";
 import { useEffect, useRef, useState } from "react";
 import { rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   aiSource,
+  applyProposal,
+  type AiProposal,
   analyzeNode,
   anatomyKey,
   connectKey,
@@ -199,7 +203,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
       )}
 
       <DefinitionField key={`def:${node.id}`} node={node} graphId={graphId} viewing={viewing} />
-      <SourceLine node={node} viewing={viewing} />
+      <SourceLine key={`src:${node.id}`} node={node} viewing={viewing} />
 
       {node.status === "error" && (
         <div className="error-box">
@@ -894,6 +898,8 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
   const t = useT();
   const graphId = useGraphStore((s) => s.activeId);
   const busy = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
+  // The AI's answer from "Look up in… → AI", waiting for the user to use it or keep the current definition.
+  const [proposal, setProposal] = useState<AiProposal | null>(null);
   const src = node.source;
   // Every definition says where it came from: an encyclopedia (linked), the AI (and which model), a document, the
   // user, or, for older concepts, nothing recorded.
@@ -905,35 +911,64 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
         ? t("source.you")
         : sourceLabel(src);
   return (
-    <div className="source-line small" data-testid="definition-source">
-      <span className="muted">
-        {t("node.source")}:{" "}
-        {src?.url ? (
-          <a href={src.url} target="_blank" rel="noopener noreferrer">
-            {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}
-            <Icon icon={ExternalLink} size={12} />
-          </a>
-        ) : (
-          label
+    <>
+      <div className="source-line small" data-testid="definition-source">
+        <span className="muted">
+          {t("node.source")}:{" "}
+          {src?.url ? (
+            <a href={src.url} target="_blank" rel="noopener noreferrer">
+              {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}
+              <Icon icon={ExternalLink} size={12} />
+            </a>
+          ) : (
+            label
+          )}
+        </span>
+        {!viewing && (
+          <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} onProposal={setProposal} />
         )}
-      </span>
-      {!viewing && <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} />}
-    </div>
+      </div>
+      {proposal && proposal.nodeId === node.id && (
+        <div className="ai-proposal" role="group" aria-label={t("source.proposalLabel")} data-testid="ai-proposal">
+          <p className="ai-proposal__head small">{t("source.proposalHead", { model: proposal.source.title })}</p>
+          <div className="ai-proposal__text"><MathText text={proposal.definition} /></div>
+          <div className="form__actions">
+            <button className="small-btn" onClick={() => setProposal(null)} data-testid="ai-proposal-keep">
+              {t("source.proposalKeep")}
+            </button>
+            <button
+              className="small-btn primary"
+              onClick={() => {
+                applyProposal(proposal, graphId);
+                setProposal(null);
+              }}
+              data-testid="ai-proposal-use"
+            >
+              {t("source.proposalUse")}
+            </button>
+          </div>
+        </div>
+      )}
+    </>
   );
 }
 
-const LOOKUP_FROM: { from: "proofwiki" | "wikipedia" | "ai"; label: MessageKey }[] = [
-  { from: "proofwiki", label: "source.fromProofwiki" },
-  { from: "wikipedia", label: "source.fromWikipedia" },
-  { from: "ai", label: "source.fromAi" },
-];
-
-/** "Look up in…": define the concept again from a source the user picks, even when it already has a definition. */
-function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: string; busy: boolean }) {
+/**
+ * "Look up in…": define the concept again from a source the user picks, even when it already has a definition. The
+ * encyclopedias replace it at once (Undo brings it back); the AI's answer is proposed first; RedNote has no API, so
+ * its entry opens RedNote's own search.
+ */
+function LookupMenu({ node, graphId, busy, onProposal }: {
+  node: ConceptNode;
+  graphId: string;
+  busy: boolean;
+  onProposal: (p: AiProposal | null) => void;
+}) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const button = useRef<HTMLButtonElement>(null);
+  const { fandom, bwiki } = useSettings((s) => s.lookup);
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
@@ -951,6 +986,23 @@ function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: strin
       document.removeEventListener("keydown", close, true);
     };
   }, [open]);
+  const fandomName = wikiName("fandom", fandom);
+  const bwikiName = wikiName("bwiki", bwiki);
+  const entries: { from: Site | "ai"; label: string; disabled?: string }[] = [
+    { from: "proofwiki", label: "ProofWiki" },
+    { from: "wikipedia", label: t("source.fromWikipedia") },
+    { from: "baidu", label: t("source.fromBaidu") },
+    { from: "moegirl", label: t("source.fromMoegirl") },
+    fandomName ? { from: "fandom", label: `Fandom (${fandomName})` } : { from: "fandom", label: "Fandom", disabled: t("source.setWiki") },
+    bwikiName ? { from: "bwiki", label: `BWIKI (${bwikiName})` } : { from: "bwiki", label: "BWIKI", disabled: t("source.setWiki") },
+    { from: "ai", label: t("source.fromAi") },
+  ];
+  const pick = async (from: Site | "ai") => {
+    setOpen(false);
+    onProposal(null);
+    const p = await relookup(node.id, graphId, from);
+    if (p) onProposal(p);
+  };
   return (
     <div className="popover-anchor" ref={ref}>
       <button
@@ -968,19 +1020,33 @@ function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: strin
       </button>
       {open && (
         <div className="popover lookup-menu" role="menu" aria-label={t("source.lookup")}>
-          {LOOKUP_FROM.map((o) => (
+          {entries.map((o) => (
             <button
               key={o.from}
               role="menuitem"
               className="lookup-menu__item"
-              onClick={() => {
-                setOpen(false);
-                void relookup(node.id, graphId, o.from);
-              }}
+              disabled={Boolean(o.disabled)}
+              title={o.disabled}
+              onClick={() => void pick(o.from)}
             >
-              {t(o.label)}
+              {o.label}
+              {o.disabled && <span className="muted small"> · {o.disabled}</span>}
             </button>
           ))}
+          <hr className="menu__sep" />
+          {/* RedNote has no public API (its search needs a logged-in account), so this opens its own search. */}
+          <a
+            role="menuitem"
+            className="lookup-menu__item lookup-menu__link"
+            href={`https://www.xiaohongshu.com/search_result?keyword=${encodeURIComponent(node.name)}`}
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setOpen(false)}
+            data-testid="lookup-rednote"
+          >
+            {t("source.searchRednote")}
+            <Icon icon={ExternalLink} size={12} />
+          </a>
         </div>
       )}
     </div>

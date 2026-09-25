@@ -1,8 +1,8 @@
 import type { Graph } from "@nodestorm/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { analyzeNode, chooseSense, relookup } from "../src/lib/actions";
+import { analyzeNode, applyProposal, chooseSense, relookup } from "../src/lib/actions";
 import * as ops from "../src/lib/graphOps";
-import { lookupLanguage, resetLookup } from "../src/lib/lookup";
+import { activeSites, lookupLanguage, resetLookup } from "../src/lib/lookup";
 import { useGraphStore } from "../src/store/graphStore";
 import { useSettings } from "../src/store/settingsStore";
 
@@ -42,7 +42,7 @@ beforeEach(() => {
     provider: "mock",
     language: "auto",
     clarify: { enabled: true, options: 3 },
-    lookup: { enabled: true, proofwiki: true, wikipedia: true },
+    lookup: { enabled: true, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" },
   });
 });
 afterEach(() => {
@@ -185,7 +185,7 @@ describe("definitions from encyclopedias", () => {
   });
 
   it("is off when disabled in Settings", async () => {
-    useSettings.setState({ lookup: { enabled: false, proofwiki: true, wikipedia: true } });
+    useSettings.setState({ lookup: { enabled: false, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" } });
     await analyzeNode(add("Kernel"));
     expect(lookups).toBe(0);
   });
@@ -210,16 +210,29 @@ describe("definitions from encyclopedias", () => {
   });
 
   it("looks up from a source the user picks, even when already defined and look-ups are off", async () => {
-    useSettings.setState({ lookup: { enabled: false, proofwiki: true, wikipedia: true } });
+    useSettings.setState({ lookup: { enabled: false, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" } });
     routes = [[/proofwiki.*page=Definition:Kernel/, () => json({ parse: { title: "Definition:Kernel", wikitext: KERNEL } })]];
     const id = add("Kernel");
     store().mutate((g) => ops.updateNode(g, id, { definition: "my own words", status: "ok", source: ops.OWN_SOURCE }));
     await relookup(id, undefined, "proofwiki");
     expect(node(id).source?.site).toBe("ProofWiki");
     expect(node(id).definition).toContain("kernel");
-    await relookup(id, undefined, "ai");
+    // The AI's answer is only proposed: nothing changes until the user uses it.
+    const before = node(id);
+    const p = await relookup(id, undefined, "ai");
+    expect(node(id)).toBe(before);
+    expect(p).toMatchObject({ nodeId: id, source: { site: "AI", title: "Offline demo · mock-kb" } });
+    applyProposal(p!);
     expect(node(id).source?.site).toBe("AI");
+    expect(node(id).definition).toBe(p!.definition);
     store().undo();
     expect(node(id).source?.site).toBe("ProofWiki");
+  });
+
+  it("asks Baidu Baike last, and only for a name in Chinese", () => {
+    expect(activeSites(Date.now(), "正规子群")).toEqual(["proofwiki", "wikipedia", "baidu"]);
+    expect(activeSites(Date.now(), "Normal subgroup")).toEqual(["proofwiki", "wikipedia"]);
+    useSettings.setState({ lookup: { ...useSettings.getState().lookup, baidu: false } });
+    expect(activeSites(Date.now(), "正规子群")).toEqual(["proofwiki", "wikipedia"]);
   });
 });

@@ -14,7 +14,6 @@ import {
   type FormalDecl,
   type Sense,
   type SourceRef,
-  type LookupSite,
   providerMeta,
   loogleDeclaration,
   findPapers as searchPapers,
@@ -29,7 +28,7 @@ import { applyAbsurdChain, sandboxName } from "./absurd";
 import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
-import { lookupDefinitions, lookupReady } from "./lookup";
+import { lookupDefinitions, lookupReady, type Site } from "./lookup";
 import { isOnline } from "./online";
 import { viewport } from "./viewport";
 import * as cycles from "./cycles";
@@ -305,18 +304,30 @@ export const relookupKey = (graphId: string, nodeId: string) => `relookup:${grap
  * "Look up again": ask the encyclopedias for this concept's definition and replace it (one undo step). Several
  * meanings go to "what do you mean?"; nothing found leaves the concept as it is and says so.
  */
+/** A definition the AI proposed in "Look up in… → AI", waiting for the user to use it or keep the current one. */
+export interface AiProposal {
+  nodeId: string;
+  definition: string;
+  source: SourceRef;
+}
+
+/** Use a proposed AI definition (one undo step). */
+export function applyProposal(p: AiProposal, graphId = store().activeId) {
+  store().mutate((g) => ops.updateNode(g, p.nodeId, { definition: p.definition, source: p.source }), graphId);
+}
+
 /**
  * "Look up again" / "Look up in…": replace the definition (one undo step) with one from an encyclopedia, even when
  * the concept is already defined. `from` picks the source: a site ("proofwiki", "wikipedia" with Wikidata), or "ai"
  * (the AI defines it again); without it, the enabled sites in order.
  */
-export async function relookup(nodeId: string, graphId = store().activeId, from?: LookupSite | "ai") {
+export async function relookup(nodeId: string, graphId = store().activeId, from?: Site | "ai"): Promise<AiProposal | undefined> {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
   const clarify = useSettings.getState().clarify;
   if (from === "ai") {
-    // The AI's definition (or its meanings to pick from), recorded as its, as one undo step like a look-up.
+    // The AI's definition, proposed for the user to accept (or its meanings, to pick from).
     const g = graph(graphId);
     const res = await withBusy(relookupKey(graphId, nodeId), t("task.clarify", { name: node.name }), (signal) =>
       api.clarify({ name: node.name, context: g.nodes.filter((n) => n.id !== nodeId).map(toBrief), count: clarify.enabled ? clarify.options : 1 }, signal),
@@ -324,21 +335,22 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
     if (!res) return;
     const src = aiSource();
     const senses = res.senses.filter((s) => s.definition.trim()).map((s): Sense => ({ ...s, source: s.source ?? src }));
-    if (!senses.length) return store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
+    if (!senses.length) return void store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
     if (res.ambiguous && senses.length > 1 && clarify.enabled) {
+      // Picking one of the meanings is already the user's choice.
       store().mutate((g) => ops.updateNode(g, nodeId, { status: "unclear", senses }), graphId);
       store().setClarifying({ graphId, nodeId });
       return;
     }
-    store().mutate((g) => ops.updateNode(g, nodeId, { definition: senses[0].definition, source: senses[0].source }), graphId);
-    return;
+    // Not applied: the inspector asks whether to use it instead of the current definition.
+    return { nodeId, definition: senses[0].definition, source: senses[0].source ?? src };
   }
-  if (from ? !isOnline() : !lookupReady()) return store().setToast(t("toast.lookupUnavailable"), "info");
+  if (from ? !isOnline() : !lookupReady()) return void store().setToast(t("toast.lookupUnavailable"), "info");
   const senses = await withBusy(relookupKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) =>
     lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true, ...(from ? { sites: [from] } : {}) }),
   );
   if (!senses) return;
-  if (!senses.length) return store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
+  if (!senses.length) return void store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
   const found = senses.map((s): Sense => ({ name: s.name, domain: s.domain, definition: s.definition, source: s.source }));
   if ((found.length > 1 || !senses[0].exact) && clarify.enabled) {
     // Keep the old name for chooseSense to compare against; the choice replaces definition and source.

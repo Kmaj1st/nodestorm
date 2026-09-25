@@ -13,7 +13,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { browserLang, LANG_NAMES, rich, useLocale, useT, type LangPref, type MessageKey } from "../i18n";
 import { api } from "../lib/api";
-import { pausedSites } from "../lib/lookup";
+import { pausedSites, SITE_NAME } from "../lib/lookup";
 import { EDGE_COLOR_KEYS, useTheme, type EdgeColorKey, type EdgeColors, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
 import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
@@ -375,9 +375,36 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
           <input type="checkbox" checked={lookup.wikipedia} disabled={!lookup.enabled} onChange={(e) => setLookup({ ...lookup, wikipedia: e.target.checked })} />
           {t("settings.lookupWikipedia")}
         </label>
+        <label className="check">
+          <input type="checkbox" checked={lookup.baidu} disabled={!lookup.enabled} onChange={(e) => setLookup({ ...lookup, baidu: e.target.checked })} />
+          {t("settings.lookupBaidu")}
+        </label>
+        <div className="field-row">
+          <label className="field">
+            {t("settings.lookupFandom")}
+            <input
+              value={lookup.fandom}
+              onChange={(e) => setLookup({ ...lookup, fandom: e.target.value })}
+              placeholder={t("settings.lookupWikiPlaceholder", { example: "minecraft" })}
+              spellCheck={false}
+              data-testid="lookup-fandom"
+            />
+          </label>
+          <label className="field">
+            {t("settings.lookupBwiki")}
+            <input
+              value={lookup.bwiki}
+              onChange={(e) => setLookup({ ...lookup, bwiki: e.target.value })}
+              placeholder={t("settings.lookupWikiPlaceholder", { example: "ys" })}
+              spellCheck={false}
+              data-testid="lookup-bwiki"
+            />
+          </label>
+        </div>
+        <span className="muted small">{t("settings.lookupWikisHint")}</span>
         <span className="muted small">{t("settings.lookupHint")}</span>
         {lookup.enabled && pausedSites().length > 0 && (
-          <span className="warn small">{t("settings.lookupPaused", { sites: pausedSites().map((s) => (s === "proofwiki" ? "ProofWiki" : "Wikipedia")).join(", ") })}</span>
+          <span className="warn small">{t("settings.lookupPaused", { sites: pausedSites().map((s) => SITE_NAME[s]).join(", ") })}</span>
         )}
       </fieldset>
 

@@ -1,5 +1,16 @@
 # Changelog
 
+## 2026-09-25: Baidu Baike, Moegirl, Fandom, BWIKI; AI look-ups proposed
+
+- **Baidu Baike (百度百科):** concepts with Chinese names are looked up there after ProofWiki and Wikipedia (there's a switch in Settings), and it is in "Look up in…".
+  - Baidu's API only works through JSONP, so its script runs in a sandboxed frame. The frame can't reach the app's page, storage, API keys or cookies; it can only hand back the answer, which is checked.
+- **Community wikis** in "Look up in…":
+  - **Moegirl (萌娘百科)**.
+  - A **Fandom** wiki and a **BWIKI** wiki you name in Settings (e.g. "minecraft", "ys").
+  - The definition is the page's intro, with infoboxes and tables left out.
+- **RedNote:** it has no public API; its search needs a logged-in account, and the open-source clients rely on that. "Look up in…" therefore has "Search on RedNote", which opens RedNote's own search in a new tab.
+- **Look up in… → AI** now proposes the AI's definition, with the model it came from. You choose **Use this definition** or **Keep current**. Encyclopedia look-ups still replace it directly (Undo brings the old one back).
+
 ## 2026-09-25: suggested connections, sources for every definition
 
 - **Suggest connections** (Inspector → Relations):

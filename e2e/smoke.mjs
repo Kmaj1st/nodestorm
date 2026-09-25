@@ -41,7 +41,7 @@ try {
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
   // Never ask the real encyclopedias: every concept's definition then comes from the offline demo AI, as the
   // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead.
-  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org/;
+  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org|baike\.baidu\.com|moegirl\.org\.cn|fandom\.com|wiki\.biligame\.com/;
   const blockLookups = (ctx) => ctx.route(LOOKUP_SITES, (r) => r.abort());
   await blockLookups(context);
   // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
@@ -1239,16 +1239,58 @@ try {
     await node("Group").click();
     const srcLine = page.getByTestId("definition-source");
     assert(/^Source:/.test((await srcLine.textContent()) ?? ""), "every definition shows its source line");
+    const groupDef = await page.getByTestId("definition-view").textContent();
     await srcLine.getByTestId("lookup-menu").click();
+    const menu = page.getByRole("menu", { name: "Look up in…" });
     assert(
-      JSON.stringify(await page.getByRole("menu", { name: "Look up in…" }).getByRole("menuitem").allTextContents()) ===
-        JSON.stringify(["ProofWiki", "Wikipedia / Wikidata", "AI"]),
-      "“Look up in…” offers ProofWiki, Wikipedia / Wikidata and the AI, even for a defined concept",
+      JSON.stringify(await menu.getByRole("menuitem").allTextContents()) ===
+        JSON.stringify(["ProofWiki", "Wikipedia / Wikidata", "Baidu Baike", "Moegirl (萌娘百科)", "Fandom · choose the wiki in Settings", "BWIKI · choose the wiki in Settings", "AI", "Search on RedNote"]),
+      "“Look up in…” offers the encyclopedias, Baidu Baike, the community wikis, the AI and a RedNote search, even for a defined concept",
     );
-    await page.getByRole("menuitem", { name: "AI" }).click();
+    assert(
+      (await page.getByTestId("lookup-rednote").getAttribute("href")) === "https://www.xiaohongshu.com/search_result?keyword=Group" &&
+        (await page.getByTestId("lookup-rednote").getAttribute("target")) === "_blank",
+      "RedNote (no public API) opens its own search in a new tab",
+    );
+    await menu.getByRole("menuitem", { name: "AI", exact: true }).click();
+    const proposal = page.getByTestId("ai-proposal");
+    await proposal.waitFor();
+    assert((await page.getByTestId("definition-view").textContent()) === groupDef, "the AI's definition is only proposed: the current one stays");
+    assert((await proposal.textContent()).includes("Offline demo · mock-kb"), "…and says which AI it came from");
+    await page.getByTestId("ai-proposal-keep").click();
+    assert((await proposal.count()) === 0 && (await page.getByTestId("definition-view").textContent()) === groupDef, "Keep current dismisses it");
+    await srcLine.getByTestId("lookup-menu").click();
+    await menu.getByRole("menuitem", { name: "AI", exact: true }).click();
+    await page.getByTestId("ai-proposal-use").click();
     await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent?.includes("AI (Offline demo · mock-kb)"));
-    assert(true, "a definition from the AI notes the AI (and its model) as its source");
+    assert(true, "Use this definition takes it, noting the AI (and its model) as its source");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
+
+    console.log("Baidu Baike");
+    // A stand-in for Baidu's JSONP script: it tries to reach the app's page (the sandbox must stop it), then answers.
+    await page.route(/baike\.baidu\.com\/api\/openapi/, (route) => {
+      const cb = new URL(route.request().url()).searchParams.get("callback");
+      const body =
+        "try { parent.__baikeLeak = 1 } catch (e) {}" +
+        "try { localStorage.getItem('nodestorm'); parent.postMessage({ leak: 'storage' }, '*') } catch (e) {}" +
+        `${cb}(${JSON.stringify({ title: "正规子群", desc: "数学术语", abstract: "设G是一个群，H是其子群。若对任何a∈G都有aH=Ha[1]，则称H是G的正规子群。", url: "http://baike.baidu.com/view/1004664.htm" })})`;
+      return route.fulfill({ status: 200, contentType: "application/javascript", body });
+    });
+    // Earlier sections' blocked look-ups paused Baidu Baike for a while (as a refusing site is); a reload starts afresh.
+    await page.reload();
+    await node("Group").waitFor();
+    const leaks = [];
+    await page.exposeFunction("__noteLeak", (x) => leaks.push(x)).catch(() => {});
+    await page.evaluate(() => window.addEventListener("message", (e) => e.data?.leak && window.__noteLeak?.(e.data.leak)));
+    await addByName("正规子群");
+    await node("正规子群").locator(".concept__def").waitFor({ timeout: 20000 });
+    await node("正规子群").click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent?.includes("Baidu Baike"), null, { timeout: 20000 });
+    assert((await page.getByTestId("definition-view").textContent()).includes("则称H是G的正规子群"), "a concept with a Chinese name gets Baidu Baike's definition (footnote marks removed)");
+    assert((await page.getByTestId("definition-source").getByRole("link").getAttribute("href")) === "https://baike.baidu.com/view/1004664.htm", "…with its https source link");
+    assert((await page.evaluate(() => window.__baikeLeak)) === undefined && !leaks.length, "Baidu's script runs sandboxed: it can't reach the app's page or storage");
+    assert((await page.locator('iframe[data-lookup="baidu"]').count()) === 0, "…and its frame is gone afterwards");
+    await page.unroute(/baike\.baidu\.com\/api\/openapi/);
 
     // Zoomed far out, descriptions would be unreadable: cards show just their name, larger.
     const nameSize = () => node("Group").locator(".concept__name").evaluate((el) => parseFloat(getComputedStyle(el).fontSize));

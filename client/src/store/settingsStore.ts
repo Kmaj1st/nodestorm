@@ -23,7 +23,11 @@ interface SettingsState {
   /** Limits for "Install all missing": how many levels of prerequisites to follow, and how many concepts to add. */
   installAll: { maxDepth: number; maxNodes: number };
   /** Look definitions up in encyclopedias before asking the AI (see lib/lookup.ts), and which ones. */
-  lookup: { enabled: boolean; proofwiki: boolean; wikipedia: boolean };
+  /**
+   * Definitions from encyclopedias before the AI. `baidu`: Baidu Baike for concepts with Chinese names. `fandom` /
+   * `bwiki`: the Fandom subdomain / BWIKI game offered in "Look up in…" ("" for none).
+   */
+  lookup: { enabled: boolean; proofwiki: boolean; wikipedia: boolean; baidu: boolean; fandom: string; bwiki: string };
   /** When a prerequisite check closes a dependency cycle, let the AI pick the wrong link and remove it. */
   autoResolveCycles: boolean;
   /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
@@ -109,7 +113,7 @@ export const useSettings = create<SettingsStore>()(
       visionModels: {},
       clarify: { enabled: true, options: 3 },
       installAll: { maxDepth: 3, maxNodes: 15 },
-      lookup: { enabled: true, proofwiki: true, wikipedia: true },
+      lookup: { enabled: true, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" },
       autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,
