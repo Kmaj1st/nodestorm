@@ -4,6 +4,14 @@
 
 - **Definitions pop-up polish:** with look-up results it says **Use this definition** (and the inspector "Definitions were found for …" / **Choose a definition…**; the card badge "choose a definition", the status "needs a definition"). When nothing was found, **My own definition** is open and focused, with **Ask the AI** highlighted beside it. The inspector's "not checked" and other boxes wrap their button under the text on narrow panels and phones; the share viewer shows "not checked" instead of an action.
 - **Look-ups don't overwrite a changed concept:** renaming a concept while its look-up runs looks the new name up; a definition typed meanwhile is kept (waiting for "Check with AI"); an undone add opens no pop-up. Baidu Baike and Moegirl are asked for Chinese (or Japanese) names whatever language the AI answers in.
+- **Imports and share links keep more:** the meanings of a concept waiting for a choice keep their source (encyclopedia link or AI) and kind, and a concept that "needs a definition" still needs one after the round trip instead of turning "ok".
+- **Share links** no longer mark a concept whose check was running or failed as "ok": it arrives "not checked" (or "needs a definition").
+- **Symbol names** such as "∇" or "∫" are recognised as the same concept when added again, and as different prerequisites from each other.
+- **Markdown and LaTeX exports** name the site of a looked-up definition ("Wikidata: Q83478"), and Markdown links its page.
+- **Full browser storage** no longer breaks editing: changes still apply (a new concept no longer stays "checking"), and a notice says they can't be saved and suggests exporting the project.
+- **Merging a sandbox** where both sides added the same concept keeps the sandbox's prerequisites of it (linked and missing), so its dependency links still count in study order and learning paths. Folding a concept into an existing one does the same.
+- **A prerequisite that is one of the concept's own aliases** is ignored instead of staying "missing" for good (installing it only said the concept already exists).
+- **AI answers** that write a prerequisite's role with capitals ("Uses") are read instead of failing the check.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

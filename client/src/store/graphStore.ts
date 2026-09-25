@@ -1,6 +1,6 @@
 import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
-import { createJSONStorage, persist } from "zustand/middleware";
+import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { t } from "../i18n";
 import { buildExample, EXAMPLES } from "../lib/examples";
 import { fork, merge, uid } from "../lib/graphOps";
@@ -131,6 +131,27 @@ function workspace(s: Workspace & Partial<Pick<State, "view">>): Workspace {
 }
 /** Fresh UI state after switching projects (which also leaves the viewer: `workspace` drops the shared graph). */
 const cleared = { selection: [], inspect: null, highlight: null, view: null } satisfies Partial<State>;
+
+/**
+ * localStorage that never throws on save: a full (or blocked) storage would otherwise make every change throw after
+ * it was applied, cutting short whatever came next (e.g. leaving a new concept "checking"). The user is told once
+ * each time saving starts failing.
+ */
+let saveFailing = false;
+const safeStorage: StateStorage = {
+  getItem: (name) => localStorage.getItem(name),
+  setItem(name, value) {
+    try {
+      localStorage.setItem(name, value);
+      saveFailing = false;
+    } catch {
+      if (saveFailing) return;
+      saveFailing = true;
+      useGraphStore.getState().setToast(t("toast.storageFull"));
+    }
+  },
+  removeItem: (name) => localStorage.removeItem(name),
+};
 
 /** Move through a graph's history. A check restored as "checking" with no task running is marked failed. */
 function travel(s: State, id: string, step: typeof hist.undo<Graph>): Pick<State, "graphs" | "history"> | null {
@@ -328,7 +349,7 @@ export const useGraphStore = create<GraphStore>()(
       name: "nodestorm",
       // v2 added projects. A v1 state (one main graph + sandboxes) becomes the project "My brainstorm".
       version: 2,
-      storage: createJSONStorage(() => localStorage),
+      storage: createJSONStorage(() => safeStorage),
       partialize: (s: GraphStore) => workspace(s),
       migrate: (persisted, version) => proj.migrateWorkspace(persisted, version) as GraphStore,
       // Also repairs a v2 state that lost track of a graph or project (e.g. hand-edited storage).

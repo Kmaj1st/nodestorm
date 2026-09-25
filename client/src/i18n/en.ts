@@ -596,6 +596,7 @@ export const en = {
   "toast.cycle": "Dependency cycle: {chain}. One of these links is probably wrong — see the inspector.",
   "toast.senseMerged": "“{name}” is already in the graph — linked to the existing concept.",
   "toast.exists": "“{name}” is already in the graph",
+  "toast.storageFull": "Changes can't be saved: this browser's storage is full or blocked. Export the project (JSON) to keep it, or free space by deleting old versions or projects.",
   "install.cancelled": "Install-all cancelled after {n, plural, one {# concept} other {# concepts}}.",
   "install.done":
     "Installed {n, plural, one {# prerequisite} other {# prerequisites}} of {name} ({depth, plural, one {# level} other {# levels}}).",

@@ -5,6 +5,9 @@ import { z } from "zod";
 export const DepRole = z.enum(["uses", "derives", "assumes"]);
 export type DepRole = z.infer<typeof DepRole>;
 
+/** A role in an AI answer: case-insensitive ("Uses", " DERIVES "); an unknown one still makes the answer malformed. */
+export const AiDepRole = z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), DepRole);
+
 export const MissingDep = z.object({
   name: z.string(),
   reason: z.string(),
@@ -206,8 +209,8 @@ export type GraphExport = z.infer<typeof GraphExport>;
 export const SourceRef = z.object({
   title: z.string().max(300),
   page: z.number().int().min(1).optional(),
-  /** The site a looked-up definition came from ("ProofWiki", "Wikipedia"…) and its page. */
-  site: z.string().max(60).optional(),
+  /** The site a looked-up definition came from ("ProofWiki", "Wikipedia", "Fandom (minecraft)"…) and its page. */
+  site: z.string().max(100).optional(),
   url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
@@ -303,7 +306,7 @@ export type DepsRequest = z.infer<typeof DepsRequest>;
 
 export const Prerequisite = z.object({
   name: z.string(),
-  role: DepRole,
+  role: AiDepRole,
   reason: z.string(),
   /** Name of an existing node the model believes this prerequisite corresponds to. */
   matchesExisting: z.string().nullish(),
@@ -492,7 +495,7 @@ export type ExtractedRelation = z.infer<typeof ExtractedRelation>;
 export const ExtractedPrerequisite = z.object({
   dependent: z.string(),
   prerequisite: z.string(),
-  role: DepRole,
+  role: AiDepRole,
   reason: z.string().default(""),
 });
 export type ExtractedPrerequisite = z.infer<typeof ExtractedPrerequisite>;
@@ -763,16 +766,19 @@ export interface ProvidersResponse {
 // ---------- Helpers ----------
 
 export function normalizeName(s: string): string {
-  return (
-    s
-      .toLowerCase()
-      .normalize("NFKD")
-      .replace(/[\u0300-\u036f]/g, "") // Latin accents: "Poincaré" ~ "poincare"
-      // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
-      .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
-      .trim()
-      .replace(/([a-z])s(?=\s|$)/g, "$1") // crude plural folding for Latin words: "groups" ~ "group"
-  );
+  const folded = s
+    .toLowerCase()
+    .normalize("NFKD")
+    .replace(/[\u0300-\u036f]/g, ""); // Latin accents: "Poincaré" ~ "poincare"
+  const words = folded
+    // Keep letters, digits and combining marks of every script (Cyrillic, Greek, kana, Hangul, CJK…).
+    .replace(/[^\p{L}\p{N}\p{M}]+/gu, " ")
+    .trim()
+    .replace(/([a-z])s(?=\s|$)/g, "$1"); // crude plural folding for Latin words: "groups" ~ "group"
+  if (words) return words;
+  // A name made only of symbols ("∇", "∫", "⊗") keeps them, so symbols differ from each other and from "" (no
+  // name); punctuation alone ("!!!", "-") still counts as no name.
+  return folded.replace(/[^\p{S}]+/gu, " ").trim();
 }
 
 /** Find the node matching a name via name or aliases (case/plural-insensitive). */

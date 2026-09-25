@@ -42,8 +42,10 @@ describe("shared graph viewer", () => {
     const first = activeGraph(store()).nodes[0].id;
     store().mutate((g) => ops.removeNode(g, first));
     expect(activeGraph(store()).nodes).toHaveLength(2);
+    // The shared concepts were still being checked: they arrive needing a definition, and the viewer leaves them so.
+    expect(activeGraph(store()).nodes[0].status).toBe("unclear");
     await analyzeNode(first);
-    expect(activeGraph(store()).nodes[0].status).toBe("ok");
+    expect(activeGraph(store()).nodes[0].status).toBe("unclear");
     expect(store().toast).toMatch(/Save a copy/);
     store().forkActive();
     expect(isViewing(store())).toBe(true);
