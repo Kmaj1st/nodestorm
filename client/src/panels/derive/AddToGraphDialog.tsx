@@ -3,6 +3,7 @@ import { useState } from "react";
 import { useT } from "../../i18n";
 import { sourceLabel } from "../../lib/export";
 import { buildGraphPlan, type GraphPlan, type PlanItem } from "../../lib/derivation";
+import { graphDisplayName } from "../../lib/graphOps";
 import { useDerive } from "../../store/deriveStore";
 import { useGraphStore } from "../../store/graphStore";
 import { Icon } from "../../ui/Icon";
@@ -31,7 +32,7 @@ export function AddToGraphDialog({ onClose }: { onClose: () => void }) {
 
   return (
     <Modal label={t("dt.add.title")} title={t("dt.add.title")} onClose={onClose} className="extract">
-      <p className="muted small">{t("dt.add.intro", { graph: graph.name })}</p>
+      <p className="muted small">{t("dt.add.intro", { graph: graphDisplayName(graph) })}</p>
 
       <h4 className="extract__head">{t("dt.add.result")}</h4>
       <ul className="extract__list">

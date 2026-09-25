@@ -18,9 +18,19 @@ import { t, type MessageKey } from "../i18n";
 export const uid = (prefix: string) =>
   `${prefix}_${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`;
 
-export function emptyGraph(name = "Main"): Graph {
+/** The stored name of a project's main graph (never shown as is: see graphDisplayName). */
+const MAIN_NAME = "Main";
+
+export function emptyGraph(name = MAIN_NAME): Graph {
   return { id: uid("g"), name, nodes: [], relations: [] };
 }
+
+/**
+ * What a graph is called on screen and in exports: its name, except a main graph stored as "Main" (or unnamed),
+ * which is "Main graph" in the interface language. The stored name stays as it is.
+ */
+export const graphDisplayName = (g: Pick<Graph, "name" | "parentId">) =>
+  !g.parentId && (!g.name.trim() || g.name === MAIN_NAME) ? t("toolbar.mainGraph") : g.name;
 
 export interface NewNodeInput {
   name: string;

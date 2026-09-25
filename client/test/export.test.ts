@@ -2,6 +2,7 @@ import type { DepRole, Graph } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import { exportFileName, mdEscape, mermaidEscape, studyOrder, toMarkdown, toMermaid } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
+import { useLocale } from "../src/i18n";
 
 const dep = (name: string, role: DepRole, reason: string) => ({ name, role, reason, matchesExisting: null });
 
@@ -42,6 +43,19 @@ describe("markdown", () => {
     expect(md).toContain("1. Homomorphism\n2. Isomorphism\n3. First Isomorphism Theorem");
     expect(md).toContain("### Isomorphism\n\n*Also:* iso\n\nA bijective homomorphism.");
     expect(md).toContain("**Prerequisites:** Homomorphism, Isomorphism");
+  });
+
+  it("heads the main graph (stored as \"Main\") with its name in the interface language", () => {
+    const g = ops.addNode(ops.emptyGraph(), { name: "Group" }).graph;
+    expect(g.name).toBe("Main");
+    expect(toMarkdown(g)).toMatch(/^# Main graph\n/);
+    useLocale.setState({ pref: "zh", lang: "zh" });
+    try {
+      expect(toMarkdown(g)).toMatch(/^# 主图谱\n/);
+    } finally {
+      useLocale.setState({ pref: "auto", lang: "en" });
+    }
+    expect(toMarkdown({ ...g, name: "Main", parentId: "p" })).toMatch(/^# Main\n/);
   });
 
   it("describes each relation in both directions, leaving out a one-way relation's \"none\" side", () => {
