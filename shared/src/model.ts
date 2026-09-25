@@ -149,6 +149,8 @@ export const ConceptNode = z.object({
   source: z.lazy(() => SourceRef).optional(),
   /** Definition, theorem, lemma…: set by the AI's check (only while unset) or by hand in the inspector. */
   kind: ConceptKind.optional(),
+  /** True once the user picked or cleared the kind by hand: the AI then leaves it alone (even when cleared). */
+  kindByUser: z.boolean().optional(),
   /** The latest "Theorem anatomy" answer (theorem-like kinds). AI study material, like `explanation`. */
   anatomy: NodeAnatomy.optional(),
 });

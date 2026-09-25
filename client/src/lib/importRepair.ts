@@ -189,6 +189,7 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     if (kind.success) node.kind = kind.data;
     else fixes.add(t("repair.droppedKind"));
   }
+  if (n.kindByUser === true) node.kindByUser = true;
   if (n.anatomy !== undefined) {
     const an = NodeAnatomy.safeParse(n.anatomy);
     if (an.success) node.anatomy = an.data;

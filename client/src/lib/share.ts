@@ -57,6 +57,7 @@ export function packGraph(g: Graph, name: string): unknown {
     if (status === "unclear" && n.senses?.length) out.senses = n.senses;
     if (n.source) out.source = n.source;
     if (n.kind) out.kind = n.kind;
+    if (n.kindByUser) out.kindByUser = true;
     return out;
   });
   const dir = (d: { kind: string; explanation: string }) => (d.explanation ? { kind: d.kind, explanation: d.explanation } : { kind: d.kind });

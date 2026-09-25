@@ -2043,16 +2043,16 @@ try {
     await dlg.waitFor();
     const names = await dlg.locator(".extract__name").evaluateAll((els) => els.map((e) => e.value));
     assert(
-      JSON.stringify(names) === JSON.stringify(["Homomorphism", "Kernel", "Lemma 1 (Notes on Group Homomorphisms)", "First Isomorphism Theorem", "Remark 1 (Notes on Group Homomorphisms)"]),
+      JSON.stringify(names) === JSON.stringify(["Homomorphism", "Kernel", "Lemma 1.3 (Notes on Group Homomorphisms)", "First Isomorphism Theorem", "Remark (Notes on Group Homomorphisms)"]),
       "a .tex file's definitions, lemma, theorem and remark become candidates, named by title or defined term",
     );
     await audit("LaTeX import review");
-    await dlg.getByLabel("Add Remark 1 (Notes on Group Homomorphisms)").uncheck();
-    await dlg.getByLabel("Name for Lemma 1 (Notes on Group Homomorphisms)").fill("Kernel is normal");
+    await dlg.getByLabel("Add Remark (Notes on Group Homomorphisms)").uncheck();
+    await dlg.getByLabel("Name for Lemma 1.3 (Notes on Group Homomorphisms)").fill("Kernel is normal");
     await dlg.getByRole("button", { name: /^Add/ }).last().click();
     await node("First Isomorphism Theorem").waitFor();
     await node("Kernel is normal").waitFor();
-    assert((await page.locator('[data-testid="node-Remark 1 (Notes on Group Homomorphisms)"]').count()) === 0, "unticked results are left out, renamed ones keep the new name");
+    assert((await page.locator('[data-testid="node-Remark (Notes on Group Homomorphisms)"]').count()) === 0, "unticked results are left out, renamed ones keep the new name");
     await node("First Isomorphism Theorem").click();
     const panel = await page.locator(".inspector").textContent();
     assert(panel.includes("Kernel is normal") && panel.includes("Homomorphism"), "a result needs what it refers to (\\ref in its statement or proof)");

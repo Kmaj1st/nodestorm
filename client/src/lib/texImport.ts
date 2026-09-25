@@ -27,25 +27,62 @@ function kindOf(word: string): ConceptKind | null {
   return KIND_BY_WORD.find(([re]) => re.test(w))?.[1] ?? null;
 }
 
-/** The source without comments (an unescaped `%` to the end of the line). */
+/** Blank out a match, keeping its line breaks (so line-based rules and offsets still hold). */
+const blank = (m: string) => m.replace(/[^\n]/g, " ");
+
+/** Environments whose content is not LaTeX to read: code listings and commented-out blocks. */
+const VERBATIM = /\\begin\{(verbatim|Verbatim|BVerbatim|lstlisting|minted|comment|filecontents)(\*?)\}[\s\S]*?\\end\{\1\2\}/g;
+
+/**
+ * The source without comments: an unescaped `%` to the end of the line (after `\\` a `%` is a comment again),
+ * listings and `comment` environments, `\verb|…|`, and `\iffalse … \fi` blocks.
+ */
 export function stripComments(tex: string): string {
-  return tex.replace(/(^|[^\\])%.*$/gm, "$1");
+  return tex
+    .replace(VERBATIM, blank)
+    .replace(/\\verb\*?([^A-Za-z\s])[^\n]*?\1/g, blank)
+    .replace(/(^|[^\\])((?:\\\\)*)%.*$/gm, "$1$2")
+    .replace(/\\iffalse\b[\s\S]*?\\fi\b/g, blank);
 }
 
-/** Environment name → printed name, from `\newtheorem{env}[counter]{Name}` / `\newtheorem*{env}{Name}` / `\newtheorem{env}{Name}[section]`. */
-export function theoremEnvs(tex: string): Map<string, string> {
-  const envs = new Map<string, string>();
-  for (const m of tex.matchAll(/\\newtheorem\*?\s*\{([^}]+)\}\s*(?:\[[^\]]*\]\s*)?(?:\{([^}]+)\})?/g)) {
-    envs.set(m[1].trim(), (m[2] ?? m[1]).trim());
-  }
-  // thmtools: \declaretheorem[name=Theorem, sibling=…]{thm} (options first) or \declaretheorem{theorem}.
-  for (const m of tex.matchAll(/\\declaretheorem\*?\s*(?:\[([^\]]*)\]\s*)?\{([^}]+)\}(?:\s*\[([^\]]*)\])?/g)) {
-    const opts = `${m[1] ?? ""},${m[3] ?? ""}`;
+/** How an environment is numbered: the counter it steps, the sectioning level that resets it, or not at all. */
+export interface TheoremEnv {
+  /** Printed name ("Theorem"). */
+  name: string;
+  /** Counter it steps (shared with `\newtheorem{lem}[thm]{Lemma}`); undefined when unnumbered (`\newtheorem*`). */
+  counter?: string;
+  /** Sectioning level it is numbered within (`\newtheorem{thm}{Theorem}[section]` prints "2.1"). */
+  within?: string;
+}
+
+/** Declared environments, from `\newtheorem{env}[counter]{Name}`, `\newtheorem*{env}{Name}`, `\newtheorem{env}{Name}[section]` and thmtools' `\declaretheorem`. */
+export function theoremDecls(tex: string): Map<string, TheoremEnv> {
+  const envs = new Map<string, TheoremEnv>();
+  const shared = (c: string) => envs.get(c)?.counter ?? c;
+  const withinOf = (c: string) => envs.get(c)?.within;
+  for (const m of tex.matchAll(/\\newtheorem(\*?)\s*\{([^}]+)\}\s*(?:\[([^\]]*)\]\s*)?(?:\{([^}]+)\})?(?:\s*\[([^\]]*)\])?/g)) {
     const env = m[2].trim();
-    const name = /(?:^|,)\s*name\s*=\s*\{?([^,}]+)\}?/.exec(opts)?.[1].trim();
-    envs.set(env, name ?? env.charAt(0).toUpperCase() + env.slice(1));
+    const name = (m[4] ?? m[2]).trim();
+    if (m[1]) envs.set(env, { name });
+    else if (m[3]) envs.set(env, { name, counter: shared(m[3].trim()), within: withinOf(m[3].trim()) });
+    else envs.set(env, { name, counter: env, within: m[5]?.trim() || undefined });
+  }
+  for (const m of tex.matchAll(/\\declaretheorem(\*?)\s*(?:\[([^\]]*)\]\s*)?\{([^}]+)\}(?:\s*\[([^\]]*)\])?/g)) {
+    const opts = `${m[2] ?? ""},${m[4] ?? ""}`;
+    const opt = (key: string) => new RegExp(`(?:^|,)\\s*(?:${key})\\s*=\\s*\\{?([^,}]+)\\}?`).exec(opts)?.[1].trim();
+    const env = m[3].trim();
+    const name = opt("name") ?? env.charAt(0).toUpperCase() + env.slice(1);
+    const sibling = opt("sibling|numberlike|sharenumber");
+    if (m[1] || /^(no|false|unless unique)$/i.test(opt("numbered") ?? "")) envs.set(env, { name });
+    else if (sibling) envs.set(env, { name, counter: shared(sibling), within: withinOf(sibling) });
+    else envs.set(env, { name, counter: env, within: opt("numberwithin|parent|within") });
   }
   return envs;
+}
+
+/** Environment name → printed name (see theoremDecls). */
+export function theoremEnvs(tex: string): Map<string, string> {
+  return new Map([...theoremDecls(tex)].map(([env, d]) => [env, d.name]));
 }
 
 /** A theorem-like environment in the document. */
@@ -63,8 +100,8 @@ export interface TexResult {
   refs: string[];
   /** For definitions: the terms it defines (\emph, \textbf, \textit, \index). */
   terms: string[];
-  /** Its number among results with the same printed name, from 1. */
-  number: number;
+  /** Its printed number ("3", or "2.1" when numbered within sections); "" when unnumbered. */
+  number: string;
 }
 
 /** Read a balanced `{…}` group starting at `i` (which must be `{`); returns its content and the index after it. */
@@ -196,23 +233,38 @@ function definedTerms(body: string): string[] {
   return terms;
 }
 
+/** Sectioning levels, outermost first (for numbers like "2.1"). */
+const LEVELS = ["part", "chapter", "section", "subsection", "subsubsection"];
+
 /** Every theorem-like environment of the document, in order, with the proof that follows each. */
 export function parseTexResults(source: string): TexResult[] {
   const tex = stripComments(source);
-  const declared = theoremEnvs(tex);
-  const envName = (env: string) => declared.get(env) ?? declared.get(env.replace(/\*$/, "")) ?? env;
-  const isResultEnv = (env: string) => env !== "proof" && Boolean(kindOf(envName(env)) ?? kindOf(env) ?? (declared.has(env.replace(/\*$/, "")) ? "other" : null));
+  const declared = theoremDecls(tex);
+  const decl = (env: string) => declared.get(env) ?? declared.get(env.replace(/\*$/, ""));
+  const envName = (env: string) => decl(env)?.name ?? env;
+  const isResultEnv = (env: string) => env !== "proof" && Boolean(kindOf(envName(env)) ?? kindOf(env) ?? (decl(env) ? "other" : null));
   const counts = new Map<string, number>();
+  const sections = LEVELS.map(() => 0);
   const out: TexResult[] = [];
-  const begin = /\\begin\{([A-Za-z*]+)\}/g;
+  // Results and the numbered sectioning commands that reset their counters, in document order.
+  const token = /\\begin\{([A-Za-z*]+)\}|\\(part|chapter|section|subsection|subsubsection)(\*?)\s*(?:\[[^\]]*\]\s*)?\{/g;
   let m: RegExpExecArray | null;
-  while ((m = begin.exec(tex))) {
+  while ((m = token.exec(tex))) {
+    if (m[2]) {
+      if (m[3]) continue; // \section* is unnumbered
+      const level = LEVELS.indexOf(m[2]);
+      sections[level]++;
+      for (let i = level + 1; i < LEVELS.length; i++) sections[i] = 0;
+      // A counter numbered within this level (or a deeper one) starts again.
+      for (const [c] of counts) if (c.endsWith(`@${m[2]}`) || LEVELS.slice(level + 1).some((l) => c.endsWith(`@${l}`))) counts.delete(c);
+      continue;
+    }
     const env = m[1];
     if (!isResultEnv(env)) continue;
     const endTag = `\\end{${env}}`;
-    const endAt = tex.indexOf(endTag, begin.lastIndex);
+    const endAt = tex.indexOf(endTag, token.lastIndex);
     if (endAt < 0) continue;
-    let bodyStart = begin.lastIndex;
+    let bodyStart = token.lastIndex;
     const opt = optional(tex, bodyStart);
     let title: string | undefined;
     if (opt && !/^\s*$/.test(opt.text)) {
@@ -221,30 +273,45 @@ export function parseTexResults(source: string): TexResult[] {
       bodyStart = opt.end;
     } else if (opt) bodyStart = opt.end;
     const body = tex.slice(bodyStart, endAt);
-    // A proof right after it (only whitespace, or a \label, between them) belongs to it.
+    // A \label right after \end{…} still names it; a proof right after it (only whitespace or labels between) belongs to it.
     const after = tex.slice(endAt + endTag.length);
-    const proof = /^\s*\\begin\{proof\}(\[[^\]]*\])?([\s\S]*?)\\end\{proof\}/.exec(after);
+    const trailing = /^(?:\s*\\label\{[^}]*\})*/.exec(after)![0];
+    const proof = /^\s*\\begin\{proof\}(\[[^\]]*\])?([\s\S]*?)\\end\{proof\}/.exec(after.slice(trailing.length));
     const declaredName = envName(env).replace(/\*$/, "");
     // Undeclared (built-in) environments print their name capitalised: "theorem" → "Theorem".
     const heading = declaredName.charAt(0).toUpperCase() + declaredName.slice(1);
-    const number = (counts.get(heading) ?? 0) + 1;
-    counts.set(heading, number);
+    const d = decl(env);
+    // Starred environments and \newtheorem* are unnumbered; an undeclared one counts by its printed name.
+    const numbered = !env.endsWith("*") && (d ? Boolean(d.counter) : true);
+    let number = "";
+    if (numbered) {
+      const within = d?.within && LEVELS.includes(d.within) ? d.within : undefined;
+      const key = `${d?.counter ?? heading}${within ? `@${within}` : ""}`;
+      const n = (counts.get(key) ?? 0) + 1;
+      counts.set(key, n);
+      // "2.1": the section's number (with its chapter's, when the document has chapters; parts don't show) before the result's.
+      const prefix = within ? sections.slice(sections.findIndex((x, i) => i > 0 && (x > 0 || i === LEVELS.indexOf(within))), LEVELS.indexOf(within) + 1) : [];
+      number = [...prefix, n].join(".");
+    }
     const kind = kindOf(heading) ?? kindOf(env) ?? "other";
     out.push({
       env,
       kind,
       heading,
       title,
-      labels: [...body.matchAll(/\\label\{([^}]*)\}/g)].map((x) => x[1].trim()),
+      labels: [...body.matchAll(/\\label\{([^}]*)\}/g), ...trailing.matchAll(/\\label\{([^}]*)\}/g)].map((x) => x[1].trim()),
       statement: body,
       refs: [...new Set([...refsIn(body), ...(proof ? refsIn(proof[2]) : [])])],
       terms: kind === "definition" || kind === "notation" ? definedTerms(body) : [],
       number,
     });
-    begin.lastIndex = endAt + endTag.length;
+    token.lastIndex = endAt + endTag.length;
   }
   return out;
 }
+
+/** "Theorem 3", or just "Remark" when unnumbered. */
+export const resultLabel = (r: TexResult) => (r.number ? `${r.heading} ${r.number}` : r.heading);
 
 /** A concept name for a result: its title, else what a definition defines, else "Theorem 3". */
 export function resultName(r: TexResult, docTitle?: string): string {
@@ -252,7 +319,7 @@ export function resultName(r: TexResult, docTitle?: string): string {
   if (r.terms.length) return r.terms[0].charAt(0).toUpperCase() + r.terms[0].slice(1);
   // "Lemma 1" alone would clash with another paper's Lemma 1 in the same graph.
   const short = docTitle && (docTitle.length > 40 ? `${docTitle.slice(0, 39).trimEnd()}…` : docTitle);
-  return short ? `${r.heading} ${r.number} (${short})` : `${r.heading} ${r.number}`;
+  return short ? `${resultLabel(r)} (${short})` : resultLabel(r);
 }
 
 /** Above this many results, no mention links (they would take seconds and make a review list nobody can read). */
@@ -276,9 +343,12 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
   const title = texTitle(source);
   // Unique names (as the graph compares them: "Main" and "Main." are the same): a repeated one gets its number.
   const names: string[] = [];
+  const taken = (n: string) => names.some((x) => normalizeName(x) === normalizeName(n));
   for (const r of results) {
-    let n = resultName(r, title);
-    if (names.some((x) => normalizeName(x) === normalizeName(n))) n = `${n} (${r.heading} ${r.number})`;
+    const base = resultName(r, title);
+    let n = base;
+    if (taken(n) && r.number) n = `${base} (${resultLabel(r)})`;
+    for (let k = 2; taken(n); k++) n = `${base} (${k})`;
     names.push(n);
   }
   const nameOf = (label: string) => {
@@ -311,7 +381,7 @@ export function texReview(source: string, opts: { mentions?: boolean } = {}): Ex
   results.forEach((r, i) => {
     for (const l of r.refs) {
       const j = byLabel.get(l);
-      if (j !== undefined) link(i, j, `Refers to ${results[j].heading} ${results[j].number}${results[j].title ? ` (${results[j].title})` : ""}.`, true);
+      if (j !== undefined) link(i, j, `Refers to ${resultLabel(results[j])}${results[j].title ? ` (${results[j].title})` : ""}.`, true);
     }
   });
   // Mention links compare every result with every definition: skipped for very large documents.

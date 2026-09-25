@@ -215,18 +215,22 @@ export function updateNode(g: Graph, nodeId: string, patch: Partial<ConceptNode>
  */
 export function suggestKind(g: Graph, nodeId: string, kind: ConceptKind | null | undefined): Graph {
   const node = g.nodes.find((n) => n.id === nodeId);
-  if (!kind || !node || node.kind) return g;
+  if (!kind || !node || node.kind || node.kindByUser) return g;
   return updateNode(g, nodeId, { kind });
 }
 
-/** Set or clear (null) a node's kind by hand. */
-export function setKind(g: Graph, nodeId: string, kind: ConceptKind | null): Graph {
+/**
+ * Set or clear (null) a node's kind. `byUser` (the default) remembers it was a hand choice, so a later AI check
+ * doesn't fill a cleared kind back in; a chosen meaning's kind (`byUser: false`) stays open to later suggestions.
+ */
+export function setKind(g: Graph, nodeId: string, kind: ConceptKind | null, byUser = true): Graph {
   return {
     ...g,
     nodes: g.nodes.map((n) => {
       if (n.id !== nodeId) return n;
-      const { kind: _old, ...rest } = n;
-      return kind ? { ...rest, kind } : rest;
+      const { kind: _old, kindByUser: _by, ...rest } = n;
+      const by = byUser ? { kindByUser: true } : n.kindByUser ? { kindByUser: true } : {};
+      return kind ? { ...rest, kind, ...by } : { ...rest, ...by };
     }),
   };
 }
@@ -315,7 +319,7 @@ export function applySense(
     error: undefined,
   });
   // The chosen meaning's kind replaces one from the old meaning (a picked sense is a user decision).
-  const typed = sense.kind ? setKind(out, nodeId, sense.kind) : out;
+  const typed = sense.kind ? setKind(out, nodeId, sense.kind, false) : out;
   return { graph: satisfyMissing(typed, nodeId), id: nodeId, merged: false };
 }
 
@@ -411,8 +415,10 @@ export function merge(parent: Graph, sandbox: Graph): Graph {
       anatomy: pick(p.anatomy, n.anatomy, (a) => a.createdAt),
       formal: pick(p.formal, n.formal, (f) => f.checkedAt),
       papers: pick(p.papers, n.papers, (x) => x.checkedAt),
-      // A kind set on the parent after the fork survives a sandbox that never had one.
-      kind: n.kind ?? p.kind,
+      // A kind set on the parent after the fork survives a sandbox that never had one, unless the sandbox's kind
+      // was picked (or cleared) by hand.
+      ...(n.kindByUser ? {} : p.kind && !n.kind ? { kind: p.kind } : {}),
+      ...(n.kindByUser || p.kindByUser ? { kindByUser: true } : {}),
     });
   }
   const relations = new Map(parent.relations.map((r) => [r.id, r]));

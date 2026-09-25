@@ -88,6 +88,33 @@ describe("kinds from the AI (offline demo)", () => {
     expect(byName("Expectation (probability)")?.kind).toBe("definition");
   });
 
+  it("a kind cleared by hand stays cleared through a Re-check", async () => {
+    store().mutate((g) => ops.addNode(g, { name: "First Isomorphism Theorem" }).graph);
+    const id = byName("First Isomorphism Theorem")!.id;
+    await analyzeNode(id);
+    expect(byName("First Isomorphism Theorem")?.kind).toBe("theorem");
+    store().mutate((g) => ops.setKind(g, id, null));
+    await analyzeNode(id);
+    expect(byName("First Isomorphism Theorem")?.kind).toBeUndefined();
+  });
+
+  it("a kind cleared in a sandbox stays cleared after merging back; an untouched sandbox keeps the parent's", () => {
+    const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel", kind: "definition" });
+    const cleared = ops.setKind(ops.fork(r.graph, "Sandbox"), r.id, null);
+    const merged = ops.merge(r.graph, cleared).nodes.find((n) => n.id === r.id)!;
+    expect(merged.kind).toBeUndefined();
+    expect(merged.kindByUser).toBe(true);
+    expect(ops.merge(r.graph, ops.fork(r.graph, "S")).nodes.find((n) => n.id === r.id)!.kind).toBe("definition");
+  });
+
+  it("the hand-set flag survives a file round trip and share links", () => {
+    const r = ops.addNode(ops.emptyGraph("Main"), { name: "Kernel" });
+    const g = ops.setKind(r.graph, r.id, null);
+    expect(repairImport({ nodes: JSON.parse(JSON.stringify(g.nodes)) }).doc.graphs[0].nodes[0].kindByUser).toBe(true);
+    const packed = packGraph(g, "P");
+    expect(repairImport(packed).doc.graphs[0].nodes[0].kindByUser).toBe(true);
+  });
+
   it("extraction carries kinds into the new concepts", () => {
     const review = buildReview(ops.emptyGraph(), {
       concepts: [{ name: "Main Lemma", definition: "", aliases: [], kind: "lemma" }, { name: "Thing", definition: "", aliases: [] }],
