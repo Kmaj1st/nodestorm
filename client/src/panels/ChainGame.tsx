@@ -109,7 +109,7 @@ export function ChainGame({
     ) : (
       <span className="chain-game__blank">
         <span aria-hidden="true">?</span>
-        <span className="absurd__sr">{t("absurd.game.hiddenConcept", { n: (o.stop ?? 0) + 1 })}</span>
+        <span className="sr-only">{t("absurd.game.hiddenConcept", { n: (o.stop ?? 0) + 1 })}</span>
       </span>
     );
 
@@ -119,7 +119,7 @@ export function ChainGame({
         <p className="chain-game__ends">
           <strong>{from}</strong>
           <Icon icon={ArrowRight} size={14} className="absurd-hop__arrow" />
-          <span className="absurd__sr">{t("absurd.game.to")} </span>
+          <span className="sr-only">{t("absurd.game.to")} </span>
           <strong>{to}</strong>
         </p>
         <p className="chain-game__score" data-testid="chain-game-score">
@@ -200,7 +200,7 @@ export function ChainGame({
               <span className="absurd-hop__n" aria-hidden="true">{i + 1}</span>
               <div className={`absurd-hop__card${v.fact ? "" : " chain-game__card--hidden"}`}>
                 <div className="absurd-hop__head">
-                  <span className="absurd__sr">{t("absurd.hop", { n: i + 1 })}: </span>
+                  <span className="sr-only">{t("absurd.hop", { n: i + 1 })}: </span>
                   <span className="absurd-hop__ends">
                     {name(order[i])}
                     <Icon icon={ArrowRight} size={14} className="absurd-hop__arrow" />
@@ -218,7 +218,7 @@ export function ChainGame({
                 </div>
                 {v.fact && (
                   <p className="absurd-hop__fact">
-                    <span className="absurd__sr">{t("absurd.factLabel")}: </span>
+                    <span className="sr-only">{t("absurd.factLabel")}: </span>
                     <MathText text={v.fact} />
                   </p>
                 )}

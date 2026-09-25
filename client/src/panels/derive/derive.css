@@ -153,7 +153,6 @@ button.derive-tab--on, button.derive-tab--on:hover:not(:disabled) {
 .derive-refs[open] { display: flex; flex-direction: column; gap: var(--space-1); }
 .derive-work__actions { position: static; }
 
-.derive-sr { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
 /* The toolbar button shows when the panel is open. */
 .toolbar button[data-testid="derive-together"][aria-pressed="true"] {

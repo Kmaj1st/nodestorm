@@ -170,7 +170,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
                 <span className="absurd-hop__n" aria-hidden="true">{i + 1}</span>
                 <div className="absurd-hop__card">
                   <div className="absurd-hop__head">
-                    <span className="absurd__sr">{t("absurd.hop", { n: i + 1 })}: </span>
+                    <span className="sr-only">{t("absurd.hop", { n: i + 1 })}: </span>
                     <span className="absurd-hop__ends">
                       <strong>{h.from}</strong>
                       <Icon icon={ArrowRight} size={14} className="absurd-hop__arrow" />
@@ -179,7 +179,7 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
                     {h.kind && <span className="absurd-hop__kind">{h.kind}</span>}
                   </div>
                   <p className="absurd-hop__fact">
-                    <span className="absurd__sr">{t("absurd.factLabel")}: </span>
+                    <span className="sr-only">{t("absurd.factLabel")}: </span>
                     <MathText text={h.fact} />
                   </p>
                   {h.quip && <p className="absurd-hop__quip"><MathText text={h.quip} /></p>}

@@ -211,7 +211,7 @@ function Tour() {
     if (step) prepare(step);
   }, [step]);
 
-  // Follow the anchor every frame (pans, zooms, the inspector opening, window resizes, the ☰ menu); a step whose
+  // Follow the anchor every frame (pans, zooms, the inspector opening, window resizes, the menu button); a step whose
   // anchor doesn't show up in time is dropped, moving on in the direction the user was going.
   useLayoutEffect(() => {
     let frame = 0;

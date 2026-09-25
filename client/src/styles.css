@@ -41,6 +41,10 @@
   --accent-soft: #eef0ff;
   --accent-border: #c3c7fa;
   --on-accent: #ffffff;
+  /* Second stop of the brand gradient, and the hairline and hover wash drawn on accent or toast colours. */
+  --accent-2: #8b5cf6;
+  --on-accent-line: rgb(255 255 255 / 0.15);
+  --on-dark-hover: rgb(255 255 255 / 0.14);
   --ok: #157a3c;
   --ok-soft: #ecfbf1;
   --ok-border: #a6e9c0;
@@ -109,6 +113,7 @@
   --border-strong: #363b46;
   --accent: #8e95ff;
   --accent-hover: #a5abff;
+  --accent-2: #a78bfa;
   --accent-soft: #232650;
   --accent-border: #454b9c;
   --on-accent: #0f1026;
@@ -281,8 +286,8 @@ fieldset { min-width: 0; }
 /* The mark: a small gradient tile, drawn in CSS (no emoji, no extra request). */
 .toolbar__brand::before {
   content: ""; width: 18px; height: 18px; border-radius: 5px; flex-shrink: 0;
-  background: linear-gradient(135deg, var(--accent) 0%, #8b5cf6 100%);
-  box-shadow: inset 0 0 0 1px rgb(255 255 255 / 0.15);
+  background: linear-gradient(135deg, var(--accent) 0%, var(--accent-2) 100%);
+  box-shadow: inset 0 0 0 1px var(--on-accent-line);
 }
 .toolbar__group { display: flex; gap: var(--space-1); align-items: center; }
 /* Thin dividers between the toolbar groups. */
@@ -889,9 +894,9 @@ button.toast__close {
   box-shadow: none; opacity: 0.85; margin-top: -2px;
 }
 button.toast__close:hover:not(:disabled) {
-  background: rgb(255 255 255 / 0.14); color: inherit; opacity: 1; border-color: transparent;
+  background: var(--on-dark-hover); color: inherit; opacity: 1; border-color: transparent;
 }
-.toast__close:focus-visible { outline-color: #fff; }
+.toast__close:focus-visible { outline-color: var(--toast-text); }
 .update-notice {
   position: fixed; bottom: var(--space-3); right: var(--space-3); z-index: 20; display: flex; gap: var(--space-2);
   align-items: center; padding: 6px 6px 6px var(--space-3); background: var(--panel); border: 1px solid var(--border);
@@ -1021,3 +1026,9 @@ kbd {
 span.paper__title { color: var(--text); }
 .paper__meta { color: var(--muted); }
 .paper__meta a { color: var(--accent); }
+
+/* Read by screen readers, not shown. */
+.sr-only {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden;
+  clip: rect(0 0 0 0); white-space: nowrap; border: 0;
+}

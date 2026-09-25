@@ -31,7 +31,7 @@ import {
   Workflow,
   type LucideIcon,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent as ReactKeyboardEvent } from "react";
 import { t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
@@ -250,7 +250,10 @@ function FileMenu() {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+      if (e instanceof KeyboardEvent ? e.key !== "Escape" : ref.current?.contains(e.target as Node)) return;
+      setOpen(false);
+      // Escape hands focus back to the menu button (a click elsewhere keeps its own target).
+      if (e instanceof KeyboardEvent) menuButton.current?.focus();
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", close);
@@ -259,6 +262,21 @@ function FileMenu() {
       document.removeEventListener("keydown", close);
     };
   }, [open]);
+
+  // Keyboard use, as in a native menu: focus the first entry on open; arrows, Home and End move between entries.
+  const list = useRef<HTMLDivElement>(null);
+  const menuButton = useRef<HTMLButtonElement>(null);
+  useEffect(() => {
+    if (open) list.current?.querySelector<HTMLButtonElement>('[role="menuitem"]')?.focus();
+  }, [open]);
+  const onMenuKey = (e: ReactKeyboardEvent) => {
+    const entries = [...(list.current?.querySelectorAll<HTMLButtonElement>('[role="menuitem"]') ?? [])];
+    const at = entries.indexOf(document.activeElement as HTMLButtonElement);
+    const to = { ArrowDown: at + 1, ArrowUp: at - 1, Home: 0, End: entries.length - 1 }[e.key];
+    if (to === undefined || !entries.length) return;
+    e.preventDefault();
+    entries[(to + entries.length) % entries.length].focus();
+  };
 
   const doImport = async (file: File) => {
     try {
@@ -284,17 +302,23 @@ function FileMenu() {
     ...(view
       ? []
       : ([
-          { label: "file.import", title: "file.importTitle", icon: Upload, action: () => fileRef.current?.click() },
+          { head: "file.importHead", label: "file.import", title: "file.importTitle", icon: Upload, action: () => fileRef.current?.click() },
           { label: "file.extract", title: "file.extractTitle", icon: ScanText, action: () => setExtracting(true) },
           { label: "file.texImport", title: "file.texImportTitle", icon: FileCode, action: () => texRef.current?.click() },
-          { label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
+          { head: "file.versionsHead", label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
+          { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
+          { head: "file.studyHead", label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
           { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => useDerive.getState().openPanel() },
           { label: "file.absurd", title: "file.absurdTitle", icon: Drama, action: () => useAbsurd.getState().openAbsurd() },
-          { label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
-          { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
         ] satisfies Item[])),
-    // Read-only, so the share viewer has it too: presenting a shared graph is a main use.
-    { label: "file.walkthrough", title: "file.walkthroughTitle", icon: Presentation, action: () => useWalkthrough.getState().openWalkthrough() },
+    // Read-only, so the share viewer has them too: presenting a shared graph is a main use.
+    {
+      ...(view ? { head: "file.studyHead" as MessageKey } : {}),
+      label: "file.walkthrough",
+      title: "file.walkthroughTitle",
+      icon: Presentation,
+      action: () => useWalkthrough.getState().openWalkthrough(),
+    },
     { label: "file.glossary", title: "file.glossaryTitle", icon: BookA, action: () => setGlossary(true) },
     {
       head: "file.exportHead",
@@ -355,15 +379,15 @@ function FileMenu() {
 
   return (
     <div className="menu" ref={ref}>
-      <button className="menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">
+      <button ref={menuButton} className="menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">
         {t("file.menu")}
         <Icon icon={ChevronDown} size={14} className="menu-button__chevron" />
       </button>
       {open && (
-        <div className="menu__list" role="menu" aria-label={t("file.menuLabel")}>
+        <div className="menu__list" role="menu" aria-label={t("file.menuLabel")} ref={list} onKeyDown={onMenuKey}>
           {items.map((it, i) => (
             <div key={it.label} role="none" className="menu__section">
-              {/* A heading for the export formats; a plain separator before Share. */}
+              {/* A heading per group (import, versions, study, export); a plain separator before Share. */}
               {it.head && i > 0 && <hr className="menu__sep" />}
               {it.head && it.head !== it.label && <div className="menu__head" role="presentation">{t(it.head)}</div>}
               <button role="menuitem" title={t(it.title)} onClick={run(it.action)}>

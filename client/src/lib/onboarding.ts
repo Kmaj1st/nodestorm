@@ -54,7 +54,7 @@ export const TOUR_STEPS = [
   { id: "arrow", anchor: "arrow", needs: "relation" },
   { id: "mix", anchor: "mix" },
   { id: "fork", anchor: "fork" },
-  // Only where the toolbar folds into ☰ (≤800px): Fork, File and Settings are hidden then, and this step says where.
+  // Only where the toolbar folds into the menu button (≤800px): Fork, File and Settings are hidden then, and this step says where.
   { id: "more", anchor: "more" },
   { id: "file", anchor: "file" },
   { id: "settings", anchor: "settings" },

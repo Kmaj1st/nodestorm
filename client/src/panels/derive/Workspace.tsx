@@ -332,7 +332,7 @@ function Step({ step, n, onDelete }: { step: DerivStep; n: number; onDelete: () 
           <button className="small-btn" onClick={() => void useDerive.getState().check(step.id)} disabled={checking || viewing}>
             {mine ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={ListChecks} size={14} />}
             {t(c ? "dt.steps.recheck" : "dt.steps.check")}
-            <span className="derive-sr"> {t("dt.steps.nth", { n })}</span>
+            <span className="sr-only"> {t("dt.steps.nth", { n })}</span>
           </button>
           <button className="icon-btn" onClick={() => setEditing(step.text)} aria-label={t("dt.steps.edit", { n })} title={t("dt.steps.editTitle")}>
             <Icon icon={Pencil} size={14} />

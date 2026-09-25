@@ -25,7 +25,7 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
   const slideKind = slide && graph.nodes.find((n) => n.id === slide.id)?.kind;
   const count = slides.length;
   const go = (to: number) => setAt(Math.max(0, Math.min(count - 1, to)));
-  // Start with focus on the slide (not the ✕ button, where Space would close the overlay); Modal keeps it there.
+  // Start with focus on the slide (not the close button, where Space would close the overlay); Modal keeps it there.
   const slideRef = useRef<HTMLElement>(null);
   useEffect(() => slideRef.current?.focus(), []);
   const rootName = rootId ? graph.nodes.find((n) => n.id === rootId)?.name : undefined;

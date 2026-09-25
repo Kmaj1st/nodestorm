@@ -1,5 +1,28 @@
 # Changelog
 
+## 2026-09-25: remaining fixes and interface polish
+
+### Fixes
+- **Concept kinds:** a kind you clear by hand stays cleared. A Re-check no longer fills it back in, and merging a sandbox back no longer restores it.
+- **LaTeX import:**
+  - Results are numbered as the paper prints them: shared counters, numbering within sections or chapters ("Lemma 1.3"), and unnumbered and starred environments.
+  - A `\label` right after `\end{…}` is picked up.
+  - `verbatim`, listings, `comment` blocks, `\verb` and `\iffalse` are skipped.
+- **Find in Mathlib:** the names are checked in parallel. Names Loogle didn't answer for are listed as unchecked rather than silently dropped.
+- **Dialogs:** dragging a text selection out of a field onto the backdrop no longer closes the dialog.
+- **LaTeX export:** CJK punctuation and fullwidth characters now switch on CJK support.
+
+### Interface
+- **Cancel buttons:** for Explain, Find in Mathlib, Reviewer 2 and hints.
+- **Lean / Mathlib and Papers:** say inline when nothing was found, show when they were checked, and wrap long Lean names.
+- **File menu:** grouped into Import, Versions, Study & play, Export and Share. The arrow keys, Home and End move through it, and Escape returns focus to the button.
+- **Install all:** its confirmation closes on Escape or a click elsewhere.
+- **Derive together:**
+  - A deleted step can be undone.
+  - When editing a step, Ctrl+Enter saves and Escape cancels.
+  - Reviewer 2 needs at least one step.
+- **Theme:** the brand gradient and the toast colours now use theme tokens, and one shared screen-reader-only style replaces three copies.
+
 ## 2026-09-25 (overnight): formal sciences and parody
 
 ### Formal sciences

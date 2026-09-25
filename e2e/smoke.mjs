@@ -838,12 +838,17 @@ try {
   assert(
     JSON.stringify(fileItems) ===
       JSON.stringify([
-        "Import JSON…", "Extract from text…", "Import LaTeX (.tex)…", "Quiz me…", "Derive together…", "Absurd chain…", "Save snapshot…", "Versions…", "Walkthrough…", "Notation…",
+        "Import JSON…", "Extract from text…", "Import LaTeX (.tex)…", "Save snapshot…", "Versions…", "Quiz me…", "Derive together…", "Absurd chain…", "Walkthrough…", "Notation…",
         "JSON (this project)", "Markdown notes", "LaTeX document (.tex)", "Mermaid diagram", "PNG image", "Flashcards (Anki)…", "Share link…",
       ]),
     "File holds import, Extract from text, Quiz me, Derive together, Absurd chain, Versions, every export format and the share link",
   );
+  // Keyboard: the first entry has focus, arrows wrap, Escape hands focus back to the button.
+  assert((await page.evaluate(() => document.activeElement?.textContent)) === "Import JSON…", "opening the File menu focuses its first entry");
+  await page.keyboard.press("ArrowUp");
+  assert((await page.evaluate(() => document.activeElement?.textContent)) === "Share link…", "ArrowUp from the first entry wraps to the last");
   await page.keyboard.press("Escape");
+  assert((await page.evaluate(() => document.activeElement?.textContent?.trim())) === "File", "Escape returns focus to the File button");
 
   {
     const st = await openSettings();

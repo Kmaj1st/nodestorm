@@ -59,7 +59,7 @@ export function inViewer(graphId: string): boolean {
 
 const controllers = new Map<string, AbortController>();
 
-/** Cancel a running AI task (status-bar ✕, dialog Cancel). */
+/** Cancel a running AI task (status-bar close button, dialog Cancel). */
 export function cancelTask(key: string) {
   controllers.get(key)?.abort();
 }
