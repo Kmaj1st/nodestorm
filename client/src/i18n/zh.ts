@@ -654,6 +654,12 @@ export const zh: Record<MessageKey, string> = {
   "repair.readUntagged": "把没有格式标记的文件当作 nodestorm/v1 读取",
   "repair.importedGraph": "导入的图",
   "repair.interrupted": "导出时检查尚未完成。点击重试可再次运行。",
+  "repair.filledFields": "补全了图中缺失的字段",
+  "repair.graphId": "恢复了一个图的 id",
+  "repair.droppedProject": "删除了一个没有主图的项目条目",
+  "repair.project": "恢复了项目的名称或日期",
+  "repair.projectName": "恢复的项目",
+  "toast.savedRepaired": "此浏览器中保存的部分数据已损坏，现已修复：{fixes}。其余内容均已保留。",
   "project.imported": "导入的项目",
   // 首次使用引导：欢迎卡片与功能导览（panels/Onboarding.tsx）
   "welcome.title": "欢迎使用 NodeStorm",

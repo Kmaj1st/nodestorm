@@ -4,7 +4,7 @@ import { createJSONStorage, persist, type StateStorage } from "zustand/middlewar
 import { t } from "../i18n";
 import { buildExample, EXAMPLES } from "../lib/examples";
 import { fork, merge, uid } from "../lib/graphOps";
-import { repairImport } from "../lib/importRepair";
+import { repairImport, repairSaved } from "../lib/importRepair";
 import * as hist from "../lib/history";
 import * as proj from "../lib/projects";
 
@@ -352,11 +352,21 @@ export const useGraphStore = create<GraphStore>()(
       storage: createJSONStorage(() => safeStorage),
       partialize: (s: GraphStore) => workspace(s),
       migrate: (persisted, version) => proj.migrateWorkspace(persisted, version) as GraphStore,
-      // Also repairs a v2 state that lost track of a graph or project (e.g. hand-edited storage).
-      merge: (persisted, current) => ({
-        ...current,
-        ...proj.normalizeWorkspace({ ...workspace(current), ...(persisted as Partial<Workspace>) }),
-      }),
+      // Also repairs a v2 state that lost track of a graph or project (e.g. hand-edited storage), and damaged graphs
+      // the way imports are (a bad field never costs the whole project); a notice says what was repaired.
+      merge: (persisted, current) => {
+        const saved = { ...workspace(current), ...(persisted as Partial<Workspace>) };
+        const { graphs, projects, fixes } = repairSaved(saved.graphs, saved.projects);
+        const ws = proj.normalizeWorkspace({
+          ...saved,
+          graphs,
+          projects,
+          projectId: typeof saved.projectId === "string" ? saved.projectId : "",
+          activeId: typeof saved.activeId === "string" ? saved.activeId : "",
+        });
+        const notice = fixes.length ? { toast: t("toast.savedRepaired", { fixes: fixes.join("; ") }), toastKind: "info" as const } : {};
+        return { ...current, ...ws, ...notice };
+      },
       // A check that was running when the page closed never finished: say so rather than pretend it passed.
       onRehydrateStorage: () => (state) => {
         if (!state) return;

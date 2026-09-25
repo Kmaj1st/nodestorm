@@ -664,6 +664,12 @@ export const en = {
   "repair.readUntagged": "read a file without a format tag as nodestorm/v1",
   "repair.importedGraph": "Imported graph",
   "repair.interrupted": "The check was interrupted before export. Retry to run it again.",
+  "repair.filledFields": "filled in missing fields of a graph",
+  "repair.graphId": "restored a graph's id",
+  "repair.droppedProject": "dropped a project entry without a main graph",
+  "repair.project": "restored a project's name or date",
+  "repair.projectName": "Recovered project",
+  "toast.savedRepaired": "Some saved data in this browser was damaged and has been repaired: {fixes}. Everything else was kept.",
   "project.imported": "Imported project",
   // First-run onboarding: welcome card and guided tour (panels/Onboarding.tsx)
   "welcome.title": "Welcome to NodeStorm",

@@ -2,6 +2,64 @@ import { findByName, normalizeName } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import * as ops from "../src/lib/graphOps";
 import { isReady, useSettings } from "../src/store/settingsStore";
+import { useGraphStore, type GraphStore } from "../src/store/graphStore";
+
+describe("saved projects from browser storage", () => {
+  const load = (persisted: unknown) => {
+    const merge = useGraphStore.persist.getOptions().merge!;
+    return merge(persisted, { ...useGraphStore.getState(), toast: null }) as GraphStore;
+  };
+  const node = (id: string, name: string, extra: Record<string, unknown> = {}) => ({
+    id, name, definition: "d", aliases: [], status: "ok", position: { x: 0, y: 0 }, dependsOn: [], missingDeps: [], ...extra,
+  });
+  const healthy = () => ({
+    graphs: {
+      g1: { id: "g1", name: "Main", nodes: [node("a", "Group"), node("b", "Ring", { dependsOn: ["a"] })], relations: [] },
+      g2: { id: "g2", name: "Sandbox", parentId: "g1", nodes: [node("c", "Field")], relations: [] },
+    },
+    projects: { p1: { id: "p1", name: "Algebra", mainId: "g1", createdAt: 1 } },
+    projectId: "p1",
+    activeId: "g1",
+  });
+
+  it("are loaded unchanged, without a notice, when nothing is wrong", () => {
+    const saved = healthy();
+    const s = load(saved);
+    expect(s.graphs.g1).toBe(saved.graphs.g1);
+    expect(s.graphs.g2).toBe(saved.graphs.g2);
+    expect(s.projects.p1.name).toBe("Algebra");
+    expect(s.toast).toBeNull();
+  });
+
+  it("start with the default project when nothing was saved", () => {
+    const s = load(undefined);
+    expect(Object.keys(s.projects)).toHaveLength(1);
+    expect(s.graphs[s.activeId]).toBeDefined();
+    expect(s.toast).toBeNull();
+  });
+
+  it("are repaired field by field, keeping the project, and say so once", () => {
+    const saved = healthy() as unknown as { graphs: Record<string, Record<string, unknown>>; projects: Record<string, unknown> };
+    delete saved.graphs.g1.relations;
+    const { missingDeps: _gone, ...noMissing } = node("b", "Ring", { dependsOn: ["a", "ghost"] });
+    saved.graphs.g1.nodes = [node("a", "Group"), noMissing, { name: 42 }];
+    saved.graphs.g9 = "broken" as never;
+    saved.projects.p2 = null;
+    const s = load(saved);
+    expect(s.projects.p1.name).toBe("Algebra");
+    expect(s.projectId).toBe("p1");
+    const g1 = s.graphs.g1;
+    expect(g1.id).toBe("g1");
+    expect(g1.relations).toEqual([]);
+    expect(g1.nodes.map((n) => n.name)).toEqual(["Group", "Ring"]);
+    expect(g1.nodes[1].missingDeps).toEqual([]);
+    expect(g1.nodes[1].dependsOn).toEqual(["a"]);
+    expect(s.graphs.g2.parentId).toBe("g1");
+    expect(s.graphs.g9).toBeUndefined();
+    expect(s.toast).toMatch(/repaired/i);
+    expect(s.toastKind).toBe("info");
+  });
+});
 
 describe("normalizeName keeps meaningful symbols", () => {
   it("tells C, C++ and C# apart", () => {
