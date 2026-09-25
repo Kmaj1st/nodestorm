@@ -75,6 +75,8 @@ export function ExtractDialog({
       title={initial ? (initial.heading ?? t("texImport.title", { title: initial.title })) : t("extract.title")}
       onClose={onClose}
       className="extract"
+      // Pasted text (also while its extraction is reviewed) is asked about before a stray Escape drops it.
+      dirty={Boolean(text.trim() || focus.trim())}
     >
       {!review ? (
         <form className="form" onSubmit={run}>

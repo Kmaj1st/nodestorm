@@ -1123,6 +1123,12 @@ try {
     "A group is a set with an associative operation, an identity and inverses. A homomorphism between groups preserves " +
       "the operation, and its kernel is the set of elements it sends to the identity. We call such a map a \"Widget morphism\".",
   );
+  // Pasted text: Escape asks before dropping it, and Keep editing leaves it there.
+  await page.keyboard.press("Escape");
+  await extract.getByTestId("modal-discard").waitFor();
+  await extract.getByRole("button", { name: "Keep editing" }).click();
+  await extract.getByTestId("modal-discard").waitFor({ state: "detached" });
+  assert((await extractText.inputValue()).startsWith("A group is a set"), "Escape with pasted text asks “Discard what you typed?”, and Keep editing keeps it");
   await extract.getByRole("button", { name: "Extract", exact: true }).click();
   await extract.getByTestId("extract-Kernel").waitFor();
   const tick = (name) => extract.getByRole("checkbox", { name: `Add ${name}`, exact: true });
