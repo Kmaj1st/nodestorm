@@ -1,6 +1,6 @@
 import type { ConceptNode } from "@nodestorm/shared";
 import { useState } from "react";
-import { listJoin, useT } from "../i18n";
+import { listJoin, useLang, useT } from "../i18n";
 import { aiSource, checkWithAi, chooseSense, sensesLookedUp } from "../lib/actions";
 import { removeNode } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
@@ -27,6 +27,7 @@ export function SenseDialog() {
 
 function SenseChoice({ graphId, node, searched }: { graphId: string; node: ConceptNode; searched?: { asked: string[]; failed: string[] } }) {
   const t = useT();
+  const lang = useLang(); // Chinese sentences follow each other without a space
   const setClarifying = useGraphStore((s) => s.setClarifying);
   const mutate = useGraphStore((s) => s.mutate);
   const clarifying = { graphId, nodeId: node.id };
@@ -76,7 +77,7 @@ function SenseChoice({ graphId, node, searched }: { graphId: string; node: Conce
               ? t("sense.nothing", { sites: listJoin(searched.asked) })
               : t(searched ? "sense.nothingOff" : "sense.none")
             : quiet.length > 0 && t("sense.notIn", { sites: listJoin(quiet) })}
-          {searched && searched.failed.length > 0 && <> {t("sense.failed", { sites: listJoin(searched.failed) })}</>}
+          {searched && searched.failed.length > 0 && <>{lang === "zh" ? "" : " "}{t("sense.failed", { sites: listJoin(searched.failed) })}</>}
         </p>
       )}
       <div className="senses" role="radiogroup">
