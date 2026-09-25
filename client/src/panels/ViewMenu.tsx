@@ -83,7 +83,10 @@ export function ViewMenu() {
   useEffect(() => {
     if (!open) return;
     const close = (e: MouseEvent | KeyboardEvent) => {
-      if (e instanceof KeyboardEvent ? e.key === "Escape" : !ref.current?.contains(e.target as Node)) setOpen(false);
+      if (e instanceof KeyboardEvent ? e.key !== "Escape" : ref.current?.contains(e.target as Node)) return;
+      // Escape from inside the popover hands focus back to its button.
+      if (e instanceof KeyboardEvent && ref.current?.contains(document.activeElement)) ref.current.querySelector("button")?.focus();
+      setOpen(false);
     };
     document.addEventListener("mousedown", close);
     document.addEventListener("keydown", close);
@@ -94,7 +97,8 @@ export function ViewMenu() {
   }, [open]);
 
   return (
-    <div className="menu" ref={ref}>
+    // Tabbing out of the popover closes it, so it never covers what has focus.
+    <div className="menu" ref={ref} onBlur={(e) => open && e.relatedTarget && !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button
         aria-haspopup="dialog"
         aria-expanded={open}

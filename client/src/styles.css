@@ -252,7 +252,7 @@ button.link {
 button.link:hover:not(:disabled) {
   background: none; text-decoration: underline; text-underline-offset: 2px;
 }
-button.link--icon { display: inline-flex; align-items: center; gap: var(--space-1); }
+button.link--icon { display: inline-flex; align-items: center; gap: var(--space-1); min-height: 24px; }
 /* Stacked links (inspector lists, learning path) get a 24px target (WCAG 2.5.8); inline ones stay text-sized. */
 li > button.link { display: inline-flex; align-items: center; min-height: 24px; }
 /* React Flow's attribution link is tiny text; pad it to a 24px target without changing how it looks. */
@@ -1009,6 +1009,8 @@ kbd {
   .toolbar__brand { display: none; }
   /* Labels that give way to an icon (the button keeps the label as its name, and a tooltip). */
   .toolbar__label { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+  /* …and is then as narrow as the other icon buttons (so Add, Mix, Derive and it share one row on a phone). */
+  .toolbar__group > button:has(> .toolbar__label) { padding: 0 var(--space-2); }
   /* Slightly tighter spacing, so the whole row (canvas tools included) still fits at 1200px. */
   .toolbar { gap: 6px; }
   .toolbar__actions { gap: 4px; }
@@ -1028,6 +1030,12 @@ kbd {
     display: flex; flex-wrap: wrap; gap: var(--space-2); width: 100%; padding-top: 6px; border-top: 1px solid var(--border);
   }
   .toolbar__right { margin-left: 0; }
+  /* The View popover opens below the toolbar from its left edge (anchored to its button it ran off the screen's left). */
+  .toolbar__tools .menu { position: static; }
+  .toolbar__tools .menu__list {
+    left: var(--space-2); right: auto; top: calc(100% + 4px); max-width: calc(100vw - 2 * var(--space-2));
+    max-height: 70vh; max-height: 70dvh; overflow-y: auto;
+  }
   .ai-button { max-width: 100%; }
   .main { flex-direction: column; }
   .sheet {
@@ -1039,6 +1047,7 @@ kbd {
     border-radius: var(--radius-lg) var(--radius-lg) 0 0; font-size: var(--text-sm); color: var(--muted);
   }
   .sheet__content { display: block; overflow-y: auto; min-height: 0; }
+  .sheet__content:focus-visible { outline-offset: -2px; }
   .sheet--closed .sheet__content { display: none; }
   .inspector { width: auto; border-left: none; overflow: visible; }
   .inspector__header { padding-top: var(--space-1); }
@@ -1172,6 +1181,7 @@ span.paper__title { color: var(--text); }
 .edge-colors { display: flex; flex-direction: column; gap: var(--space-1); margin-top: var(--space-2); }
 .edge-colors__head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .edge-colors__title { font-size: var(--text-sm); font-weight: 600; }
+.edge-colors__head button.link { min-height: 24px; }
 .edge-colors__row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
 .edge-colors__label { display: inline-flex; align-items: center; gap: var(--space-2); font-size: var(--text-sm); }
 .edge-colors__label input[type="color"] {
@@ -1210,3 +1220,5 @@ a.lookup-menu__link { display: flex; align-items: center; gap: var(--space-1); p
 a.lookup-menu__link:hover { background: var(--hover); }
 .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }
 .field-row input { min-width: 0; }
+/* Two inputs side by side don't fit a phone: stack them (minmax(0, …) above keeps them from pushing the dialog wider). */
+@media (max-width: 480px) { .field-row { grid-template-columns: minmax(0, 1fr); } }

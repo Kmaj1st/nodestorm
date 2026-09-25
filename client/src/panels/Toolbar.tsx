@@ -381,7 +381,8 @@ function FileMenu() {
   ];
 
   return (
-    <div className="menu" ref={ref}>
+    // Tabbing out of the menu closes it, so it never covers what has focus.
+    <div className="menu" ref={ref} onBlur={(e) => open && e.relatedTarget && !e.currentTarget.contains(e.relatedTarget) && setOpen(false)}>
       <button ref={menuButton} className="menu-button" aria-haspopup="menu" aria-expanded={open} onClick={() => setOpen(!open)} data-tour="file">
         {t("file.menu")}
         <Icon icon={ChevronDown} size={14} className="menu-button__chevron" />
