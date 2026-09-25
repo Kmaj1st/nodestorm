@@ -1,5 +1,9 @@
 # Changelog
 
+## 2026-09-26: overnight improvements
+
+- **Hide concepts for now.** The eye button in the inspector's header, **H** on the canvas (the selected concepts) or **Shift+H** (all but the selected ones), and **View → Hide selected / Hide others** take concepts and their relations off the canvas, the minimap, fit-view, Tidy and the 3D view. It is only a view choice for this browser tab: nothing is deleted, undone, exported or shared, and a new tab shows everything. **"N hidden · Show all"** in the canvas corner lists them, each with its own **Show** button; finding, opening or walking through a hidden concept shows it again.
+
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
 - **Adding a concept by name** opens **Definitions for "…"**: what ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl (for Chinese names) and your Fandom/BWIKI wiki found, side by side, each with its source.

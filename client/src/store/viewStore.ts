@@ -1,16 +1,47 @@
 import type { Graph } from "@nodestorm/shared";
 import { create } from "zustand";
 import { t } from "../i18n";
-import { DEFAULT_VIEW, kindFilterOf, sanitizeView, visibleParts, type ViewPrefs, type Visible } from "../lib/view";
+import {
+  DEFAULT_VIEW,
+  hideIds,
+  kindFilterOf,
+  parseHidden,
+  pruneHidden,
+  sanitizeView,
+  showIds,
+  visibleParts,
+  type HiddenMap,
+  type ViewPrefs,
+  type Visible,
+} from "../lib/view";
 import { viewport } from "../lib/viewport";
 import { useGraphStore, type GraphStore } from "./graphStore";
 
 /**
- * Canvas view state: filters (remembered per browser) and focus mode (not remembered).
- * The graph data itself is never changed by any of this.
+ * Canvas view state: filters (remembered per browser), concepts hidden by hand (remembered for the browser tab's
+ * session) and focus mode (not remembered). The graph data itself is never changed by any of this.
  */
 
 const KEY = "nodestorm-view";
+const HIDDEN_KEY = "nodestorm-hidden";
+
+function loadHidden(): HiddenMap {
+  try {
+    const v = sessionStorage.getItem(HIDDEN_KEY);
+    return v ? parseHidden(JSON.parse(v)) : {};
+  } catch {
+    return {}; // storage blocked or garbled
+  }
+}
+
+function saveHidden(hidden: HiddenMap) {
+  try {
+    if (Object.keys(hidden).length) sessionStorage.setItem(HIDDEN_KEY, JSON.stringify(hidden));
+    else sessionStorage.removeItem(HIDDEN_KEY);
+  } catch {
+    /* hidden concepts just come back on a reload */
+  }
+}
 
 function load(): ViewPrefs {
   try {
@@ -31,15 +62,21 @@ interface ViewState extends ViewPrefs {
   focus: Focus | null;
   /** The 3D view is open (not remembered: it is a dialog). */
   view3d: boolean;
+  /** Concepts hidden by hand, per graph (see lib/view.ts HiddenMap). Hide with `hideConcepts`: it also deselects. */
+  hidden: HiddenMap;
   setPrefs(patch: Partial<ViewPrefs>): void;
   setFocus(focus: Focus | null): void;
   setView3d(open: boolean): void;
+  setHidden(hidden: HiddenMap): void;
+  /** Show concepts of a graph again: `ids`, or all of them. */
+  show(graphId: string, ids?: readonly string[]): void;
 }
 
 export const useView = create<ViewState>()((set, get) => ({
   ...load(),
   focus: null,
   view3d: false,
+  hidden: loadHidden(),
   setPrefs(patch) {
     const { origins, edgeLabels, todoOnly, hops, kinds, layout, physics } = { ...get(), ...patch };
     const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds, layout, physics });
@@ -52,7 +89,17 @@ export const useView = create<ViewState>()((set, get) => ({
   },
   setFocus: (focus) => set({ focus }),
   setView3d: (view3d) => set({ view3d }),
+  setHidden(hidden) {
+    if (hidden === get().hidden) return;
+    saveHidden(hidden);
+    set({ hidden });
+  },
+  show: (graphId, ids) => get().setHidden(showIds(get().hidden, graphId, ids)),
 }));
+
+const NONE: readonly string[] = [];
+/** Selector: the concepts hidden by hand in graph `graphId` (a stable empty list when there are none). */
+export const hiddenIn = (graphId: string) => (v: Pick<ViewState, "hidden">) => v.hidden[graphId] ?? NONE;
 
 /** The focus that applies to `graph` (focus mode is per graph: switching graphs shows everything). */
 export function activeFocus(v: Pick<ViewState, "focus" | "hops">, graph: Graph) {
@@ -64,16 +111,51 @@ export function activeFocus(v: Pick<ViewState, "focus" | "hops">, graph: Graph) 
 export function visibleNow(s: GraphStore = useGraphStore.getState()): Visible {
   const v = useView.getState();
   const g = s.graphs[s.activeId];
-  return visibleParts(g, v, activeFocus(v, g));
+  return visibleParts(g, v, activeFocus(v, g), new Set(hiddenIn(s.activeId)(v)));
 }
 
 /**
- * Select a concept of the active graph and centre the view on it (Find, the notation glossary). A concept the to-do
+ * Hide concepts of the active graph from the canvas (a view choice, not an edit). They leave the selection, the
+ * inspector closes if it shows one of them (or a relation of one), and focus mode ends if it is centred on one.
+ * Returns how many were hidden.
+ */
+export function hideConcepts(ids: readonly string[]): number {
+  const s = useGraphStore.getState();
+  const g = s.graphs[s.activeId];
+  const already = hiddenIn(s.activeId)(useView.getState());
+  const hide = ids.filter((id) => !already.includes(id) && g?.nodes.some((n) => n.id === id));
+  if (!hide.length) return 0;
+  // Deselect first: selecting (or inspecting) a hidden concept shows it again (see the subscription below).
+  if (s.selection.some((id) => hide.includes(id))) s.setSelection(s.selection.filter((id) => !hide.includes(id)));
+  const ins = s.inspect;
+  const rel = ins?.kind === "edge" ? g.relations.find((r) => r.id === ins.relationId) : undefined;
+  if ((ins?.kind === "node" && hide.includes(ins.id)) || (rel && (hide.includes(rel.a) || hide.includes(rel.b)))) s.setInspect(null);
+  const v = useView.getState();
+  if (v.focus?.graphId === s.activeId && hide.includes(v.focus.nodeId)) v.setFocus(null);
+  v.setHidden(hideIds(v.hidden, s.activeId, hide));
+  return hide.length;
+}
+
+/** "Hide others" (Shift+H): hide every concept of the active graph that isn't selected, and say how to undo it. */
+export function hideOthers(): number {
+  const s = useGraphStore.getState();
+  const g = s.graphs[s.activeId];
+  if (!g || !s.selection.length) return 0;
+  const n = hideConcepts(g.nodes.filter((c) => !s.selection.includes(c.id)).map((c) => c.id));
+  if (n) s.setToast(t("hide.others", { n }), "info");
+  return n;
+}
+
+/**
+ * Select a concept of the active graph and centre the view on it (Find, the notation glossary, the 3D view). A concept
+ * hidden by hand is shown again. A concept the to-do
  * view or a kind filter hides would be selected but invisible, so those filters are turned off first, with a notice.
  * (In focus mode that's not needed: selecting moves the focus to it.)
  */
 export function goToConcept(id: string) {
   const s = useGraphStore.getState();
+  // A concept hidden by hand is shown again (nothing else needs to change for it).
+  if (hiddenIn(s.activeId)(useView.getState()).includes(id)) useView.getState().show(s.activeId, [id]);
   const view = useView.getState();
   const node = s.graphs[s.activeId]?.nodes.find((n) => n.id === id);
   const kindHidden = node && !view.kinds[kindFilterOf(node)];
@@ -106,4 +188,17 @@ useGraphStore.subscribe((s, prev) => {
   if (!f || s.selection === prev.selection || f.graphId !== s.activeId) return;
   const target = focusTarget(s);
   if (target && target !== f.nodeId) useView.getState().setFocus({ graphId: s.activeId, nodeId: target });
+});
+
+// Concepts hidden by hand: forget the ones that are gone (deleted concepts, discarded graphs), and show one again when
+// it gets selected or opened in the inspector by other means (a link in the inspector, the walkthrough, a new concept).
+useGraphStore.subscribe((s, prev) => {
+  const v = useView.getState();
+  if (!Object.keys(v.hidden).length) return;
+  if (s.graphs !== prev.graphs) v.setHidden(pruneHidden(v.hidden, s.graphs));
+  if (s.selection === prev.selection && s.inspect === prev.inspect) return;
+  const hidden = hiddenIn(s.activeId)(useView.getState());
+  const wanted = s.inspect?.kind === "node" ? [...s.selection, s.inspect.id] : s.selection;
+  const back = hidden.filter((id) => wanted.includes(id));
+  if (back.length) useView.getState().show(s.activeId, back);
 });

@@ -4,7 +4,8 @@ import { useLang, useT } from "../i18n";
 import { dependencyLayers } from "../lib/layout";
 import { useTheme } from "../lib/theme";
 import { activeGraph, useGraphStore } from "../store/graphStore";
-import { goToConcept } from "../store/viewStore";
+import { withoutHidden } from "../lib/view";
+import { goToConcept, hiddenIn, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 import { createScene, themeColors, type Scene3D } from "../graph3d/scene";
 import { Modal } from "./Modal";
@@ -14,11 +15,14 @@ const reducedMotion = () => typeof matchMedia === "function" && matchMedia("(pre
 /**
  * "3D view": the active graph's dependency layers as stacked plates in 3D (graph3d/scene.ts). Look-only: drag to
  * rotate, scroll to zoom, right-drag to pan, arrow keys and +/- too; clicking a concept (on a card, or in the list of
- * layers beside it) closes the view and opens that concept on the canvas.
+ * layers beside it) closes the view and opens that concept on the canvas. Concepts hidden on the canvas are left out.
  */
 export function Graph3DDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
-  const graph = useGraphStore(activeGraph);
+  // Concepts hidden on the canvas are left out here too.
+  const full = useGraphStore(activeGraph);
+  const hiddenIds = useView(hiddenIn(full.id));
+  const graph = useMemo(() => withoutHidden(full, new Set(hiddenIds)), [full, hiddenIds]);
   const theme = useTheme((s) => s.theme);
   const lang = useLang();
   const canvas = useRef<HTMLCanvasElement>(null);
