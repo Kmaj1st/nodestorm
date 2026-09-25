@@ -23,7 +23,7 @@ describe("AI provider errors in the interface language", () => {
     const err = await withDeadline("DeepSeek", { timeoutMs: 20 }, () => new Promise(() => {})).catch((e) => e);
     expect(err).toBeInstanceOf(ProviderError);
     expect(err).toMatchObject({ code: "timeout", params: { provider: "DeepSeek", seconds: 0 } });
-    expect(errorMessage(err)).toMatch(/^DeepSeek didn't respond within 0 s\./);
+    expect(errorMessage(err)).toMatch(/^DeepSeek didn't respond within 0s — /);
     zh();
     expect(errorMessage(err)).toMatch(/^DeepSeek 在 0 秒内没有响应。/);
   });

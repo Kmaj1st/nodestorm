@@ -1014,6 +1014,8 @@ export const zh: Record<MessageKey, string> = {
   "source.fromAi": "AI",
   "source.fromBaidu": "百度百科",
   "source.fromMoegirl": "萌娘百科",
+  "site.baidu": "百度百科",
+  "site.moegirl": "萌娘百科",
   "source.setWiki": "请在设置中选择维基",
   "source.searchRednote": "在小红书中搜索",
   "source.proposalLabel": "AI 给出的定义",

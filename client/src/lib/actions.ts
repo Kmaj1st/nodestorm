@@ -51,7 +51,7 @@ const graph = (id: string) => store().graphs[id];
 /** Report an AI failure; a missing key opens Settings instead of just complaining. */
 function reportError(e: unknown, prefix = "") {
   if (e instanceof NeedsSetupError) store().setSettingsOpen(true);
-  store().setToast(prefix + (errorMessage(e)));
+  store().setToast(prefix + errorMessage(e));
 }
 
 /**
@@ -155,7 +155,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     onError: (e) => {
       const msg = errorMessage(e);
       bg((g) => ops.setNodeError(g, nodeId, msg));
-      reportError(e, `${node.name}: `);
+      reportError(e, `${t("common.label", { label: node.name })} `);
     },
     onCancel: () => bg((g) => ops.setNodeError(g, nodeId, t("task.cancelled"))),
   };

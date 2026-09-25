@@ -653,7 +653,7 @@ export const en = {
   "api.serverLabel": "The NodeStorm server",
   // AI provider errors, by code (the raw detail, such as an HTTP body, follows in brackets)
   "aiErr.withDetail": "{message} ({detail})",
-  "aiErr.timeout": "{provider} didn't respond within {seconds} s. The model may be overloaded or slow: try again, pick a faster model, or raise the timeout in Settings.",
+  "aiErr.timeout": "{provider} didn't respond within {seconds}s — the model may be overloaded or slow. Try again, pick a faster model, or raise the timeout in Settings.",
   "aiErr.rateLimited": "{provider} is limiting how often it can be asked. Wait a moment and try again.",
   "aiErr.rateLimitedWait": "{provider} is limiting how often it can be asked. Try again in {seconds} s.",
   "aiErr.noKey": "{provider}: no API key is set.",
@@ -1027,6 +1027,8 @@ export const en = {
   "source.fromAi": "AI",
   "source.fromBaidu": "Baidu Baike",
   "source.fromMoegirl": "Moegirl (萌娘百科)",
+  "site.baidu": "Baidu Baike",
+  "site.moegirl": "Moegirl",
   "source.setWiki": "choose the wiki in Settings",
   "source.searchRednote": "Search on RedNote",
   "source.proposalLabel": "The AI's definition",

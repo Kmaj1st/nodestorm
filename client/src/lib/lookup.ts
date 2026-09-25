@@ -1,4 +1,5 @@
 import { CancelledError, lookupConcept, normalizeName, type LookupSense, type LookupSite } from "@nodestorm/shared";
+import { t } from "../i18n";
 import { useSettings } from "../store/settingsStore";
 import { baikeLookup } from "./baike";
 import { wikiLookup } from "./mediawiki";
@@ -85,12 +86,16 @@ export function activeSites(now = Date.now(), name?: string): Site[] {
 /** Sites refused recently (for Settings to say so). */
 export const pausedSites = (now = Date.now()) => (Object.keys(paused) as Site[]).filter((s) => paused[s]! > now);
 
-/** A site's name as shown to the user. */
+/** A site's name as shown to the user (the Chinese sites by their Chinese names in a Chinese interface). */
 export const SITE_NAME: Record<Site, string> = {
   proofwiki: "ProofWiki",
   wikipedia: "Wikipedia",
-  baidu: "Baidu Baike",
-  moegirl: "Moegirl",
+  get baidu() {
+    return t("site.baidu");
+  },
+  get moegirl() {
+    return t("site.moegirl");
+  },
   fandom: "Fandom",
   bwiki: "BWIKI",
 };
