@@ -1094,7 +1094,7 @@ export const en = {
   "settings.searchUrl": "SearXNG address",
   "settings.searchUrlHint": "The instance must allow JSON output (search.formats in its settings.yml) and requests from this site (CORS), unless it is used through the local NodeStorm server.",
   "settings.searchHowTo": "how to run one",
-  "settings.searchBraveServer": "Brave's API doesn't answer web pages, so it needs the local NodeStorm server (choose “Through the local NodeStorm server” above).",
+  "settings.searchBraveServer": "Brave's API doesn't answer web pages, so it needs the local NodeStorm server (see Connection above).",
   "settings.searchTest": "Test",
   "settings.searchTestAria": "Test {engine}",
   "settings.searchTesting": "Testing…",

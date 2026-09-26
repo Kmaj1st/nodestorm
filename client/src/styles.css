@@ -1103,6 +1103,9 @@ kbd {
 .web-search__body, .web-search .indent-text { padding-left: var(--space-5); }
 .web-search__body .row { flex-wrap: wrap; }
 .web-search__body .row input { flex-basis: 10rem; }
+.web-search label > span.web-search__label { display: block; }
+.web-search label > span.web-search__label > a { font-weight: 400; }
+.web-search label > span.web-search__name { display: block; flex: 1; min-width: 0; }
 
 /* Lean / Mathlib declarations in the inspector. */
 .formal-list { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: var(--space-2); }

@@ -339,6 +339,68 @@ The same pattern with no AI at all: real literature for a concept, where an AI's
   checks the query, parsing and headers with a fake fetch, `client/test/papers.test.ts` the action and exports, and
   the e2e "Papers" section serves fixtures. `npm run smoke:papers` (`scripts/papers-smoke.mts`) queries the real API.
 
+### Web search (`shared/src/lookup/webSearch.ts`, `client/src/lib/webSearch.ts`)
+
+Pages that define a concept, from web search engines, for the AI to rate and the user to quote from (the AI never
+writes the definition). This layer only finds and cleans the pages; the rating and the pop-up are built on its API.
+
+- **Contract** (`client/src/lib/webSearch.ts`): `searchEngines()` (the engines that are ticked, configured and can run
+  here), `searchReady()` (one of them usable now: online, not paused), and `searchWeb(name, {max, signal})` →
+  `{results: WebResult[], asked, failed}`. A `WebResult` is `{engine, title, url, site, text, published?}`: plain
+  text, whitespace-normalised, at most `TEXT_MAX` (4000) characters, https pages only. Cancelling throws
+  `CancelledError`; an engine that fails lands in `failed` (with a `console.warn`), the others still answer.
+- **Engines** (`shared/src/lookup/webSearch.ts`, used by the browser and the server alike): `webSearchRequest` builds
+  each request, `parseWebSearch` zod-checks the answer (a bad hit is skipped, a wrong shape is `malformed`),
+  `webSearchError` codes the failures, `fetchWebSearch` runs one search with a 12 s deadline. Requests carry no
+  credentials (`credentials: "omit"`, no referrer).
+  - **Tavily**: `POST api.tavily.com/search`, `Authorization: Bearer`, `search_depth: "basic"`, no answer or raw
+    content; `results[].title/url/content/published_date`. 432/433 are used-up plans.
+  - **Serper** (Google results): `POST google.serper.dev/search`, `X-API-KEY`, `{q, num, hl, gl}` (`zh-cn`/`cn`,
+    `ja`/`jp`…); `organic[].title/link/snippet/date`. "Not enough credits" (400) is a used-up plan.
+  - **Brave Search**: `GET api.search.brave.com/res/v1/web/search?q&count&search_lang&extra_snippets=true`,
+    `X-Subscription-Token`; `web.results[].title/url/description/extra_snippets/page_age`. Its API refuses cross-site
+    calls (the preflight gets a 405), so only the local server can ask it.
+  - **SearXNG**: `GET <instance>/search?q&format=json&language`; `results[].title/url/content/publishedDate`. The
+    instance must enable JSON output (a 403 otherwise) and allow CORS from the site, or be used through the server.
+  - Error codes (`ProviderErrorCode`, translated by `errorMessage`): `invalidKey` (401/403, Brave's 422 token error),
+    `rateLimited` (429), `quota` (used-up searches or credits), `declined` (SearXNG without JSON), `noKey`,
+    `unreachable` (network, CORS or a time-out), `malformed`, `http`. The engine's own message follows in brackets,
+    with the key replaced (`redactSecret`).
+- **Client** (`lib/webSearch.ts`):
+  - The query is `"<name>" definition`, or `<name> 定义` / `定義` / `정의` after a Chinese, Japanese or Korean name;
+    the engines' language comes from `lookupLanguage`.
+  - Browser mode calls Tavily, Serper and SearXNG directly. Server mode sends every engine through
+    `POST /api/search/:engine` with `{q, count, lang, key?, url?}`.
+  - Text: Brave's and SearXNG's markup goes through `DOMParser` and only `textContent` is kept (nothing is ever
+    inserted into the page). The others' text is plain and may contain `<` (math). Whitespace is normalised, text
+    clipped after a sentence, non-https and credentialed URLs dropped, relative dates ("2 days ago") dropped.
+  - Merging: the engines take turns (first hits of each first), one result per page (`urlKey` ignores the fragment,
+    a trailing slash, `www.` and host case), at most `max` in all.
+  - A localStorage cache (`nodestorm-websearch-cache`, 500 searches for 30 days, the oldest half dropped when storage
+    is full) is keyed by language, engines (and SearXNG address), `max` and name. Only answers without a failed engine
+    are cached.
+  - An engine that rejected the key, rate-limited or ran out of credits is paused for 10 minutes, per engine and key
+    (a corrected key is tried at once). Settings shows the pause.
+  - `testSearchEngine(engine, search, connection)` backs Settings' "Test". It uses the settings being edited, skips
+    the cache and pauses, and clears the pause when it works.
+- **Offline demo** (`provider: "mock"`): `searchEngines()` is `["demo"]` and `lib/webSearchDemo.ts` (lazy, so the
+  knowledge base stays out of the first-paint bundle) returns three pages built from `kbDefinition` in `mock.ts`:
+  `demo-encyclopedia.example` and `demo-lecture-notes.example` quote the knowledge base's definition word for word,
+  `demo-forum.example` is sloppy and wrong. An unknown concept has no pages.
+- **Settings** (`search` in `settingsStore`, `panels/WebSearchSettings.tsx` after "Definitions"): `{tavily, serper,
+  brave: {enabled, apiKey?}, searxng: {enabled, url?}, maxResults}` (default all off, 6). The keys follow the AI keys'
+  rules: `splitStorage` strips them from localStorage unless "Remember keys" is on, and "Forget all saved keys"
+  clears them. Settings are never part of exports, share links or snapshots. Brave's row is disabled in browser mode.
+- **Server** (`POST /api/search/:engine` in `server/src/app.ts`, behind the same Host/Origin checks as everything
+  else): zod-checks the body, takes the key typed in Settings or `TAVILY_API_KEY` / `SERPER_API_KEY` /
+  `BRAVE_API_KEY` / `SEARXNG_URL` from `server/.env`, and answers `{hits}` or the coded error. Plain http is allowed
+  for a SearXNG instance there (it often runs on the same machine). `createApp`'s `env` and `searchFetch` options
+  are for tests.
+- **Tests**: `test-setup.ts` blocks the three engine hosts in vitest, and the e2e aborts them with the lookup hosts.
+  `client/test/webSearch.test.ts` covers each engine with fixtures, merging, cleanup, errors, pauses, the cache, the
+  demo and key storage. `server/test/search.test.ts` covers the route, including the Host/Origin checks. The e2e
+  "Web search settings" section tests a Tavily key against a fixture, then a wrong one, and runs axe.
+
 ### Browser mode vs server mode
 
 ```mermaid

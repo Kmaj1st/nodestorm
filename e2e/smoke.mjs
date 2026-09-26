@@ -44,8 +44,9 @@ try {
   // A context (not browser.newPage) so the share-link section can open a second page with the same storage.
   const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, locale: "en-US" });
   // Never ask the real encyclopedias: every concept's definition then comes from the offline demo AI, as the
-  // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead.
-  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org|baike\.baidu\.com|moegirl\.org\.cn|fandom\.com|wiki\.biligame\.com/;
+  // flows below expect. The "Definitions from encyclopedias" section answers with fixtures instead. The web search
+  // engines are blocked too ("Web search settings" answers Tavily with a fixture).
+  const LOOKUP_SITES = /proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org|baike\.baidu\.com|moegirl\.org\.cn|fandom\.com|wiki\.biligame\.com|api\.tavily\.com|google\.serper\.dev|api\.search\.brave\.com/;
   const blockLookups = (ctx) => ctx.route(LOOKUP_SITES, (r) => r.abort());
   await blockLookups(context);
   // The run starts in English whatever the machine's language (the selectors below are English); the 中文 section at
@@ -2897,6 +2898,52 @@ try {
     );
     await page.screenshot({ path: `${shots}38-phone.png` });
     await page.setViewportSize({ width: 1400, height: 900 });
+  }
+
+  console.log("Web search settings");
+  {
+    // Tavily answers from a fixture: the key "tvly-good" works, any other is rejected with a 401, as Tavily does.
+    const TAVILY = /api\.tavily\.com/;
+    await context.route(TAVILY, (route) => {
+      const req = route.request();
+      const cors = { "access-control-allow-origin": "*", "access-control-allow-headers": "authorization, content-type", "access-control-allow-methods": "POST" };
+      if (req.method() === "OPTIONS") return route.fulfill({ status: 204, headers: cors });
+      const ok = req.headers().authorization === "Bearer tvly-good";
+      const body = ok
+        ? { query: "x", results: [{ title: "Group (mathematics)", url: "https://en.wikipedia.org/wiki/Group_(mathematics)", content: "In mathematics, a group is a set with an operation." }] }
+        : { detail: { error: "Unauthorized: missing or invalid API key." } };
+      return route.fulfill({ status: ok ? 200 : 401, contentType: "application/json", headers: cors, body: JSON.stringify(body) });
+    });
+    const st = await openSettings();
+    const ws = st.getByTestId("web-search-settings");
+    await ws.scrollIntoViewIfNeeded();
+    assert(await ws.getByTestId("search-brave-enabled").isDisabled(), "web search: Brave can't be ticked in browser mode…");
+    assert(await ws.getByText(/it needs the local NodeStorm server/).isVisible(), "…and says it needs the local NodeStorm server");
+    assert(await ws.getByText("Concept names are sent to the search engines you enable.").isVisible(), "the privacy line is shown");
+    await ws.getByTestId("search-tavily-enabled").check();
+    const key = ws.getByTestId("search-tavily-key");
+    const test = ws.getByTestId("search-tavily-test");
+    assert((await key.getAttribute("type")) === "password" && (await test.isDisabled()), "Tavily's key field is a password field, and Test waits for a key");
+    await key.fill("tvly-good");
+    await test.click();
+    await ws.getByTestId("search-tavily-ok").waitFor();
+    assert(true, "Test with a working Tavily key says it works");
+    await key.fill("tvly-wrong");
+    assert((await ws.getByTestId("search-tavily-ok").count()) === 0, "changing the key clears the old result");
+    await test.click();
+    const err = ws.getByTestId("search-tavily-error");
+    await err.waitFor();
+    const text = (await err.textContent()) ?? "";
+    assert(text.startsWith("Tavily rejected the API key. Check it in Settings."), `a wrong key: Test says Tavily rejected it (${text})`);
+    await audit("Settings with the web search section filled in");
+    await key.fill("tvly-good");
+    await st.getByRole("button", { name: "Save", exact: true }).click();
+    const stored = await page.evaluate(() => localStorage.getItem("nodestorm-settings") ?? "{}");
+    assert(!stored.includes("tvly-good") && JSON.parse(stored).state.search.tavily.enabled === true, "the engine is saved, its key not in localStorage (Remember keys is off)");
+    const st2 = await openSettings();
+    await st2.getByTestId("search-tavily-enabled").uncheck();
+    await st2.getByRole("button", { name: "Save", exact: true }).click();
+    await context.unroute(TAVILY);
   }
 
   if (BUILT) assert(!cspViolations.length, `production build: nothing broke the Content-Security-Policy${cspViolations.length ? `: ${cspViolations.join("; ")}` : ""}`);

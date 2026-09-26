@@ -81,13 +81,13 @@ export function WebSearchSettings({
                 onChange={(e) => setEngine(engine, { enabled: e.target.checked })}
                 data-testid={`search-${engine}-enabled`}
               />
-              {t(LABEL[engine])}
+              <span className="web-search__name">{t(LABEL[engine])}</span>
             </label>
             {browserOnly && <span className="muted small indent-text">{t("settings.searchBraveServer")}</span>}
             {cfg.enabled && !browserOnly && (
               <div className="web-search__body">
                 <label className="field">
-                  <span>
+                  <span className="web-search__label">
                     {label} · <a href={ENGINE_KEY_URL[engine]} target="_blank" rel="noreferrer">{t(isUrl ? "settings.searchHowTo" : "settings.getKey")}</a>
                   </span>
                   <div className="row">

@@ -1080,7 +1080,7 @@ export const zh: Record<MessageKey, string> = {
   "settings.searchUrl": "SearXNG 地址",
   "settings.searchUrlHint": "该实例须允许 JSON 输出（settings.yml 中的 search.formats），并允许来自本站的请求（CORS）；通过本地 NodeStorm 服务器使用时则不需要。",
   "settings.searchHowTo": "如何搭建",
-  "settings.searchBraveServer": "Brave 的 API 不响应网页发出的请求，因此需要本地 NodeStorm 服务器（在上方选择“通过本地 NodeStorm 服务器”）。",
+  "settings.searchBraveServer": "Brave 的 API 不响应网页发出的请求，因此需要本地 NodeStorm 服务器（见上方的“连接方式”）。",
   "settings.searchTest": "测试",
   "settings.searchTestAria": "测试 {engine}",
   "settings.searchTesting": "正在测试…",

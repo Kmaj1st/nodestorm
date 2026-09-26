@@ -348,6 +348,10 @@ Providers are configured by env vars named `<PROVIDER>_API_KEY`, `<PROVIDER>_BAS
 `server/.env.example`. The browser may choose the provider and model, never the key. The server has no
 authentication: run it on your own machine only.
 
+**Web search** (Settings → Web search) also goes through the server in this mode. It uses the key typed in Settings,
+or `TAVILY_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY` and `SEARXNG_URL` from `server/.env`. Brave Search only works
+this way, because its API refuses calls from web pages.
+
 ## Build and deploy
 
 `npm run build` produces a static site in `client/dist/` that runs without a server; you can open it from any static
