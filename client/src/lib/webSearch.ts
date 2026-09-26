@@ -1,7 +1,7 @@
 // STUB until web search lands: the real module (the four engines, their settings, the offline demo) replaces this
-// file. Only the contract's exports are here; the demo engine returns a few canned pages so the sources flow can be
-// tried and tested offline with the "mock" provider.
-import { CancelledError, normalizeName } from "@nodestorm/shared";
+// file. Only the contract's exports are here; the demo engine returns canned pages for the names the offline demo's
+// knowledge base knows, so the sources flow can be tried and tested offline with the "mock" provider.
+import { CancelledError } from "@nodestorm/shared";
 import { useSettings } from "../store/settingsStore";
 
 export type Engine = "tavily" | "serper" | "brave" | "searxng" | "demo";
@@ -15,40 +15,20 @@ export interface WebResult {
 }
 export interface WebSearchResult { results: WebResult[]; asked: Engine[]; failed: Engine[] }
 
-const DEMO: Record<string, string> = {
-  group: "A set with an associative binary operation, an identity element, and inverses.",
-  subgroup: "A subset of a group that is itself a group under the same operation.",
-  homomorphism: "A map between algebraic structures that preserves the operations, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for groups.",
-  kernel: "The set $\\ker\\varphi$ of elements a homomorphism $\\varphi$ sends to the identity.",
-};
-
-function demoPages(name: string): WebResult[] {
-  const def = DEMO[normalizeName(name)];
-  if (!def) return [];
-  const slug = encodeURIComponent(name.toLowerCase().replace(/\s+/g, "-"));
-  return [
-    {
-      engine: "demo",
-      title: `${name} — Demo Encyclopedia`,
-      url: `https://demo-encyclopedia.example/wiki/${slug}`,
-      site: "demo-encyclopedia.example",
-      text: `${name}. In mathematics, ${name.toLowerCase()} means the following. ${def} It is one of the basic notions of abstract algebra.`,
-    },
-    {
-      engine: "demo",
-      title: `Lecture 3: ${name}`,
-      url: `https://demo-lecture-notes.example/algebra/${slug}`,
-      site: "demo-lecture-notes.example",
-      text: `Definition 3.1 (${name}). ${def} We will use this throughout the course.`,
-    },
-    {
-      engine: "demo",
-      title: `What is a ${name.toLowerCase()}?? - Demo Forum`,
-      url: `https://demo-forum.example/t/${slug}`,
-      site: "demo-forum.example",
-      text: `honestly ${name.toLowerCase()} is just any set of numbers you can add up, nothing more to it. source: my teacher said so.`,
-    },
-  ];
+/** Three demo "sites" per meaning the offline demo knows: an encyclopedia, lecture notes and a sloppy forum post. */
+async function demoPages(name: string): Promise<WebResult[]> {
+  const { createProvider, tasks } = await import("./aiBrowser");
+  const { senses } = await tasks.clarify(createProvider("mock", {}), { name, count: 3 });
+  return senses
+    .filter((s) => s.definition)
+    .flatMap((s) => {
+      const slug = encodeURIComponent(s.name.replace(/\s+/g, "_"));
+      return [
+        { engine: "demo" as const, title: `${s.name} - Demo Encyclopedia`, url: `https://demo-encyclopedia.example/wiki/${slug}`, site: "demo-encyclopedia.example", text: `${s.definition} It is a standard notion of its field.` },
+        { engine: "demo" as const, title: `Lecture notes: ${s.name}`, url: `https://demo-lecture-notes.example/${slug}`, site: "demo-lecture-notes.example", text: `${s.definition} We will use this throughout the course.` },
+        { engine: "demo" as const, title: `What is ${s.name}?? - Demo Forum`, url: `https://demo-forum.example/t/${slug}`, site: "demo-forum.example", text: `honestly ${s.name.toLowerCase()} is just any set of numbers you can add up, nothing more to it. source: my teacher said so.` },
+      ];
+    });
 }
 
 export function searchEngines(): Engine[] {
@@ -62,6 +42,7 @@ export function searchReady(): boolean {
 export async function searchWeb(name: string, opts: { max: number; signal?: AbortSignal }): Promise<WebSearchResult> {
   if (opts.signal?.aborted) throw new CancelledError();
   const asked = searchEngines();
-  const results = asked.includes("demo") ? demoPages(name).slice(0, opts.max) : [];
+  const results = asked.includes("demo") ? (await demoPages(name)).slice(0, opts.max) : [];
+  if (opts.signal?.aborted) throw new CancelledError();
   return { results, asked, failed: [] };
 }

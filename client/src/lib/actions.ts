@@ -189,10 +189,11 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       set({ definition: pick.passage, source: sourceRef(pick), aliases: [...new Set([...(cur?.aliases ?? node.aliases), ...alias])] });
       lookedUp = true;
     } else {
-      // Several sources and none to take as it stands, or nothing found (the concept then needs a definition).
+      // Sources, but none to take as it stands: the user chooses in the pop-up. Nothing found: the concept needs a
+      // definition (its badge opens the pop-up), and no pop-up interrupts.
       set({ status: "unclear", senses: sourcesAsSenses(found?.sources ?? [], node.name) });
       if (!find()) return;
-      if (!opts.quiet) store().setClarifying({ graphId, nodeId, sources: found });
+      if (!opts.quiet && found?.sources.length) store().setClarifying({ graphId, nodeId, sources: found });
       return; // continues in chooseSense once the user picks a passage or writes a definition
     }
   }

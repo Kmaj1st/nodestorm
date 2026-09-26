@@ -364,8 +364,8 @@ function voiced<T extends { intuition: string; keyPoints: string[]; examples: { 
 
 /**
  * The offline demo's source check: encyclopedias and lecture notes rate high, a forum low (with why), other pages
- * medium; a page that never uses a word of mathematics is about another meaning. Each passage is the first sentence
- * that names the concept (or the first sentence), copied from the page's text.
+ * medium; a page that never uses a word of mathematics is about another meaning. Each passage is copied from the
+ * source's text: an encyclopedia's whole definition, or a page's first sentence that names the concept (or its first).
  */
 function assessSources(name: string, sources: { id: string; kind: string; site: string; title?: string; text: string }[]) {
   const math = /\b(group|set|element|operation|homomorphism|subgroup|map|identity|theorem|function|bird)\b|\$/i;
@@ -375,7 +375,8 @@ function assessSources(name: string, sources: { id: string; kind: string; site: 
     const forum = /forum|reddit|quora|answers/i.test(s.site);
     const strong = s.kind === "encyclopedia" || /encyclopedia|lecture|university|\.edu\b|wiki/i.test(s.site);
     const other = !math.test(s.text);
-    const first = sentences(s.text).find((x) => x.toLowerCase().includes(key)) ?? sentences(s.text)[0] ?? "";
+    // An encyclopedia's text is already its definition; a web page's is the first sentence naming the concept.
+    const first = s.kind === "encyclopedia" ? s.text : (sentences(s.text).find((x) => x.toLowerCase().includes(key)) ?? sentences(s.text)[0] ?? "");
     return {
       id: s.id,
       reliability: forum ? "low" : strong ? "high" : "medium",
