@@ -1,5 +1,6 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
+import { csp } from "./pwa/csp";
 import { serviceWorker } from "./pwa/plugin";
 
 /**
@@ -19,7 +20,8 @@ function katexWoff2Only(): Plugin {
 
 export default defineConfig({
   // serviceWorker() only runs in `vite build`: the dev server never has a service worker.
-  plugins: [react(), katexWoff2Only(), serviceWorker()],
+  // csp() too: the Content-Security-Policy <meta> goes into the built index.html only.
+  plugins: [react(), katexWoff2Only(), csp(), serviceWorker()],
   // Relative asset paths so the built site works from any folder or static host.
   base: "./",
   server: {

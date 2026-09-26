@@ -1,5 +1,6 @@
 import { CancelledError, normalizeName, SiteBlockedError, type LookupSense } from "@nodestorm/shared";
 import { z } from "zod";
+import { baikeFrameDoc } from "./baikeFrame";
 
 /**
  * Baidu Baike (百度百科) definitions, for concepts with Chinese names. Its open API sends no CORS header, so the
@@ -46,8 +47,6 @@ export function baikeSense(name: string, data: BaikeAnswer): LookupSense | null 
   };
 }
 
-const attr = (s: string) => s.replace(/&/g, "&amp;").replace(/"/g, "&quot;").replace(/</g, "&lt;");
-
 /** Ask Baidu Baike for `name` (through the sandboxed iframe). Resolves to the raw answer, `{}` when there is none. */
 export function baikeFetch(name: string, signal?: AbortSignal): Promise<BaikeAnswer> {
   if (typeof document === "undefined") return Promise.reject(new SiteBlockedError("baidu", "no browser"));
@@ -60,10 +59,7 @@ export function baikeFetch(name: string, signal?: AbortSignal): Promise<BaikeAns
   frame.setAttribute("tabindex", "-1");
   frame.dataset.lookup = "baidu";
   frame.style.cssText = "position:absolute;width:0;height:0;border:0;visibility:hidden";
-  frame.srcdoc =
-    `<!doctype html><meta charset="utf-8"><script>` +
-    `function cb(d){parent.postMessage({nonce:${JSON.stringify(nonce)},data:d},"*")}` +
-    `</script><script src="${attr(src)}" onerror='parent.postMessage({nonce:${JSON.stringify(nonce)},error:1},"*")'></script>`;
+  frame.srcdoc = baikeFrameDoc(src, nonce);
   return new Promise<BaikeAnswer>((resolve, reject) => {
     const done = () => {
       clearTimeout(timer);

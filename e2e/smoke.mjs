@@ -30,7 +30,11 @@ function assert(cond, msg) {
 }
 
 start("npx", ["tsx", "server/src/index.ts"], { AI_PROVIDER: "mock", PORT: String(SERVER_PORT) });
-start("npx", ["vite", "client", "--port", String(WEB_PORT), "--strictPort"], { SERVER_PORT: String(SERVER_PORT) });
+// E2E_BUILT=1 runs everything against the production build (`npm run build` first) served by `vite preview`, which
+// proxies /api like the dev server; that build has the Content-Security-Policy, and any violation fails the run.
+const BUILT = process.env.E2E_BUILT === "1";
+start("npx", ["vite", ...(BUILT ? ["preview"] : []), "client", "--port", String(WEB_PORT), "--strictPort"], { SERVER_PORT: String(SERVER_PORT) });
+const cspViolations = [];
 
 let browser;
 try {
@@ -51,9 +55,17 @@ try {
       if (!localStorage.getItem("nodestorm-ui-language")) localStorage.setItem("nodestorm-ui-language", "en");
     } catch {}
   });
+  if (BUILT) {
+    // Collected from every page and frame (the Baidu Baike srcdoc frame inherits the page's policy).
+    await context.exposeBinding("__cspViolation", (_src, v) => cspViolations.push(v));
+    await context.addInitScript(() =>
+      document.addEventListener("securitypolicyviolation", (e) => window.__cspViolation?.(`${e.effectiveDirective} ${e.blockedURI} (${e.sourceFile}:${e.lineNumber})`)),
+    );
+  }
   const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   await page.goto(`http://localhost:${WEB_PORT}/`);
+  if (BUILT) assert(await page.locator('meta[http-equiv="Content-Security-Policy"]').count(), "production build: the page has a Content-Security-Policy");
   // A first visit shows the welcome card (the Onboarding section below tests it); it doesn't block the toolbar.
   await page.getByTestId("welcome").waitFor();
 
@@ -2886,6 +2898,8 @@ try {
     await page.screenshot({ path: `${shots}38-phone.png` });
     await page.setViewportSize({ width: 1400, height: 900 });
   }
+
+  if (BUILT) assert(!cspViolations.length, `production build: nothing broke the Content-Security-Policy${cspViolations.length ? `: ${cspViolations.join("; ")}` : ""}`);
 
   console.log("\nE2E passed");
 } catch (e) {

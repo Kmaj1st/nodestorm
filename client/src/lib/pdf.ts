@@ -103,7 +103,9 @@ export async function readPdf(
   aborted(signal);
   const lib = await pdfjs();
   aborted(signal);
-  const task = lib.getDocument({ data: new Uint8Array(data.slice(0)), verbosity: lib.VerbosityLevel.ERRORS });
+  // Files are untrusted: no XFA forms. PDF scripts never run here (only PDF.js's viewer, not used, has a scripting
+  // sandbox), and the production build's CSP (pwa/csp.ts) forbids eval and inline code besides.
+  const task = lib.getDocument({ data: new Uint8Array(data.slice(0)), verbosity: lib.VerbosityLevel.ERRORS, enableXfa: false });
   const stop = () => void task.destroy();
   signal?.addEventListener("abort", stop, { once: true });
   try {

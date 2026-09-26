@@ -80,6 +80,16 @@ export interface ProviderErrorInfo {
   detail?: string;
 }
 
+/**
+ * `text` with every copy of `secret` (an API key) replaced. Error bodies are shown to the user and sent from the
+ * server to the browser, and some providers or proxies echo the key they were given. Very short values are left
+ * alone: they aren't real keys and would mangle ordinary words.
+ */
+export function redactSecret<T extends string | undefined>(text: T, secret: string | undefined): T {
+  if (!text || !secret || secret.length < 8) return text;
+  return text.split(secret).join("[key hidden]") as T;
+}
+
 export class ProviderError extends Error {
   code?: ProviderErrorCode;
   params?: Record<string, string | number>;

@@ -769,7 +769,7 @@ export const zh: Record<MessageKey, string> = {
   "quiz.styleMixedHint": "按你对每个概念的掌握程度，出回忆、应用或关联题。",
   "quiz.styleRecallHint": "它是什么？用自己的话说出定义。",
   "quiz.styleApplyHint": "把它用在一个小例子上。",
-  "quiz.styleConnectHint": "它如何建立在某个前置概念之上？",
+  "quiz.styleConnectHint": "它如何建立在某个前置知识之上？",
   "quiz.tagRecall": "回忆",
   "quiz.tagApply": "应用",
   "quiz.tagConnect": "关联",
