@@ -635,6 +635,61 @@ export type ConnectSuggestion = z.infer<typeof ConnectSuggestion>;
 export const ConnectResponse = z.object({ suggestions: z.array(ConnectSuggestion).default([]) });
 export type ConnectResponse = z.infer<typeof ConnectResponse>;
 
+// ---------- Assess sources ----------
+
+/** How far a source can be trusted for a concept's definition, as the AI judges it against the other sources. */
+export const Reliability = z.enum(["high", "medium", "low", "unusable"]);
+export type Reliability = z.infer<typeof Reliability>;
+
+/** Longest source text the AI is shown (a web page's excerpt is cut to this). */
+export const ASSESS_TEXT_MAX = 2500;
+/** Most sources one assessment compares. */
+export const ASSESS_MAX = 10;
+
+/** One source found for a concept's name: an encyclopedia entry or a web search result, with the text we have of it. */
+export const AssessSource = z.object({
+  id: z.string().min(1).max(40),
+  kind: z.enum(["encyclopedia", "web"]),
+  site: z.string().max(200),
+  title: z.string().max(300).default(""),
+  url: z.string().max(2000).default(""),
+  text: z.string().max(ASSESS_TEXT_MAX),
+});
+export type AssessSource = z.infer<typeof AssessSource>;
+
+/**
+ * "Assess sources": the AI rates each source and points at the passage that defines the concept, quoted word for
+ * word from that source's text. It never writes a definition itself.
+ */
+export const AssessRequest = z.object({
+  name: z.string().min(1),
+  /** Extra context, e.g. why a dependent concept needs this one. */
+  hint: z.string().optional(),
+  /** Names of related concepts in the graph (which meaning is meant). */
+  context: z.array(z.string().max(200)).max(40).default([]),
+  sources: z.array(AssessSource).min(1).max(ASSESS_MAX),
+});
+export type AssessRequest = z.infer<typeof AssessRequest>;
+
+export const AssessRating = z.object({
+  id: z.string(),
+  /** Null when the answer's value isn't one of the four (the source then counts as not rated). */
+  reliability: z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), Reliability.nullable()).catch(null),
+  reasons: z.string().default(""),
+  /** A short label of the meaning of the name the source describes (sources about different meanings are grouped). */
+  sense: z.string().default(""),
+  /** The sentence(s) of the source that define the concept, copied verbatim ("" when there is none). */
+  passage: z.string().default(""),
+});
+export type AssessRating = z.infer<typeof AssessRating>;
+
+export const AssessResponse = z.object({
+  ratings: z.array(AssessRating).default([]),
+  /** How far the sources agree, and where they conflict. */
+  note: z.string().default(""),
+});
+export type AssessResponse = z.infer<typeof AssessResponse>;
+
 // ---------- Derive together ----------
 
 /** Largest page image `readPage` accepts (base64 characters, about 6 MB of JPEG). */

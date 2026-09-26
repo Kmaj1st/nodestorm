@@ -41,6 +41,9 @@ import {
   RefereeResponse,
   type SheetProblem,
   type TutorConcept,
+  AssessRequest,
+  AssessResponse,
+  type AssessRating,
 } from "../model";
 import type { z } from "zod";
 import { isLeanName } from "../lookup/loogle";
@@ -64,6 +67,7 @@ import {
   connectPrompt,
   refereeReportPrompt,
   relatePrompt,
+  assessPrompt,
   withLanguage,
 } from "./prompts";
 
@@ -382,6 +386,10 @@ export const tasks = {
     const res = await runStructured(p, connectPrompt(req), ConnectResponse, o);
     return cleanConnect(res, req);
   },
+  assess: async (p: Provider, body: unknown, o?: RequestOptions) => {
+    const req = AssessRequest.parse(body);
+    return cleanAssessment(await runStructured(p, assessPrompt(req), AssessResponse, o), req);
+  },
 };
 export type TaskName = keyof typeof tasks;
 
@@ -401,6 +409,98 @@ export function cleanConnect(res: ConnectResponse, req: Pick<ConnectRequest, "no
     if (out.length >= (req.count ?? 8)) break;
   }
   return { suggestions: out };
+}
+
+/** Folded forms for the tolerant passage match: quotes and dashes of every kind, and invisible characters. */
+const FOLD: Record<string, string> = {};
+for (const c of "‘’‚‛′`´") FOLD[c] = "'";
+for (const c of "“”„‟″«»") FOLD[c] = '"';
+for (const c of "‐‑‒–—―−﹣－") FOLD[c] = "-";
+for (const c of "​‌‍﻿­") FOLD[c] = "";
+
+/**
+ * `s` with runs of whitespace as one space (and, when `tolerant`, quotes and dashes unified, invisible characters
+ * dropped, letters in lower case), plus for each character of the result the index in `s` it came from.
+ */
+function foldWithMap(s: string, tolerant: boolean): { text: string; at: number[] } {
+  let text = "";
+  const at: number[] = [];
+  let space = false;
+  for (let i = 0; i < s.length; i++) {
+    let c = s[i];
+    if (/\s/.test(c)) {
+      if (!space && text) {
+        text += " ";
+        at.push(i);
+      }
+      space = true;
+      continue;
+    }
+    space = false;
+    if (tolerant) {
+      if (c in FOLD) c = FOLD[c];
+      else if (c.toLowerCase().length === 1) c = c.toLowerCase();
+      if (!c) continue;
+    }
+    text += c;
+    at.push(i);
+  }
+  if (text.endsWith(" ")) {
+    text = text.slice(0, -1);
+    at.pop();
+  }
+  return { text, at };
+}
+
+/** Shortest passage worth keeping (a word or two would match almost anywhere). */
+const MIN_PASSAGE = 4;
+
+/**
+ * The passage the AI quoted, as the source's own characters: exactly as given when it is a substring of `text`;
+ * otherwise found again with whitespace collapsed, and then also with quotes/dashes unified and case ignored, and
+ * mapped back to the span of `text` it matches. "" when it isn't in the text at all: text the AI wrote is never kept.
+ */
+export function matchPassage(text: string, passage: string): string {
+  // Quotes or an ellipsis the model put around the quote aren't part of it.
+  const p = passage.trim().replace(/^["“”'‘’「『]+|["“”'‘’」』]+$/g, "").replace(/^(?:\.\.\.|…)\s*|\s*(?:\.\.\.|…)$/g, "").trim();
+  if (p.length < MIN_PASSAGE) return "";
+  if (text.includes(p)) return p;
+  for (const tolerant of [false, true]) {
+    const src = foldWithMap(text, tolerant);
+    const want = foldWithMap(p, tolerant).text;
+    if (want.length < MIN_PASSAGE) continue;
+    const i = src.text.indexOf(want);
+    if (i < 0) continue;
+    const start = src.at[i];
+    const last = src.at[i + want.length - 1];
+    return text.slice(start, last + 1);
+  }
+  return "";
+}
+
+/**
+ * An assessment as the UI uses it: one rating per source that was given (unknown ids and repeats dropped), each
+ * passage checked to be the source's own words (see matchPassage), texts trimmed. Sources the AI left out have no
+ * rating (the caller shows them as not rated).
+ */
+export function cleanAssessment(res: AssessResponse, req: Pick<AssessRequest, "sources">): { ratings: AssessRating[]; note: string } {
+  const byId = new Map(req.sources.map((s) => [s.id, s]));
+  const seen = new Set<string>();
+  const ratings: AssessRating[] = [];
+  for (const r of res.ratings) {
+    const id = String(r.id).trim();
+    const src = byId.get(id);
+    if (!src || seen.has(id)) continue;
+    seen.add(id);
+    ratings.push({
+      id,
+      reliability: r.reliability,
+      reasons: r.reasons.trim().slice(0, 600),
+      sense: r.sense.trim().slice(0, 80),
+      passage: matchPassage(src.text, r.passage),
+    });
+  }
+  return { ratings, note: res.note.trim().slice(0, 1000) };
 }
 
 const MAX_TUTOR_CONCEPTS = 5;

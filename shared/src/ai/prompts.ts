@@ -23,12 +23,14 @@ import type {
   CheckStepRequest,
   MathlibRequest,
   ConnectRequest,
+  AssessRequest,
 } from "../model";
 import { normalizeName } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
-  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport" | "connect";
+  | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport" | "connect"
+  | "assess";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -68,7 +70,7 @@ export function languageInstruction(language: string | undefined): string {
   const target =
     lang.toLowerCase() === "auto" ? "the same language as the concept names and descriptions in the input" : lang;
   return `Output language: write every human-readable value (names, aliases, definitions, domains, relation kinds, explanations, reasons, summaries, examples, key points, pitfalls, reading hints, quiz questions, answers, hints and choices, chain titles, facts, quips, morals and notes, hypotheses, conclusions and proof ideas, referee summaries, comments and praise) in ${target}.
-Keep the JSON keys, the "role" values, the referee "verdict" and "severity" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. Relation kinds in another language are active verb phrases too, without a passive marker (e.g. no 被). When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. The reply must still be a single valid JSON object.`;
+Keep the JSON keys, the "role" values, the referee "verdict" and "severity" values, the concept "kind" values (definition, theorem…) and the relation kind "none" exactly as in the schema, in English. Relation kinds in another language are active verb phrases too, without a passive marker (e.g. no 被). When a field refers to a concept already in the graph ("matchesExisting", "from", "to", "dependent", "prerequisite"), copy its name exactly as given. A quoted "passage" and the "reliability" values stay exactly as in the source and the schema, never translated. The reply must still be a single valid JSON object.`;
 }
 
 /** Add the output-language paragraph to the system message of a task prompt. */
@@ -520,5 +522,27 @@ ${KIND_GUIDE}
 Schema: {"suggestions":[{"name":string,"keyword":string,"definition":string,"kind":${KIND_VALUES}|null,"aToB":{"kind":string,"explanation":string},"bToA":{"kind":string,"explanation":string}}]}`,
     ),
     input(req, `Concept:\n${brief(req.node)}${linked}\n\n${contextBlock(req.existing)}`),
+  ];
+}
+
+export function assessPrompt(req: AssessRequest): ChatMessage[] {
+  const context = req.context.length ? `\nRelated concepts in the user's graph: ${req.context.join("; ")}` : "";
+  return [
+    sys(
+      "assess",
+      `You check sources found for a concept's name: encyclopedia entries and web search results. You do not write a definition.
+For each source (by its "id"):
+- "reliability": "high", "medium", "low" or "unusable". Judge it by comparing the sources against each other: the authority of the site (an established encyclopedia, a university or textbook page or a standards body ranks higher than a forum, a Q&A answer, a marketing page, a content farm or text that reads as AI-generated), whether it agrees with the other sources, and errors you spot. "unusable" = it has no definition of the concept or is not about it at all.
+- "reasons": one or two short sentences saying why (the site's authority, agreement or disagreement with the other sources and on what, errors spotted, forum/marketing/AI-generated content, a different meaning of the name).
+- "sense": a short label (1-4 words) of which meaning of the name the source describes, e.g. "group theory", "linear algebra", "video game". Use the same label for sources about the same meaning. Different meanings of the name are not errors: rate a source about another meaning by its own quality, and say in "reasons" that it is about another meaning.
+- "passage": the sentence or sentences of that source's "text" that define the concept (for a result, state it), QUOTED VERBATIM: copied character for character, in the source's own language, with its own formulas and punctuation. Quote only: never paraphrase, shorten with "…", translate, correct, or write new text, and never put one source's words in another's passage. Use "" when the text has no defining sentence.
+"note": one to three sentences on how far the sources agree, and where they conflict (name the sites).
+Use the related concepts and any hint to tell which meaning the user means, but rate every source.
+Schema: {"ratings":[{"id":string,"reliability":"high"|"medium"|"low"|"unusable","reasons":string,"sense":string,"passage":string}],"note":string}`,
+    ),
+    input(
+      req,
+      `Concept name: ${req.name}${req.hint ? `\nHint: ${req.hint}` : ""}${context}\n\nThe sources are in the INPUT below. Each "passage" is copied exactly from that source's "text", never written by you.`,
+    ),
   ];
 }

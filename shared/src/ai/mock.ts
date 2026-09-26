@@ -362,6 +362,41 @@ function voiced<T extends { intuition: string; keyPoints: string[]; examples: { 
   };
 }
 
+/**
+ * The offline demo's source check: encyclopedias and lecture notes rate high, a forum low (with why), other pages
+ * medium; a page that never uses a word of mathematics is about another meaning. Each passage is the first sentence
+ * that names the concept (or the first sentence), copied from the page's text.
+ */
+function assessSources(name: string, sources: { id: string; kind: string; site: string; title?: string; text: string }[]) {
+  const math = /\b(group|set|element|operation|homomorphism|subgroup|map|identity|theorem|function|bird)\b|\$/i;
+  const sentences = (text: string) => text.match(/[\s\S]*?(?:[.!?](?=\s|$)|[。！？])/g) ?? [text];
+  const key = name.toLowerCase();
+  const ratings = sources.map((s) => {
+    const forum = /forum|reddit|quora|answers/i.test(s.site);
+    const strong = s.kind === "encyclopedia" || /encyclopedia|lecture|university|\.edu\b|wiki/i.test(s.site);
+    const other = !math.test(s.text);
+    const first = sentences(s.text).find((x) => x.toLowerCase().includes(key)) ?? sentences(s.text)[0] ?? "";
+    return {
+      id: s.id,
+      reliability: forum ? "low" : strong ? "high" : "medium",
+      reasons: forum
+        ? "A forum post: no editorial review, and its wording disagrees with the encyclopedia and the lecture notes."
+        : other
+          ? "Describes another meaning of the name; a reliable page for that meaning."
+          : strong
+            ? "An encyclopedia or course page; agrees with the other sources."
+            : "A general web page; agrees with the other sources but names no references.",
+      sense: other ? "another meaning" : "mathematics",
+      passage: first.trim(),
+    };
+  });
+  const low = ratings.filter((r) => r.reliability === "low").map((r) => sources.find((s) => s.id === r.id)!.site);
+  const note = low.length
+    ? `The sources agree on the definition, except ${low.join(", ")}, which contradicts the others.`
+    : "The sources agree on the definition.";
+  return { ratings, note };
+}
+
 function title(s: string) {
   return s.replace(/\b\w/g, (c) => c.toUpperCase());
 }
@@ -431,6 +466,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(this.absurdChain(inp));
       case "anatomy":
         return JSON.stringify(anatomyOf(inp.node ?? { name: "" }));
+      case "assess":
+        return JSON.stringify(assessSources(String(inp.name ?? ""), inp.sources ?? []));
       default:
         return "{}";
     }
