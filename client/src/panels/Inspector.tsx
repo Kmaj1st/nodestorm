@@ -31,7 +31,7 @@ import { hideConcepts, useView } from "../store/viewStore";
 import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog } from "./lazy";
 import type { Site } from "../lib/lookup";
-import { wikiName } from "../lib/mediawiki";
+import { wikiName } from "../lib/wikiName";
 import { useEffect, useRef, useState } from "react";
 import { listJoin, rich, useLang, useT, type MessageKey } from "../i18n";
 import {

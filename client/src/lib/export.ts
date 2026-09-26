@@ -1,6 +1,6 @@
 import type { ConceptNode, ExplainLevel, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
 import { listJoin, translate, useLocale, type Lang, type MessageKey } from "../i18n";
-import { isUnrelated } from "./graphOps";
+import { graphDisplayName, isUnrelated } from "./graphOps";
 import { KIND_LABEL } from "./kinds";
 import { splitMath } from "./math";
 
@@ -86,7 +86,7 @@ export function toMarkdown(g: Graph): string {
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const ordered = studyOrder(g);
   const rank = new Map(ordered.map((n, i) => [n.id, i]));
-  const lines: string[] = [`# ${mdEscape(g.name || t("md.untitled"))}`, ""];
+  const lines: string[] = [`# ${mdEscape(graphDisplayName(g) || t("md.untitled"))}`, ""];
   if (!g.nodes.length) return [...lines, `_${t("md.empty")}_`, ""].join("\n");
 
   lines.push(`## ${t("md.studyOrder")}`, "");

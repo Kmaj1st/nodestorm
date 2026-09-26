@@ -121,8 +121,12 @@ export function AbsurdChainDialog({ from: from0, to: to0, onClose }: { from: str
     if (addAbsurdChainToSandbox(res, shownVia)) onClose();
   };
 
+  // Ends or stops typed for a chain not built yet, and a custom stop's description, are asked about before closing.
+  const typedEnds = normalizeName(from) !== normalizeName(from0) || normalizeName(to) !== normalizeName(to0);
+  const dirty = stops.some((s) => Boolean(s.description?.trim())) || (!res && (typedEnds || stops.length > 0));
+
   return (
-    <Modal label={t("absurd.title")} title={t("absurd.title")} onClose={onClose} className="absurd">
+    <Modal label={t("absurd.title")} title={t("absurd.title")} onClose={onClose} className="absurd" dirty={dirty}>
       <p className="muted">{t("absurd.intro")}</p>
       <div
         className="absurd__form"

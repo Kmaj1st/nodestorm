@@ -17,6 +17,19 @@ import {
   type DocMeta,
   type DocPage,
 } from "../src/lib/docDb";
+import { useLocale } from "../src/i18n";
+import { errorMessage } from "../src/lib/errors";
+import { storageError } from "../src/lib/storageError";
+
+describe("storage errors", () => {
+  it("a full disk says so whatever failed; other browser messages follow in brackets", () => {
+    expect(storageError("transaction", new DOMException("x", "QuotaExceededError"))).toMatchObject({ code: "quota" });
+    expect(errorMessage(storageError("transaction", new DOMException("x", "QuotaExceededError")))).toMatch(/storage is full/);
+    const err = storageError("request", new DOMException("Key not valid", "DataError"));
+    expect(err.message).toBe("IndexedDB request failed (Key not valid)");
+    expect(errorMessage(err)).toBe("Reading or writing the browser's storage failed. (Key not valid)");
+  });
+});
 
 const meta = (id: string, over: Partial<DocMeta> = {}): DocMeta => ({
   id,
@@ -44,7 +57,14 @@ describe("docDb", () => {
     try {
       expect(await docsAvailable()).toBe(false);
       await expect(listDocs("p1")).rejects.toThrow(/not available/);
+      // Coded, so the interface can say it in its own language.
+      const err = await listDocs("p1").catch((e) => e);
+      expect(err).toMatchObject({ code: "unavailable" });
+      expect(errorMessage(err)).toMatch(/^This browser can't store data here/);
+      useLocale.setState({ pref: "zh", lang: "zh" });
+      expect(errorMessage(err)).toMatch(/^这个浏览器无法在这里保存数据/);
     } finally {
+      useLocale.setState({ pref: "auto", lang: "en" });
       (globalThis as { indexedDB?: unknown }).indexedDB = saved;
     }
     expect(await docsAvailable()).toBe(true); // a failed open is retried

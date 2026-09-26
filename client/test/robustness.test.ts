@@ -1,4 +1,4 @@
-import { findByName, normalizeName } from "@nodestorm/shared";
+import { findByName, normalizeName, type ConceptNode } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import * as ops from "../src/lib/graphOps";
 import { isReady, useSettings } from "../src/store/settingsStore";
@@ -148,5 +148,37 @@ describe("aliases never answer for another concept", () => {
     const r = ops.renameNode(bad, ring.id, "Ring (algebra)");
     expect(r.error).toBeUndefined();
     expect(r.graph.nodes.find((n) => n.id === ring.id)!.aliases).toEqual(["Ring"]);
+  });
+
+  const named = (g: { nodes: { name: string; aliases: string[] }[] }, name: string) => g.nodes.find((n) => n.name === name)!;
+
+  it("merging a sandbox brings its aliases only where they are free, and the parent's aliases win", () => {
+    let parent = ops.addNode(ops.emptyGraph(), { name: "Group", aliases: ["Gruppe"] }).graph;
+    let sb = ops.fork(parent, "Sandbox");
+    // After the fork, both sides add "Kernel"; the parent also adds "Rng".
+    parent = ops.addNode(parent, { name: "Kernel", aliases: ["Kern"] }).graph;
+    parent = ops.addNode(parent, { name: "Rng" }).graph;
+    sb = ops.addNode(sb, { name: "Kernel", aliases: ["Null space", "Rng"] }).graph;
+    // A concept both sides have, given in the sandbox the alias the parent's new concept took.
+    const group = named(sb, "Group") as ConceptNode;
+    sb = { ...sb, nodes: sb.nodes.map((n) => (n.id === group.id ? { ...n, aliases: ["Kern", "Gruppe"] } : n)) };
+
+    const out = ops.merge(parent, sb);
+    expect(out.nodes.map((n) => n.name).sort()).toEqual(["Group", "Kernel", "Rng"]);
+    expect(named(out, "Kernel").aliases).toEqual(["Kern", "Null space"]);
+    expect(named(out, "Group").aliases).toEqual(["Gruppe"]);
+    for (const key of ["Gruppe", "Kern", "Rng", "Null space"]) expect(out.nodes.filter((n) => findByName([n], key))).toHaveLength(1);
+  });
+
+  it("a concept folded into an existing meaning leaves its name as an alias, and no alias of another concept", () => {
+    let g = ops.addNode(ops.emptyGraph(), { name: "Expectation (probability)" }).graph;
+    g = ops.addNode(g, { name: "Mean", aliases: ["Average"] }).graph;
+    const r = ops.addNode(g, { name: "Expectation", aliases: ["Expected value"] });
+    // An older graph where the new concept wrongly carries another concept's alias.
+    const bad = { ...r.graph, nodes: r.graph.nodes.map((n) => (n.id === r.id ? { ...n, aliases: ["Average", "Expected value"] } : n)) };
+    const out = ops.applySense(bad, r.id, { name: "Expectation (probability)", definition: "" });
+    expect(out.merged).toBe(true);
+    expect(named(out.graph, "Expectation (probability)").aliases).toEqual(["Expectation", "Expected value"]);
+    expect(findByName(out.graph.nodes, "Average")?.name).toBe("Mean");
   });
 });

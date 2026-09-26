@@ -39,6 +39,11 @@
 - **Derive together keeps the last change across a quick reload:** a derivation started (or a document's problems found, or something deleted) just before the page reloads or the tab closes is no longer lost when its IndexedDB write hadn't finished. Each such write is noted in localStorage first and written through when the library next opens.
 - **Undo keeps an AI explanation or theorem anatomy exactly as it was stored** (its time could differ by a millisecond before).
 - Tests: the flaky theorem-anatomy unit test is deterministic, and the end-to-end test waits for menus, dialogs and saved state instead of fixed pauses.
+  Extract from text (pasted text or a focus, also while its concepts are reviewed) and Absurd chain (ends or stops typed for a chain not built yet, a custom stop's description) ask too.
+- **Merging a sandbox, or folding a concept into one that has the same meaning,** keeps aliases unambiguous too: the folded concept's name and aliases become aliases of the one it joined where no other concept has them, and on a merge the aliases the main graph already had win.
+- **Errors of the browser storage** behind Versions and Derive together's documents (unavailable, blocked by another tab, full) are said in the interface language.
+- **The main graph** is headed "Main graph" (主图谱) in the Markdown export and in Derive together's "Add to graph", instead of its stored name "Main".
+- **Faster start, again:** the encyclopedia clients (ProofWiki, Wikipedia/Wikidata, Baidu Baike, the MediaWiki wikis) load on the first look-up that isn't cached: the first-paint bundle is 818 kB instead of 832 kB (262 kB instead of 267 kB gzipped). Physics saves positions without scanning the concept list once per concept.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
