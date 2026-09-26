@@ -1,12 +1,18 @@
 import type { Graph } from "@nodestorm/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { analyzeNode, applyProposal, chooseSense, relookup } from "../src/lib/actions";
+import { analyzeNode, chooseSense, compareSources, relookup, replaceDefinition } from "../src/lib/actions";
+import { api } from "../src/lib/api";
 import * as ops from "../src/lib/graphOps";
 import { activeSites, lookupLanguage, resetLookup } from "../src/lib/lookup";
+import { resetSources } from "../src/lib/sources";
 import { useGraphStore } from "../src/store/graphStore";
 import { useSettings } from "../src/store/settingsStore";
 
-// The lookup-before-AI flow of analyzeNode, against fake encyclopedia answers and the offline mock AI.
+// The definition step of analyzeNode (Settings: use the AI right away), against fake encyclopedia answers, a fake web
+// search (off unless a test turns it on) and the offline mock AI, which rates the sources but never writes a definition.
+
+vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+const { fake } = await import("./fakeWebSearch");
 
 vi.hoisted(() => {
   const data = new Map<string, string>();
@@ -37,6 +43,9 @@ beforeEach(() => {
   }) as typeof fetch;
   store().reset();
   resetLookup();
+  resetSources();
+  fake.ready = false;
+  fake.pages = undefined;
   useSettings.setState({
     newConcepts: "auto", // the automatic flow (lookupFlow.test.ts has the asking one)
     connection: "browser",
@@ -48,6 +57,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
+  vi.restoreAllMocks();
 });
 
 function add(name: string) {
@@ -88,9 +98,10 @@ describe("definitions from encyclopedias", () => {
     await analyzeNode(id);
     const n = node(id);
     expect(n.status).toBe("unclear");
-    expect(n.senses?.map((s) => [s.name, s.source?.site])).toEqual([["expected value", "Wikidata"], ["expectation", "Wikidata"]]);
-    expect(store().clarifying).toEqual({ graphId: store().activeId, nodeId: id });
-    chooseSense(store().activeId, id, n.senses![0]);
+    // The page named exactly "expectation" first.
+    expect(n.senses?.map((s) => [s.name, s.source?.site])).toEqual([["expectation", "Wikidata"], ["expected value", "Wikidata"]]);
+    expect(store().clarifying).toMatchObject({ graphId: store().activeId, nodeId: id, sources: { rated: true } });
+    chooseSense(store().activeId, id, n.senses![1]);
     expect(node(id).source).toEqual({ site: "Wikidata", title: "Q1", url: "https://www.wikidata.org/wiki/Q1" });
     expect(node(id).definition).toBe("average of a random variable");
   });
@@ -106,23 +117,8 @@ describe("definitions from encyclopedias", () => {
     expect(node(id).senses?.map((s) => s.name)).toEqual(["Normal Subgroup"]);
   });
 
-  it("“Ask again” goes to the AI, not back to the same encyclopedia list", async () => {
-    routes = [
-      [/proofwiki/, () => new Response("x", { status: 403, headers: { "content-type": "text/html" } })],
-      [/titles=Expectation&/, () => json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "x" }] } })],
-      [/wbsearchentities/, () => json({ search: [{ id: "Q1", label: "expected value", description: "average" }, { id: "Q2", label: "expectation", description: "belief" }] })],
-      [/wbgetentities/, () => json({ entities: {} })],
-    ];
-    const id = add("Expectation");
-    await analyzeNode(id);
-    expect(node(id).senses?.[0].source?.site).toBe("Wikidata");
-    await analyzeNode(id, undefined, undefined, { askAi: true });
-    // The offline AI's own meanings for "Expectation": their source is the AI (and which model).
-    expect(node(id).status).toBe("unclear");
-    expect(node(id).senses?.every((s) => s.source?.site === "AI" && s.source.title === "Offline demo · mock-kb")).toBe(true);
-  });
-
-  it("an install's hint lets the AI pick among several looked-up meanings instead of asking", async () => {
+  it("an install's hint goes to the AI's check of the sources, which writes no definition", async () => {
+    const assess = vi.spyOn(api, "assess");
     routes = [
       [/proofwiki/, () => new Response("x", { status: 403, headers: { "content-type": "text/html" } })],
       [/titles=Expectation&/, () => json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "x" }] } })],
@@ -131,7 +127,10 @@ describe("definitions from encyclopedias", () => {
     ];
     const id = add("Expectation");
     await analyzeNode(id, undefined, "needed by Variance (probability)");
-    expect(node(id).senses?.some((s) => s.source && s.source.site !== "AI")).not.toBe(true);
+    expect(assess.mock.calls[0][0]).toMatchObject({ name: "Expectation", hint: "needed by Variance (probability)" });
+    // Two near matches: nothing is taken unasked, and nothing comes from the AI.
+    expect(node(id)).toMatchObject({ status: "unclear", definition: "" });
+    expect(node(id).senses?.every((s) => s.source?.site === "Wikidata")).toBe(true);
   });
 
   it("without AI set up, a chosen looked-up meaning is kept instead of failing", async () => {
@@ -149,22 +148,33 @@ describe("definitions from encyclopedias", () => {
     expect(store().settingsOpen).toBe(false);
   });
 
-  it("an AI definition after “Ask again” doesn't keep an encyclopedia's source", async () => {
-    routes = [[/proofwiki.*page=Definition:Kernel/, () => json({ parse: { title: "Definition:Kernel", wikitext: KERNEL } })]];
-    const id = add("Kernel");
-    store().mutate((g) => ops.updateNode(g, id, { definition: "old", status: "ok" }));
-    await relookup(id);
-    expect(node(id).source?.site).toBe("ProofWiki");
-    await analyzeNode(id, undefined, undefined, { askAi: true });
-    expect(node(id).source).toEqual({ site: "AI", title: "Offline demo · mock-kb" });
-    expect(node(id).definition).not.toContain("\\phi^{-1}");
-  });
-
-  it("falls back to the AI when nothing is found", async () => {
+  it("nothing found: the concept needs a definition, and no AI text is written", async () => {
     const id = add("Homomorphism");
     await analyzeNode(id);
-    expect(node(id).definition).toMatch(/preserves the operations/); // the mock AI's definition
-    expect(node(id).source).toEqual({ site: "AI", title: "Offline demo · mock-kb" }); // noted as the AI's
+    expect(node(id)).toMatchObject({ status: "unclear", definition: "", senses: [] });
+    expect(node(id).source).toBeUndefined();
+  });
+
+  it("with web search, the most reliable page's passage is taken word for word, with the page as its source", async () => {
+    fake.ready = true;
+    const id = add("Homomorphism");
+    await analyzeNode(id);
+    const n = node(id);
+    expect(n.definition).toBe("A map between algebraic structures that preserves the operations, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for groups.");
+    expect(n.source).toEqual({ site: "demo-encyclopedia.example", title: "Homomorphism - Demo Encyclopedia", url: "https://demo-encyclopedia.example/wiki/Homomorphism" });
+    expect(n.status).not.toBe("unclear");
+  });
+
+  it("a doubtful source alone isn't taken: the concept waits for the user", async () => {
+    fake.ready = true;
+    fake.pages = (name) => [
+      { engine: "demo", title: "Forum", url: "https://demo-forum.example/t/1", site: "demo-forum.example", text: `${name} is a set of numbers, trust me.` },
+    ];
+    const id = add("Homomorphism");
+    await analyzeNode(id);
+    expect(node(id)).toMatchObject({ status: "unclear", definition: "" });
+    expect(node(id).senses?.[0]).toMatchObject({ definition: "Homomorphism is a set of numbers, trust me.", source: { site: "demo-forum.example" } });
+    expect(store().clarifying?.sources?.sources[0]).toMatchObject({ reliability: "low" });
   });
 
   it("skips a site that refused for a while", async () => {
@@ -218,16 +228,22 @@ describe("definitions from encyclopedias", () => {
     await relookup(id, undefined, "proofwiki");
     expect(node(id).source?.site).toBe("ProofWiki");
     expect(node(id).definition).toContain("kernel");
-    // The AI's answer is only proposed: nothing changes until the user uses it.
-    const before = node(id);
-    const p = await relookup(id, undefined, "ai");
-    expect(node(id)).toBe(before);
-    expect(p).toMatchObject({ nodeId: id, source: { site: "AI", title: "Offline demo · mock-kb" } });
-    applyProposal(p!);
-    expect(node(id).source?.site).toBe("AI");
-    expect(node(id).definition).toBe(p!.definition);
+  });
+
+  it("“Search the web and compare” opens the sources; choosing replaces the definition as one undo step", async () => {
+    fake.ready = true;
+    const id = add("Kernel");
+    store().mutate((g) => ops.updateNode(g, id, { definition: "my own words", status: "ok", source: ops.OWN_SOURCE }));
+    await compareSources(id);
+    const c = store().clarifying!;
+    expect(c).toMatchObject({ nodeId: id, replace: true, sources: { rated: true } });
+    const pick = c.sources!.sources.find((s) => s.site === "demo-encyclopedia.example")!;
+    expect(node(id).definition).toBe("my own words"); // nothing changes until the user chooses
+    replaceDefinition(store().activeId, id, { definition: pick.passage, source: { site: pick.site, title: pick.title, url: pick.url } });
+    expect(node(id)).toMatchObject({ definition: pick.passage, status: "ok", source: { site: "demo-encyclopedia.example" } });
+    expect(store().clarifying).toBeNull();
     store().undo();
-    expect(node(id).source?.site).toBe("ProofWiki");
+    expect(node(id)).toMatchObject({ definition: "my own words", source: ops.OWN_SOURCE });
   });
 
   it("asks Baidu Baike last, and only for a name in Chinese", () => {

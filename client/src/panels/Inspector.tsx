@@ -36,10 +36,9 @@ import { useEffect, useRef, useState } from "react";
 import { listJoin, rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   aiSource,
-  applyProposal,
-  type AiProposal,
   analyzeNode,
   checkWithAi,
+  compareSources,
   sensesLookedUp,
   anatomyKey,
   connectKey,
@@ -984,8 +983,6 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
   const t = useT();
   const graphId = useGraphStore((s) => s.activeId);
   const busy = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
-  // The AI's answer from "Look up in… → AI", waiting for the user to use it or keep the current definition.
-  const [proposal, setProposal] = useState<AiProposal | null>(null);
   const src = node.source;
   // Every definition says where it came from: an encyclopedia (linked), the AI (and which model), a document, the
   // user, or, for older concepts, nothing recorded.
@@ -1011,45 +1008,19 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
           )}
         </span>
         {!viewing && (
-          <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} onProposal={setProposal} />
+          <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} />
         )}
       </div>
-      {proposal && proposal.nodeId === node.id && (
-        <div className="ai-proposal" role="group" aria-label={t("source.proposalLabel")} data-testid="ai-proposal">
-          <p className="ai-proposal__head small">{t("source.proposalHead", { model: proposal.source.title })}</p>
-          <div className="ai-proposal__text"><MathText text={proposal.definition} /></div>
-          <div className="form__actions">
-            <button className="small-btn" onClick={() => setProposal(null)} data-testid="ai-proposal-keep">
-              {t("source.proposalKeep")}
-            </button>
-            <button
-              className="small-btn primary"
-              onClick={() => {
-                applyProposal(proposal, graphId);
-                setProposal(null);
-              }}
-              data-testid="ai-proposal-use"
-            >
-              {t("source.proposalUse")}
-            </button>
-          </div>
-        </div>
-      )}
     </>
   );
 }
 
 /**
  * "Look up in…": define the concept again from a source the user picks, even when it already has a definition. The
- * encyclopedias replace it at once (Undo brings it back); the AI's answer is proposed first; RedNote has no API, so
- * its entry opens RedNote's own search.
+ * encyclopedias replace it at once (Undo brings it back); "Search the web and compare" opens the sources pop-up (every
+ * source, rated by the AI) to pick a passage from; RedNote has no API, so its entry opens RedNote's own search.
  */
-function LookupMenu({ node, graphId, busy, onProposal }: {
-  node: ConceptNode;
-  graphId: string;
-  busy: boolean;
-  onProposal: (p: AiProposal | null) => void;
-}) {
+function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: string; busy: boolean }) {
   const t = useT();
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -1074,20 +1045,18 @@ function LookupMenu({ node, graphId, busy, onProposal }: {
   }, [open]);
   const fandomName = wikiName("fandom", fandom);
   const bwikiName = wikiName("bwiki", bwiki);
-  const entries: { from: Site | "ai"; label: string; disabled?: string }[] = [
+  const entries: { from: Site | "compare"; label: string; disabled?: string }[] = [
     { from: "proofwiki", label: t("source.fromProofwiki") },
     { from: "wikipedia", label: t("source.fromWikipedia") },
     { from: "baidu", label: t("source.fromBaidu") },
     { from: "moegirl", label: t("source.fromMoegirl") },
     fandomName ? { from: "fandom", label: `Fandom (${fandomName})` } : { from: "fandom", label: "Fandom", disabled: t("source.setWiki") },
     bwikiName ? { from: "bwiki", label: `BWIKI (${bwikiName})` } : { from: "bwiki", label: "BWIKI", disabled: t("source.setWiki") },
-    { from: "ai", label: t("source.fromAi") },
+    { from: "compare", label: t("source.compare") },
   ];
-  const pick = async (from: Site | "ai") => {
+  const pick = (from: Site | "compare") => {
     setOpen(false);
-    onProposal(null);
-    const p = await relookup(node.id, graphId, from);
-    if (p) onProposal(p);
+    void (from === "compare" ? compareSources(node.id, graphId) : relookup(node.id, graphId, from));
   };
   return (
     <div className="popover-anchor" ref={ref}>
@@ -1113,7 +1082,8 @@ function LookupMenu({ node, graphId, busy, onProposal }: {
               className="lookup-menu__item"
               disabled={Boolean(o.disabled)}
               title={o.disabled}
-              onClick={() => void pick(o.from)}
+              onClick={() => pick(o.from)}
+              data-testid={o.from === "compare" ? "lookup-compare" : undefined}
             >
               {o.label}
               {o.disabled && <span className="muted small"> · {o.disabled}</span>}

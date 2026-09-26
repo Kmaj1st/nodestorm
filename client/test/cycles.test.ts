@@ -9,6 +9,9 @@ import { useSettings } from "../src/store/settingsStore";
 
 // Automatic dependency-cycle resolution, driven through the real store + actions with the offline mock AI.
 
+// Web search as in the offline demo: a page defining any name (see fakeWebSearch.ts).
+vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+
 vi.hoisted(() => {
   const data = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {

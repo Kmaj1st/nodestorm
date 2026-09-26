@@ -2,6 +2,7 @@ import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
 import { t } from "../i18n";
+import type { Gathered } from "../lib/sources";
 import { buildExample, EXAMPLES } from "../lib/examples";
 import { fork, merge, uid } from "../lib/graphOps";
 import { repairImport, repairSaved } from "../lib/importRepair";
@@ -28,9 +29,12 @@ interface State {
   /** "info" for confirmations and summaries; "error" (default) for failures. */
   toastKind: ToastKind;
   settingsOpen: boolean;
-  /** Node whose meaning the user is being asked to pick ("what do you mean?" dialog). */
-  /** The concept whose meaning is being chosen; `searched`: the sites a fresh look-up asked, and those that failed. */
-  clarifying: { graphId: string; nodeId: string; searched?: { asked: string[]; failed: string[] } } | null;
+  /**
+   * The concept whose definition is being chosen in the sources pop-up. `sources`: what a fresh search found (without
+   * it, the concept's stored meanings are shown); `replace`: the concept already has a definition, which a choice
+   * replaces ("Look up in… → Search the web and compare").
+   */
+  clarifying: { graphId: string; nodeId: string; sources?: Gathered; replace?: boolean } | null;
   /** Node whose learning path is highlighted on the canvas (everything else is dimmed). */
   highlight: { graphId: string; nodeId: string } | null;
   /** Undo/redo stacks per graph id (in memory only). */

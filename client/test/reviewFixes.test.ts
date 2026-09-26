@@ -7,6 +7,9 @@ import { useSettings } from "../src/store/settingsStore";
 
 // Regressions for bugs found in the post-merge review; drives the real store + actions with the mock AI.
 
+// Web search as in the offline demo: a page defining any name (see fakeWebSearch.ts).
+vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+
 vi.hoisted(() => {
   const data = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {

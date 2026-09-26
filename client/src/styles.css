@@ -874,9 +874,52 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 }
 .sense__searched { color: var(--muted); margin-top: calc(-1 * var(--space-1)); }
 .sense__searched:empty { display: none; }
-/* "Ask the AI" when the look-ups found nothing: one of the two ways on, beside writing a definition. */
-button.sense__ask-ai { background: var(--accent-soft); border-color: var(--accent-border); color: var(--accent); }
-button.sense__ask-ai:hover:not(:disabled) { background: var(--accent-soft); border-color: var(--accent); }
+
+/* Sources pop-up (panels/SenseDialog.tsx): sources rated by the AI, a passage of one to pick, or selected text. */
+.modal__body.sources-dialog { width: min(680px, calc(100vw - 32px)); }
+.sources { display: flex; flex-direction: column; gap: var(--space-2); }
+.sources__meaning { margin: var(--space-2) 0 0; font-size: var(--text-sm) !important; font-weight: 600; color: var(--muted); }
+.sources__note {
+  padding: var(--space-2) var(--space-3); border: 1px solid var(--accent-border); border-radius: var(--radius-md);
+  background: var(--accent-soft); line-height: 1.5;
+}
+.src {
+  display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-md);
+  padding: 10px var(--space-3); min-width: 0;
+}
+.src--on { border-color: var(--accent); background: var(--accent-soft); }
+.src__head { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }
+.src__head input[type="radio"] { margin: 0; align-self: center; }
+.src__label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
+.src__site { font-weight: 600; }
+.src__title { color: var(--muted); font-size: var(--text-sm); }
+.src__rel {
+  padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-full); font-size: var(--text-xs);
+  white-space: nowrap; color: var(--muted); background: var(--surface);
+}
+.src__rel--high { color: var(--ok); border-color: var(--ok-border); background: var(--ok-soft); }
+.src__rel--medium { color: var(--sandbox); border-color: var(--sandbox-border); background: var(--sandbox-soft); }
+.src__rel--low { color: var(--checking); border-color: var(--checking-border); background: var(--checking-soft); }
+.src__rel--unusable { color: var(--blocked); border-color: var(--blocked-border); background: var(--blocked-soft); }
+.src__why summary { cursor: pointer; color: var(--muted); width: fit-content; }
+.src__why p { margin: 4px 0 0; }
+/* Plain characters, so a selection is exactly the source's text. */
+.src__text { white-space: pre-wrap; overflow-wrap: anywhere; line-height: 1.5; color: var(--text); }
+.src__text mark { background: var(--warn-soft); color: inherit; border-bottom: 2px solid var(--checking-border); padding: 0 1px; }
+.src__cut { color: var(--muted); user-select: none; }
+.src__actions { display: flex; gap: var(--space-3); align-items: center; flex-wrap: wrap; }
+.src__link { display: inline-flex; align-items: center; gap: 4px; }
+.src__quote { white-space: pre-wrap; overflow-wrap: anywhere; }
+.src__copy { color: var(--ok); }
+.src__copy--changed { color: var(--checking); }
+.sources__select { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; justify-content: space-between; }
+.sources__select .muted { flex: 1 1 260px; }
+.sources__preview {
+  display: flex; flex-direction: column; gap: 4px; padding: var(--space-2) var(--space-3); border-radius: var(--radius-md);
+  background: var(--surface); overflow-wrap: anywhere;
+}
+.sources__searched:empty { display: none; }
+.sources__engine { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 
 /* Find concept (command palette) */
 .modal--top { place-items: start center; padding-top: 12vh; }
@@ -1237,14 +1280,6 @@ span.paper__title { color: var(--text); }
 button.lookup-menu__item { justify-content: flex-start; background: transparent; border-color: transparent; box-shadow: none; min-height: 28px; }
 button.lookup-menu__item:hover:not(:disabled) { background: var(--hover); }
 
-/* "Look up in… → AI": the AI's definition, proposed until the user uses it or keeps the current one. */
-.ai-proposal {
-  display: flex; flex-direction: column; gap: var(--space-2); padding: var(--space-2) 10px; margin-top: var(--space-1);
-  border: 1px dashed var(--accent-border); border-radius: var(--radius-sm); background: var(--accent-soft); font-size: var(--text-sm);
-}
-.ai-proposal__head { margin: 0; color: var(--accent); font-weight: 500; }
-.ai-proposal__text { overflow-wrap: anywhere; line-height: 1.5; }
-.ai-proposal .form__actions { margin: 0; }
 a.lookup-menu__link { display: flex; align-items: center; gap: var(--space-1); padding: 4px var(--space-2); min-height: 28px; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; font-size: var(--text-sm); }
 a.lookup-menu__link:hover { background: var(--hover); }
 .field-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-2); }

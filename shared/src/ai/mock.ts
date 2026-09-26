@@ -369,7 +369,7 @@ function voiced<T extends { intuition: string; keyPoints: string[]; examples: { 
  */
 function assessSources(name: string, sources: { id: string; kind: string; site: string; title?: string; text: string }[]) {
   const math = /\b(group|set|element|operation|homomorphism|subgroup|map|identity|theorem|function|bird)\b|\$/i;
-  const sentences = (text: string) => text.match(/[\s\S]*?(?:[.!?](?=\s|$)|[。！？])/g) ?? [text];
+  const sentences = (text: string) => text.match(/[\s\S]*?(?:(?<!\b(?:e\.g|i\.e|cf|etc|vs))[.!?](?=\s|$)|[。！？])/g) ?? [text];
   const key = name.toLowerCase();
   const ratings = sources.map((s) => {
     const forum = /forum|reddit|quora|answers/i.test(s.site);
@@ -386,7 +386,8 @@ function assessSources(name: string, sources: { id: string; kind: string; site: 
           : strong
             ? "An encyclopedia or course page; agrees with the other sources."
             : "A general web page; agrees with the other sources but names no references.",
-      sense: other ? "another meaning" : "mathematics",
+      // Another meaning is labelled by the page's first words (the demo can't tell meanings apart any better).
+      sense: other ? s.text.split(/\s+/).slice(0, 3).join(" ").replace(/[.,;:]$/, "") : "mathematics",
       passage: first.trim(),
     };
   });

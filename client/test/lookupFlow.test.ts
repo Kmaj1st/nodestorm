@@ -4,11 +4,15 @@ import { addConcept, checkWithAi, chooseSense, installDep, sensesLookedUp } from
 import { api } from "../src/lib/api";
 import * as ops from "../src/lib/graphOps";
 import { everySite, lookupEverywhere, resetLookup } from "../src/lib/lookup";
+import { resetSources } from "../src/lib/sources";
 import { useGraphStore } from "../src/store/graphStore";
 import { useSettings } from "../src/store/settingsStore";
 
-// Adding a concept with "ask first" (the default): what the encyclopedias and wikis found is offered, and the AI is
-// used only when the user says so.
+// Adding a concept with "ask first" (the default): the sources found (encyclopedias, wikis; the web search is off
+// here unless a test turns it on) are offered, rated by the AI; the AI checks prerequisites only when the user says so.
+
+vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+const { fake } = await import("./fakeWebSearch");
 
 vi.hoisted(() => {
   const data = new Map<string, string>();
@@ -36,6 +40,7 @@ let routes: [RegExp, () => Response][] = [];
 const realFetch = globalThis.fetch;
 let clarify: { mock: { calls: unknown[] } };
 let deps: { mock: { calls: unknown[] } };
+let assess: { mock: { calls: unknown[][] } };
 beforeEach(() => {
   routes = [];
   globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
@@ -45,6 +50,9 @@ beforeEach(() => {
   }) as typeof fetch;
   store().reset();
   resetLookup();
+  resetSources();
+  fake.ready = false;
+  fake.pages = undefined;
   useSettings.setState({
     newConcepts: "ask",
     connection: "browser",
@@ -55,6 +63,7 @@ beforeEach(() => {
   });
   clarify = vi.spyOn(api, "clarify");
   deps = vi.spyOn(api, "deps");
+  assess = vi.spyOn(api, "assess");
 });
 afterEach(() => {
   globalThis.fetch = realFetch;
@@ -98,13 +107,68 @@ describe("look-ups everywhere", () => {
 });
 
 describe("adding a concept, asking first", () => {
-  it("offers what was found and doesn't use the AI", async () => {
+  it("offers what was found, rated by the AI, without checking prerequisites or writing a definition", async () => {
     kernelRoutes();
     const id = addConcept({ name: "Kernel" });
     await idle();
     expect(node(id).status).toBe("unclear");
     expect(node(id).senses?.map((s) => s.source?.site)).toEqual(["ProofWiki", "Fandom (minecraft)"]);
-    expect(store().clarifying).toMatchObject({ nodeId: id, searched: { asked: ["ProofWiki", "Wikipedia", "Fandom (minecraft)"], failed: [] } });
+    expect(store().clarifying).toMatchObject({
+      nodeId: id,
+      sources: { asked: ["ProofWiki", "Wikipedia", "Fandom (minecraft)"], failed: [], web: false, rated: true },
+    });
+    // Two meanings: the mathematical one and the game's block, grouped apart.
+    expect(store().clarifying!.sources!.sources.map((s) => s.sense)).toEqual(["mathematics", "The Kernel is"]);
+    expect(assess).toHaveBeenCalledTimes(1);
+    expect(clarify).not.toHaveBeenCalled();
+    expect(deps).not.toHaveBeenCalled();
+  });
+
+  it("without an AI set up, the sources are offered unrated in the order found", async () => {
+    useSettings.setState({ provider: "siliconflow", configs: { ...useSettings.getState().configs, siliconflow: {} } });
+    kernelRoutes();
+    const id = addConcept({ name: "Kernel" });
+    await idle();
+    const found = store().clarifying!.sources!;
+    expect(found.rated).toBe(false);
+    expect(found.sources.map((s) => [s.site, s.reliability])).toEqual([["ProofWiki", null], ["Fandom (minecraft)", null]]);
+    // The default passage is the encyclopedia's definition.
+    expect(found.sources[1].passage).toBe(FANDOM_KERNEL);
+    expect(assess).not.toHaveBeenCalled();
+    expect(node(id).status).toBe("unclear");
+  });
+
+  it("with web search, the pages come after the encyclopedias, one per URL, and the choice records the page", async () => {
+    fake.ready = true;
+    fake.pages = () => [
+      { engine: "demo", title: "Kernel (algebra)", url: "https://demo-lecture-notes.example/kernel", site: "demo-lecture-notes.example", text: "Definition. The kernel of a homomorphism is the set of elements sent to the identity. More." },
+      { engine: "demo", title: "Kernel again", url: "https://demo-lecture-notes.example/kernel/", site: "demo-lecture-notes.example", text: "Duplicate page." },
+      { engine: "demo", title: "Kernel??", url: "https://demo-forum.example/t/9", site: "demo-forum.example", text: "kernel is just the zero of a group lol. trust me." },
+    ];
+    kernelRoutes();
+    const id = addConcept({ name: "Kernel" });
+    await idle();
+    const found = store().clarifying!.sources!;
+    expect(found.asked).toEqual(["ProofWiki", "Wikipedia", "Fandom (minecraft)", "offline demo search"]);
+    const sites = found.sources.map((s) => `${s.site}:${s.reliability}`);
+    expect(sites).toEqual([
+      "ProofWiki:high",
+      "Fandom (minecraft):high",
+      "demo-lecture-notes.example:high",
+      "demo-forum.example:low",
+    ]);
+    const forum = found.sources[3];
+    expect(forum.reasons).toMatch(/forum/i);
+    const notes = found.sources[2];
+    // The AI's passage, verbatim from the page.
+    expect(notes.passage).toBe("The kernel of a homomorphism is the set of elements sent to the identity.");
+    expect(notes.pointed).toBe(true);
+    chooseSense(store().activeId, id, { name: "Kernel", definition: notes.passage, source: { site: notes.site, title: notes.title, url: notes.url } });
+    expect(node(id)).toMatchObject({
+      status: "pending",
+      definition: "The kernel of a homomorphism is the set of elements sent to the identity.",
+      source: { site: "demo-lecture-notes.example", title: "Kernel (algebra)", url: "https://demo-lecture-notes.example/kernel" },
+    });
     expect(clarify).not.toHaveBeenCalled();
     expect(deps).not.toHaveBeenCalled();
   });
@@ -130,7 +194,9 @@ describe("adding a concept, asking first", () => {
     await idle();
     expect(node(id)).toMatchObject({ status: "unclear", senses: [] });
     expect(store().clarifying?.nodeId).toBe(id);
+    expect(store().clarifying?.sources?.sources).toEqual([]);
     expect(clarify).not.toHaveBeenCalled();
+    expect(assess).not.toHaveBeenCalled(); // nothing to rate
   });
 
   it("a concept renamed during the look-up isn't given the old name's results: the new name is looked up", async () => {

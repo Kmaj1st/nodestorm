@@ -11,6 +11,9 @@ import { packGraph } from "../src/lib/share";
 import { useGraphStore } from "../src/store/graphStore";
 import { useSettings } from "../src/store/settingsStore";
 
+// Web search as in the offline demo: a page defining any name (see fakeWebSearch.ts).
+vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+
 vi.hoisted(() => {
   const data = new Map<string, string>();
   (globalThis as { localStorage?: unknown }).localStorage = {
