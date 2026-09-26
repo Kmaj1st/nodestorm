@@ -1110,7 +1110,6 @@ export const en = {
   "task.sources": "Searching sources for “{name}”…",
   "task.assess": "Checking the sources for “{name}”…",
   "source.compare": "Search the web and compare…",
-  "sources.engineDemo": "offline demo search",
   "sources.webSearch": "web search",
   "sources.dialog": "Sources",
   "sources.title": "Sources for “{name}”",

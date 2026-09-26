@@ -149,7 +149,7 @@ describe("adding a concept, asking first", () => {
     const id = addConcept({ name: "Kernel" });
     await idle();
     const found = store().clarifying!.sources!;
-    expect(found.asked).toEqual(["ProofWiki", "Wikipedia", "Fandom (minecraft)", "offline demo search"]);
+    expect(found.asked).toEqual(["ProofWiki", "Wikipedia", "Fandom (minecraft)", "Offline demo"]);
     const sites = found.sources.map((s) => `${s.site}:${s.reliability}`);
     expect(sites).toEqual([
       "ProofWiki:high",

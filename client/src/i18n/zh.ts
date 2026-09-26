@@ -1096,7 +1096,6 @@ export const zh: Record<MessageKey, string> = {
   "task.sources": "正在为“{name}”搜索来源…",
   "task.assess": "正在核查“{name}”的来源…",
   "source.compare": "搜索网页并比较…",
-  "sources.engineDemo": "离线演示搜索",
   "sources.webSearch": "网页搜索",
   "sources.dialog": "来源",
   "sources.title": "“{name}”的来源",

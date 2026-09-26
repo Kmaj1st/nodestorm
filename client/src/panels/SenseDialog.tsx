@@ -5,7 +5,7 @@ import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
-import { groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
+import { cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
 import { MathText } from "./MathText";
@@ -24,7 +24,8 @@ export function SenseDialog() {
   );
   if (!clarifying || !node) return null;
   // Keyed so a picked passage or typed text never carries over to another concept or a new set of sources.
-  const found = clarifying.sources;
+  // Reopened from its badge: what this session found for the name, if it is still cached.
+  const found = clarifying.sources ?? cachedSources(node.name);
   const key = `${clarifying.graphId}:${node.id}:${found ? found.sources.map((s) => s.url ?? s.id).join("|") : (node.senses ?? []).map((x) => x.name).join("|")}`;
   return <SourcesChoice key={key} graphId={clarifying.graphId} node={node} found={found} replace={Boolean(clarifying.replace)} />;
 }
@@ -131,6 +132,17 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
       return next;
     });
 
+  // Settings opens over this pop-up (what was picked or typed stays), scrolled to its Web search part.
+  const openSearchSettings = () => {
+    setSettingsOpen(true);
+    let tries = 0;
+    const scroll = () => {
+      const part = document.querySelector<HTMLElement>('[data-testid="web-search-settings"]');
+      if (part) part.scrollIntoView({ block: "start" });
+      else if (++tries < 40) setTimeout(scroll, 50);
+    };
+    scroll();
+  };
   const on = (id: string) => choice?.kind !== "own" && choice?.id === id;
   const pickedSource = picked ? byId(picked.id) : undefined;
   const sp = lang === "zh" ? "" : " ";
@@ -187,7 +199,10 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                     />
                     <label htmlFor={id} className="src__label">
                       <span className="src__site">{s.site}</span>
-                      {s.title && s.title !== s.site && <span className="src__title">{s.title}</span>}
+                      {/* An encyclopedia entry by its own name (Wikidata's page title is only an id). */}
+                      {(s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title) !== s.site && (
+                        <span className="src__title">{s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title}</span>
+                      )}
                     </label>
                     <span
                       className={`src__rel src__rel--${s.reliability ?? "none"}`}
@@ -325,7 +340,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               {t("sources.searchAgain")}
             </button>
           )}
-          <button type="button" className="small-btn" onClick={() => setSettingsOpen(true)} data-testid="sources-settings">
+          <button type="button" className="small-btn" onClick={openSearchSettings} data-testid="sources-settings">
             {t("sources.openSettings")}
           </button>
         </div>

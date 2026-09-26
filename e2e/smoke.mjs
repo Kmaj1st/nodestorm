@@ -78,9 +78,11 @@ try {
     await field.waitFor();
     return field;
   };
-  const addByName = async (name) => {
+  /** Add a concept by name; with a `definition` (typed as the user's own), no source is looked for. */
+  const addByName = async (name, definition) => {
     await page.getByRole("button", { name: "Add concept", exact: true }).click();
     await page.getByLabel("Concept name").fill(name);
+    if (definition) await page.getByRole("textbox", { name: "Definition (optional)" }).fill(definition);
     await page.getByRole("button", { name: "Add", exact: true }).click();
   };
   /**
@@ -462,20 +464,43 @@ try {
     await st.getByLabel("Number of meanings to offer").fill("4");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
+  {
+    // Wikipedia has only a disambiguation page; Wikidata lists four meanings (fixtures shaped like the real answers).
+    // They are near matches for other names, so nothing is taken unasked: the sources pop-up opens.
+    const json = (body) => ({ status: 200, contentType: "application/json", headers: { "access-control-allow-origin": "*" }, body: JSON.stringify(body) });
+    await context.unroute(LOOKUP_SITES);
+    await context.route(LOOKUP_SITES, (route) => {
+      const url = decodeURIComponent(route.request().url()).replace(/\+/g, " ");
+      if (url.includes("titles=Expectation&")) return route.fulfill(json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "Expectation may refer to:" }] } }));
+      if (url.includes("wbsearchentities") && url.includes("Expectation")) {
+        return route.fulfill(json({ search: [
+          { id: "Q200125", label: "Expectation (probability)", description: "long-run average value of a random variable" },
+          { id: "Q7", label: "Expectation (psychology)", description: "belief about what will happen in the future" },
+          { id: "Q8", label: "Expectation (quantum mechanics)", description: "average outcome of measuring an observable" },
+          { id: "Q9", label: "Expectation (economics)", description: "forecast of future economic variables" },
+        ] }));
+      }
+      if (url.includes("wbgetentities")) return route.fulfill(json({ entities: {} }));
+      return route.abort();
+    });
+  }
   await addByName("Expectation");
-  const what = page.getByRole("dialog", { name: "What do you mean?" });
-  await what.waitFor();
-  assert((await what.getByRole("radio").count()) === 5, "dialog offers the configured 4 meanings + 'something else'");
+  const what = page.getByRole("dialog", { name: "Sources" });
+  await what.getByTestId("source-item").first().waitFor();
+  assert((await what.getByRole("radio").count()) === 5, "the pop-up offers the configured 4 meanings (one source each) + “My own definition”");
+  assert((await what.getByRole("heading", { name: /^Meaning:/ }).count()) === 4, "…grouped by meaning, as the AI tells them apart");
   await page.screenshot({ path: `${shots}6-what-do-you-mean.png` });
   await what.getByRole("button", { name: "Later" }).click();
-  await waitBadge("Expectation", "what do you mean?");
+  await waitBadge("Expectation", "choose a definition");
   assert(await page.getByRole("button", { name: /Mix/ }).isDisabled(), "unclear concept can't be mixed yet");
   await badge("Expectation").click();
   await what.getByText("Expectation (probability)").click();
-  await what.getByRole("button", { name: "Use this meaning" }).click();
+  await what.getByRole("button", { name: "Use this text" }).click();
   await waitBadge("Expectation (probability)", "ready");
-  assert(true, "picking a meaning renames the node and continues the analysis");
+  assert(true, "picking a source's definition renames the node and continues the analysis");
   assert((await page.getByTestId("node-panel").textContent()).includes("also: Expectation"), "original name kept as alias");
+  await context.unroute(LOOKUP_SITES);
+  await blockLookups(context);
 
   console.log("Failures");
   let chatMode = "hang";
@@ -503,7 +528,8 @@ try {
     await st.getByLabel("Request timeout (seconds)").fill("10");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
-  await addByName("Group");
+  // Typed definitions: the AI call under test is the prerequisite check (definitions never come from the AI).
+  await addByName("Group", "A set with an associative operation, an identity and inverses.");
   await page.getByTestId("task").first().waitFor();
   assert(true, "running check is visible in the status bar");
   await waitBadge("Group", "failed – retry", 15000);
@@ -512,13 +538,13 @@ try {
   await page.screenshot({ path: `${shots}7-timeout.png` });
   await page.locator(".toast").click();
 
-  await addByName("Ring");
+  await addByName("Ring", "A set with two operations.");
   await page.getByTestId("task").first().waitFor();
   await page.getByRole("button", { name: /^Cancel:/ }).click();
   await waitBadge("Ring", "failed – retry", 3000);
   assert((await page.getByTestId("task").count()) === 0 && (await page.locator(".toast").count()) === 0, "cancel stops the task without an error toast");
 
-  await addByName("Field");
+  await addByName("Field", "A ring where division works.");
   await page.reload();
   await waitBadge("Field", "failed – retry", 5000);
   assert(true, "a check interrupted by reload shows as failed, not ready");
@@ -654,9 +680,9 @@ try {
   }
   chatBodies.length = 0;
   rateLimitOnce = true;
-  await addByName("Monoid");
+  await addByName("Monoid", "A set with an associative operation and an identity.");
   await waitBadge("Monoid", "ready", 15000);
-  assert(chatBodies.length >= 3 && (await page.locator(".toast").count()) === 0, "a 429 is retried after Retry-After; node ends up ready, no error toast");
+  assert(chatBodies.length >= 2 && (await page.locator(".toast").count()) === 0, "a 429 is retried after Retry-After; node ends up ready, no error toast");
   assert(chatBodies.every((b) => b.includes("Output language") && b.includes("Chinese (中文)")), "the 中文 setting puts the language instruction into the prompt");
   {
     const st = await openSettings();
@@ -665,8 +691,8 @@ try {
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
   chatMode = "hang";
-  await addByName("Semigroup");
-  await addByName("Lattice");
+  await addByName("Semigroup", "A set with an associative operation.");
+  await addByName("Lattice", "A partially ordered set with meets and joins.");
   const queuedTask = page.locator('[data-testid="task"][data-state="queued"]');
   await queuedTask.waitFor();
   assert((await queuedTask.textContent()).includes("queued") && (await page.getByTestId("task").count()) === 2, "with a limit of 1 the second AI call waits as 'queued'");
@@ -1415,27 +1441,31 @@ try {
     const menu = page.getByRole("menu", { name: "Look up in…" });
     assert(
       JSON.stringify(await menu.getByRole("menuitem").allTextContents()) ===
-        JSON.stringify(["ProofWiki", "Wikipedia / Wikidata", "Baidu Baike", "Moegirl (萌娘百科)", "Fandom · choose the wiki in Settings", "BWIKI · choose the wiki in Settings", "AI", "Search on RedNote"]),
-      "“Look up in…” offers the encyclopedias, Baidu Baike, the community wikis, the AI and a RedNote search, even for a defined concept",
+        JSON.stringify(["ProofWiki", "Wikipedia / Wikidata", "Baidu Baike", "Moegirl (萌娘百科)", "Fandom · choose the wiki in Settings", "BWIKI · choose the wiki in Settings", "Search the web and compare…", "Search on RedNote"]),
+      "“Look up in…” offers the encyclopedias, Baidu Baike, the community wikis, a web search to compare and a RedNote search (no AI entry), even for a defined concept",
     );
     assert(
       (await page.getByTestId("lookup-rednote").getAttribute("href")) === "https://www.xiaohongshu.com/search_result?keyword=Group" &&
         (await page.getByTestId("lookup-rednote").getAttribute("target")) === "_blank",
       "RedNote (no public API) opens its own search in a new tab",
     );
-    await menu.getByRole("menuitem", { name: "AI", exact: true }).click();
-    const proposal = page.getByTestId("ai-proposal");
-    await proposal.waitFor();
-    assert((await page.getByTestId("definition-view").textContent()) === groupDef, "the AI's definition is only proposed: the current one stays");
-    assert((await proposal.textContent()).includes("Offline demo · mock-kb"), "…and says which AI it came from");
-    await page.getByTestId("ai-proposal-keep").click();
-    assert((await proposal.count()) === 0 && (await page.getByTestId("definition-view").textContent()) === groupDef, "Keep current dismisses it");
+    await menu.getByRole("menuitem", { name: "Search the web and compare…" }).click();
+    const compare = page.getByRole("dialog", { name: "Sources" });
+    await compare.getByText("Sources for “Group”").waitFor();
+    await compare.getByTestId("source-item").first().waitFor();
+    assert((await page.getByTestId("definition-view").textContent()) === groupDef, "the sources are only offered: the current definition stays");
+    await compare.getByRole("button", { name: "Cancel", exact: true }).click();
+    assert((await compare.count()) === 0 && (await page.getByTestId("definition-view").textContent()) === groupDef, "Cancel keeps the current definition");
     await srcLine.getByTestId("lookup-menu").click();
-    await menu.getByRole("menuitem", { name: "AI", exact: true }).click();
-    await page.getByTestId("ai-proposal-use").click();
-    await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent?.includes("AI (Offline demo · mock-kb)"));
-    assert(true, "Use this definition takes it, noting the AI (and its model) as its source");
+    await menu.getByRole("menuitem", { name: "Search the web and compare…" }).click();
+    const encyclopedia = compare.locator('[data-site="demo-encyclopedia.example"]');
+    await encyclopedia.getByRole("radio").check();
+    const picked = await encyclopedia.getByTestId("source-passage").textContent();
+    await compare.getByRole("button", { name: "Use this text" }).click();
+    await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent?.includes("demo-encyclopedia.example"));
+    assert((await (await definitionField()).inputValue()) === picked, "choosing a passage replaces the definition with exactly that passage, the page as its source");
     await page.getByRole("button", { name: "Undo", exact: true }).click();
+    assert(!(await page.getByTestId("definition-source").textContent()).includes("demo-encyclopedia.example"), "…as one undo step");
 
     console.log("Baidu Baike");
     // A stand-in for Baidu's JSONP script: it tries to reach the app's page (the sandbox must stop it), then answers.
@@ -1480,10 +1510,7 @@ try {
     await audit("Settings dialog");
     await st.getByRole("button", { name: "Cancel" }).click();
   }
-  await addByName("Expectation");
-  await what.waitFor();
-  await audit("“What do you mean?” dialog");
-  await what.getByRole("button", { name: "Later" }).click();
+  // The sources pop-up is audited (light and dark) in "Sources from the web".
   const firstArrow = page.locator('[data-testid^="arrow-"]').first();
   await firstArrow.click({ force: true });
   await page.getByTestId("relation-panel").waitFor();
@@ -2055,15 +2082,21 @@ try {
     await page.getByLabel("Project name").press("Enter");
     await page.locator(".canvas__empty").waitFor();
     await addByName("Kernel");
-    const dlg = page.getByRole("dialog", { name: "Definitions" });
-    await dlg.getByText("Definitions for “Kernel”").waitFor();
-    const sources = await dlg.locator(".sense__source").allTextContents();
-    assert(JSON.stringify(sources) === JSON.stringify(["ProofWiki", "Fandom (minecraft)"]), `the pop-up lists each source's definition: ${sources}`);
-    assert((await dlg.getByTestId("sense-searched").textContent()).includes("Nothing in Wikipedia"), "…and says where nothing was found");
-    await audit("definitions pop-up");
+    const dlg = page.getByRole("dialog", { name: "Sources" });
+    await dlg.getByText("Sources for “Kernel”").waitFor();
+    await dlg.getByTestId("source-item").first().waitFor();
+    const sources = await dlg.getByTestId("source-item").evaluateAll((els) => els.map((e) => e.dataset.site));
+    assert(sources[0] === "ProofWiki" && sources.includes("Fandom (minecraft)"), `the pop-up lists every source, the encyclopedias with the web pages: ${sources}`);
+    assert(
+      (await dlg.getByRole("heading", { name: /^Meaning:/ }).count()) === 2,
+      "the Minecraft wiki's block is another meaning of the name: the sources are grouped by meaning",
+    );
+    assert((await dlg.getByTestId("sense-searched").textContent()).includes("Searched ProofWiki, Wikipedia, Fandom (minecraft)"), "…and says what was searched");
+    assert((await dlg.getByTestId("sense-ask-ai").count()) === 0 && (await dlg.getByRole("button", { name: "Ask the AI" }).count()) === 0, "there is no “Ask the AI”: the AI doesn't write definitions");
+    await audit("sources pop-up");
     await page.screenshot({ path: `${shots}lookups-popup.png` });
     await dlg.getByRole("radio").first().check();
-    await dlg.getByRole("button", { name: "Use this definition" }).click();
+    await dlg.getByRole("button", { name: "Use this text" }).click();
     await waitBadge("Kernel", "check with AI");
     assert(!(await node("Kernel").textContent()).includes("missing"), "adding and choosing a definition doesn't check prerequisites (no AI)");
     await node("Kernel").click();
@@ -2072,9 +2105,9 @@ try {
     await waitBadge("Kernel", "blocked");
     assert((await node("Kernel").textContent()).includes("missing: Homomorphism"), "“Check with AI” checks its prerequisites");
 
-    // Nothing found: the pop-up says so, and "Ask the AI" defines it.
-    await addByName("Subgroup");
-    await dlg.getByText("Nothing found in ProofWiki, Wikipedia, Fandom (minecraft).").waitFor();
+    // Nothing found (the offline demo's web doesn't know the name either): the pop-up says so; the user writes one.
+    await addByName("Zorblax");
+    await dlg.getByText("Nothing was found for “Zorblax”.", { exact: false }).waitFor();
     assert(true, "an unknown name: the pop-up says nothing was found");
     assert(
       (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Your definition",
@@ -2100,14 +2133,14 @@ try {
     await discard.getByRole("button", { name: "Discard" }).click();
     await dlg.waitFor({ state: "detached" });
     assert(true, "…and Discard closes the pop-up");
-    await waitBadge("Subgroup", "needs a definition");
-    await badge("Subgroup").click();
-    await dlg.getByTestId("sense-ask-ai").click();
-    await page.waitForFunction(() => {
-      const b = document.querySelector('[data-testid="node-Subgroup"] .concept__badge')?.textContent;
-      return b && !["needs a definition", "checking…"].includes(b);
-    });
-    assert((await node("Subgroup").locator(".concept__def").count()) === 1, "“Ask the AI” writes a definition");
+    await waitBadge("Zorblax", "needs a definition");
+    await badge("Zorblax").click();
+    await dlg.getByText("Nothing was found for “Zorblax”.", { exact: false }).waitFor();
+    await dlg.getByLabel("Your definition").fill("A made-up creature.");
+    await dlg.getByRole("button", { name: "Use this text" }).click();
+    await waitBadge("Zorblax", "check with AI");
+    await node("Zorblax").click();
+    assert((await page.getByTestId("definition-source").textContent()).includes("written by you"), "“My own definition” is saved as written by you");
 
     const s2 = await openSettings();
     await s2.getByTestId("new-concepts-ask").uncheck();
@@ -2136,7 +2169,7 @@ try {
       if (url.includes("proofwiki") && url.includes("page=Definition:Kernel")) return route.fulfill(json({ parse: { title: "Definition:Kernel", wikitext: kernel } }));
       if (url.includes("proofwiki")) return route.fulfill({ status: 403, contentType: "text/html", headers: { "cf-mitigated": "challenge" }, body: "Just a moment..." });
       if (url.includes("titles=Expectation&")) return route.fulfill(json({ query: { pages: [{ title: "Expectation", pageprops: { disambiguation: "" }, extract: "Expectation may refer to:" }] } }));
-      if (url.includes("wbsearchentities")) {
+      if (url.includes("wbsearchentities") && url.includes("Expectation")) {
         return route.fulfill(json({ search: [
           { id: "Q200125", label: "expected value", description: "long-run average value of a random variable" },
           { id: "Q7", label: "expectation", description: "belief about the future" },
@@ -2148,6 +2181,9 @@ try {
       }
       return route.fulfill({ status: 404, contentType: "application/json", body: "{}" });
     });
+    // "Ambiguous names" served other Expectation fixtures: forget the cached look-ups and this session's sources.
+    await page.evaluate(() => localStorage.removeItem("nodestorm-lookup-cache"));
+    await page.reload();
     // Wikipedia's language follows the AI answer language, which an earlier section set to 中文.
     const lang = await openSettings();
     await lang.getByLabel("AI answers in").selectOption({ label: "Auto (match the concept names)" });
@@ -2167,12 +2203,12 @@ try {
 
     // ProofWiki refuses this one (a bot check), so Wikipedia and Wikidata answer: two meanings to choose from.
     await addByName("Expectation");
-    const sense = page.getByRole("dialog", { name: "Definitions" });
-    await sense.waitFor();
-    const sites = await sense.locator(".sense__source").allTextContents();
-    assert(sites.includes("Wikipedia") && sites.includes("Wikidata"), `several looked-up meanings go to the definitions pop-up, each naming its site: ${sites}`);
+    const sense = page.getByRole("dialog", { name: "Sources" });
+    await sense.getByTestId("source-item").first().waitFor();
+    const sites = await sense.getByTestId("source-item").evaluateAll((els) => els.map((e) => e.dataset.site));
+    assert(sites.includes("Wikipedia") && sites.includes("Wikidata"), `several meanings, none to take unasked: the sources pop-up, each source naming its site: ${sites}`);
     await sense.getByText("Expected value", { exact: true }).click();
-    await sense.getByRole("button", { name: "Use this definition" }).click();
+    await sense.getByRole("button", { name: "Use this text" }).click();
     await node("Expected value").click();
     assert((await (await definitionField()).inputValue()).startsWith("In probability theory"), "the chosen meaning brings its definition");
 
@@ -2185,9 +2221,147 @@ try {
     await addByName("Normal Subgroup");
     await waitBadge("Normal Subgroup", "blocked");
     await node("Normal Subgroup").click();
-    assert((await (await definitionField()).inputValue()).startsWith("A subgroup $N$"), "with lookups off, the AI defines new concepts again");
+    assert(
+      (await (await definitionField()).inputValue()).startsWith("A subgroup $N$") && (await page.getByTestId("definition-source").textContent()).includes("demo-"),
+      "with look-ups off, the most reliable web page defines a new concept (its words, its page as the source)",
+    );
     await context.unrouteAll();
     await blockLookups(context);
+  }
+
+  console.log("Sources from the web");
+  {
+    // The offline demo's web search: an encyclopedia, lecture notes and a sloppy forum page for each concept it
+    // knows; its AI rates them and points at passages. The encyclopedias are blocked here.
+    const s1 = await openSettings();
+    await s1.getByTestId("new-concepts-ask").check();
+    await s1.getByRole("button", { name: "Save", exact: true }).click();
+    await projectMenu("New project");
+    await page.getByLabel("Project name").press("Enter");
+    await page.locator(".canvas__empty").waitFor();
+    const dlg = page.getByRole("dialog", { name: "Sources" });
+    const item = (site) => dlg.locator(`[data-site="${site}"]`);
+
+    await addByName("Homomorphism");
+    await dlg.getByTestId("source-item").first().waitFor();
+    const rated = await dlg.getByTestId("source-item").evaluateAll((els) =>
+      els.map((e) => `${e.dataset.site}:${e.querySelector('[data-testid="source-reliability"]').textContent}`),
+    );
+    assert(rated.includes("demo-encyclopedia.example:Reliable") && rated.includes("demo-lecture-notes.example:Reliable"), `the sources are listed with reliability badges: ${rated}`);
+    assert(rated.at(-1) === "demo-forum.example:Doubtful", "the forum page is rated doubtful, and listed last");
+    await item("demo-forum.example").getByText("Why?").click();
+    assert(/forum/i.test(await item("demo-forum.example").getByTestId("source-reasons").textContent()), "…with the AI's reason");
+    assert((await dlg.getByTestId("sources-note").textContent()).includes("demo-forum.example"), "the AI's assessment says where the sources disagree");
+    assert((await dlg.getByTestId("sense-searched").textContent()).includes("Offline demo"), "the footer says what was searched");
+    const link = item("demo-lecture-notes.example").getByRole("link");
+    assert((await link.getAttribute("target")) === "_blank" && (await link.getAttribute("rel")) === "noopener noreferrer", "each page opens in a new tab, without opener");
+    await audit("sources pop-up with web pages");
+    await page.screenshot({ path: `${shots}39-sources.png` });
+    // Settings can't open over the pop-up from the toolbar: close it, switch, and reopen it from the badge (this
+    // session's sources come back, rated, without searching again).
+    await dlg.getByRole("button", { name: "Later" }).click();
+    await setTheme("dark");
+    await badge("Homomorphism").click();
+    await item("demo-forum.example").waitFor();
+    assert((await dlg.getByTestId("sources-note").count()) === 1, "reopened from its badge, the pop-up shows the rated sources again");
+    await audit("sources pop-up, dark theme");
+    await page.screenshot({ path: `${shots}39-sources-dark.png` });
+    await dlg.getByRole("button", { name: "Later" }).click();
+    await setTheme("light");
+    await badge("Homomorphism").click();
+    await item("demo-forum.example").waitFor();
+    // Keyboard: Tab reaches the radios; arrow keys move between them.
+    const notes = item("demo-lecture-notes.example");
+    await notes.getByRole("radio").focus();
+    await page.keyboard.press("Space");
+    assert(await notes.getByRole("radio").isChecked(), "a passage can be picked from the keyboard");
+    const passage = await notes.getByTestId("source-passage").textContent();
+    await dlg.getByRole("button", { name: "Use this text" }).click();
+    await waitBadge("Homomorphism", "check with AI");
+    await node("Homomorphism").click();
+    assert((await (await definitionField()).inputValue()) === passage, "the definition is exactly the chosen passage");
+    const src = page.getByTestId("definition-source").getByRole("link");
+    assert(
+      (await src.getAttribute("href")).startsWith("https://demo-lecture-notes.example/") && (await src.textContent()).startsWith("demo-lecture-notes.example:"),
+      "…with the page as its source",
+    );
+
+    // Select other words of a source with the mouse: exactly that selection is used.
+    await addByName("Group");
+    await item("demo-encyclopedia.example").waitFor();
+    const selected = await item("demo-encyclopedia.example").getByTestId("source-passage").evaluate((mark) => {
+      const text = mark.firstChild;
+      const range = document.createRange();
+      range.setStart(text, 2);
+      range.setEnd(text, Math.min(text.length, 30));
+      const sel = document.getSelection();
+      sel.removeAllRanges();
+      sel.addRange(range);
+      return sel.toString().trim();
+    });
+    await dlg.getByTestId("source-use-selection").click();
+    assert(await dlg.getByTestId("source-selection").getByRole("radio").isChecked(), "“Use selected text” offers the selection as a choice, picked");
+    await page.screenshot({ path: `${shots}39-sources-selection.png` });
+    await dlg.getByRole("button", { name: "Use this text" }).click();
+    await waitBadge("Group", "check with AI");
+    await node("Group").click();
+    assert((await (await definitionField()).inputValue()) === selected, `the definition is exactly the selected text (${selected})`);
+    assert((await page.getByTestId("definition-source").textContent()).includes("demo-encyclopedia.example"), "…from that page");
+
+    // Edit a copy: cut down, it stays the source's words; changed, it is the user's.
+    await addByName("Subgroup");
+    await item("demo-lecture-notes.example").waitFor();
+    await item("demo-lecture-notes.example").getByTestId("source-edit-copy").click();
+    const own = dlg.getByTestId("source-own-text");
+    await page.waitForFunction(() => document.activeElement?.getAttribute("data-testid") === "source-own-text");
+    assert((await own.inputValue()).length > 0, "Edit a copy puts the text into “My own definition”, focused");
+    const whole = await own.inputValue();
+    await own.fill(whole.split(". ")[0].trim());
+    assert((await dlg.getByTestId("source-copy-note").textContent()).startsWith("Still demo-lecture-notes.example's own words"), "cut down to a part of it, it is still the source's words");
+    await own.fill(`${whole} (my note)`);
+    assert((await dlg.getByTestId("source-copy-note").textContent()).startsWith("Changed: saved as written by you"), "changed, it says it will be saved as written by you");
+    await dlg.getByRole("button", { name: "Use this text" }).click();
+    await waitBadge("Subgroup", "check with AI");
+    await node("Subgroup").click();
+    assert((await page.getByTestId("definition-source").textContent()).includes("written by you"), "…and it is");
+
+    // A phone.
+    await page.setViewportSize({ width: 390, height: 844 });
+    await addByName("Kernel");
+    await dlg.getByTestId("source-item").first().waitFor();
+    const overflow = await page.evaluate(() => document.documentElement.scrollWidth - window.innerWidth);
+    assert(overflow <= 0, `the pop-up fits a phone (${overflow}px too wide)`);
+    await page.screenshot({ path: `${shots}39-sources-phone.png` });
+    await dlg.getByRole("button", { name: "Later" }).click();
+    await page.setViewportSize({ width: 1400, height: 900 });
+
+    // 中文.
+    {
+      const ctx = await browser.newContext({ viewport: { width: 1280, height: 900 } });
+      await blockLookups(ctx);
+      await ctx.addInitScript(() => {
+        try {
+          localStorage.setItem("nodestorm-ui-language", "zh");
+          localStorage.setItem("nodestorm-settings", JSON.stringify({ state: { provider: "mock", connection: "browser", newConcepts: "ask" }, version: 1 }));
+          localStorage.setItem("nodestorm-onboarding", JSON.stringify({ welcome: "done", tour: "skipped" }));
+        } catch {}
+      });
+      const p = await ctx.newPage();
+      p.on("pageerror", (e) => console.error("pageerror:", e.message));
+      await p.goto(`http://localhost:${WEB_PORT}/`);
+      await p.getByRole("button", { name: "添加概念", exact: true }).click();
+      await p.getByLabel("概念名称").fill("Kernel");
+      await p.getByRole("button", { name: "添加", exact: true }).click();
+      const zh = p.getByRole("dialog", { name: "来源" });
+      await zh.getByText("“Kernel”的来源").waitFor();
+      await zh.getByTestId("source-item").first().waitFor();
+      assert((await zh.getByText("存疑").count()) === 1 && (await zh.getByRole("button", { name: "使用这段文字" }).count()) === 1, "in 中文 the pop-up is Chinese");
+      await p.screenshot({ path: `${shots}39-sources-zh.png` });
+      await ctx.close();
+    }
+    const s2 = await openSettings();
+    await s2.getByTestId("new-concepts-ask").uncheck();
+    await s2.getByRole("button", { name: "Save", exact: true }).click();
   }
 
   console.log("Absurd chain");

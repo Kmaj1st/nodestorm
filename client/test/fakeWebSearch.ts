@@ -26,6 +26,7 @@ export async function defaultPages(name: string): Promise<WebSearchResult["resul
     }));
 }
 
+export const ENGINE_NAME = { tavily: "Tavily", serper: "Serper", brave: "Brave Search", searxng: "SearXNG", demo: "Offline demo" };
 export const searchEngines = () => (fake.ready ? ["demo" as const] : []);
 export const searchReady = () => fake.ready;
 export async function searchWeb(name: string, opts: { max: number; signal?: AbortSignal }): Promise<WebSearchResult> {

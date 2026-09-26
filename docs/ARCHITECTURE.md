@@ -286,15 +286,59 @@ These are plain `fetch` calls to public APIs, not an AI task. They work the same
   - `lookupLanguage` goes from the answer language, or the name's script, to a Wikipedia code.
   - A localStorage cache holds 500 names for 30 days; only clean answers are cached.
   - A site that refused is paused for 10 minutes, and Settings shows that.
-- **In `analyzeNode`**: a concept without a definition is looked up first.
-  - One sense gives the definition and `source` (plus the looked-up title as an alias).
-  - Several senses go to `SenseDialog` (`Sense.source` shows "from Wikipedia").
-  - Nothing found falls through to the AI `clarify`.
-  - With no AI ready, a looked-up concept is left `ok` and a one-time notice appears, instead of opening Settings.
-  - `relookup` backs "Look up again" (one undo step).
+- **In `analyzeNode`**: a concept without a definition gets its sources (see "Sources for a definition" below): the
+  AI's top-rated passage is taken, or the concept waits as `unclear` for the user. The AI never writes the definition.
+  - With no AI ready, a concept defined from a source is left `ok` and a one-time notice appears, instead of opening
+    Settings.
+  - `relookup` backs "Look up in… → <site>" (one undo step); `lookupDefinitions` (first site with an answer) is also
+    what `defineInstalled` uses.
 - **Tests never touch the real sites**:
   - `test-setup.ts` makes those hosts fail in vitest.
   - The e2e routes abort them, except the "Definitions from encyclopedias" section, which serves fixtures.
+
+### Sources for a definition (`client/src/lib/sources.ts`, the `assess` task, `panels/SenseDialog.tsx`)
+
+A concept's definition is always a source's own words (recorded as its `source`: site, title, https page) or the
+user's (`OWN_SOURCE`), never text the AI wrote.
+
+- **Gathering** (`gatherSources(name, {signal, hint, context, onChecking, fresh})`): `lookupEverywhere` (every enabled
+  encyclopedia and wiki) and `searchWeb` (when `searchReady()`) side by side; `mergeFound` makes one `Source` list
+  (encyclopedias first, a web page's site is its host, one source per URL). With an AI ready, one `api.assess` call
+  rates up to `ASSESS_MAX` (10) sources, texts cut to `ASSESS_TEXT_MAX` (2500); `mergeRatings` adds reliability,
+  reasons, the meaning label and the passage, and sorts (high → unusable, not rated last). Without an AI (or when the
+  check fails: `assessError`) the sources stay unrated in the order found, each with a default passage
+  (`defaultPassage`: an encyclopedia's whole definition, a page's first sentence or two, both substrings of the text).
+  Results are cached for the session per name, language and the sites/engines asked (an hour, 50 names, only when
+  no site or engine failed),
+  with the rating once there is one; the badge reopens the pop-up from it (`cachedSources`). The status bar says
+  "Searching sources for X…", then "Checking the sources for X…" (a relabel of the same cancellable task).
+- **The `assess` task** (`shared/src/ai/tasks.ts`, `[task:assess]`): `{name, hint?, context: names, sources: {id,
+  kind, site, title, url, text}[]}` → per source `{id, reliability: high|medium|low|unusable (null when the answer's
+  value is not one of them), reasons, sense, passage}` plus a `note` on agreement. The prompt says to quote only and to
+  judge sources against each other; different meanings aren't errors. `cleanAssessment` keeps one rating per known id
+  and checks each passage with `matchPassage`: an exact substring, else found again with whitespace collapsed (then
+  quotes/dashes unified, invisible characters dropped, case ignored) and mapped back to the source's own characters;
+  otherwise dropped (""). The offline demo rates encyclopedias and lecture notes high, forums low (with a reason), and
+  quotes an encyclopedia's whole text or a page's first sentence naming the concept.
+- **Automatic pick** (`autoPick`, Settings "use the AI right away" and Install all): the most reliable source's passage
+  when rated high or medium, never an encyclopedia's near match (a page for another name), and not when equally
+  reliable sources describe different meanings. Unrated: only an exact encyclopedia page found alone.
+- **The pop-up** (`SenseDialog`, "Sources for X"): the store's `clarifying` carries the gathered `sources` (or none:
+  then the session cache, or the passages stored on the concept as `senses` by `sourcesAsSenses`, unrated, with
+  "Search again"), and `replace` for an existing concept. Sources are grouped by meaning when the AI labels them
+  differently (`groupBySense`), each with its site, a reliability badge (text, not only colour; "Why?" shows the AI's
+  reasons), a link (new tab, `noopener noreferrer`), and its text as plain characters with the passage `<mark>`ed
+  (shortened around the passage until "Show the whole text"). Choices, all radios of one group: a passage; "Use
+  selected text" (a `selectionchange` listener accepts a selection inside one source's text that is a substring of it);
+  "My own definition" ("Edit a copy" fills it with a source's text: cut down to a substring it keeps that source,
+  any other change makes it `OWN_SOURCE`, and a live note says which). The AI's note is on top as its assessment; the
+  footer says what was searched and what failed, and without a search engine offers Settings → Web search.
+- **Choosing**: a waiting concept → `chooseSense` (an encyclopedia's own name may rename it, as before; "pending" in
+  ask-first mode); an existing one → `replaceDefinition` (one undo step).
+- **Where it runs**: `lookUpChoices` (ask-first add), `analyzeNode` (auto add, Install all, Retry: a pick, or the
+  pop-up when there are sources but no pick; nothing found → "needs a definition" without a pop-up), and
+  `compareSources` ("Look up in… → Search the web and compare…"; also the pop-up's "Search again"). A single Install in
+  ask-first mode stays `defineInstalled` (an exact encyclopedia page only, no web search, to save the search quota).
 
 ### Lean / Mathlib (`shared/src/lookup/loogle.ts`, `findInMathlib` in `actions.ts`)
 
@@ -550,23 +594,26 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 
 ## 7. Key flows, end to end
 
-### Add concept → clarify → deps → install / install all
+### Add concept → sources → deps → install / install all
 
 1. `AddNodeDialog` calls `addConcept({ name, definition })` (or `suggestNames(description)` → `api.name` →
    `addCandidate`).
 2. `addConcept` (`client/src/lib/actions.ts`) positions at the viewport centre, `mutate(ops.addNode)` as an undo step
-   (status `checking`; `satisfyMissing` links it into anyone who was missing it), reveals it, then calls
-   `analyzeNode(id, graphId)`.
-3. `analyzeNode`: if the node has no definition and clarifying is on, `api.clarify`. Ambiguous → background
-   `status: "unclear", senses`, and `setClarifying` opens `SenseDialog`; the user's choice goes to `chooseSense` →
-   `ops.applySense` (may merge into an existing concept) → `analyzeNode` again. Unambiguous → store the definition.
+   (status `checking`; `satisfyMissing` links it into anyone who was missing it), reveals it, then (ask first, the
+   default) `lookUpChoices` for a name alone, or (use the AI right away) `analyzeNode(id, graphId)`.
+3. Without a definition, `gatherSources` (see "Sources for a definition"). `lookUpChoices` always opens the sources
+   pop-up; `analyzeNode` takes `autoPick`'s passage, or opens the pop-up (background `status: "unclear", senses`,
+   `setClarifying`). The user's choice goes to `chooseSense` → `ops.applySense` (may merge into an existing concept) →
+   "pending" (ask first) or `analyzeNode` again. The AI never writes the definition (the `clarify` task is no longer
+   called by the client).
 4. `api.deps` with the other concepts as context → background `ops.applyDeps`: prerequisites that match an existing
    concept (`matchesExisting` or by name) are `link`ed (`dependsOn` + a `dependency` relation); the rest become
    `missingDeps` and the node is `blocked`. If `paths.cycleThrough` finds a cycle, `resolveCycle` (actions.ts) asks the
    `resolveCycle` AI task which link is wrong (links and their reasons from `client/src/lib/cycles.ts`), falls back to
    the link the check just added, and removes it as one undo step (setting `autoResolveCycles`; otherwise a warning).
 5. **Install** (Inspector) → `installDep(dependentId, name)` → `placeDep` adds the concept at `installPosition` with a
-   hint ("Needed by X (role): reason") so its clarify rarely needs the user → `analyzeNode` on it.
+   hint ("Needed by X (role): reason", passed to the `assess` task) → `analyzeNode` on it (ask first:
+   `defineInstalled`, an exact encyclopedia page or "unclear").
 6. **Install all** → `installAllMissing(rootId)`: `autoSnapshot("installAll")`, then breadth-first over levels: place
    every missing dep of the frontier (`placeDep`), analyze siblings in parallel with `{ quiet: true }` (no dialogs,
    through the AI queue), next frontier = the ones that became ok/blocked. Stops at `installAll.maxDepth` /

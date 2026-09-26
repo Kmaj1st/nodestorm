@@ -13,8 +13,8 @@ import { t } from "../i18n";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api } from "./api";
 import { errorMessage } from "./errors";
-import { lookupEverywhere, lookupLanguage, SITE_NAME, type Site } from "./lookup";
-import { searchReady, searchWeb, type Engine } from "./webSearch";
+import { everySite, lookupEverywhere, lookupLanguage, SITE_NAME, type Site } from "./lookup";
+import { ENGINE_NAME, searchEngines, searchReady, searchWeb, type Engine } from "./webSearch";
 
 /**
  * Sources for a concept's definition: what the encyclopedias and wikis found (lib/lookup.ts) and what the web search
@@ -72,11 +72,6 @@ const rank = (s: Source) => (s.reliability ? RANK[s.reliability] : 4);
 /** Most reliable first, not rated last; otherwise in the order found (a stable sort). */
 export function sortSources(sources: Source[]): Source[] {
   return [...sources].sort((a, b) => rank(a) - rank(b));
-}
-
-/** A search engine's name as shown. */
-export function engineName(e: Engine): string {
-  return e === "demo" ? t("sources.engineDemo") : { tavily: "Tavily", serper: "Serper", brave: "Brave Search", searxng: "SearXNG" }[e];
 }
 
 /** A look-up site's name as shown, with the wiki for Fandom and BWIKI. */
@@ -295,17 +290,18 @@ const cache = new Map<string, { at: number; found: Found; rating?: Rating }>();
 const CACHE_MAX = 50;
 const CACHE_MS = 60 * 60_000;
 
-const cacheKey = (name: string) => `${lookupLanguage(useSettings.getState().language, name)}:${normalizeName(name)}`;
-
-/** The shape of Settings' web search part used here (see lib/webSearch.ts). */
-type SearchSettings = { search?: { maxResults?: number } };
+/** Per name, language and what is asked (another site, wiki or engine set up in Settings is another answer). */
+const cacheKey = (name: string) => {
+  const { language, lookup } = useSettings.getState();
+  return [lookupLanguage(language, name), everySite(name).join(","), lookup.fandom, lookup.bwiki, searchEngines().join(","), normalizeName(name)].join(":");
+};
 
 async function find(name: string, signal?: AbortSignal): Promise<Found> {
   const web = searchReady();
   const [looked, searched] = await Promise.all([
     lookupEverywhere(name, useSettings.getState().clarify.options, signal),
     web
-      ? searchWeb(name, { max: (useSettings.getState() as SearchSettings).search?.maxResults ?? 6, signal }).catch((e) => {
+      ? searchWeb(name, { max: useSettings.getState().search.maxResults, signal }).catch((e) => {
           if (e instanceof CancelledError || signal?.aborted) throw new CancelledError();
           console.warn("Web search failed:", e);
           return { results: [], asked: [] as Engine[], failed: [] as Engine[], error: true };
@@ -315,8 +311,8 @@ async function find(name: string, signal?: AbortSignal): Promise<Found> {
   const failedSearch = searched && "error" in searched;
   return {
     sources: mergeFound(looked.senses, searched?.results ?? []),
-    asked: [...looked.asked.map(siteName), ...(searched?.asked ?? []).map(engineName)],
-    failed: [...looked.failed.map(siteName), ...(searched?.failed ?? []).map(engineName), ...(failedSearch ? [t("sources.webSearch")] : [])],
+    asked: [...looked.asked.map(siteName), ...(searched?.asked ?? []).map((e) => ENGINE_NAME[e])],
+    failed: [...looked.failed.map(siteName), ...(searched?.failed ?? []).map((e) => ENGINE_NAME[e]), ...(failedSearch ? [t("sources.webSearch")] : [])],
     web,
   };
 }
@@ -378,6 +374,17 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
     if (entry && entry.found === found) entry.rating = rating;
   }
   return { ...out, sources: mergeRatings(found.sources, rating.ratings), note: rating.note, rated: true };
+}
+
+/**
+ * What this session already found (and rated) for `name`, as when it was gathered: the pop-up reopened from a
+ * concept's badge shows it again without searching. Undefined when nothing is cached.
+ */
+export function cachedSources(name: string): Gathered | undefined {
+  const hit = cache.get(cacheKey(name));
+  if (!hit || Date.now() - hit.at > CACHE_MS) return undefined;
+  const out: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources), note: "", rated: false };
+  return hit.rating ? { ...out, sources: mergeRatings(hit.found.sources, hit.rating.ratings), note: hit.rating.note, rated: true } : out;
 }
 
 /** For tests. */
