@@ -1,6 +1,7 @@
 // Unit tests never reach the real encyclopedias: requests to them fail like a network error (lookups then fall
-// back to the AI, as they do offline). Tests of the lookup code pass their own fake `fetch`.
-const LOOKUP_HOSTS = /(^|\.)(proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org|baidu\.com|moegirl\.org\.cn|fandom\.com|biligame\.com)$/;
+// back to the AI, as they do offline). Tests of the lookup code pass their own fake `fetch`. The web search engines
+// (Tavily, Serper, Brave) are blocked the same way.
+const LOOKUP_HOSTS = /(^|\.)(proofwiki\.org|wikipedia\.org|wikidata\.org|lean-lang\.org|openalex\.org|baidu\.com|moegirl\.org\.cn|fandom\.com|biligame\.com|api\.tavily\.com|google\.serper\.dev|api\.search\.brave\.com)$/;
 const realFetch = globalThis.fetch;
 globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
   const url = new URL(typeof input === "string" || input instanceof URL ? String(input) : input.url);

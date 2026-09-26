@@ -5,6 +5,7 @@ import { StorageError, type StorageErrorCode } from "./storageError";
 const KEYS: Record<ProviderErrorCode, MessageKey> = {
   timeout: "aiErr.timeout",
   rateLimited: "aiErr.rateLimited",
+  quota: "aiErr.quota",
   noKey: "aiErr.noKey",
   invalidKey: "aiErr.invalidKey",
   modelDenied: "aiErr.modelDenied",
