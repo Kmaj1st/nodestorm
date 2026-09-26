@@ -34,6 +34,11 @@
 - **Extracting without an AI set up** leaves the new concepts "not checked" (their badge checks them later) instead of one error per concept.
 - **C, C++ and C#** (and f / f′, A / A*, A†) are different concepts: symbols such as + # * ′ † count in names, while case, spaces, hyphens, underscores and trailing punctuation still don't.
 - **Escape doesn't lose typed text:** in the definitions pop-up (your own definition), Add concept (definition or description) and Settings (unsaved changes), Escape, a click outside or X first asks "Discard what you typed?"; focus is on **Keep editing**, and Escape again goes back to the text.
+  - Deleting a hidden concept and then **Undo** brings it back still hidden (and Redo takes it away again).
+  - On a phone the open "N hidden" list sits beside the canvas zoom buttons instead of covering them.
+- **Derive together keeps the last change across a quick reload:** a derivation started (or a document's problems found, or something deleted) just before the page reloads or the tab closes is no longer lost when its IndexedDB write hadn't finished. Each such write is noted in localStorage first and written through when the library next opens.
+- **Undo keeps an AI explanation or theorem anatomy exactly as it was stored** (its time could differ by a millisecond before).
+- Tests: the flaky theorem-anatomy unit test is deterministic, and the end-to-end test waits for menus, dialogs and saved state instead of fixed pauses.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

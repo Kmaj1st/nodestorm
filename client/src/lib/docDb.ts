@@ -42,6 +42,69 @@ type StoreName = (typeof STORES)[number];
 
 let opening: Promise<IDBDatabase> | null = null;
 
+/**
+ * Sessions and document metadata are saved in the background while the user works, and a transaction that hasn't
+ * committed when the page goes (a reload, a closed tab) is aborted: the last change would be lost. So each such write
+ * is first noted in localStorage, synchronously, and the note is dropped once the transaction completes. The first
+ * open of the database in a page writes through whatever notes are left (`null` notes a deletion). Only small records
+ * go here; pages are written before the document shows.
+ */
+const PENDING_KEY = "nodestorm-docs-pending";
+type Journaled = "sessions" | "docs";
+type Pending = Partial<Record<Journaled, Record<string, unknown>>>;
+
+function readPending(): Pending {
+  try {
+    const v = JSON.parse(localStorage.getItem(PENDING_KEY) ?? "{}");
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {}; // no localStorage, or a garbled note
+  }
+}
+
+function writePending(p: Pending) {
+  try {
+    if (Object.values(p).some((m) => m && Object.keys(m).length)) localStorage.setItem(PENDING_KEY, JSON.stringify(p));
+    else localStorage.removeItem(PENDING_KEY);
+  } catch {
+    /* storage full or blocked: the write just isn't protected against a quick reload */
+  }
+}
+
+/** Note a write (a record, or `null` for a deletion) before it starts. Returns the note, to settle it with. */
+function note(store: Journaled, id: string, value: unknown) {
+  const p = readPending();
+  p[store] = { ...p[store], [id]: value };
+  writePending(p);
+  return JSON.stringify(value);
+}
+
+/** The write is in IndexedDB: drop its note, unless a newer write of the same record noted something else since. */
+function settle(store: Journaled, id: string, noted: string) {
+  const p = readPending();
+  const m = p[store];
+  if (!m || !(id in m) || JSON.stringify(m[id]) !== noted) return;
+  delete m[id];
+  writePending(p);
+}
+
+/** Write through the notes an earlier page left (its writes may not have committed). */
+async function replayPending(db: IDBDatabase) {
+  const p = readPending();
+  const entries = (["sessions", "docs"] as const).flatMap((store) => Object.entries(p[store] ?? {}).map(([id, v]) => ({ store, id, v })));
+  if (!entries.length) return;
+  const tx = db.transaction(["sessions", "docs", "pages"], "readwrite");
+  for (const { store, id, v } of entries) {
+    if (v && typeof v === "object" && (v as { id?: unknown }).id === id) tx.objectStore(store).put(v);
+    else if (v === null) {
+      tx.objectStore(store).delete(id);
+      if (store === "docs") tx.objectStore("pages").delete(pageRange(id));
+    }
+  }
+  await finished(tx);
+  for (const { store, id, v } of entries) settle(store, id, JSON.stringify(v));
+}
+
 const done = <T>(req: IDBRequest<T>) =>
   new Promise<T>((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
@@ -78,6 +141,10 @@ function open(): Promise<IDBDatabase> {
     };
     req.onerror = () => reject(req.error ?? new Error("IndexedDB can't be opened"));
     req.onblocked = () => reject(new Error("IndexedDB is blocked by another tab"));
+  }).then(async (db) => {
+    // Before anything else reads or writes: what an earlier page noted but may not have committed.
+    await replayPending(db).catch(() => writePending({})); // notes that can't be written are dropped, not retried forever
+    return db;
   });
   // A failed open is retried next time (e.g. after the user allowed storage).
   opening.catch(() => { opening = null; });
@@ -130,15 +197,30 @@ export const updatePage = (page: DocPage) =>
     tx.objectStore("pages").put(page);
   });
 
+/** A write of one record in the background, noted first so a reload right after it can't lose it (see PENDING_KEY). */
+async function noted(store: Journaled, id: string, value: object | null, write: () => Promise<void>) {
+  const n = note(store, id, value);
+  await write();
+  settle(store, id, n);
+}
+
 /** Replace a document's metadata (e.g. the problems found on a sheet), keeping its pages. */
 export const updateDoc = (meta: DocMeta) =>
-  run(["docs"], "readwrite", (tx) => {
-    tx.objectStore("docs").put(meta);
-  });
+  noted("docs", meta.id, meta, () =>
+    run(["docs"], "readwrite", (tx) => {
+      tx.objectStore("docs").put(meta);
+    }),
+  );
 
 /** Delete everything a project has here: its documents, their pages and its sessions (the project was deleted). */
-export const deleteProjectData = (projectId: string) =>
-  run(["docs", "pages", "sessions"], "readwrite", async (tx) => {
+export const deleteProjectData = (projectId: string) => {
+  // Its noted writes must not bring any of it back.
+  const p = readPending();
+  for (const m of Object.values(p)) {
+    for (const [id, v] of Object.entries(m ?? {})) if ((v as { projectId?: unknown } | null)?.projectId === projectId) delete m![id];
+  }
+  writePending(p);
+  return run(["docs", "pages", "sessions"], "readwrite", async (tx) => {
     const docs = await done(tx.objectStore("docs").getAll() as IDBRequest<DocMeta[]>);
     for (const d of docs.filter((d) => d.projectId === projectId)) {
       tx.objectStore("docs").delete(d.id);
@@ -147,22 +229,27 @@ export const deleteProjectData = (projectId: string) =>
     const sessions = await done(tx.objectStore("sessions").index("projectId").getAllKeys(projectId));
     for (const k of sessions) tx.objectStore("sessions").delete(k);
   });
+};
 
 /** Delete a document and all its pages. */
 export const deleteDoc = (id: string) =>
-  run(["docs", "pages"], "readwrite", (tx) => {
-    tx.objectStore("docs").delete(id);
-    tx.objectStore("pages").delete(pageRange(id));
-  });
+  noted("docs", id, null, () =>
+    run(["docs", "pages"], "readwrite", (tx) => {
+      tx.objectStore("docs").delete(id);
+      tx.objectStore("pages").delete(pageRange(id));
+    }),
+  );
 
 /** Every `[docId, page]` key of one document: page numbers are numbers, and every number sorts before any array. */
 const pageRange = (docId: string) => IDBKeyRange.bound([docId, -Infinity], [docId, []]);
 
 /** Save (create or replace) a session. */
 export const putSession = <S extends StoredSession>(session: S) =>
-  run(["sessions"], "readwrite", (tx) => {
-    tx.objectStore("sessions").put(session);
-  });
+  noted("sessions", session.id, session, () =>
+    run(["sessions"], "readwrite", (tx) => {
+      tx.objectStore("sessions").put(session);
+    }),
+  );
 
 /** A project's sessions, most recently updated first. The caller validates the shape. */
 export const listSessions = (projectId: string) =>
@@ -172,9 +259,11 @@ export const listSessions = (projectId: string) =>
   });
 
 export const deleteSession = (id: string) =>
-  run(["sessions"], "readwrite", (tx) => {
-    tx.objectStore("sessions").delete(id);
-  });
+  noted("sessions", id, null, () =>
+    run(["sessions"], "readwrite", (tx) => {
+      tx.objectStore("sessions").delete(id);
+    }),
+  );
 
 /** Close the connection (tests, which replace the IndexedDB implementation between runs). */
 export async function closeDocDb() {

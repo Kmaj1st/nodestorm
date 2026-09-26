@@ -860,8 +860,10 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
     api.explain({ node: toBrief(node), prerequisites, relations, level, voice }, signal),
   );
   if (!res) return;
+  // Built once: a background change is applied to every undo snapshot too, and they must all get the same value.
+  const explanation = { ...res, level, ...(voice !== "plain" ? { voice } : {}), createdAt: Date.now() };
   store().mutate(
-    (g) => ops.updateNode(g, nodeId, { explanation: { ...res, level, ...(voice !== "plain" ? { voice } : {}), createdAt: Date.now() } }),
+    (g) => ops.updateNode(g, nodeId, { explanation }),
     graphId,
     { history: "background" },
   );
@@ -884,8 +886,9 @@ export async function anatomyNode(nodeId: string, graphId = store().activeId) {
     api.anatomy({ node: { ...toBrief(node), kind: node.kind }, prerequisites }, signal),
   );
   if (!res) return;
+  const anatomy = { ...res, createdAt: Date.now() }; // once, for every undo snapshot (see explainNode)
   store().mutate(
-    (g) => ops.updateNode(g, nodeId, { anatomy: { ...res, createdAt: Date.now() } }),
+    (g) => ops.updateNode(g, nodeId, { anatomy }),
     graphId,
     { history: "background" },
   );

@@ -195,6 +195,10 @@ describe("concepts hidden by hand", () => {
     expect(pruneHidden({ g: ["gone"] }, { g })).toEqual({});
     const ok = { g: ["A", "B"] };
     expect(pruneHidden(ok, { g })).toBe(ok); // unchanged: the same map
+    // A deleted concept that Undo (or Redo) can bring back stays hidden; one only a gone graph had doesn't.
+    const history = { g: { past: [{ nodes: [{ id: "gone" }] }], future: [] }, deleted: { past: [{ nodes: [{ id: "X" }] }], future: [] } };
+    expect(pruneHidden(m, { g }, history as never)).toEqual({ g: ["A", "gone"] });
+    expect(pruneHidden({ g: ["later"] }, { g }, { g: { past: [], future: [{ nodes: [{ id: "later" }] }] } } as never)).toEqual({ g: ["later"] });
   });
 
   it("tolerates anything stored", () => {

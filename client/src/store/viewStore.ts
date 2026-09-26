@@ -190,12 +190,13 @@ useGraphStore.subscribe((s, prev) => {
   if (target && target !== f.nodeId) useView.getState().setFocus({ graphId: s.activeId, nodeId: target });
 });
 
-// Concepts hidden by hand: forget the ones that are gone (deleted concepts, discarded graphs), and show one again when
-// it gets selected or opened in the inspector by other means (a link in the inspector, the walkthrough, a new concept).
+// Concepts hidden by hand: forget the ones that are gone for good (deleted concepts Undo/Redo can't bring back,
+// discarded graphs), and show one again when it gets selected or opened in the inspector by other means (a link in the
+// inspector, the walkthrough, a new concept).
 useGraphStore.subscribe((s, prev) => {
   const v = useView.getState();
   if (!Object.keys(v.hidden).length) return;
-  if (s.graphs !== prev.graphs) v.setHidden(pruneHidden(v.hidden, s.graphs));
+  if (s.graphs !== prev.graphs || s.history !== prev.history) v.setHidden(pruneHidden(v.hidden, s.graphs, s.history));
   if (s.selection === prev.selection && s.inspect === prev.inspect) return;
   const hidden = hiddenIn(s.activeId)(useView.getState());
   const wanted = s.inspect?.kind === "node" ? [...s.selection, s.inspect.id] : s.selection;

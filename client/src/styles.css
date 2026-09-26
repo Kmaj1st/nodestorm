@@ -557,6 +557,11 @@ button.edge-label--active:hover:not(:disabled) {
 .hidden-bar__list li { display: flex; align-items: center; gap: var(--space-2); padding-left: var(--space-2); }
 .hidden-bar__name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .hidden-bar__list button { flex-shrink: 0; }
+/* A phone's canvas is short, so the list would drop over the zoom controls in the bottom-left corner (15px in, 30px
+   wide): it opens beside them instead. */
+@media (max-width: 800px) {
+  .canvas .hidden-bar__list { left: 38px; max-width: calc(100vw - 38px - 2 * var(--space-3) - 2px); }
+}
 
 /* ==========================================================================================================
    Inspector
