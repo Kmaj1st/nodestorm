@@ -34,6 +34,7 @@
 - **Extracting without an AI set up** leaves the new concepts "not checked" (their badge checks them later) instead of one error per concept.
 - **C, C++ and C#** (and f / f′, A / A*, A†) are different concepts: symbols such as + # * ′ † count in names, while case, spaces, hyphens, underscores and trailing punctuation still don't.
 - **Escape doesn't lose typed text:** in the definitions pop-up (your own definition), Add concept (definition or description) and Settings (unsaved changes), Escape, a click outside or X first asks "Discard what you typed?"; focus is on **Keep editing**, and Escape again goes back to the text.
+- **Security review:** the local server answers only requests addressed to `localhost`/`127.0.0.1`/`[::1]` (or `HOST`, or names in `NODESTORM_ALLOWED_HOSTS`) and none from other sites' pages, so a DNS-rebinding page can't spend the keys in `server/.env`. An API key that a provider (or proxy) echoes in an error body is replaced by "[key hidden]" before it reaches a message. The production build carries a Content-Security-Policy (`client/pwa/csp.ts`: the app's own scripts only, no inline code or eval; the Baidu Baike frame's one fixed script is allowed by hash). PDF import turns XFA forms off. `E2E_BUILT=1 npm run e2e` runs the end-to-end test against the build and fails on any CSP violation.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
