@@ -182,5 +182,6 @@ export function usePhysics(opts: {
 
   useEffect(() => stop, [stop]);
 
-  return { settling, onDragStart, onDrag, onDragStop };
+  // Switched on but not started yet (the simulation is built in an effect after this render): not settled either.
+  return { settling: settling || (enabled && !sim.current), onDragStart, onDrag, onDragStop };
 }
