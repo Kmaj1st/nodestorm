@@ -39,6 +39,54 @@ interface SettingsState {
   language: string;
   /** How many AI calls may run at once; the rest wait in a queue (lib/aiQueue.ts). */
   aiConcurrency: number;
+  /** Web search engines that find pages defining a concept (lib/webSearch.ts). Keys follow `rememberKeys` like AI keys. */
+  search: SearchSettings;
+}
+
+/**
+ * Web search engines. Brave allows no cross-site calls from a page, so it only runs through the local server
+ * (connection "server"), which uses the key typed here or BRAVE_API_KEY from server/.env.
+ */
+export interface SearchSettings {
+  tavily: { enabled: boolean; apiKey?: string };
+  serper: { enabled: boolean; apiKey?: string };
+  brave: { enabled: boolean; apiKey?: string };
+  /** `url`: the user's SearXNG instance. */
+  searxng: { enabled: boolean; url?: string };
+  /** Most results in all (after removing duplicates). */
+  maxResults: number;
+}
+
+export const defaultSearch = (): SearchSettings => ({
+  tavily: { enabled: false },
+  serper: { enabled: false },
+  brave: { enabled: false },
+  searxng: { enabled: false },
+  maxResults: 6,
+});
+
+/** `search` without its API keys (what localStorage gets when keys aren't remembered). */
+export function searchWithoutKeys(s: SearchSettings): SearchSettings {
+  return {
+    ...s,
+    tavily: { ...s.tavily, apiKey: undefined },
+    serper: { ...s.serper, apiKey: undefined },
+    brave: { ...s.brave, apiKey: undefined },
+  };
+}
+
+/** Stored `search` settings, whatever their age or state, as a complete and valid value. */
+function mergeSearch(p: Partial<SearchSettings> | undefined): SearchSettings {
+  const d = defaultSearch();
+  const engine = <K extends "tavily" | "serper" | "brave" | "searxng">(k: K) => ({ ...d[k], ...(p?.[k] && typeof p[k] === "object" ? p[k] : {}) });
+  const max = Number(p?.maxResults);
+  return {
+    tavily: engine("tavily"),
+    serper: engine("serper"),
+    brave: engine("brave"),
+    searxng: engine("searxng"),
+    maxResults: Number.isFinite(max) ? Math.min(20, Math.max(1, Math.round(max))) : d.maxResults,
+  };
 }
 
 /** Presets for the output-language picker; `value` is what the prompt says. Anything else is custom text. */
@@ -90,7 +138,8 @@ const splitStorage: StateStorage = {
         const configs = Object.fromEntries(
           Object.entries(parsed.state.configs).map(([k, c]) => [k, { ...c, apiKey: undefined }]),
         );
-        localStorage.setItem(name, JSON.stringify({ ...parsed, state: { ...parsed.state, configs } }));
+        const search = parsed.state.search && searchWithoutKeys(parsed.state.search);
+        localStorage.setItem(name, JSON.stringify({ ...parsed, state: { ...parsed.state, configs, search } }));
         sessionStorage.setItem(name, value);
       }
     } catch {
@@ -123,6 +172,7 @@ export const useSettings = create<SettingsStore>()(
       autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,
+      search: defaultSearch(),
 
       update: (patch) => set(patch),
       updateConfig: (kind, patch) =>
@@ -132,6 +182,7 @@ export const useSettings = create<SettingsStore>()(
           configs: Object.fromEntries(
             Object.entries(get().configs).map(([k, c]) => [k, { ...c, apiKey: undefined }]),
           ) as Record<ProviderKind, ProviderConfig>,
+          search: searchWithoutKeys(get().search),
         }),
     }),
     {
@@ -152,6 +203,7 @@ export const useSettings = create<SettingsStore>()(
           clarify: { ...current.clarify, ...(p.clarify ?? {}) },
           installAll: { ...current.installAll, ...(p.installAll ?? {}) },
           lookup: { ...current.lookup, ...(p.lookup ?? {}) },
+          search: mergeSearch(p.search),
         };
       },
     },

@@ -345,6 +345,12 @@ function kbGet(name: string) {
   return entry && { key: entry[0], ...entry[1] };
 }
 
+/** The knowledge base's entry for a name or alias: the offline demo's web search builds its pages from it. */
+export function kbDefinition(name: string): { name: string; definition: string; aliases: string[] } | null {
+  const e = kbGet(name);
+  return e ? { name: title(e.key), definition: e.definition, aliases: e.aliases } : null;
+}
+
 /** The plain demo explanation in one of the parody voices (content untouched; "plain" or unknown: as is). */
 function voiced<T extends { intuition: string; keyPoints: string[]; examples: { title: string; body: string }[]; pitfalls: string[] }>(
   ex: T,

@@ -18,9 +18,10 @@ import { pausedSites, SITE_NAME } from "../lib/lookup";
 import { providerName } from "../lib/online";
 import { EDGE_COLOR_KEYS, useTheme, type EdgeColorKey, type EdgeColors, type ThemePref } from "../lib/theme";
 import { useGraphStore } from "../store/graphStore";
-import { DEFAULT_CONCURRENCY, LANGUAGES, useSettings, type Connection } from "../store/settingsStore";
+import { DEFAULT_CONCURRENCY, LANGUAGES, searchWithoutKeys, useSettings, type Connection } from "../store/settingsStore";
 import { formatTokens, useUsage } from "../store/usageStore";
 import { Modal } from "./Modal";
+import { WebSearchSettings } from "./WebSearchSettings";
 
 type ModelsState =
   | { status: "idle" }
@@ -50,6 +51,9 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
   const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
   const [aiConcurrency, setAiConcurrency] = useState(saved.aiConcurrency);
+  const [search, setSearch] = useState(saved.search);
+  // Search keys are kept like AI keys, so "Remember keys" shows for them too.
+  const searchKeyTyped = Boolean(search.tavily.apiKey || search.serper.apiKey || search.brave.apiKey);
   const tokens = useUsage((s) => s.tokens);
   const [showKey, setShowKey] = useState(false);
   const [models, setModels] = useState<ModelsState>({ status: "idle" });
@@ -105,14 +109,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setEdgeColors(edgeColors);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language: lang, aiConcurrency,
+      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language: lang, aiConcurrency, search,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
   };
 
   // Anything changed and not saved: Escape, the backdrop and X ask before throwing it away.
-  const draft = { connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language, aiConcurrency };
+  const draft = { connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language, aiConcurrency, search };
   const stored = Object.fromEntries(Object.keys(draft).map((k) => [k, saved[k as keyof typeof draft]]));
   const dirty =
     uiLang !== useLocale.getState().pref ||
@@ -429,6 +433,8 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         )}
       </fieldset>
 
+      <WebSearchSettings value={search} onChange={setSearch} connection={connection} provider={provider} />
+
       <fieldset className="choice">
         <legend>{t("settings.cycles")}</legend>
         <label className="check">
@@ -484,17 +490,17 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         )}
       </fieldset>
 
-      {connection === "browser" && meta.needsKey && (
+      {connection === "browser" && (meta.needsKey || searchKeyTyped) && (
         <div className="keynote">
           <label className="check">
             <input type="checkbox" checked={rememberKeys} onChange={(e) => setRememberKeys(e.target.checked)} />
             {t("settings.remember")}
           </label>
           <p className="muted small">
-            {t("settings.keyOnlyTo", { provider: meta.label })} {t(rememberKeys ? "settings.keyLocal" : "settings.keyTab")}{" "}
+            {meta.needsKey && `${t("settings.keyOnlyTo", { provider: meta.label })} `}{t(rememberKeys ? "settings.keyLocal" : "settings.keyTab")}{" "}
             {t("settings.keyAdvice")}
           </p>
-          <button type="button" className="link small" onClick={() => { saved.forgetKeys(); setConfigs(useSettings.getState().configs); }}>
+          <button type="button" className="link small" onClick={() => { saved.forgetKeys(); setConfigs(useSettings.getState().configs); setSearch(searchWithoutKeys(search)); }}>
             {t("settings.forget")}
           </button>
         </div>

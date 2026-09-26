@@ -1,0 +1,271 @@
+import { z } from "zod";
+import { CancelledError, ProviderError, redactSecret, withDeadline } from "../ai/provider";
+
+/**
+ * Web search engines that find pages defining a concept (Tavily, Serper's Google results, Brave Search, a SearXNG
+ * instance). This module builds each engine's request, reads its answer (zod-checked, one bad hit is skipped, not the
+ * whole answer) and turns HTTP failures into coded `ProviderError`s the interface translates. It runs in the browser
+ * (client/src/lib/webSearch.ts) and in the local server (`POST /api/search/:engine`), which forwards what the browser
+ * can't call itself (Brave allows no cross-site requests). Text cleanup, dedupe, caching and pauses are the client's.
+ */
+
+export type SearchEngineId = "tavily" | "serper" | "brave" | "searxng";
+export const SEARCH_ENGINES: SearchEngineId[] = ["tavily", "serper", "brave", "searxng"];
+
+export const SEARCH_ENGINE_LABEL: Record<SearchEngineId, string> = {
+  tavily: "Tavily",
+  serper: "Serper",
+  brave: "Brave Search",
+  searxng: "SearXNG",
+};
+
+export interface WebSearchQuery {
+  q: string;
+  /** Results wanted (engines cap it: Brave 20, Serper 100, Tavily 20). */
+  count: number;
+  /** Language code from lookupLanguage ("en", "zh", "ja"…). */
+  lang: string;
+}
+
+/** What an engine needs besides the query: its API key, or (SearXNG) the instance's address. */
+export interface WebSearchAuth {
+  key?: string;
+  url?: string;
+}
+
+/** One hit as the engine sent it. `text` may still hold HTML (Brave marks matches with <strong>). */
+export interface RawWebHit {
+  title: string;
+  url: string;
+  text: string;
+  /** The engine's date, as it wrote it ("2021-03-03T00:00:00", "Mar 3, 2021", "2 days ago"). */
+  date?: string;
+}
+
+/**
+ * A SearXNG instance's base address, or null when it isn't an http(s) URL. A pasted `…/search` or query is cut off.
+ * Plain http is allowed: a self-hosted instance often runs on this machine or the local network.
+ */
+export function searxngBase(raw: string | undefined): string | null {
+  const v = raw?.trim();
+  if (!v) return null;
+  try {
+    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`);
+    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
+    if (u.username || u.password) return null;
+    const path = u.pathname.replace(/\/+$/, "").replace(/\/search$/, "");
+    return `${u.origin}${path}`;
+  } catch {
+    return null;
+  }
+}
+
+const clampCount = (n: number, max: number) => Math.max(1, Math.min(max, Math.round(n) || 1));
+
+/** Serper's Google interface language (`hl`) and country (`gl`) for a language code. */
+function serperLocale(lang: string): { hl: string; gl?: string } {
+  if (lang === "zh") return { hl: "zh-cn", gl: "cn" };
+  if (lang === "ja") return { hl: "ja", gl: "jp" };
+  if (lang === "ko") return { hl: "ko", gl: "kr" };
+  return { hl: lang };
+}
+
+/** Brave's `search_lang` codes differ from ISO for Chinese and Japanese. */
+const braveLang = (lang: string) => (lang === "zh" ? "zh-hans" : lang === "ja" ? "jp" : lang);
+
+/** The HTTP request for one search. Throws a `noKey` ProviderError when the key (or SearXNG address) is missing. */
+export function webSearchRequest(engine: SearchEngineId, query: WebSearchQuery, auth: WebSearchAuth): { url: string; init: RequestInit } {
+  const provider = SEARCH_ENGINE_LABEL[engine];
+  const key = auth.key?.trim();
+  if (engine !== "searxng" && !key) {
+    throw new ProviderError(`${provider}: no API key is set.`, 400, undefined, { code: "noKey", params: { provider } });
+  }
+  // No cookies or other credentials go along: the key is the only identification.
+  const base: RequestInit = { credentials: "omit", referrerPolicy: "no-referrer" };
+  switch (engine) {
+    case "tavily":
+      return {
+        url: "https://api.tavily.com/search",
+        init: {
+          ...base,
+          method: "POST",
+          headers: { "content-type": "application/json", authorization: `Bearer ${key}` },
+          body: JSON.stringify({
+            query: query.q,
+            search_depth: "basic",
+            max_results: clampCount(query.count, 20),
+            include_answer: false,
+            include_raw_content: false,
+          }),
+        },
+      };
+    case "serper":
+      return {
+        url: "https://google.serper.dev/search",
+        init: {
+          ...base,
+          method: "POST",
+          headers: { "content-type": "application/json", "x-api-key": key! },
+          body: JSON.stringify({ q: query.q, num: clampCount(query.count, 100), ...serperLocale(query.lang) }),
+        },
+      };
+    case "brave": {
+      const params = new URLSearchParams({ q: query.q, count: String(clampCount(query.count, 20)), search_lang: braveLang(query.lang), extra_snippets: "true" });
+      return {
+        url: `https://api.search.brave.com/res/v1/web/search?${params}`,
+        init: { ...base, method: "GET", headers: { accept: "application/json", "x-subscription-token": key! } },
+      };
+    }
+    case "searxng": {
+      const root = searxngBase(auth.url);
+      if (!root) throw new ProviderError(`${provider}: no instance address is set.`, 400, undefined, { code: "noKey", params: { provider } });
+      const params = new URLSearchParams({ q: query.q, format: "json", language: query.lang === "zh" ? "zh-CN" : query.lang });
+      return { url: `${root}/search?${params}`, init: { ...base, method: "GET", headers: { accept: "application/json" } } };
+    }
+  }
+}
+
+const str = z.string();
+const optStr = z.string().nullish();
+const HIT: Record<SearchEngineId, { list: (json: unknown) => unknown; item: z.ZodType<RawWebHit> }> = {
+  tavily: {
+    list: (j) => z.object({ results: z.array(z.unknown()) }).parse(j).results,
+    item: z
+      .object({ title: optStr, url: str, content: optStr, published_date: optStr })
+      .transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.published_date ?? undefined })),
+  },
+  serper: {
+    // No `organic` at all is a search without results.
+    list: (j) => z.object({ organic: z.array(z.unknown()).optional() }).parse(j).organic ?? [],
+    item: z
+      .object({ title: optStr, link: str, snippet: optStr, date: optStr })
+      .transform((r) => ({ title: r.title ?? "", url: r.link, text: r.snippet ?? "", date: r.date ?? undefined })),
+  },
+  brave: {
+    list: (j) => z.object({ web: z.object({ results: z.array(z.unknown()) }).optional() }).parse(j).web?.results ?? [],
+    item: z
+      .object({ title: optStr, url: str, description: optStr, extra_snippets: z.array(z.string()).nullish(), page_age: optStr, age: optStr })
+      .transform((r) => ({
+        title: r.title ?? "",
+        url: r.url,
+        text: [r.description ?? "", ...(r.extra_snippets ?? [])].filter((s) => s.trim()).join(" "),
+        date: r.page_age ?? r.age ?? undefined,
+      })),
+  },
+  searxng: {
+    list: (j) => z.object({ results: z.array(z.unknown()) }).parse(j).results,
+    item: z
+      .object({ title: optStr, url: str, content: optStr, publishedDate: optStr })
+      .transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.publishedDate ?? undefined })),
+  },
+};
+
+/** The hits in an engine's JSON answer. An answer of the wrong shape is a `malformed` error; a bad hit is skipped. */
+export function parseWebSearch(engine: SearchEngineId, json: unknown): RawWebHit[] {
+  let list: unknown;
+  try {
+    list = HIT[engine].list(json);
+  } catch (e) {
+    const provider = SEARCH_ENGINE_LABEL[engine];
+    throw new ProviderError(`${provider}'s answer couldn't be read.`, 502, undefined, {
+      code: "malformed",
+      params: { provider },
+      detail: e instanceof Error ? e.message.slice(0, 200) : undefined,
+    });
+  }
+  const hits: RawWebHit[] = [];
+  for (const raw of list as unknown[]) {
+    const r = HIT[engine].item.safeParse(raw);
+    if (r.success) hits.push(r.data);
+  }
+  return hits;
+}
+
+/** The engine's own words about an error, short and without the key. */
+function errorDetail(body: string, key: string | undefined): string | undefined {
+  let text = body.trim();
+  try {
+    const j = JSON.parse(text) as any;
+    const m = j?.detail?.error ?? j?.error?.detail ?? j?.error?.code ?? j?.message ?? j?.error ?? j?.detail;
+    if (typeof m === "string") text = m;
+  } catch {
+    /* not JSON: the text itself */
+  }
+  if (/^\s*</.test(text)) return undefined; // an HTML error page says nothing useful
+  text = redactSecret(text.replace(/\s+/g, " ").slice(0, 200), key);
+  return text || undefined;
+}
+
+/**
+ * A failed search as a coded error: a rejected key, a rate limit, used-up credits (Tavily 432/433, Serper's "Not
+ * enough credits", Brave's quota), a SearXNG instance that refuses JSON, or any other HTTP error.
+ */
+export function webSearchError(engine: SearchEngineId, status: number, body: string, key?: string): ProviderError {
+  const provider = SEARCH_ENGINE_LABEL[engine];
+  const detail = errorDetail(body, key);
+  const lower = body.toLowerCase();
+  const quota = /credit|quota|plan limit|usage limit|exceeded your/.test(lower);
+  const make = (code: "invalidKey" | "rateLimited" | "quota" | "declined" | "http", message: string, st = status) =>
+    new ProviderError(`${provider}: ${message}`, st, undefined, { code, params: code === "http" ? { provider, status } : { provider }, detail });
+  if (status === 432 || status === 433 || status === 402 || (quota && (status === 400 || status === 403 || status === 429))) {
+    return make("quota", "the searches or credits of this account are used up.", 429);
+  }
+  if (status === 429) return make("rateLimited", "rate limited.");
+  if (engine === "searxng" && status === 403) return make("declined", "the instance refused JSON output.");
+  if (status === 401 || status === 403 || (engine === "brave" && status === 422 && /token/.test(lower))) {
+    return make("invalidKey", "the API key was rejected.", 401);
+  }
+  return make("http", `HTTP ${status}.`, status >= 500 ? 502 : status);
+}
+
+export interface WebSearchFetchOptions {
+  signal?: AbortSignal;
+  /** Per request (default 12 s). */
+  timeoutMs?: number;
+  fetch?: typeof fetch;
+}
+
+/**
+ * One search on one engine, straight to the engine. Network failures (including a browser's CORS refusal) and time-outs
+ * are `unreachable`; the other failures are coded by `webSearchError`. Cancelling throws CancelledError.
+ */
+export async function fetchWebSearch(engine: SearchEngineId, query: WebSearchQuery, auth: WebSearchAuth, opts: WebSearchFetchOptions = {}): Promise<RawWebHit[]> {
+  const provider = SEARCH_ENGINE_LABEL[engine];
+  const { url, init } = webSearchRequest(engine, query, auth);
+  const f = opts.fetch ?? globalThis.fetch;
+  const timeoutMs = opts.timeoutMs ?? 12_000;
+  try {
+    return await withDeadline(provider, { signal: opts.signal, timeoutMs }, async (signal) => {
+      let res: Response;
+      try {
+        res = await f(url, { ...init, signal });
+      } catch (e) {
+        if (signal.aborted) throw new CancelledError();
+        throw new ProviderError(`Can't reach ${provider}.`, 502, undefined, {
+          code: "unreachable",
+          params: { provider },
+          detail: redactSecret(e instanceof Error ? e.message : String(e), auth.key),
+        });
+      }
+      const body = await res.text().catch(() => "");
+      if (!res.ok) throw webSearchError(engine, res.status, body, auth.key);
+      let json: unknown;
+      try {
+        json = JSON.parse(body);
+      } catch {
+        throw new ProviderError(`${provider}'s answer couldn't be read.`, 502, undefined, { code: "malformed", params: { provider }, detail: "not JSON" });
+      }
+      return parseWebSearch(engine, json);
+    });
+  } catch (e) {
+    // A search engine that is slow is out of reach for our purposes; the AI time-out's advice doesn't apply.
+    if (e instanceof ProviderError && e.code === "timeout") {
+      throw new ProviderError(`Can't reach ${provider}.`, 504, undefined, {
+        code: "unreachable",
+        params: { provider },
+        detail: `no answer within ${Math.round(timeoutMs / 1000)} s`,
+      });
+    }
+    throw e;
+  }
+}

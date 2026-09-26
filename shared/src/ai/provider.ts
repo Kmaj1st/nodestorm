@@ -57,6 +57,7 @@ export interface Provider {
 export type ProviderErrorCode =
   | "timeout" // {provider, seconds}
   | "rateLimited" // {provider}, and {seconds} once retries are used up
+  | "quota" // {provider}: a web search account's searches or credits are used up
   | "noKey" // {provider}
   | "invalidKey" // {provider}
   | "modelDenied" // {provider, model}

@@ -4,6 +4,7 @@ import { proofWiki, wikipedia, type LookupSense } from "./sites";
 
 export { DEFAULT_USER_AGENT, SiteBlockedError, type LookupOptions } from "./http";
 export { mathFromExtract, proofWiki, proofWikiTitle, shortExtract, wikipedia, type LookupSense } from "./sites";
+export * from "./webSearch";
 export { definitionText, expandMacros, isDisambiguation, listedDefinitions } from "./wikitext";
 
 export type LookupSite = "proofwiki" | "wikipedia";
