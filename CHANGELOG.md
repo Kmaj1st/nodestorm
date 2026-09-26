@@ -34,6 +34,11 @@
 - **Extracting without an AI set up** leaves the new concepts "not checked" (their badge checks them later) instead of one error per concept.
 - **C, C++ and C#** (and f / f′, A / A*, A†) are different concepts: symbols such as + # * ′ † count in names, while case, spaces, hyphens, underscores and trailing punctuation still don't.
 - **Escape doesn't lose typed text:** in the definitions pop-up (your own definition), Add concept (definition or description) and Settings (unsaved changes), Escape, a click outside or X first asks "Discard what you typed?"; focus is on **Keep editing**, and Escape again goes back to the text.
+  Extract from text (pasted text or a focus, also while its concepts are reviewed) and Absurd chain (ends or stops typed for a chain not built yet, a custom stop's description) ask too.
+- **Merging a sandbox, or folding a concept into one that has the same meaning,** keeps aliases unambiguous too: the folded concept's name and aliases become aliases of the one it joined where no other concept has them, and on a merge the aliases the main graph already had win.
+- **Errors of the browser storage** behind Versions and Derive together's documents (unavailable, blocked by another tab, full) are said in the interface language.
+- **The main graph** is headed "Main graph" (主图谱) in the Markdown export and in Derive together's "Add to graph", instead of its stored name "Main".
+- **Faster start, again:** the encyclopedia clients (ProofWiki, Wikipedia/Wikidata, Baidu Baike, the MediaWiki wikis) load on the first look-up that isn't cached: the first-paint bundle is 818 kB instead of 832 kB (262 kB instead of 267 kB gzipped). Physics saves positions without scanning the concept list once per concept.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
