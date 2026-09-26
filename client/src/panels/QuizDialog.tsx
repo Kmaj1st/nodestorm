@@ -10,11 +10,12 @@ import { Modal } from "./Modal";
 import { Icon } from "../ui/Icon";
 import "./quiz.css";
 
-const STYLES: { value: quiz.StylePref; label: MessageKey }[] = [
-  { value: "mixed", label: "quiz.styleMixed" },
-  { value: "recall", label: "quiz.styleRecall" },
-  { value: "apply", label: "quiz.styleApply" },
-  { value: "connect", label: "quiz.styleConnect" },
+// Short names in the select (it can't wrap on a phone); the chosen one is explained under it.
+const STYLES: { value: quiz.StylePref; label: MessageKey; hint: MessageKey }[] = [
+  { value: "mixed", label: "quiz.styleMixed", hint: "quiz.styleMixedHint" },
+  { value: "recall", label: "quiz.styleRecall", hint: "quiz.styleRecallHint" },
+  { value: "apply", label: "quiz.styleApply", hint: "quiz.styleApplyHint" },
+  { value: "connect", label: "quiz.styleConnect", hint: "quiz.styleConnectHint" },
 ];
 const STYLE_TAG: Record<QuizStyle, MessageKey> = { recall: "quiz.tagRecall", apply: "quiz.tagApply", connect: "quiz.tagConnect" };
 const GRADE_LABEL: Record<quiz.Grade | "skipped", MessageKey> = {
@@ -166,10 +167,11 @@ export function QuizDialog({ graphId, rootId, pathFirst, onClose }: {
         </fieldset>
         <label className="field">
           {t("quiz.style")}
-          <select value={style} onChange={(e) => setStyle(e.target.value as quiz.StylePref)}>
+          <select value={style} onChange={(e) => setStyle(e.target.value as quiz.StylePref)} aria-describedby="quiz-style-hint">
             {STYLES.map((s) => <option key={s.value} value={s.value}>{t(s.label)}</option>)}
           </select>
         </label>
+        <p id="quiz-style-hint" className="quiz__styleHint">{t(STYLES.find((s) => s.value === style)!.hint)}</p>
         <label className="check">
           <input type="checkbox" checked={multipleChoice} onChange={(e) => setMultipleChoice(e.target.checked)} />
           {t("quiz.multipleChoice")}

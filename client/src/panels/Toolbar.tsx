@@ -107,7 +107,12 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         <button className="primary" onClick={onAdd} data-tour="add"><Icon icon={Plus} />{t("toolbar.add")}</button>
         <button
           data-tour="mix" // data-tour: what the guided tour points at (panels/Onboarding.tsx)
-          onClick={() => mix(selected[0].id, selected[1].id)}
+          onClick={async (e) => {
+            // The button is disabled while mixing, which drops the focus: give it back when the relation is in.
+            const button = e.currentTarget;
+            await mix(selected[0].id, selected[1].id);
+            if (document.activeElement === document.body) button.focus();
+          }}
           disabled={!canMix}
           title={blockReason ?? (selected.length !== 2 ? t("toolbar.mixSelectTwo") : t("toolbar.mixTitle"))}
         >
@@ -124,7 +129,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
         >
           <Icon icon={Drama} />
         </button>
-        <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? t("toolbar.deriveTitle")}>
+        <button onClick={onDerive} disabled={!canDerive} title={blockReason ?? t(selected.length ? "toolbar.deriveTitle" : "toolbar.deriveSelect")}>
           <Icon icon={Sparkles} />
           {t("toolbar.derive")}
         </button>

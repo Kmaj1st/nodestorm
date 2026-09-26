@@ -433,8 +433,15 @@ fieldset { min-width: 0; }
   border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--focus-ring), var(--shadow-md);
 }
 .concept__handle { opacity: 0; pointer-events: none; top: 50% !important; left: 50% !important; }
-.concept__head { display: flex; justify-content: space-between; gap: var(--space-2); align-items: flex-start; }
-.concept__name { font-weight: 600; font-size: var(--text-sm); line-height: 1.35; min-width: 0; overflow-wrap: anywhere; letter-spacing: -0.005em; }
+.concept__head { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-2); align-items: flex-start; }
+/* The name takes the row when it and the status pill don't fit side by side (the pill goes under it), so a name
+   breaks between words, not mid-word. A single word wider than the card is hyphenated (the span's lang is the
+   name's), and one of 13+ / 20+ letters is set a little smaller; cutting it anywhere is the last resort. */
+.concept__name {
+  flex: 1 1 auto; font-weight: 600; font-size: var(--text-sm); line-height: 1.35; min-width: 0; letter-spacing: -0.005em;
+  overflow-wrap: break-word; hyphens: auto; -webkit-hyphens: auto;
+}
+.concept__name--xlong { font-size: var(--text-xs); letter-spacing: -0.02em; }
 .concept__def {
   color: var(--muted); font-size: var(--text-xs); line-height: 1.45; margin-top: 6px;
   display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
@@ -781,6 +788,9 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .form label > input, .form label > textarea, .form label > select { font-weight: 400; }
 .row { display: flex; gap: var(--space-2); }
 .row input { flex: 1; min-width: 0; }
+/* Derive's goal: on a phone the field takes the row (its example stays readable) and Regenerate goes under it. */
+.derive__goal { flex-wrap: wrap; justify-content: flex-end; }
+.derive__goal input { flex: 1 1 16em; }
 .candidates { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .candidates li {
   display: flex; gap: var(--space-3); justify-content: space-between; align-items: center;
@@ -828,6 +838,9 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .check { display: flex; flex-direction: row; gap: var(--space-2); align-items: center; font-size: var(--text-md); cursor: pointer; }
 .form label.check { flex-direction: row; font-weight: 400; font-size: var(--text-md); }
 .field .row input { flex: 1; min-width: 0; }
+/* Derive's goal: on a phone the field takes the row (its example stays readable) and Regenerate goes under it. */
+.derive__goal { flex-wrap: wrap; justify-content: flex-end; }
+.derive__goal input { flex: 1 1 16em; }
 .model-list {
   list-style: none; margin: 0; padding: var(--space-1); max-height: 184px; overflow-y: auto;
   border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 1px;
@@ -948,7 +961,7 @@ button.status__cancel:hover:not(:disabled) { background: var(--hover); color: va
   position: fixed; bottom: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 20; cursor: pointer;
   display: flex; gap: 10px; align-items: flex-start; padding: 9px 8px 9px 14px; border-radius: var(--radius-md);
   background: var(--toast-bg); color: var(--toast-text); font-size: var(--text-sm); line-height: 1.45;
-  max-width: min(640px, calc(100vw - 32px)); box-shadow: var(--shadow-lg);
+  width: max-content; max-width: min(640px, calc(100vw - 32px)); box-shadow: var(--shadow-lg);
 }
 /* Informational notices (copied, imported, install summary) use the neutral status colours, not error red. */
 .toast--info { background: var(--status-bg); color: var(--status-text); }
@@ -1166,7 +1179,9 @@ span.paper__title { color: var(--text); }
   justify-content: space-between; gap: var(--space-2); pointer-events: none;
 }
 .graph3d__hud > * { pointer-events: auto; }
-.graph3d__hint { background: var(--panel); border: 1px solid var(--border); border-radius: 999px; padding: 3px var(--space-3); color: var(--muted); }
+/* A pill on one line; a rounded box when it wraps (a phone, the touch hint). */
+.graph3d__hint { background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 3px var(--space-3); color: var(--muted); }
+.graph3d__hud > button { white-space: nowrap; flex-shrink: 0; }
 .graph3d__failed { padding: var(--space-4); color: var(--muted); }
 .graph3d__list { overflow: auto; min-height: 0; font-size: var(--text-sm); }
 .graph3d__list ul { list-style: none; margin: 0 0 var(--space-3); padding: 0; }
@@ -1214,6 +1229,8 @@ span.paper__title { color: var(--text); }
 .canvas--far .concept__cycle span { display: none; }
 .canvas--far .concept__missing, .canvas--far .concept__cycle { border-top: none; padding-top: 0; }
 .canvas--far .concept__name { font-size: 22px; line-height: 1.2; letter-spacing: -0.01em; }
+.canvas--far .concept__name--long { font-size: 18px; }
+.canvas--far .concept__name--xlong { font-size: 15px; }
 
 /* "Look up in…" next to the definition's source. */
 .popover.lookup-menu { left: 0; right: auto; width: auto; min-width: 190px; padding: var(--space-1); gap: 2px; }

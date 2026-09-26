@@ -44,6 +44,10 @@
 - **Errors of the browser storage** behind Versions and Derive together's documents (unavailable, blocked by another tab, full) are said in the interface language.
 - **The main graph** is headed "Main graph" (主图谱) in the Markdown export and in Derive together's "Add to graph", instead of its stored name "Main".
 - **Faster start, again:** the encyclopedia clients (ProofWiki, Wikipedia/Wikidata, Baidu Baike, the MediaWiki wikis) load on the first look-up that isn't cached: the first-paint bundle is 818 kB instead of 832 kB (262 kB instead of 267 kB gzipped). Physics saves positions without scanning the concept list once per concept.
+- **Concept names wrap between words:** a card's name no longer breaks mid-word ("Homomor|phism") on a narrow card; the status pill moves under the name when both don't fit. A single long word is hyphenated in the name's own language and set a little smaller (also when zoomed out), and Chinese names wrap as before.
+- **Touch screens:** the 3D view's hint names finger gestures (one finger rotates, a pinch zooms, two fingers pan, a tap opens a concept), and lifting a finger after a pinch no longer opens a card. Loading the example says "tap a concept" instead of "press ?".
+- **Quiz on a phone:** the question type select shows short names (Mixed, Recall, Apply, Connect), with the chosen one explained under it, instead of cutting off its text. Toasts use the width of the screen instead of half of it.
+- **First visit polish:** the welcome card's first button has the focus; after adding a stop to an absurd chain the focus goes back to its field, and a new chain takes the focus when it is built (it was lost); Mix gives the focus back when it's done. Disabled **Derive** (nothing selected) and **Use this definition** (nothing picked or written) say why. "How to use" describes the look-ups-first flow and **Check with AI**. Derive's goal field keeps its example readable on a phone.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
