@@ -2216,7 +2216,7 @@ try {
     await st.getByText("ProofWiki refused recent requests").waitFor();
     assert(true, "Settings says ProofWiki is being skipped for now");
     await audit("Settings with the definitions section");
-    await st.getByLabel("Look definitions up in encyclopedias before asking the AI").uncheck();
+    await st.getByLabel("Look definitions up in encyclopedias and wikis").uncheck();
     await st.getByRole("button", { name: "Save", exact: true }).click();
     await addByName("Normal Subgroup");
     await waitBadge("Normal Subgroup", "blocked");

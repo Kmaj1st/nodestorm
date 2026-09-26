@@ -1063,10 +1063,10 @@ export const en = {
   "node.source": "Source",
   "node.sourceLink": "{site}: {title}",
   "settings.lookup": "Definitions",
-  "settings.lookupEnabled": "Look definitions up in encyclopedias before asking the AI",
+  "settings.lookupEnabled": "Look definitions up in encyclopedias and wikis",
   "settings.lookupProofWiki": "ProofWiki (rigorous mathematical definitions)",
   "settings.lookupWikipedia": "Wikipedia and Wikidata (broad, many languages)",
-  "settings.lookupHint": "Concept names are sent to the sites you tick. The AI is asked only when they find nothing.",
+  "settings.lookupHint": "Concept names are sent to the sites you tick. Definitions always come from a source’s own words; the AI only rates the sources.",
   "settings.lookupPaused": "{sites} refused recent requests and will be skipped for a few minutes.",
   "settings.search": "Web search",
   "settings.searchIntro": "Search engines find pages that define a new concept. The AI only rates them and points at the passage; the text you keep is the page's own.",
@@ -1151,7 +1151,7 @@ export const en = {
   "sources.use": "Use this text",
   "sense.writeFirst": "Write your definition first",
   "sense.pickFirst": "Pick one above first",
-  "settings.newConceptsAsk": "When adding a concept, show what the look-ups found and ask before using the AI",
+  "settings.newConceptsAsk": "When adding a concept, show the sources and let me choose (otherwise the most reliable passage is taken)",
   "toast.setUpAi": "Set up an AI provider first.",
 
   // Absurd chain (parody mode): panels/AbsurdChainDialog.tsx, lib/absurd.ts
