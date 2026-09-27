@@ -1,10 +1,11 @@
 import type { ConceptNode, Reliability, SourceRef } from "@nodestorm/shared";
 import { ExternalLink } from "lucide-react";
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
+import { mathRanges } from "../lib/math";
 import { cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
@@ -76,8 +77,9 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
       const a = holder(sel.anchorNode);
       if (!a || a !== holder(sel.focusNode)) return setSelection(null);
       const src = sources.find((s) => s.id === a.dataset.sourceText);
-      const text = sel.toString().trim();
-      setSelection(src && text.length > 1 && src.text.includes(text) ? { id: src.id, text } : null);
+      const span = src && selectedSpan(a, sel.getRangeAt(0));
+      const text = src && span ? src.text.slice(span.from, span.to).trim() : "";
+      setSelection(src && text.length > 1 ? { id: src.id, text } : null);
     };
     document.addEventListener("selectionchange", onChange);
     return () => document.removeEventListener("selectionchange", onChange);
@@ -365,11 +367,72 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
 }
 
 /**
- * A source's text as plain characters (so what the user selects is exactly the source's text), the passage marked.
- * Short: the passage with some context around it, the cut-off parts as "…" that can't be selected.
+ * Where a selection inside a source's text (`holder`) starts and ends in that text. Every shown piece carries the
+ * offsets of the characters it stands for (`data-from`, and `data-to` on a typeset formula), so what the user selects
+ * maps back to the source's own characters; a selection that starts or ends inside a formula takes the whole formula.
+ */
+function selectedSpan(holder: HTMLElement, range: Range): { from: number; to: number } | null {
+  const pieces = [...holder.querySelectorAll<HTMLElement>("[data-from]")];
+  if (!pieces.length) return null;
+  const at = (node: Node, offset: number, end: boolean): number | null => {
+    const el = (node instanceof Element ? node : node.parentElement)?.closest<HTMLElement>("[data-from]");
+    if (el && holder.contains(el)) {
+      const from = Number(el.dataset.from);
+      if (el.dataset.to) return end ? Number(el.dataset.to) : from; // a formula: all of it
+      // A text piece: a single text node, or the element itself with the offset counting its children.
+      if (node.nodeType === Node.TEXT_NODE) return from + offset;
+      return offset === 0 ? from : from + (el.textContent ?? "").length;
+    }
+    // Outside every piece (the "…" of a shortened text, or the holder itself): the edge of the nearest piece inside
+    // the selection.
+    const follows = (p: Element) => (node.compareDocumentPosition(p) & Node.DOCUMENT_POSITION_FOLLOWING) !== 0;
+    if (!end) {
+      const next = pieces.find(follows);
+      return next ? Number(next.dataset.from) : null;
+    }
+    const prev = [...pieces].reverse().find((p) => (!follows(p) || node.contains(p)) && !p.contains(node));
+    return prev ? Number(prev.dataset.to ?? Number(prev.dataset.from) + (prev.textContent ?? "").length) : null;
+  };
+  // A boundary between an element's children (offset counts children): the child it touches, from its start or end.
+  const edge = (node: Node, offset: number, end: boolean): number | null => {
+    if (node.nodeType === Node.ELEMENT_NODE && !(node as Element).closest("[data-from]")) {
+      const child = node.childNodes[end ? offset - 1 : offset];
+      if (child) return at(child, end ? child.childNodes.length || (child.textContent ?? "").length : 0, end);
+    }
+    return at(node, offset, end);
+  };
+  const from = edge(range.startContainer, range.startOffset, false);
+  const to = edge(range.endContainer, range.endOffset, true);
+  return from !== null && to !== null && to > from ? { from, to } : null;
+}
+
+/** The characters [from, to) of `text`, formulas typeset; each piece says which characters it stands for. */
+function Pieces({ text, from, to, formulas }: { text: string; from: number; to: number; formulas: { from: number; to: number }[] }) {
+  const out: ReactNode[] = [];
+  let at = from;
+  for (const f of formulas) {
+    if (f.to <= at || f.from >= to) continue;
+    if (f.from < at || f.to > to) continue; // a formula cut by the passage's edge stays as its source
+    if (f.from > at) out.push(<span key={at} data-from={at}>{text.slice(at, f.from)}</span>);
+    out.push(
+      <span key={f.from} className="src__math" data-from={f.from} data-to={f.to}>
+        <MathText text={text.slice(f.from, f.to)} inline />
+      </span>,
+    );
+    at = f.to;
+  }
+  if (at < to) out.push(<span key={at} data-from={at}>{text.slice(at, to)}</span>);
+  return <>{out}</>;
+}
+
+/**
+ * A source's text, formulas typeset, the passage marked. What the user selects still maps back to exactly the source's
+ * characters (see selectedSpan). Short: the passage with some context around it, the cut-off parts as "…" that can't
+ * be selected.
  */
 function SourceText({ source, full, markTitle }: { source: Source; full: boolean; markTitle: string }) {
   const { text, passage } = source;
+  const formulas = useMemo(() => mathRanges(text), [text]);
   const at = passage ? text.indexOf(passage) : -1;
   let from = 0;
   let to = text.length;
@@ -384,16 +447,21 @@ function SourceText({ source, full, markTitle }: { source: Source; full: boolean
       const sp = text.indexOf(" ", to);
       to = sp < 0 ? text.length : sp;
     }
+    // Nor inside a formula.
+    for (const f of formulas) {
+      if (f.from < from && f.to > from) from = f.from;
+      if (f.from < to && f.to > to) to = f.to;
+    }
   }
-  const before = at >= 0 ? text.slice(from, Math.max(from, at)) : text.slice(from, to);
-  const mark = at >= 0 ? text.slice(Math.max(at, from), Math.min(at + passage.length, to)) : "";
-  const after = at >= 0 ? text.slice(Math.min(at + passage.length, to), to) : "";
+  const markFrom = at >= 0 ? Math.max(at, from) : to;
+  const markTo = at >= 0 ? Math.min(at + passage.length, to) : to;
+  const p = (a: number, b: number) => (b > a ? <Pieces text={text} from={a} to={b} formulas={formulas} /> : null);
   return (
     <>
       {from > 0 && <span className="src__cut" aria-hidden="true">… </span>}
-      {before}
-      {mark && <mark title={markTitle} data-testid="source-passage">{mark}</mark>}
-      {after}
+      {p(from, at >= 0 ? markFrom : to)}
+      {markTo > markFrom && <mark title={markTitle} data-testid="source-passage">{p(markFrom, markTo)}</mark>}
+      {at >= 0 && p(markTo, to)}
       {to < text.length && <span className="src__cut" aria-hidden="true"> …</span>}
     </>
   );

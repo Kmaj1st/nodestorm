@@ -592,7 +592,8 @@ button.edge-label--active:hover:not(:disabled) {
   padding: var(--space-4) var(--space-4) var(--space-3); margin: 0 calc(-1 * var(--space-4));
   border-bottom: 1px solid var(--border);
 }
-.inspector__title { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2); }
+/* The name keeps room for a whole word; the status pill and buttons go under it when there isn't room beside it. */
+.inspector__title { display: flex; align-items: center; justify-content: space-between; gap: 4px var(--space-2); flex-wrap: wrap; }
 .inspector__eyebrow {
   margin-top: var(--space-4); font-size: var(--text-xs); font-weight: 600; color: var(--muted);
 }
@@ -648,7 +649,9 @@ button.edge-label--active:hover:not(:disabled) {
 .dir-switch button { width: 100%; justify-content: flex-start; text-align: left; padding: 6px var(--space-3); }
 /* Inline-editable text (DraftField): looks like plain text until hovered or focused. */
 .draft { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.inspector__title .draft, .rel-kind .draft { flex: 1; }
+.inspector__title .draft { flex: 1 1 11rem; }
+.inspector__title > :last-child:not(.draft) { margin-left: auto; } /* wrapped under the name, still at the right */
+.rel-kind .draft { flex: 1; }
 .draft input, .draft textarea {
   border-color: transparent; background: transparent; padding: 3px 6px; margin-left: -6px;
 }
@@ -657,7 +660,7 @@ button.edge-label--active:hover:not(:disabled) {
 .draft .invalid, .draft .invalid:hover { border-color: var(--blocked); }
 .title-input { font-size: 17px; font-weight: 600; width: 100%; letter-spacing: -0.01em; }
 /* The name wraps and grows with its text (a one-row textarea). */
-textarea.title-input { resize: none; field-sizing: content; min-height: 0; line-height: 1.35; overflow: hidden; }
+textarea.title-input { resize: none; field-sizing: content; min-height: 0; line-height: 1.35; overflow: hidden; hyphens: auto; }
 
 /* Cards inside the inspector: errors, unclear meaning, cycle warning, explanation, math preview */
 .error-box {
@@ -892,6 +895,8 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 .src__head input[type="radio"] { margin: 0; align-self: center; }
 .src__label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
 .src__site { font-weight: 600; }
+/* A typeset formula in a source's text is selected as a whole (it stands for its whole LaTeX source). */
+.src__math { user-select: all; -webkit-user-select: all; }
 .src__title { color: var(--muted); font-size: var(--text-sm); }
 .src__rel {
   padding: 0 8px; border: 1px solid var(--border); border-radius: var(--radius-full); font-size: var(--text-xs);

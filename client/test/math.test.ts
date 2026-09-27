@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { mdEscape, toMarkdown, toMermaid } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
-import { hasMath, splitMath, type MathSegment } from "../src/lib/math";
+import { hasMath, mathRanges, splitMath, type MathSegment } from "../src/lib/math";
 
 const text = (t: string): MathSegment => ({ kind: "text", text: t });
 const inl = (tex: string, raw = `$${tex}$`): MathSegment => ({ kind: "math", tex, display: false, raw });
@@ -108,5 +108,20 @@ describe("code spans (final review)", () => {
     expect(hasMath("`echo $HOME` and `$PATH`")).toBe(false);
     expect(splitMath("run `echo $a$` then $x^2$").filter((s) => s.kind === "math").map((s) => (s as { tex: string }).tex)).toEqual(["x^2"]);
     expect(hasMath("an unmatched ` then $x$")).toBe(true);
+  });
+});
+
+describe("mathRanges", () => {
+  it("gives each formula's place in the text, delimiters included", () => {
+    const text = "A map with $\\varphi(ab) = \\varphi(a)\\varphi(b)$ and \\(x\\), not $5 or $10.";
+    const ranges = mathRanges(text);
+    expect(ranges.map((r) => text.slice(r.from, r.to))).toEqual(["$\\varphi(ab) = \\varphi(a)\\varphi(b)$", "\\(x\\)"]);
+  });
+  it("finds a repeated formula at each of its places", () => {
+    const text = "$N$ and $N$";
+    expect(mathRanges(text)).toEqual([{ from: 0, to: 3 }, { from: 8, to: 11 }]);
+  });
+  it("is empty for text without formulas", () => {
+    expect(mathRanges("costs $5, or $10.")).toEqual([]);
   });
 });

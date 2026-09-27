@@ -2275,7 +2275,9 @@ try {
     await notes.getByRole("radio").focus();
     await page.keyboard.press("Space");
     assert(await notes.getByRole("radio").isChecked(), "a passage can be picked from the keyboard");
-    const passage = await notes.getByTestId("source-passage").textContent();
+    // The passage is the lecture notes' own sentence (the offline demo's definition of Homomorphism), shown typeset.
+    const passage = "A map between algebraic structures that preserves the operations, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for groups.";
+    assert((await notes.getByTestId("source-passage").locator(".katex").count()) > 0, "the passage's formula is typeset in the pop-up");
     await dlg.getByRole("button", { name: "Use this text" }).click();
     await waitBadge("Homomorphism", "check with AI");
     await node("Homomorphism").click();
@@ -2290,7 +2292,7 @@ try {
     await addByName("Group");
     await item("demo-encyclopedia.example").waitFor();
     const selected = await item("demo-encyclopedia.example").getByTestId("source-passage").evaluate((mark) => {
-      const text = mark.firstChild;
+      const text = mark.querySelector("[data-from]:not([data-to])").firstChild; // the first piece of plain text
       const range = document.createRange();
       range.setStart(text, 2);
       range.setEnd(text, Math.min(text.length, 30));
@@ -2307,6 +2309,30 @@ try {
     await node("Group").click();
     assert((await (await definitionField()).inputValue()) === selected, `the definition is exactly the selected text (${selected})`);
     assert((await page.getByTestId("definition-source").textContent()).includes("demo-encyclopedia.example"), "…from that page");
+
+    // Formulas in a source's text are typeset; a selection that ends inside one takes the whole formula, as LaTeX.
+    await addByName("Normal Subgroup");
+    const enc = item("demo-encyclopedia.example");
+    await enc.waitFor();
+    await enc.locator(".src__math .katex").first().waitFor();
+    assert(true, "formulas in a source's text are typeset");
+    await enc.getByTestId("source-passage").evaluate((mark) => {
+      const text = mark.querySelector("[data-from]:not([data-to])").firstChild; // "A subgroup "
+      const formula = mark.querySelector("[data-to]"); // $N$, typeset
+      const walker = document.createTreeWalker(formula, NodeFilter.SHOW_TEXT);
+      const inside = walker.nextNode();
+      const range = document.createRange();
+      range.setStart(text, 2);
+      range.setEnd(inside, Math.min(1, inside.length));
+      document.getSelection().removeAllRanges();
+      document.getSelection().addRange(range);
+    });
+    await dlg.getByTestId("source-use-selection").click();
+    await dlg.getByRole("button", { name: "Use this text" }).click();
+    await waitBadge("Normal Subgroup", "check with AI");
+    await node("Normal Subgroup").click();
+    const withFormula = await (await definitionField()).inputValue();
+    assert(withFormula === "subgroup $N$", `a selection ending inside a formula takes all of it, as its LaTeX source (${withFormula})`);
 
     // Edit a copy: cut down, it stays the source's words; changed, it is the user's.
     await addByName("Subgroup");

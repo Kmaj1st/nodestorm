@@ -105,6 +105,23 @@ export function splitMath(text: string): MathSegment[] {
   return out;
 }
 
+/**
+ * Where the formulas are in `text`, as [from, to) offsets of their source with delimiters (the `raw` of each math
+ * segment): for showing a text typeset while still knowing which of its characters each part stands for.
+ */
+export function mathRanges(text: string): { from: number; to: number }[] {
+  const out: { from: number; to: number }[] = [];
+  let at = 0;
+  for (const seg of splitMath(text)) {
+    if (seg.kind !== "math") continue;
+    const from = text.indexOf(seg.raw, at);
+    if (from < 0) continue;
+    out.push({ from, to: from + seg.raw.length });
+    at = from + seg.raw.length;
+  }
+  return out;
+}
+
 /** True when `text` has at least one formula (the check that decides whether KaTeX gets loaded). */
 export function hasMath(text: string | undefined): boolean {
   return !!text && mayContainMath(text) && splitMath(text).some((s) => s.kind === "math");
