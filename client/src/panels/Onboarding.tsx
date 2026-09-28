@@ -12,6 +12,7 @@ import {
   type TourEnv,
   type TourStep,
 } from "../lib/onboarding";
+import { touchScreen } from "../lib/touch";
 import { viewport } from "../lib/viewport";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useOnboarding } from "../store/onboardingStore";
@@ -43,8 +44,8 @@ export function Onboarding() {
   );
 }
 
-/** A touch screen (no mouse or keyboard to speak of). */
-const touchScreen = () => typeof matchMedia === "function" && matchMedia("(pointer: coarse)").matches;
+/** Tour steps with their own text for touch screens (`tour.<id>.bodyTouch`). */
+const TOUCH_BODY = new Set(["mix", "arrow"]);
 const q = <E extends Element = Element>(sel: string) => document.querySelector<E>(sel);
 const focusAdd = () => q<HTMLElement>('[data-tour="add"]')?.focus();
 
@@ -290,7 +291,8 @@ function Tour() {
   }, [end, go]);
 
   const titleKey = (step ? `tour.${step.id}.title` : "tour.intro.title") as MessageKey;
-  const bodyKey = (step ? `tour.${step.id}.body` : "tour.intro.body") as MessageKey;
+  // On a touch screen, steps that would say "Shift+click" or "click" say how to do it with a finger.
+  const bodyKey = (step ? `tour.${step.id}.body${touchScreen() && TOUCH_BODY.has(step.id) ? "Touch" : ""}` : "tour.intro.body") as MessageKey;
   const last = !!steps && index === steps.length - 1;
   const style = place ? { left: place.left, top: place.top } : { left: 0, top: 0, visibility: "hidden" as const };
   const ring = place?.ring;

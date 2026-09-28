@@ -109,8 +109,10 @@ export function WebSearchSettings({
                     )}
                     <button
                       type="button"
-                      onClick={() => test(engine)}
-                      disabled={!engineUsable(engine, value, connection) || state?.status === "loading"}
+                      // While it tests it stays focusable (aria-disabled, not disabled), so the keyboard keeps its place.
+                      onClick={() => state?.status !== "loading" && void test(engine)}
+                      disabled={!engineUsable(engine, value, connection)}
+                      aria-disabled={state?.status === "loading" || undefined}
                       aria-label={t("settings.searchTestAria", { engine: ENGINE_NAME[engine] })}
                       data-testid={`search-${engine}-test`}
                     >

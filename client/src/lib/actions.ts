@@ -176,7 +176,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
               signal,
               hint,
               context: relatedNames(graph(graphId), nodeId),
-              onChecking: () => store().setBusy(key, t("task.assess", { name: node.name })),
+              onChecking: () => store().setBusy(key, t("task.assess", { name: node.name }), undefined, "rating"),
             }),
           { onError: () => {}, onCancel: () => void ((cancelled = true), handlers.onCancel?.()) },
         )
@@ -331,7 +331,7 @@ export async function compareSources(nodeId: string, graphId = store().activeId,
       signal,
       fresh: opts.fresh,
       context: relatedNames(graph(graphId), nodeId),
-      onChecking: () => store().setBusy(key, t("task.assess", { name: node.name })),
+      onChecking: () => store().setBusy(key, t("task.assess", { name: node.name }), undefined, "rating"),
     }),
   );
   const cur = graph(graphId)?.nodes.find((n) => n.id === nodeId);
@@ -565,7 +565,7 @@ export async function lookUpChoices(nodeId: string, graphId = store().activeId, 
       gatherSources(name, {
         signal,
         context: relatedNames(graph(graphId), nodeId),
-        onChecking: () => store().setBusy(key, t("task.assess", { name })),
+        onChecking: () => store().setBusy(key, t("task.assess", { name }), undefined, "rating"),
       }),
     (name) => t("task.sources", { name }),
   );

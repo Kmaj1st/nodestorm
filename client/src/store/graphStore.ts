@@ -68,6 +68,8 @@ export interface BusyTask {
   startedAt: number;
   /** "queued" while its AI call waits for a free slot (see lib/aiQueue.ts); absent means running. */
   state?: "queued" | "running";
+  /** A step of a task that says more than its label, e.g. gathering sources: "rating" while the AI rates them. */
+  phase?: "rating";
 }
 
 /** Abort signal of each busy task, so the AI queue can mark the task it belongs to as queued (not UI state). */
@@ -83,7 +85,7 @@ interface Actions {
   setSettingsOpen(open: boolean): void;
   setClarifying(c: State["clarifying"]): void;
   /** Show, relabel (e.g. progress; keeps the start time) or clear (null) a running task. */
-  setBusy(key: string, label: string | null, signal?: AbortSignal): void;
+  setBusy(key: string, label: string | null, signal?: AbortSignal, phase?: BusyTask["phase"]): void;
   /** Mark the busy task that owns `signal` as queued or running. */
   setBusyState(signal: AbortSignal | undefined, state: "queued" | "running"): void;
   setHighlight(h: State["highlight"]): void;
@@ -210,10 +212,10 @@ export const useGraphStore = create<GraphStore>()(
       setInspect: (inspect) => set({ inspect }),
       setSettingsOpen: (settingsOpen) => set({ settingsOpen }),
       setClarifying: (clarifying) => set({ clarifying }),
-      setBusy(key, label, signal) {
+      setBusy(key, label, signal, phase) {
         const busy = { ...get().busy };
-        // A relabel (progress text) keeps the task's start time, queued/running state and signal.
-        if (label) busy[key] = { ...busy[key], label, startedAt: busy[key]?.startedAt ?? Date.now() };
+        // A relabel (progress text) keeps the task's start time, queued/running state, phase and signal.
+        if (label) busy[key] = { ...busy[key], label, startedAt: busy[key]?.startedAt ?? Date.now(), ...(phase && { phase }) };
         else delete busy[key];
         if (!label) busySignals.delete(key);
         else if (signal) busySignals.set(key, signal);

@@ -343,6 +343,11 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   "My own definition" ("Edit a copy" fills it with a source's text: cut down to a substring it keeps that source,
   any other change makes it `OWN_SOURCE`, and a live note says which). The AI's note is on top as its assessment; the
   footer says what was searched and what failed, and without a search engine offers Settings → Web search.
+  Keyboard: the choices are one radio group (arrow keys); only the source the keyboard is on (`active`: its radio or
+  an action had the focus last) has its actions in the Tab order (`tabIndex=-1` on the others'; a source without a
+  passage keeps them), so "Use this text" stays a few Tab presses away (e2e: at most 8 with 3 sources). Each action's
+  accessible name ends with its site. While the search's busy task has `phase: "rating"` (set with the "Checking the
+  sources" relabel) the pop-up says so instead of "Searching…".
 - **Choosing**: a waiting concept → `chooseSense` (an encyclopedia's own name may rename it, as before; "pending" in
   ask-first mode); an existing one → `replaceDefinition` (one undo step).
 - **Where it runs**: `lookUpChoices` (ask-first add), `analyzeNode` (auto add, Install all, Retry: a pick, or the

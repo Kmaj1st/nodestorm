@@ -411,6 +411,11 @@ fieldset { min-width: 0; }
 .react-flow__controls-button { width: 28px; height: 28px; padding: 6px; box-shadow: none; min-height: 0; border-radius: 0; }
 /* React Flow fills and shrinks control icons; a lucide icon is drawn with strokes. */
 .react-flow__controls-button svg.icon { fill: none; max-width: 14px; max-height: 14px; }
+/* A finger needs a bigger target than a pointer: 40px buttons, and the attribution and "N hidden" list move with them. */
+@media (pointer: coarse) {
+  .react-flow__controls-button { width: 40px; height: 40px; padding: 11px; }
+  .react-flow__controls-button svg.icon { max-width: 18px; max-height: 18px; }
+}
 .react-flow__minimap { border-radius: var(--radius-md); overflow: hidden; border: 1px solid var(--border); box-shadow: var(--shadow-md); }
 .react-flow__attribution { color: var(--muted); }
 .react-flow__attribution a { color: var(--muted); }
@@ -568,6 +573,10 @@ button.edge-label--active:hover:not(:disabled) {
    wide): it opens beside them instead. */
 @media (max-width: 800px) {
   .canvas .hidden-bar__list { left: 38px; max-width: calc(100vw - 38px - 2 * var(--space-3) - 2px); }
+}
+/* A touch screen's zoom buttons are 40px wide (57px in). */
+@media (max-width: 800px) and (pointer: coarse) {
+  .canvas .hidden-bar__list { left: 52px; max-width: calc(100vw - 52px - 2 * var(--space-3) - 2px); }
 }
 /* Select several: "2 selected · Clear · Done" at the bottom of the canvas (panels/SelectSeveral.tsx). */
 .select-bar {
@@ -865,9 +874,6 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .check { display: flex; flex-direction: row; gap: var(--space-2); align-items: center; font-size: var(--text-md); cursor: pointer; }
 .form label.check { flex-direction: row; font-weight: 400; font-size: var(--text-md); }
 .field .row input { flex: 1; min-width: 0; }
-/* Derive's goal: on a phone the field takes the row (its example stays readable) and Regenerate goes under it. */
-.derive__goal { flex-wrap: wrap; justify-content: flex-end; }
-.derive__goal input { flex: 1 1 16em; }
 .model-list {
   list-style: none; margin: 0; padding: var(--space-1); max-height: 184px; overflow-y: auto;
   border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 1px;

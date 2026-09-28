@@ -1,6 +1,6 @@
 import type { Graph, LookupSense } from "@nodestorm/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { addConcept, compareSources, installAllMissing, installDep, openSources, relookup } from "../src/lib/actions";
+import { addConcept, compareSources, installAllMissing, installDep, openSources, relookup, relookupKey } from "../src/lib/actions";
 import { toMarkdown } from "../src/lib/export";
 import { repairImport } from "../src/lib/importRepair";
 import { decodeShare, encodeShare } from "../src/lib/share";
@@ -226,6 +226,23 @@ describe("no definition from the AI through the look-up paths", () => {
     // Not offered again unrated from the cache: its badge asks the AI again (the search itself is cached).
     expect(cachedSources("Subgroup")).toBeUndefined();
     vi.restoreAllMocks();
+  });
+
+  it("the search's busy task says when the AI rates the sources (the pop-up then says “Checking the sources…”)", async () => {
+    const id = addConcept({ name: "Subgroup" });
+    await idle();
+    store().setClarifying(null);
+    const key = relookupKey(store().activeId, id);
+    const phases: string[] = [];
+    const stop = useGraphStore.subscribe((s) => {
+      const task = s.busy[key];
+      const phase = task && (task.phase ?? "searching");
+      if (phase && phases.at(-1) !== phase) phases.push(phase);
+    });
+    await compareSources(id, store().activeId, { fresh: true });
+    stop();
+    expect(phases).toEqual(["searching", "rating"]);
+    expect(store().busy[key]).toBeUndefined();
   });
 });
 

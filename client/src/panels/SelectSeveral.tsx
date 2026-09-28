@@ -62,17 +62,28 @@ export function SelectBar() {
   const store = useStoreApi();
   const on = useView((v) => v.selecting);
   const n = useGraphStore((s) => s.selection.length);
+  const doneRef = useRef<HTMLButtonElement>(null);
   if (!on) return null;
+  // Clear disables itself and Done takes the bar away: the keyboard goes on to Done, then back to the toggle.
+  const clear = () => {
+    store.getState().unselectNodesAndEdges();
+    doneRef.current?.focus();
+  };
+  const done = () => {
+    const fromBar = doneRef.current === document.activeElement;
+    useView.getState().setSelecting(false);
+    if (fromBar) requestAnimationFrame(() => document.querySelector<HTMLElement>('[data-testid="select-several"]')?.focus());
+  };
   return (
     <div className="select-bar" role="group" aria-label={t("select.bar")} data-testid="select-bar">
       <Icon icon={CopyCheck} size={14} className="select-bar__icon" />
       <span className="select-bar__count" aria-live="polite" data-testid="select-count">
         {n ? t("select.count", { n }) : t("select.hint")}
       </span>
-      <button onClick={() => store.getState().unselectNodesAndEdges()} disabled={!n} title={t("select.clearTitle")}>
+      <button onClick={clear} disabled={!n} title={t("select.clearTitle")}>
         {t("select.clear")}
       </button>
-      <button className="primary select-bar__done" onClick={() => useView.getState().setSelecting(false)} title={t("select.doneTitle")}>
+      <button ref={doneRef} className="primary select-bar__done" onClick={done} title={t("select.doneTitle")}>
         {t("select.done")}
       </button>
     </div>

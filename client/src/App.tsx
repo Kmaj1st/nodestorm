@@ -69,6 +69,8 @@ export function App() {
         // Leaves Select several first (the selection stays); a second Escape leaves focus mode.
         if (t?.closest(".menu, .popover")) return;
         useView.getState().setSelecting(false);
+        // From its bar (which goes), the focus goes to the toggle among the zoom buttons.
+        if (t?.closest(".select-bar")) document.querySelector<HTMLElement>('[data-testid="select-several"]')?.focus();
       } else if (e.key === "Escape" && useView.getState().focus) {
         // Menus and popovers close on Escape themselves; don't also leave focus mode behind them.
         if (t?.closest(".menu, .popover")) return;

@@ -62,7 +62,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const setClarifying = useGraphStore((s) => s.setClarifying);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
   const mutate = useGraphStore((s) => s.mutate);
-  const searching = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
+  const task = useGraphStore((s) => s.busy[relookupKey(graphId, node.id)]);
+  const searching = Boolean(task);
   // Without a fresh search (reopened after a reload), the passages stored on the concept, not rated.
   const sources = useMemo(() => found?.sources ?? sourcesFromSenses(node.senses ?? []), [found, node.senses]);
   const groups = useMemo(() => groupBySense(sources), [sources]);
@@ -75,6 +76,14 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const [selection, setSelection] = useState<{ id: string; text: string } | null>(null);
   const [picked, setPicked] = useState<{ id: string; text: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
+  /**
+   * The source the keyboard is on (its radio or one of its actions had the focus last). Only its actions are Tab
+   * stops, so Tab goes from the list to "Use this text" in a few steps whatever the number of sources: the arrow keys
+   * move between sources (as between any radios), then Tab reaches that source's actions. A source without a passage
+   * (its radio can't be picked) keeps its actions in the Tab order. Mouse, touch and a screen reader's reading mode
+   * reach every action as before.
+   */
+  const [active, setActive] = useState<string | null>(null);
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const uid = useId();
 
@@ -186,7 +195,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
       {!found && searching && (
         <p className="small sources__searching" role="status" data-testid="sources-searching">
           <span className="spinner spinner--xs" aria-hidden="true" />
-          {t("sources.searching", { name: node.name })}
+          {task?.phase === "rating" ? t("task.assess", { name: node.name }) : t("sources.searching", { name: node.name })}
         </p>
       )}
       {!found && !searching && sources.length > 0 && (
@@ -198,7 +207,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         </p>
       )}
 
-      <div className="sources" role="radiogroup" aria-label={t("sources.list")}>
+      <div className="sources" role="radiogroup" aria-label={t("sources.list")} aria-describedby={sources.length > 1 ? `${uid}-keys` : undefined}>
+        {sources.length > 1 && <span id={`${uid}-keys`} className="sr-only">{t("sources.keys")}</span>}
         {groups.map((grp, gi) => (
           <Fragment key={grp.sense || `g${gi}`}>
             {groups.length > 1 && (
@@ -210,8 +220,17 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               const id = `${uid}-${s.id}`;
               const long = s.text.length > limits(s.text).short;
               const open = expanded.has(s.id);
+              // Out of the Tab order unless the keyboard is on this source; each names its source for screen readers.
+              const tab = !s.passage || active === s.id ? undefined : -1;
+              const of = (action: string) => t("sources.actionOf", { action, site: s.site });
               return (
-                <div key={s.id} className={`src${on(s.id) ? " src--on" : ""}`} data-testid="source-item" data-site={s.site}>
+                <div
+                  key={s.id}
+                  className={`src${on(s.id) ? " src--on" : ""}`}
+                  data-testid="source-item"
+                  data-site={s.site}
+                  onFocus={() => setActive(s.id)}
+                >
                   <div className="src__head">
                     <input
                       type="radio"
@@ -239,7 +258,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                   </div>
                   {s.reasons && (
                     <details className="src__why small">
-                      <summary>{t("sources.why")}</summary>
+                      <summary tabIndex={tab} aria-label={of(t("sources.why"))}>{t("sources.why")}</summary>
                       <p data-testid="source-reasons">{s.reasons}</p>
                     </details>
                   )}
@@ -254,17 +273,33 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                   {!s.passage && <p className="small muted">{t("sources.noPassage")}</p>}
                   <div className="src__actions small">
                     {s.url && (
-                      <a href={s.url} target="_blank" rel="noopener noreferrer" className="src__link" aria-label={t("sources.newTab", { title: s.title || s.site })}>
+                      <a href={s.url} target="_blank" rel="noopener noreferrer" className="src__link" tabIndex={tab} aria-label={t("sources.newTab", { title: s.title || s.site })}>
                         {t("sources.open")}
                         <Icon icon={ExternalLink} size={12} />
                       </a>
                     )}
                     {long && (
-                      <button type="button" className="link" aria-expanded={open} aria-controls={`${id}-text`} onClick={() => toggle(s.id)}>
+                      <button
+                        type="button"
+                        className="link"
+                        tabIndex={tab}
+                        aria-label={of(t(open ? "sources.showLess" : "sources.showAll"))}
+                        aria-expanded={open}
+                        aria-controls={`${id}-text`}
+                        onClick={() => toggle(s.id)}
+                      >
                         {t(open ? "sources.showLess" : "sources.showAll")}
                       </button>
                     )}
-                    <button type="button" className="link" title={t("sources.editCopyTitle")} onClick={() => editCopy(s)} data-testid="source-edit-copy">
+                    <button
+                      type="button"
+                      className="link"
+                      tabIndex={tab}
+                      aria-label={of(t("sources.editCopy"))}
+                      title={t("sources.editCopyTitle")}
+                      onClick={() => editCopy(s)}
+                      data-testid="source-edit-copy"
+                    >
                       {t("sources.editCopy")}
                     </button>
                   </div>
@@ -275,7 +310,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         ))}
 
         {picked && pickedSource && (
-          <label className={`sense${choice?.kind === "selection" ? " sense--on" : ""}`} data-testid="source-selection">
+          <label className={`sense${choice?.kind === "selection" ? " sense--on" : ""}`} data-testid="source-selection" onFocus={() => setActive(null)}>
             <input
               type="radio"
               name={`${uid}-source`}
@@ -289,7 +324,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
           </label>
         )}
 
-        <label className={`sense${choice?.kind === "own" ? " sense--on" : ""}`}>
+        <label className={`sense${choice?.kind === "own" ? " sense--on" : ""}`} onFocus={() => setActive(null)}>
           <input type="radio" name={`${uid}-source`} checked={choice?.kind === "own"} onChange={() => setChoice({ kind: "own" })} data-testid="source-own" />
           <span className="sense__other">
             <b>{t("sense.own")}</b>

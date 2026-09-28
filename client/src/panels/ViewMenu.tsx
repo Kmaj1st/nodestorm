@@ -125,6 +125,8 @@ export function ViewMenu() {
             <button
               className="small-btn view-menu__3d"
               onClick={() => {
+                // Focus on the View button first, so closing the 3D view returns it there.
+                ref.current?.querySelector("button")?.focus();
                 setOpen(false);
                 view.setView3d(true);
               }}
