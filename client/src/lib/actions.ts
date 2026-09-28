@@ -1,6 +1,11 @@
 import {
+  ABSURD_AVOID_MAX,
+  ABSURD_AVOID_NAME_MAX,
+  BRIEF_LIST_MAX,
   CancelledError,
+  clipText,
   findByName,
+  HINT_MAX,
   NAME_MAX,
   normalizeName,
   type AbsurdChainResponse,
@@ -258,7 +263,7 @@ export async function resolveCycle(
     if (links.length < 2) break;
     const chain = cycleText(graphId, current);
     const req = {
-      links: links.map((l) => ({ from: toBrief(l.from), to: toBrief(l.to), reason: l.reason })),
+      links: links.map((l) => ({ from: toBrief(l.from), to: toBrief(l.to), reason: clipText(l.reason, HINT_MAX) })),
     };
     let cancelled = false;
     const res = await withBusy(
@@ -653,7 +658,7 @@ export function suggestNames(description: string) {
   if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   return withBusy("name", t("task.name"), (signal) =>
-    api.name({ description, context: toBriefs(g.nodes) }, signal).then((r) => r.candidates),
+    api.name({ description: clipText(description.trim(), HINT_MAX), context: toBriefs(g.nodes) }, signal).then((r) => r.candidates),
   );
 }
 
@@ -875,8 +880,8 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
     if (r.a !== nodeId && r.b !== nodeId) return [];
     const mine = r.a === nodeId;
     const other = name(mine ? r.b : r.a);
-    return other ? [{ other, toOther: mine ? r.aToB : r.bToA, fromOther: mine ? r.bToA : r.aToB }] : [];
-  });
+    return other ? [{ other: clipText(other, NAME_MAX), toOther: mine ? r.aToB : r.bToA, fromOther: mine ? r.bToA : r.aToB }] : [];
+  }).slice(0, BRIEF_LIST_MAX);
   const prerequisites = toBriefs(g.nodes.filter((n) => node.dependsOn.includes(n.id)));
   const res = await withBusy(explainKey(graphId, nodeId), t("task.explain", { name: node.name }), (signal) =>
     api.explain({ node: toBrief(node), prerequisites, relations, level, voice }, signal),
@@ -947,7 +952,9 @@ export function derive(selectedIds: string[], goal?: string) {
   const g = graph(store().activeId);
   const selected = g.nodes.filter((n) => selectedIds.includes(n.id));
   return withBusy("derive", t("task.derive"), (signal) =>
-    api.derive({ selected: toBriefs(selected), context: toBriefs(g.nodes), goal }, signal).then((r) => r.proposals),
+    api
+      .derive({ selected: toBriefs(selected), context: toBriefs(g.nodes), goal: goal?.trim() ? clipText(goal.trim(), HINT_MAX) : undefined }, signal)
+      .then((r) => r.proposals),
   );
 }
 
@@ -1087,10 +1094,12 @@ export function absurdChain(
   const [a, b] = [brief(from), brief(to)];
   const stops = via.map((s) => brief(s.name, s.description));
   const context = toBriefs(nodes, 80);
+  // Every roll adds its concepts to `avoid`: after many rolls only the latest ones go.
+  const recent = avoid.slice(-ABSURD_AVOID_MAX).map((n) => clipText(n, ABSURD_AVOID_NAME_MAX));
   return withBusy(
     absurdKey,
     t("task.absurd", { a: a.name, b: b.name }),
-    (signal) => api.absurdChain({ from: a, to: b, style, hops, context, avoid, via: stops }, signal),
+    (signal) => api.absurdChain({ from: a, to: b, style, hops, context, avoid: recent, via: stops }, signal),
     {
       // Still missing a stop after the retry (see checkAbsurdStops): say so in the user's language.
       onError: (e) =>

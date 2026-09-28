@@ -1,4 +1,4 @@
-import type { DerivedProposal } from "@nodestorm/shared";
+import { HINT_MAX, type DerivedProposal } from "@nodestorm/shared";
 import { ArrowRight, Check, GitBranchPlus, Plus, RefreshCw } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
@@ -48,7 +48,7 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
       )}
       <p className={forked ? "hint" : "sr-only"} role="status">{forked && t("derive.forked", { name: forked })}</p>
       <div className="row derive__goal">
-        <input ref={goalRef} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
+        <input ref={goalRef} value={goal} onChange={(e) => setGoal(e.target.value)} maxLength={HINT_MAX} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
         <button onClick={run} disabled={busy}>
           {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={RefreshCw} size={14} />}
           {busy ? t("derive.thinking") : t("derive.regenerate")}
