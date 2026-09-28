@@ -12,10 +12,10 @@ import {
 
 /** A fake fetch: the first route whose pattern matches the URL answers; anything else is a 404. */
 function fakeFetch(routes: [RegExp, (url: URL) => Response | Promise<Response>][]) {
-  const calls: { url: string; headers: Record<string, string> }[] = [];
+  const calls: { url: string; headers: Record<string, string>; credentials?: RequestCredentials }[] = [];
   const f = (async (input: RequestInfo | URL, init?: RequestInit) => {
     const url = new URL(String(input));
-    calls.push({ url: url.toString(), headers: (init?.headers ?? {}) as Record<string, string> });
+    calls.push({ url: url.toString(), headers: (init?.headers ?? {}) as Record<string, string>, credentials: init?.credentials });
     for (const [re, answer] of routes) if (re.test(decodeURIComponent(url.toString().replace(/\+/g, " ")))) return answer(url);
     return new Response("{}", { status: 404, headers: { "content-type": "application/json" } });
   }) as typeof fetch;
@@ -89,6 +89,7 @@ describe("lookupConcept", () => {
     expect(r.senses[0].definition).toContain("The kernel of $\\phi$ is the set");
     // ProofWiki gets no custom header (its request stays a CORS "simple" one); Wikimedia gets Api-User-Agent.
     expect(Object.keys(calls[0].headers)).toEqual(["accept"]);
+    expect(calls.every((c) => c.credentials === "omit")).toBe(true); // no cookies go along
     expect(calls.every((c) => !c.url.includes("wikipedia"))).toBe(true);
   });
 

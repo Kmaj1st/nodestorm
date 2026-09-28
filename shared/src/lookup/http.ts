@@ -38,8 +38,10 @@ export async function getJson<T>(site: string, url: string, opts: LookupOptions 
   return withDeadline(site, { signal: opts.signal, timeoutMs: opts.timeoutMs ?? 10_000 }, async (signal) => {
     let res: Response;
     try {
+      // No cookies go along: a site's own session must neither change nor identify a look-up (as for web searches).
       res = await f(url, {
         signal,
+        credentials: "omit",
         headers: { accept: "application/json", ...identify(site, opts) },
       });
     } catch (e) {
