@@ -333,9 +333,10 @@ function runEngine(engine: SearchEngineId, query: WebSearchQuery, search: Search
 
 /**
  * Search every configured engine in parallel for a definition of `name`, dedupe by URL, at most `max` results
- * overall. Throws CancelledError on abort; per-engine failures go to `failed`.
+ * overall. Throws CancelledError on abort; per-engine failures go to `failed`. `fresh`: ask the engines even when the
+ * cache has an answer (an explicit "Search again": it uses search quota); the new answer is cached.
  */
-export async function searchWeb(name: string, opts: { max: number; signal?: AbortSignal }): Promise<WebSearchResult> {
+export async function searchWeb(name: string, opts: { max: number; signal?: AbortSignal; fresh?: boolean }): Promise<WebSearchResult> {
   const { signal } = opts;
   const max = Math.max(1, Math.round(opts.max) || 1);
   if (signal?.aborted) throw new CancelledError();
@@ -352,7 +353,7 @@ export async function searchWeb(name: string, opts: { max: number; signal?: Abor
   const q = searchQuery(name);
   const searx = real.includes("searxng") ? `|${s.search.searxng.url ?? ""}` : "";
   const key = `${lang}:${real.join(",")}${searx}:${max}:${normalizeName(name)}`;
-  const hit = Object.hasOwn(loadCache(), key) ? validEntry(loadCache()[key]) : undefined;
+  const hit = !opts.fresh && Object.hasOwn(loadCache(), key) ? validEntry(loadCache()[key]) : undefined;
   if (hit && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return { results: hit.results, asked: [...real], failed: [] };
 
   const now = Date.now();

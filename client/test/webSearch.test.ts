@@ -352,6 +352,16 @@ describe("failures, pauses, the cache", () => {
     expect(calls).toHaveLength(2);
   });
 
+  it("`fresh` (an explicit Search again) asks the engines past the cache, and caches the new answer", async () => {
+    withSearch({ tavily: { enabled: true, apiKey: "t" } });
+    answer(() => json(TAVILY));
+    await searchWeb("Group", { max: 6 });
+    await searchWeb("Group", { max: 6, fresh: true });
+    expect(calls).toHaveLength(2);
+    await searchWeb("Group", { max: 6 });
+    expect(calls).toHaveLength(2);
+  });
+
   it("cancelling throws CancelledError", async () => {
     withSearch({ tavily: { enabled: true, apiKey: "t" } });
     vi.spyOn(globalThis, "fetch").mockImplementation(

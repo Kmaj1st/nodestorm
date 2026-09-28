@@ -463,12 +463,12 @@ export function forgetSources(name: string) {
   if (c.delete(cacheKey(name))) saveCache();
 }
 
-async function find(name: string, signal?: AbortSignal): Promise<Found> {
+async function find(name: string, signal?: AbortSignal, requery = false): Promise<Found> {
   const web = searchReady();
   const [looked, searched] = await Promise.all([
     lookupEverywhere(name, useSettings.getState().clarify.options, signal),
     web
-      ? searchWeb(name, { max: useSettings.getState().search.maxResults, signal }).catch((e) => {
+      ? searchWeb(name, { max: useSettings.getState().search.maxResults, signal, fresh: requery }).catch((e) => {
           if (e instanceof CancelledError || signal?.aborted) throw new CancelledError();
           console.warn("Web search failed:", e);
           return { results: [], asked: [] as Engine[], failed: [] as Engine[], error: true };
@@ -493,6 +493,8 @@ export interface GatherOptions {
   /** Called when the search is done and the AI starts checking the sources (the status bar says so). */
   onChecking?: () => void;
   /** Search again instead of using this session's results. */
+  /** With `fresh`: ask the web search engines too instead of their 30-day cache (an explicit "Search again"; uses quota). */
+  requery?: boolean;
   fresh?: boolean;
 }
 
@@ -509,7 +511,7 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
   let hit = opts.fresh ? undefined : cache.get(key);
   // Results from before a search engine was set up (or while it failed) are asked again.
   if (hit && (Date.now() - hit.at > CACHE_MS || hit.found.web !== searchReady())) hit = undefined;
-  const found = hit?.found ?? (await find(name, signal));
+  const found = hit?.found ?? (await find(name, signal, opts.requery));
   if (signal?.aborted) throw new CancelledError();
   if (!hit) {
     const had = cache.delete(key);
@@ -545,6 +547,11 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
     }
   }
   return { ...out, sources: mergeRatings(found.sources, rating.ratings), note: rating.note, rated: true };
+}
+
+/** Nothing was found because every site and search engine asked failed (or was paused): not "nothing exists". */
+export function allSourcesFailed(g: Pick<Gathered, "sources" | "asked" | "failed">): boolean {
+  return !g.sources.length && g.failed.length > 0 && g.asked.every((a) => g.failed.includes(a));
 }
 
 /**

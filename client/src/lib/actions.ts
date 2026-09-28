@@ -320,9 +320,10 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
  * "Look up in… → Search the web and compare": every source for an existing concept (encyclopedias, wikis, the web),
  * rated by the AI when one is set up, in the sources pop-up. Choosing there replaces the definition (one undo step).
  * For a concept waiting for a definition ("Search again", or its badge when nothing was gathered yet), the pop-up
- * chooses as when it was added. `fresh`: skip what was found before (the menu and "Search again").
+ * chooses as when it was added. `fresh`: skip what was found before (the menu and "Search again"). `requery`: the web
+ * search engines are asked again too, past their cache ("Search again" only: it uses search quota).
  */
-export async function compareSources(nodeId: string, graphId = store().activeId, opts: { fresh?: boolean; ifOpen?: boolean } = {}) {
+export async function compareSources(nodeId: string, graphId = store().activeId, opts: { fresh?: boolean; requery?: boolean; ifOpen?: boolean } = {}) {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
@@ -332,6 +333,7 @@ export async function compareSources(nodeId: string, graphId = store().activeId,
     gatherSources(node.name, {
       signal,
       fresh: opts.fresh,
+      requery: opts.requery,
       context: relatedNames(graph(graphId), nodeId),
       onChecking: () => store().setBusy(key, t("task.assess", { name: node.name }), undefined, "rating"),
     }),
