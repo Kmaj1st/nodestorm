@@ -27,7 +27,7 @@ no key needed) or an empty graph.
 ### Graph and AI
 
 - **Naming.** If you can only *describe* something, the AI suggests the established names and definitions for it.
-  Ambiguous names ("Expectation") get a **what do you mean?** choice of meanings.
+  Ambiguous names ("Expectation") show their sources grouped by meaning, to pick one.
 - **Mix.** Select two concepts and the AI finds how they relate, **separately in each direction**. Each relation line
   has an arrowhead at both ends: the one at B shows what A does to B, the one at A what B does to A.
 - **Dependencies.** Every new concept is checked for direct prerequisites. Those already in the graph are linked with
@@ -82,14 +82,15 @@ no key needed) or an empty graph.
   dollar, and prices like "$5 and $10" stay text (a `$` followed by a space can't open a formula, and one after a
   space or before a digit can't close it). A formula KaTeX can't read is shown as written.
 
-- **Definitions from encyclopedias**, before the AI is asked. When you add a concept without a definition, NodeStorm
-  looks it up in these sources, in this order:
+- **Definitions from encyclopedias and the web**, never written by the AI. When you add a concept without a definition,
+  NodeStorm looks it up in these sources, in this order (and with the web search engines of Settings → **Web search**):
   - **ProofWiki**, for rigorous maths definitions. Its macros become standard LaTeX.
   - **Wikipedia and Wikidata**, in your answer language. Formulas are kept as LaTeX.
 
-  Several meanings go to "what do you mean?", each naming its site. The definition keeps a link to its source, and the
-  inspector can **Look up again**. The AI is asked only when nothing is found, and with no AI key set up you still get
-  definitions. Settings → **Definitions** switches each source on or off.
+  The pop-up **Sources for "X"** lists what was found, grouped by meaning, each naming its site; with an AI set up, the AI
+  rates them against each other and marks a passage, but only a source's own words (or yours) become the definition.
+  The definition keeps a link to its source, and the inspector can **Look up again**. With no AI key set up you still
+  get definitions, unrated. Settings → **Definitions** switches each source on or off.
 
   Concept names are sent to the sites you enable. ProofWiki sits behind a Cloudflare bot check that often refuses
   apps; NodeStorm then skips it for 10 minutes and uses Wikipedia. `npm run smoke:lookup` checks the sites from your
@@ -99,7 +100,7 @@ no key needed) or an empty graph.
 
 - **Concept kinds.** A concept can be a *definition*, *theorem*, *lemma*, *proposition*, *corollary*, *axiom*,
   *conjecture*, *example*, *notation* or *other*. The AI's check sets the kind while it is unset (as do naming, the
-  "what do you mean?" choice, Derive and Extract from text, which follows the text's own "Lemma 2.1"); you can change
+  sources pop-up, Derive and Extract from text, which follows the text's own "Lemma 2.1"); you can change
   it in the inspector's **Kind** field, and the AI never overrides your choice. Each card shows its kind as a small
   colour-coded label (the proved results share a colour, and so do definitions and notation). **View** can hide
   concepts by kind (only the kinds in the graph are listed, plus *No kind set*). The kind is kept in JSON exports,

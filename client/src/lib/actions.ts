@@ -302,7 +302,7 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
   );
   if (!senses) return;
   if (!senses.length) return void store().setToast(t("toast.lookupNothing", { name: node.name }), "info");
-  const found = senses.map((s): Sense => ({ name: s.name, domain: s.domain, definition: s.definition, source: s.source }));
+  const found = senses.map(lookedUpSense);
   if ((found.length > 1 || !senses[0].exact) && clarify.enabled) {
     // Keep the old name for chooseSense to compare against; the choice replaces definition and source.
     store().mutate((g) => ops.updateNode(g, nodeId, { status: "unclear", senses: found }), graphId);

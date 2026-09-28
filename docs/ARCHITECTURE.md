@@ -122,12 +122,12 @@ classDiagram
   ignores it). See [Share link](#share-link).
 - **File format.** `GraphExport` (`format: "nodestorm/v1"`) is the one on-disk format: JSON export, share links and
   version snapshots all use it, and all are read back through `client/src/lib/importRepair.ts`.
-- **AI task I/O.** `NameRequest/Response`, `ClarifyRequest/Response`, `RelateRequest/Response`,
+- **AI task I/O.** `NameRequest/Response`, `RelateRequest/Response`, `AssessRequest/Response`,
   `DepsRequest/Response`, `DeriveRequest/Response`, `ExplainRequest/Response`, `ExtractRequest/Response`,
   `QuizRequest/Response`, `AbsurdChainRequest/Response` (with `AbsurdStyle` and `AbsurdHop`), `AnatomyRequest/Response`,
   `RefereeRequest/Response` (and the other Derive together, Mathlib and cycle tasks). `ExplainRequest.voice` is an
   `ExplainVoice` (default `plain`). Requests carry `NodeBrief`s (`name`, `definition`, `aliases`),
-  built with `toBrief`; `name`, `clarify`, `deps`, `derive` and `extract` answers carry a `kind` (`deps`: of the
+  built with `toBrief`; `name`, `deps`, `derive` and `extract` answers carry a `kind` (`deps`: of the
   analysed concept).
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
   crude plural folding for Latin words) and
@@ -149,6 +149,7 @@ Everything is in the user's browser. No account, no backend storage.
 | localStorage | `nodestorm-chain-game` | "Guess the chain" best scores, `{score, max}` per ordered pair of ends (`pairKey`), at most 200 pairs. | `client/src/lib/chainGame.ts` |
 | IndexedDB | database `nodestorm-snapshots`, stores `meta` and `data` | Version snapshots: metadata for the list, and the JSON only loaded to compare or restore. | `client/src/lib/snapshotDb.ts` |
 | IndexedDB | database `nodestorm-docs`, stores `docs`, `pages` (key `[docId, page]`) and `sessions` | Derive together: imported documents (metadata plus problems found), their page text, and derivation sessions, per project. Deleted with the project. | `client/src/lib/docDb.ts` |
+| localStorage | `nodestorm-docs-pending` | Notes of Derive together writes that may not have committed yet (sessions, document metadata, a page's changed text while the page notes stay under 200 kB; a bigger page only when the tab is hidden or closed), written through by the next open of `nodestorm-docs`. | `client/src/lib/docDb.ts` |
 | memory | — | Undo/redo stacks (per graph, max 100), busy tasks, token usage. | `client/src/lib/history.ts`, `client/src/store/usageStore.ts` |
 
 Every storage access is wrapped in try/catch: a private window with blocked storage still runs, it just forgets.
@@ -184,7 +185,7 @@ never races a write.
 - `shared/src/ai/anthropic.ts`: `AnthropicProvider`. The `@anthropic-ai/sdk` is **imported lazily** (`loadSdk`), so
   in the browser it's a separate chunk that only loads when someone talks to Claude; a failed load is retried next
   time. SDK retries are off (`maxRetries: 0`) so `withRetries` owns them. Optional server-side web search for the
-  `name`, `clarify` and `relate` tasks; `pause_turn` is resumed up to 4 times.
+  `name` and `relate` tasks; `pause_turn` is resumed up to 4 times.
 - `shared/src/ai/mock.ts`: `MockProvider`, the **Offline demo**. A tiny abstract-algebra knowledge base; it
   identifies the task from the `[task:<name>]` marker in the system prompt and parses the `INPUT:` JSON of the user
   message. Deterministic, so unit and e2e tests use it.
@@ -195,20 +196,19 @@ never races a write.
   `[task:kind]` marker; `withLanguage` appends the output-language paragraph (`languageInstruction`) to the system
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
-  `name`, `clarify`, `relate`, `deps`, `derive`, `explain`, `anatomy`, `extract`, `quiz`, `resolveCycle`, `absurdChain`,
-  `mathlib`, and for Derive together `readPage`, `splitProblems`, `tutorHint`, `checkStep` and `refereeReport`. Each parses the request with its zod
+  `name`, `relate`, `deps`, `derive`, `explain`, `anatomy`, `extract`, `quiz`, `resolveCycle`, `absurdChain`,
+  `mathlib`, `connect`, `assess`, and for Derive together `readPage`, `splitProblems`, `tutorHint`, `checkStep` and `refereeReport`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
   2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
      `<think>…</think>` block from reasoning models; tries each `{` until one parses),
   3. validates it with the response schema and the task's optional `check` function, and on a malformed answer
      (either one throws) asks once more, quoting the error.
-  Timeouts and cancellation are not retried there. Some tasks post-process: `clarify` treats "ambiguous with one
-  sense" as unambiguous, `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
+  Timeouts and cancellation are not retried there. Some tasks post-process: `relate` turns a passive side into "none" (`activeOnly`), `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
   ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index),
   `anatomy` runs `cleanAnatomy` (trimmed, no empty hypotheses, at most 8 hypotheses and 3 examples / non-examples).
 
-**Concept kinds in prompts.** `KIND_GUIDE` / `KIND_VALUES` in `prompts.ts` describe the kinds; the `name`, `clarify`,
+**Concept kinds in prompts.** `KIND_GUIDE` / `KIND_VALUES` in `prompts.ts` describe the kinds; the `name`,
 `deps`, `derive` and `extract` prompts ask for one, and `languageInstruction` keeps the kind values in English.
 
 **Theorem anatomy** (`anatomyPrompt`): given the statement (with its kind) and its prerequisites, the model lists the
@@ -604,8 +604,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 3. Without a definition, `gatherSources` (see "Sources for a definition"). `lookUpChoices` always opens the sources
    pop-up; `analyzeNode` takes `autoPick`'s passage, or opens the pop-up (background `status: "unclear", senses`,
    `setClarifying`). The user's choice goes to `chooseSense` → `ops.applySense` (may merge into an existing concept) →
-   "pending" (ask first) or `analyzeNode` again. The AI never writes the definition (the `clarify` task is no longer
-   called by the client).
+   "pending" (ask first) or `analyzeNode` again. The AI never writes the definition; it only rates the sources.
 4. `api.deps` with the other concepts as context → background `ops.applyDeps`: prerequisites that match an existing
    concept (`matchesExisting` or by name) are `link`ed (`dependsOn` + a `dependency` relation); the rest become
    `missingDeps` and the node is `blocked`. If `paths.cycleThrough` finds a cycle, `resolveCycle` (actions.ts) asks the
@@ -669,7 +668,7 @@ user's description as its definition; `absurdHops` widens the hop range to at le
 more with that note. Nothing touches the graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res, via)` (a new
 custom stop keeps the user's description, source "you"): `forkActive(sandboxName(title))` (switches to the
 new sandbox), one `mutate(applyAbsurdChain)` there (one undo step), then quiet `analyzeNode` for each new concept with
-the hop's fact as the clarify hint. The user's graph only changes through **Merge back**.
+the hop's fact as the hint for rating its sources. The user's graph only changes through **Merge back**.
 
 **Guess the chain** (the dialog's second build button) runs the same `absurdChain` call (same avoid list, so *Play
 again* takes another route) and shows `ChainGame` (`client/src/panels/ChainGame.tsx`, same chunk) instead of the
