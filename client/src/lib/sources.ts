@@ -240,22 +240,38 @@ export function groupBySense(sources: Source[]): SenseGroup[] {
   return [...groups.values(), ...(rest.length ? [{ sense: "", sources: rest }] : [])];
 }
 
+const reliable = (s: Source) => s.reliability === "high" || s.reliability === "medium";
+
+/**
+ * Does another source back `top`: an encyclopedia, or a page of another site, that the AI rated high or medium for the
+ * same meaning of the name? A web page's text can steer the AI that rates it (a prompt injection), but not the others.
+ */
+function backed(top: Source, sources: Source[]): boolean {
+  const meaning = normalizeName(top.sense);
+  const site = (s: Source) => (s.kind === "web" ? (s.url && hostOf(s.url)) || s.site : s.site).toLowerCase();
+  return sources.some(
+    (s) => s !== top && reliable(s) && normalizeName(s.sense) === meaning && (s.kind === "encyclopedia" || site(s) !== site(top)),
+  );
+}
+
 /**
  * The passage a concept takes without asking (Settings: use the AI right away, and Install all): the most reliable
  * source's, when the AI rated it high or medium, unless equally reliable sources describe different meanings of the
- * name (the user then picks the meaning). Without a rating only an encyclopedia page of exactly the name, found alone,
- * is taken (as the look-ups always did). Undefined: the user chooses (or writes) the definition.
+ * name (the user then picks the meaning). A web page (or an encyclopedia rated only medium) is taken only when another
+ * site or an encyclopedia was rated high or medium for the same meaning; an encyclopedia page of exactly the name rated
+ * high can be taken alone. Without a rating only an encyclopedia page of exactly the name, found alone, is taken (as
+ * the look-ups always did). Undefined: the user chooses (or writes) the definition.
  */
 export function autoPick(g: Pick<Gathered, "sources" | "rated">): Source | undefined {
   if (g.rated) {
     // An encyclopedia's near match (a page for another name, "Normal subgroup" for "Normal") is never taken unasked.
-    const top = g.sources.find(
-      (s) => s.passage && (s.reliability === "high" || s.reliability === "medium") && (s.kind === "web" || s.exact),
-    );
+    const top = g.sources.find((s) => s.passage && reliable(s) && (s.kind === "web" || s.exact));
     if (!top) return undefined;
     const peers = g.sources.filter((s) => s.passage && s.reliability === top.reliability);
     const meanings = new Set(peers.map((s) => normalizeName(s.sense)).filter(Boolean));
-    return meanings.size > 1 ? undefined : top;
+    if (meanings.size > 1) return undefined;
+    const alone = top.kind === "encyclopedia" && top.reliability === "high";
+    return alone || backed(top, g.sources) ? top : undefined;
   }
   const [only] = g.sources;
   return g.sources.length === 1 && only.kind === "encyclopedia" && only.exact && only.passage ? only : undefined;

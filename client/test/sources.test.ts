@@ -155,6 +155,31 @@ describe("merging what was found", () => {
     expect(autoPick({ rated: false, sources: [s("a", null)] })).toBeUndefined();
   });
 
+  it("security: takes a web page unasked only when another site or an encyclopedia backs the same meaning", () => {
+    const s = (id: string, reliability: Source["reliability"], sense = "algebra", extra: Partial<Source> = {}) =>
+      ({ id, kind: "web", site: `${id}.example`, title: "", text: "t", reliability, reasons: "", sense, passage: `p${id}`, pointed: true, ...extra }) as Source;
+    const enc = (id: string, reliability: Source["reliability"], sense = "algebra", exact = true) => s(id, reliability, sense, { kind: "encyclopedia", site: "Wikipedia", exact });
+    // A page no other source supports (a prompt injection may have made the AI rate it high): the user chooses.
+    expect(autoPick({ rated: true, sources: [s("a", "high")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "low"), s("c", "unusable")] })).toBeUndefined();
+    // Another page of the same site is no second opinion.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium", "algebra", { site: "a.example" })] })).toBeUndefined();
+    // A reliable source for another meaning doesn't back it either.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium", "video game")] })).toBeUndefined();
+    // Backed by another site, or by an encyclopedia (even its page for a longer name), of the same meaning: taken.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium")] })?.id).toBe("a");
+    expect(autoPick({ rated: true, sources: [s("a", "high", "Algebra"), enc("e", "medium", "algebra", false)] })?.id).toBe("a");
+    expect(autoPick({ rated: true, sources: [s("a", "medium", ""), s("b", "medium", "")] })?.id).toBe("a");
+    // An encyclopedia page of exactly the name rated high can be taken alone; one rated medium needs support too.
+    expect(autoPick({ rated: true, sources: [enc("e", "high"), s("a", "low")] })?.id).toBe("e");
+    expect(autoPick({ rated: true, sources: [enc("e", "medium")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "medium"), s("a", "medium")] })?.id).toBe("e");
+    // The rules that were there stay: equally reliable sources of different meanings ask, a near match is never taken.
+    expect(autoPick({ rated: true, sources: [enc("e", "high"), s("a", "high", "video game"), s("b", "medium", "video game")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "high", "algebra", false)] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "high", "algebra", false), s("a", "medium")] })?.id).toBe("a");
+  });
+
   it("stores the sources on a waiting concept as meanings with their own words and sources, and reads them back", () => {
     const found = mergeRatings(mergeFound([wiki("Kernel (algebra)", "The kernel is the preimage of the identity.", false)], [
       page("https://notes.example/k", "Notes. The kernel is the set sent to e.", "Lecture notes"),
