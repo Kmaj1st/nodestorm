@@ -2,6 +2,7 @@ import { passiveKind } from "@nodestorm/shared";
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import example from "../src/data/groupTheory.json";
+import exampleZh from "../src/data/groupTheory.zh.json";
 import { translate } from "../src/i18n";
 import { DEP_KIND } from "../src/lib/graphOps";
 
@@ -11,7 +12,7 @@ describe("built-in relation labels", () => {
   it("are active: dependency links, the example graph and the offline demo AI", () => {
     const labels = [
       ...Object.values(DEP_KIND).map((key) => translate("en", key)),
-      ...example.relations.flatMap((r) => [r.aToB.kind, r.bToA.kind]),
+      ...[example, exampleZh].flatMap((e) => e.relations.flatMap((r) => [r.aToB.kind, r.bToA.kind])),
       // Every label literal in the offline demo (BRIDGES, relate, extract, derive, absurd chain).
       ...[...readFileSync(new URL("../../shared/src/ai/mock.ts", import.meta.url), "utf8").matchAll(/\b(?:kind|back): "([^"]+)"/g)].map((m) => m[1]),
     ];

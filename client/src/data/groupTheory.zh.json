@@ -1,0 +1,77 @@
+{
+  "name": "群论",
+  "concepts": [
+    {
+      "name": "群",
+      "kind": "definition",
+      "definition": "带有一个满足结合律的二元运算的集合，其中有单位元，且每个元素都有逆元。",
+      "aliases": []
+    },
+    {
+      "name": "子群",
+      "kind": "definition",
+      "definition": "群的一个子集，它在同一运算下本身也构成群。",
+      "aliases": [],
+      "dependsOn": [{ "name": "群", "role": "uses", "reason": "子群是群中对运算封闭的子集。" }]
+    },
+    {
+      "name": "正规子群",
+      "kind": "definition",
+      "definition": "$G$ 的子群 $N$，对任意 $g \\in G$ 都有 $gNg^{-1} = N$。",
+      "aliases": ["不变子群"],
+      "dependsOn": [{ "name": "子群", "role": "uses", "reason": "正规子群是在共轭下不变的子群。" }]
+    },
+    {
+      "name": "同态",
+      "kind": "definition",
+      "definition": "群之间的映射 $\\varphi: G \\to H$，满足 $\\varphi(ab) = \\varphi(a)\\varphi(b)$。",
+      "aliases": ["群同态"],
+      "dependsOn": [{ "name": "群", "role": "uses", "reason": "同态把一个群映到另一个群，并保持运算。" }]
+    },
+    {
+      "name": "核",
+      "kind": "definition",
+      "definition": "同态映到单位元的元素全体：$\\ker\\varphi = \\{ g \\in G : \\varphi(g) = e \\}$。",
+      "aliases": ["ker", "同态核"],
+      "dependsOn": [{ "name": "同态", "role": "uses", "reason": "核是对同态定义的。" }]
+    },
+    {
+      "name": "商群",
+      "kind": "definition",
+      "definition": "正规子群 $N$ 的陪集构成的群 $G/N$，运算为 $(aN)(bN) = abN$。",
+      "aliases": ["因子群"],
+      "dependsOn": [
+        { "name": "群", "role": "uses", "reason": "G/N 由群 G 构造而来。" },
+        { "name": "正规子群", "role": "uses", "reason": "只有 N 是正规子群时，陪集的乘法才是良定义的。" }
+      ]
+    },
+    {
+      "name": "第一同构定理",
+      "kind": "theorem",
+      "definition": "对同态 $\\varphi: G \\to H$，$G/\\ker\\varphi$ 与 $\\operatorname{im}\\varphi$ 同构。",
+      "aliases": ["同态基本定理"],
+      "dependsOn": [
+        { "name": "同态", "role": "uses", "reason": "定理从一个同态 φ: G → H 出发。" },
+        { "name": "核", "role": "uses", "reason": "它用 φ 的核去除 G。" },
+        { "name": "商群", "role": "uses", "reason": "G / ker φ 是一个商群。" }
+      ],
+      "missing": [
+        { "name": "同构", "role": "derives", "reason": "它的结论是一个同构 $G/\\ker\\varphi \\cong \\operatorname{im}\\varphi$。" }
+      ]
+    }
+  ],
+  "relations": [
+    {
+      "a": "核",
+      "b": "正规子群",
+      "aToB": { "kind": "总是构成", "explanation": "任何同态的核都是其定义域的正规子群。" },
+      "bToA": { "kind": "充当", "explanation": "每个正规子群 N 都是投影 $G \\to G/N$ 的核。" }
+    },
+    {
+      "a": "商群",
+      "b": "同态",
+      "aToB": { "kind": "自带", "explanation": "$G/N$ 自带典范投影 $g \\mapsto gN$，这是一个满同态。" },
+      "bToA": { "kind": "产生", "explanation": "在同构意义下，同态的像是其定义域的一个商群。" }
+    }
+  ]
+}

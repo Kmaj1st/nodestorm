@@ -144,4 +144,20 @@ it("builds a safe file name", () => {
   expect(exportFileName(ops.emptyGraph("Sandbox 2: Rings!"), new Date("2026-01-02T00:00:00Z"))).toBe(
     "nodestorm-sandbox-2-rings-2026-01-02",
   );
+  const day = new Date("2026-01-02T00:00:00Z");
+  expect(exportFileName({ name: "Théorie des groupes / L3" }, day)).toBe("nodestorm-theorie-des-groupes-l3-2026-01-02");
+  expect(exportFileName({ name: "群论：第一章" }, day)).toBe("nodestorm-群论-第一章-2026-01-02");
+  expect(exportFileName({ name: "?!" }, day)).toBe("nodestorm-2026-01-02");
+});
+
+it("names a main graph (stored as \"Main\") in the interface language in file names", () => {
+  const day = new Date("2026-01-02T00:00:00Z");
+  expect(exportFileName(ops.emptyGraph(), day)).toBe("nodestorm-main-graph-2026-01-02");
+  expect(exportFileName({ name: "Main", parentId: "p" }, day)).toBe("nodestorm-main-2026-01-02");
+  useLocale.setState({ pref: "zh", lang: "zh" });
+  try {
+    expect(exportFileName(ops.emptyGraph(), day)).toBe("nodestorm-主图谱-2026-01-02");
+  } finally {
+    useLocale.setState({ pref: "auto", lang: "en" });
+  }
 });

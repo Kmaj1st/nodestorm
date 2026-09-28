@@ -105,6 +105,20 @@ describe("hiding concepts", () => {
     expect(hideOthers()).toBe(0);
   });
 
+  it("says what was hidden for screen readers (hide others says it in its toast instead)", () => {
+    const [a, b, c] = setup();
+    useView.setState({ hiddenSaid: "" });
+    hideConcepts([a]);
+    expect(useView.getState().hiddenSaid).toBe("Hid A from the canvas. “Show all” in the canvas corner brings it back.");
+    hideConcepts([b, c]);
+    expect(useView.getState().hiddenSaid).toMatch(/^Hid 2 concepts from the canvas\./);
+    useView.setState({ hiddenSaid: "" });
+    useView.getState().setHidden({});
+    store().setSelection([b]);
+    hideOthers();
+    expect(useView.getState().hiddenSaid).toBe("");
+  });
+
   it("shows one again, or all", () => {
     const [a, b, c] = setup();
     hideConcepts([a, b, c]);

@@ -208,11 +208,19 @@ try {
   await page.screenshot({ path: `${shots}3-mixed.png` });
 
   console.log("Sandbox: fork, derive, merge");
-  await page.getByRole("button", { name: "Fork sandbox" }).click();
-  await page.getByTestId("sandbox-banner").waitFor();
+  // Derive in the main graph suggests a sandbox, and its button forks one without leaving the dialog.
   await node("Homomorphism").click();
   await page.getByRole("button", { name: "Derive", exact: true }).click();
-  await page.getByRole("button", { name: "Accept" }).first().click();
+  const deriveDialog = page.getByRole("dialog", { name: "Derive" });
+  await deriveDialog.getByRole("button", { name: "Fork a sandbox" }).click();
+  await page.getByTestId("sandbox-banner").waitFor();
+  assert(
+    (await deriveDialog.getByRole("status").textContent()).includes("Now in Sandbox 1") &&
+      (await deriveDialog.getByRole("button", { name: "Fork a sandbox" }).count()) === 0 &&
+      (await page.evaluate(() => document.activeElement?.getAttribute("aria-label"))) === "Goal",
+    "Derive's Fork a sandbox forks, says so, and keeps the dialog open with the focus on the goal",
+  );
+  await deriveDialog.getByRole("button", { name: "Accept" }).first().click();
   await page.getByRole("button", { name: "Close" }).click();
   await node("Kernel").waitFor();
   assert(true, "derived 'Kernel' inside the sandbox");
@@ -1012,6 +1020,11 @@ try {
       kernelLinks > 0 && (await node("Kernel").count()) === 0 && (await count.textContent()) === "1 hidden" && (await page.getByTestId("node-panel").count()) === 0,
       "Hide in the inspector takes the concept and its relations off the canvas, closes the inspector and shows “1 hidden”",
     );
+    await page.waitForFunction(() => document.activeElement?.dataset.testid === "hidden-count");
+    assert(
+      (await page.locator(".sr-only[role=status]").filter({ hasText: "Hid Kernel from the canvas." }).count()) === 1,
+      "the focus goes to “1 hidden” (not the page) and screen readers hear what was hidden",
+    );
     await page.reload();
     await waitCounts(`6/${11 - kernelLinks}`);
     assert((await count.textContent()) === "1 hidden", "hidden concepts stay hidden after a reload (same tab)");
@@ -1035,6 +1048,8 @@ try {
     await waitCounts(`5/${await linksWithout(["Group", "Homomorphism"])}`);
     await page.waitForFunction(() => document.querySelector("[data-testid=hidden-count]")?.textContent === "2 hidden");
     assert((await node("Group").count()) === 0 && (await node("Homomorphism").count()) === 0, "H hides the selected concepts");
+    await page.waitForFunction(() => document.activeElement?.classList.contains("react-flow__node"));
+    assert(true, "…and the focus goes on to a concept still shown");
     await count.click();
     await page.screenshot({ path: `${shots}11b-hidden.png` });
     await page.keyboard.press("Escape");
@@ -1364,7 +1379,8 @@ try {
     await tour.getByRole("button", { name: "跳过导览" }).click();
     await tour.waitFor({ state: "detached" });
     await p.reload();
-    await p.getByTestId("node-Group").waitFor();
+    await p.getByTestId("node-群").waitFor();
+    assert((await p.getByTestId("node-第一同构定理").count()) === 1 && (await p.getByTestId("node-Group").count()) === 0, "in 中文 the example is the Chinese one");
     assert((await onboardingState(p))?.tour === "skipped" && (await welcome.count()) === 0 && (await tour.count()) === 0, "Skip ends the tour and is remembered");
     await ctx.close();
   }

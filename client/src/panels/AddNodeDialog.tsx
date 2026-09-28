@@ -54,7 +54,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label>
-            {t("add.definition")} <span className="muted">{t("add.optional")}</span>
+            <span>{t("add.definition")} <span className="muted">{t("add.optional")}</span></span>
             <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={3} />
           </label>
           <div className="form__actions">

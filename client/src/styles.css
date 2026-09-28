@@ -657,6 +657,9 @@ button.edge-label--active:hover:not(:disabled) {
 }
 .draft input:hover:not(:focus), .draft textarea:hover:not(:focus) { border-color: var(--border-strong); }
 .draft input:focus, .draft textarea:focus { border-color: var(--accent); background: var(--panel); }
+/* A relation's explanation is a paragraph to write in, not a label: a bordered, resizable field like Notes. */
+.draft textarea.rel-explanation { border-color: var(--border-strong); background: var(--input-bg); padding: 7px 10px; margin-left: 0; }
+.draft textarea.rel-explanation:hover:not(:focus) { border-color: var(--muted); }
 .draft .invalid, .draft .invalid:hover { border-color: var(--blocked); }
 .title-input { font-size: 17px; font-weight: 600; width: 100%; letter-spacing: -0.01em; }
 /* The name wraps and grows with its text (a one-row textarea). */
@@ -789,11 +792,15 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .form { display: flex; flex-direction: column; gap: 14px; }
 .form label { display: flex; flex-direction: column; gap: 6px; font-size: var(--text-sm); font-weight: 500; }
 .form label > input, .form label > textarea, .form label > select { font-weight: 400; }
+.form label > span > .muted { font-weight: 400; }
 .row { display: flex; gap: var(--space-2); }
 .row input { flex: 1; min-width: 0; }
 /* Derive's goal: on a phone the field takes the row (its example stays readable) and Regenerate goes under it. */
 .derive__goal { flex-wrap: wrap; justify-content: flex-end; }
 .derive__goal input { flex: 1 1 16em; }
+.derive__tip { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: var(--space-2); }
+.derive__tip span { flex: 1 1 18em; }
+.derive__tip button { flex: none; }
 .candidates { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: var(--space-2); }
 .candidates li {
   display: flex; gap: var(--space-3); justify-content: space-between; align-items: center;

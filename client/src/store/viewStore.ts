@@ -64,6 +64,8 @@ interface ViewState extends ViewPrefs {
   view3d: boolean;
   /** Concepts hidden by hand, per graph (see lib/view.ts HiddenMap). Hide with `hideConcepts`: it also deselects. */
   hidden: HiddenMap;
+  /** What the last hiding did, for screen readers (HiddenBar's status line). */
+  hiddenSaid: string;
   setPrefs(patch: Partial<ViewPrefs>): void;
   setFocus(focus: Focus | null): void;
   setView3d(open: boolean): void;
@@ -77,6 +79,7 @@ export const useView = create<ViewState>()((set, get) => ({
   focus: null,
   view3d: false,
   hidden: loadHidden(),
+  hiddenSaid: "",
   setPrefs(patch) {
     const { origins, edgeLabels, todoOnly, hops, kinds, layout, physics } = { ...get(), ...patch };
     const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds, layout, physics });
@@ -119,12 +122,13 @@ export function visibleNow(s: GraphStore = useGraphStore.getState()): Visible {
  * inspector closes if it shows one of them (or a relation of one), and focus mode ends if it is centred on one.
  * Returns how many were hidden.
  */
-export function hideConcepts(ids: readonly string[]): number {
+export function hideConcepts(ids: readonly string[], { quiet = false } = {}): number {
   const s = useGraphStore.getState();
   const g = s.graphs[s.activeId];
   const already = hiddenIn(s.activeId)(useView.getState());
   const hide = ids.filter((id) => !already.includes(id) && g?.nodes.some((n) => n.id === id));
   if (!hide.length) return 0;
+  keepFocus(hide);
   // Deselect first: selecting (or inspecting) a hidden concept shows it again (see the subscription below).
   if (s.selection.some((id) => hide.includes(id))) s.setSelection(s.selection.filter((id) => !hide.includes(id)));
   const ins = s.inspect;
@@ -133,7 +137,31 @@ export function hideConcepts(ids: readonly string[]): number {
   const v = useView.getState();
   if (v.focus?.graphId === s.activeId && hide.includes(v.focus.nodeId)) v.setFocus(null);
   v.setHidden(hideIds(v.hidden, s.activeId, hide));
+  if (!quiet) {
+    const name = g.nodes.find((n) => n.id === hide[0])?.name ?? "";
+    useView.setState({ hiddenSaid: hide.length === 1 ? t("hide.saidOne", { name }) : t("hide.saidMany", { n: hide.length }) });
+  }
   return hide.length;
+}
+
+/**
+ * Hiding removes the focused concept's card, or closes the inspector whose Hide button had the focus: the focus would
+ * fall to the page. From the canvas it goes on to the next concept still shown (in the canvas's order), otherwise to
+ * the "N hidden" button in the canvas corner, where they can be shown again.
+ */
+function keepFocus(hide: readonly string[]) {
+  if (typeof document === "undefined") return;
+  const had = document.activeElement;
+  const cards = [...document.querySelectorAll<HTMLElement>(".react-flow__node[data-id]")];
+  const from = had ? cards.findIndex((c) => c.contains(had)) : -1;
+  const next = from < 0 ? undefined : [...cards.slice(from + 1), ...cards.slice(0, from)].find((c) => !hide.includes(c.dataset.id ?? ""));
+  const nextId = next?.dataset.id;
+  requestAnimationFrame(() => {
+    const now = document.activeElement;
+    if (now && now !== document.body && now.isConnected) return; // still somewhere (a menu item, the canvas)
+    const card = nextId ? document.querySelector<HTMLElement>(`.react-flow__node[data-id="${CSS.escape(nextId)}"]`) : null;
+    (card ?? document.querySelector<HTMLElement>('[data-testid="hidden-count"]'))?.focus();
+  });
 }
 
 /** "Hide others" (Shift+H): hide every concept of the active graph that isn't selected, and say how to undo it. */
@@ -141,7 +169,8 @@ export function hideOthers(): number {
   const s = useGraphStore.getState();
   const g = s.graphs[s.activeId];
   if (!g || !s.selection.length) return 0;
-  const n = hideConcepts(g.nodes.filter((c) => !s.selection.includes(c.id)).map((c) => c.id));
+  // The toast says what happened (and is read out), so no second announcement.
+  const n = hideConcepts(g.nodes.filter((c) => !s.selection.includes(c.id)).map((c) => c.id), { quiet: true });
   if (n) s.setToast(t("hide.others", { n }), "info");
   return n;
 }

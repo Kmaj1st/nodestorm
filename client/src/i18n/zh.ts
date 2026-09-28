@@ -205,6 +205,8 @@ export const zh: Record<MessageKey, string> = {
   "hide.showAllTitle": "重新显示所有已隐藏的概念",
   "hide.show": "显示",
   "hide.showName": "显示“{name}”",
+  "hide.saidOne": "已在画布上隐藏“{name}”。点击画布角落的“全部显示”即可恢复。",
+  "hide.saidMany": "已在画布上隐藏 {n} 个概念。点击画布角落的“全部显示”即可恢复。",
   "hide.others": "已隐藏其余 {n} 个概念。点击画布角落的“全部显示”即可恢复。",
 
   // 项目
@@ -443,6 +445,8 @@ export const zh: Record<MessageKey, string> = {
   "derive.dialog": "推导",
   "derive.title": "从 {names} 推导",
   "derive.tip": "提示：推导最好在沙盒里进行——先创建沙盒，就能随意试验而不影响主图谱。",
+  "derive.fork": "创建沙盒",
+  "derive.forked": "已进入{name}：采纳的概念会加入这个沙盒，不会进入主图谱。",
   "derive.goal": "目标",
   "derive.goalPlaceholder": "可选目标，例如“一个反例”",
   "derive.thinking": "思考中…",

@@ -206,6 +206,8 @@ export const en = {
   "hide.showAllTitle": "Show every hidden concept again",
   "hide.show": "Show",
   "hide.showName": "Show {name}",
+  "hide.saidOne": "Hid {name} from the canvas. “Show all” in the canvas corner brings it back.",
+  "hide.saidMany": "Hid {n} concepts from the canvas. “Show all” in the canvas corner brings them back.",
   "hide.others": "{n, plural, one {Hid # other concept} other {Hid # other concepts}}. “Show all” in the canvas corner brings them back.",
 
   // Projects
@@ -449,6 +451,8 @@ export const en = {
   "derive.dialog": "Derive",
   "derive.title": "Derive from {names}",
   "derive.tip": "Tip: derivations are safer in a sandbox — fork first to experiment without touching the main graph.",
+  "derive.fork": "Fork a sandbox",
+  "derive.forked": "Now in {name}: the concepts you accept go into this sandbox, not the main graph.",
   "derive.goal": "Goal",
   "derive.goalPlaceholder": "Optional goal, e.g. “a counterexample”",
   "derive.thinking": "Thinking…",
