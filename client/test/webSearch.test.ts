@@ -413,3 +413,47 @@ describe("keys are stored like AI keys", () => {
     expect(useSettings.getState().search).toEqual({ ...defaultSearch(), tavily: { enabled: true }, maxResults: 20 });
   });
 });
+
+describe("security: the stored cache", () => {
+  const CACHE = "nodestorm-websearch-cache";
+
+  it("storage that isn't a cache ('null', a list, junk) is ignored instead of breaking searches", async () => {
+    withSearch({ tavily: { enabled: true, apiKey: "t" } });
+    answer(() => json(TAVILY));
+    for (const stored of ["null", "[1,2]", '"text"', "{not json", '{"x":null}']) {
+      resetWebSearch();
+      store.local.set(CACHE, stored);
+      const r = await searchWeb(`Group ${stored.length}`, { max: 6 });
+      expect(r.results.map((x) => x.url), stored).toContain("https://en.wikipedia.org/wiki/Group_(mathematics)");
+    }
+  });
+
+  it("a stored answer is checked again when read: one with a non-https page or a non-text field is searched anew", async () => {
+    withSearch({ tavily: { enabled: true, apiKey: "t" } });
+    answer(() => json(TAVILY));
+    await searchWeb("Group", { max: 6 });
+    for (const bad of [
+      (r: Record<string, unknown>) => (r.url = "javascript:alert(1)"),
+      (r: Record<string, unknown>) => (r.url = "http://insecure.example.org/"),
+      (r: Record<string, unknown>) => (r.text = { __html: "<img src=x onerror=alert(1)>" }),
+      (r: Record<string, unknown>) => (r.title = 42),
+    ]) {
+      const c = JSON.parse(store.local.get(CACHE)!) as Record<string, { at: number; results: Record<string, unknown>[] }>;
+      for (const e of Object.values(c)) bad(e.results[0]);
+      store.local.set(CACHE, JSON.stringify(c));
+      resetWebSearch();
+      calls = [];
+      const r = await searchWeb("Group", { max: 6 });
+      expect(calls).toHaveLength(1); // not taken from the tampered cache
+      expect(r.results.every((x) => x.url.startsWith("https://") && typeof x.text === "string" && typeof x.title === "string")).toBe(true);
+    }
+  });
+
+  it("holds no search keys", async () => {
+    withSearch({ tavily: { enabled: true, apiKey: "tvly-secret-key-1" }, searxng: { enabled: true, url: "https://searx.example.org" } });
+    answer((url) => json(url.includes("tavily") ? TAVILY : SEARXNG));
+    await searchWeb("Group", { max: 6 });
+    expect(store.local.get(CACHE)).toBeTruthy();
+    expect(store.local.get(CACHE)).not.toContain("tvly-secret");
+  });
+});

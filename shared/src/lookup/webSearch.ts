@@ -80,8 +80,9 @@ export function webSearchRequest(engine: SearchEngineId, query: WebSearchQuery, 
   if (engine !== "searxng" && !key) {
     throw new ProviderError(`${provider}: no API key is set.`, 400, undefined, { code: "noKey", params: { provider } });
   }
-  // No cookies or other credentials go along: the key is the only identification.
-  const base: RequestInit = { credentials: "omit", referrerPolicy: "no-referrer" };
+  // No cookies or other credentials go along: the key is the only identification. The key engines' APIs never
+  // redirect, and a redirect elsewhere would carry their custom key headers (x-api-key…) along: refused.
+  const base: RequestInit = { credentials: "omit", referrerPolicy: "no-referrer", redirect: engine === "searxng" ? "follow" : "error" };
   switch (engine) {
     case "tavily":
       return {
@@ -160,6 +161,47 @@ const HIT: Record<SearchEngineId, { list: (json: unknown) => unknown; item: z.Zo
   },
 };
 
+/** Most hits kept of one answer. */
+const HITS_MAX = 100;
+/** Largest answer read (engines send tens of kilobytes; a hostile SearXNG instance could send gigabytes). */
+export const SEARCH_BODY_MAX = 4_000_000;
+
+/**
+ * An answer's body as text, at most `max` bytes: null when it is longer (reading stops there, and a Content-Length
+ * over the limit is refused unread). With `cut`, the first `max` bytes instead (enough of an error page).
+ */
+export async function readCapped(res: Response, max: number, cut = false): Promise<string | null> {
+  const declared = Number(res.headers.get("content-length"));
+  if (!cut && declared > max) {
+    await res.body?.cancel().catch(() => {});
+    return null;
+  }
+  if (!res.body) return res.text();
+  const reader = res.body.getReader();
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  for (;;) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    chunks.push(value);
+    size += value.byteLength;
+    if (size > max) {
+      await reader.cancel().catch(() => {});
+      if (!cut) return null;
+      break;
+    }
+  }
+  const all = new Uint8Array(Math.min(size, max));
+  let at = 0;
+  for (const c of chunks) {
+    const part = c.subarray(0, all.length - at);
+    all.set(part, at);
+    at += part.length;
+    if (at >= all.length) break;
+  }
+  return new TextDecoder().decode(all);
+}
+
 /** The hits in an engine's JSON answer. An answer of the wrong shape is a `malformed` error; a bad hit is skipped. */
 export function parseWebSearch(engine: SearchEngineId, json: unknown): RawWebHit[] {
   let list: unknown;
@@ -174,7 +216,8 @@ export function parseWebSearch(engine: SearchEngineId, json: unknown): RawWebHit
     });
   }
   const hits: RawWebHit[] = [];
-  for (const raw of list as unknown[]) {
+  // More hits than any request asks for (20 at most) are an instance's padding: the first HITS_MAX are enough.
+  for (const raw of (list as unknown[]).slice(0, HITS_MAX)) {
     const r = HIT[engine].item.safeParse(raw);
     if (r.success) hits.push(r.data);
   }
@@ -192,7 +235,8 @@ function errorDetail(body: string, key: string | undefined): string | undefined 
     /* not JSON: the text itself */
   }
   if (/^\s*</.test(text)) return undefined; // an HTML error page says nothing useful
-  text = redactSecret(text.replace(/\s+/g, " ").slice(0, 200), key);
+  // Hidden before it is cut short, so no piece of the key is left at the cut.
+  text = redactSecret(text.replace(/\s+/g, " "), key).slice(0, 200);
   return text || undefined;
 }
 
@@ -247,8 +291,14 @@ export async function fetchWebSearch(engine: SearchEngineId, query: WebSearchQue
           detail: redactSecret(e instanceof Error ? e.message : String(e), auth.key),
         });
       }
-      const body = await res.text().catch(() => "");
-      if (!res.ok) throw webSearchError(engine, res.status, body, auth.key);
+      if (!res.ok) throw webSearchError(engine, res.status, (await readCapped(res, 64_000, true).catch(() => "")) ?? "", auth.key);
+      const body = await readCapped(res, SEARCH_BODY_MAX).catch(() => {
+        if (signal.aborted) throw new CancelledError();
+        return ""; // cut off mid-answer: not JSON, below
+      });
+      if (body === null) {
+        throw new ProviderError(`${provider}'s answer couldn't be read.`, 502, undefined, { code: "malformed", params: { provider }, detail: "answer too large" });
+      }
       let json: unknown;
       try {
         json = JSON.parse(body);

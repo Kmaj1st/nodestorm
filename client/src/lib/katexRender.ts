@@ -6,13 +6,19 @@ import "katex/dist/katex.min.css";
 
 const cache = new Map<string, string | null>();
 const CACHE_MAX = 500;
+/** Longest formula typeset (a long aligned derivation is ~2 000 characters). */
+const TEX_MAX = 5_000;
+/** Largest typeset HTML kept: a 20-line derivation makes ~160 kB, a hostile 2 kB matrix over 600 kB. */
+const HTML_MAX = 300_000;
 
 /**
  * KaTeX HTML (with MathML for screen readers) for `tex`, or null when KaTeX rejects it: the caller then shows the
- * source instead. Never throws. `trust: false` disables \href, \url, \includegraphics and \html…, so user or AI text
- * can't inject links or markup; `maxSize`/`maxExpand` bound what a hostile macro can do.
+ * source instead. Never throws. `trust: false` disables \href, \url, \includegraphics and \html…, so user, AI or web
+ * page text can't inject links or markup; `maxSize`/`maxExpand` bound what a hostile macro can do, and formulas too
+ * long to try, or whose HTML would be huge (text from web pages), are shown as their source too.
  */
 export function renderTex(tex: string, display: boolean): string | null {
+  if (tex.length > TEX_MAX) return null;
   const key = `${display ? "D" : "I"}${tex}`;
   const hit = cache.get(key);
   if (hit !== undefined) return hit;
@@ -27,6 +33,7 @@ export function renderTex(tex: string, display: boolean): string | null {
       maxSize: 20,
       maxExpand: 200,
     });
+    if (html.length > HTML_MAX) html = null;
   } catch {
     html = null;
   }

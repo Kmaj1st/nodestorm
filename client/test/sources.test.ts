@@ -98,6 +98,12 @@ describe("merging what was found", () => {
     expect(merged.map((s) => s.passage)).toEqual(["A group is a set with an operation.", "A group is a set. It has inverses."]);
   });
 
+  it("security: only https pages are linked (the pop-up's 'Open' link), whatever a site or engine sent", () => {
+    const bad = { ...wiki("Group", "A group is a set."), source: { site: "Wikipedia", title: "Group", url: "javascript:alert(1)" } };
+    const merged = mergeFound([bad], [page("javascript:alert(2)//x.example", "Injected."), page("http://plain.example/g", "Plain http."), page("https://ok.example/g", "Fine.")]);
+    expect(merged.map((s) => s.url)).toEqual([undefined, "https://ok.example/g"]);
+  });
+
   it("the non-AI passage is the text's own first sentence or two, never rewritten", () => {
     expect(leadSentences("A group is a set with an associative operation, identity and inverses. It is central. More.")).toBe(
       "A group is a set with an associative operation, identity and inverses.",
