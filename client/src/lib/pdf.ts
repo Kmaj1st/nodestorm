@@ -27,22 +27,50 @@ export interface PdfHandle {
 type PdfJs = typeof import("pdfjs-dist/legacy/build/pdf.mjs");
 type TextItems = Awaited<ReturnType<PDFPageProxy["getTextContent"]>>["items"];
 
-let loading: Promise<PdfJs> | null = null;
+interface Loaded {
+  lib: PdfJs;
+  /** PDF.js's WebAssembly decoders by the file name it asks for, as URLs of the build's own (hashed) copies. */
+  wasm: Record<string, string>;
+}
+
+let loading: Promise<Loaded> | null = null;
 
 /** PDF.js with its worker configured, loaded once. A failed load (offline, stale chunk) is retried next time. */
-function pdfjs(): Promise<PdfJs> {
+function pdfjs(): Promise<Loaded> {
   if (loading) return loading;
   // The legacy build: the modern one relies on very new JavaScript (e.g. Map.prototype.getOrInsertComputed) that
   // many browsers still in use don't have, and fails there only once a page is drawn.
   loading = Promise.all([
     import("pdfjs-dist/legacy/build/pdf.mjs"),
     import("pdfjs-dist/legacy/build/pdf.worker.min.mjs?url"),
-  ]).then(([lib, worker]) => {
+    import("pdfjs-dist/wasm/jbig2.wasm?url"),
+    import("pdfjs-dist/wasm/openjpeg.wasm?url"),
+  ]).then(([lib, worker, jbig2, openjpeg]) => {
     lib.GlobalWorkerOptions.workerSrc = worker.default;
-    return lib;
+    return { lib, wasm: { "jbig2.wasm": jbig2.default, "openjpeg.wasm": openjpeg.default } };
   });
   loading.catch(() => { loading = null; });
   return loading;
+}
+
+/**
+ * Hands PDF.js the WebAssembly decoders for the picture formats of scans: JBIG2 and CCITT fax (black-and-white
+ * scanners) in jbig2.wasm, JPEG 2000 in openjpeg.wasm. Without them such a page renders blank, and the vision model
+ * gets an empty picture. PDF.js would fetch them itself from one folder (`wasmUrl`), with fixed names; this
+ * factory serves them from the build's hashed assets instead, which the service worker precaches like every other
+ * file, so it works offline too. Nothing else is served: no CMaps or standard fonts (PDF.js falls back to what
+ * the page embeds and the system's fonts), and no ICC colour profiles (qcms_bg.wasm; colours are approximated).
+ */
+function binaryDataFactory(wasm: Record<string, string>) {
+  return class {
+    async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
+      const url = kind === "wasmUrl" ? wasm[filename] : undefined;
+      if (!url) throw new Error(`Not available: ${filename}`);
+      const res = await fetch(url);
+      if (!res.ok) throw new Error(`HTTP ${res.status} for ${filename}`);
+      return new Uint8Array(await res.arrayBuffer());
+    }
+  };
 }
 
 /** Fewer than this many non-whitespace characters on a page: treat it as a scan (page numbers, a stray header). */
@@ -101,11 +129,18 @@ export async function readPdf(
 ): Promise<{ pages: PdfPage[]; doc: PdfHandle }> {
   const { signal, onPage } = opts;
   aborted(signal);
-  const lib = await pdfjs();
+  const { lib, wasm } = await pdfjs();
   aborted(signal);
   // Files are untrusted: no XFA forms. PDF scripts never run here (only PDF.js's viewer, not used, has a scripting
-  // sandbox), and the production build's CSP (pwa/csp.ts) forbids eval and inline code besides.
-  const task = lib.getDocument({ data: new Uint8Array(data.slice(0)), verbosity: lib.VerbosityLevel.ERRORS, enableXfa: false });
+  // sandbox), and the production build's CSP (pwa/csp.ts) forbids eval and inline code besides (it allows compiling
+  // WebAssembly only). `useWorkerFetch: false`: the worker asks this page for the decoders (see binaryDataFactory).
+  const task = lib.getDocument({
+    data: new Uint8Array(data.slice(0)),
+    verbosity: lib.VerbosityLevel.ERRORS,
+    enableXfa: false,
+    useWorkerFetch: false,
+    BinaryDataFactory: binaryDataFactory(wasm),
+  });
   const stop = () => void task.destroy();
   signal?.addEventListener("abort", stop, { once: true });
   try {

@@ -1,6 +1,8 @@
 // Writes the PDF fixtures for the "Derive together" import tests, by hand, with no dependencies:
 //   e2e/fixtures/problems.pdf  two pages of text in Helvetica (a problem sheet on homomorphisms)
 //   e2e/fixtures/scanned.pdf   one page with only a drawn rectangle, i.e. what a scan without OCR looks like
+//   e2e/fixtures/scanned-fax.pdf  one page that is a CCITT Group 4 (fax) picture, as black-and-white scanners write
+//                                 them: a black bar on white. PDF.js decodes these (and JBIG2) with WebAssembly.
 // The output is deterministic (no dates, no ids), so rerunning it leaves the committed files unchanged.
 // Usage: node scripts/make-fixture-pdf.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -15,21 +17,28 @@ const textStream = (lines) => lines.map(([size, x, y, text]) => `BT /F1 ${size} 
 
 /**
  * A complete PDF (1.4, US Letter pages) from one content stream per page. Objects: 1 catalog, 2 page tree,
- * 3 font, then a page and its content stream for each page. The xref table holds byte offsets, and every entry
+ * 3 font, then a page and its content stream for each page, then `image` if given (an image XObject `/Im1` every
+ * page can draw: its dictionary entries and its bytes). The xref table holds byte offsets, and every entry
  * is exactly 20 bytes ("0000000015 00000 n" plus a space and a newline), as the spec requires.
  */
-function makePdf(pages) {
+function makePdf(pages, image) {
   const objects = [];
   const pageIds = pages.map((_, i) => 4 + i * 2);
+  const imageId = 4 + pages.length * 2;
+  const xobject = image ? ` /XObject << /Im1 ${imageId} 0 R >>` : "";
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
   objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
   pages.forEach((content, i) => {
     const pageId = pageIds[i];
     objects[pageId] =
-      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >> >> /Contents ${pageId + 1} 0 R >>`;
+      `<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 3 0 R >>${xobject} >> /Contents ${pageId + 1} 0 R >>`;
     objects[pageId + 1] = `<< /Length ${Buffer.byteLength(content, "latin1")} >>\nstream\n${content}\nendstream`;
   });
+  if (image) {
+    const bytes = image.data.toString("latin1");
+    objects[imageId] = `<< /Type /XObject /Subtype /Image ${image.dict} /Length ${bytes.length} >>\nstream\n${bytes}\nendstream`;
+  }
 
   // The binary comment on line 2 tells transfer tools the file isn't plain text.
   let pdf = "%PDF-1.4\n%\xE2\xE3\xCF\xD3\n";
@@ -57,7 +66,18 @@ const problems = makePdf([
 // A stroked grey rectangle and nothing else: no text layer at all.
 const scanned = makePdf(["0.4 0.4 0.4 RG 2 w 100 300 412 300 re S"]);
 
+// A 64 × 32 picture, white with a black bar from (8, 8) to (55, 23), CCITT Group 4 encoded (made once with Pillow:
+// Image.new("1", (64, 32), 1), the rectangle filled with 0, saved as a group4 TIFF; these are its one strip's bytes,
+// which code black as 1, hence /BlackIs1). Drawn 400 × 200 pt at (106, 296), so the bar covers the middle of the page.
+const scannedFax = makePdf(["q 400 0 0 200 106 296 cm /Im1 Do Q"], {
+  dict: "/Width 64 /Height 32 /ColorSpace /DeviceGray /BitsPerComponent 1 /Filter /CCITTFaxDecode /DecodeParms << /K -1 /Columns 64 /Rows 32 /BlackIs1 true >>",
+  data: Buffer.from("26a0786ffffc8a17fffffffffffffff8ffff001001", "hex"),
+});
+
 mkdirSync(out, { recursive: true });
 writeFileSync(new URL("problems.pdf", out), problems);
 writeFileSync(new URL("scanned.pdf", out), scanned);
-console.log(`wrote e2e/fixtures/problems.pdf (${problems.length} bytes) and e2e/fixtures/scanned.pdf (${scanned.length} bytes)`);
+writeFileSync(new URL("scanned-fax.pdf", out), scannedFax);
+console.log(
+  `wrote e2e/fixtures/problems.pdf (${problems.length} bytes), scanned.pdf (${scanned.length} bytes) and scanned-fax.pdf (${scannedFax.length} bytes)`,
+);
