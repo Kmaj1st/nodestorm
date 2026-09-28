@@ -840,7 +840,7 @@ function installSummary(name: string, r: InstallReport, maxDepth: number): strin
   if (r.failed.length) parts.push(t("install.failed", { names: listJoin(r.failed) }));
   if (r.limit === "depth") parts.push(t("install.depthLimit", { max: maxDepth, names: listJoin(r.leftOver) }));
   if (r.limit === "nodes") parts.push(t("install.nodeLimit", { n, names: listJoin(r.leftOver) }));
-  if (r.cycles.length) parts.push(t("install.cycles", { cycles: r.cycles.join("; ") }));
+  if (r.cycles.length) parts.push(t("install.cycles", { cycles: r.cycles.join(t("common.clauseSep")) }));
   return parts.join(" ");
 }
 

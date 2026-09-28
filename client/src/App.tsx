@@ -221,7 +221,7 @@ async function openShareLink() {
     if (shareToken(location.hash) !== token) return;
     s.openView(graph, name);
     // Replaces any earlier message (e.g. about a broken link opened before this one).
-    s.setToast(fixes.length ? t("viewer.repaired", { fixes: fixes.join("; ") }) : null, "info");
+    s.setToast(fixes.length ? t("viewer.repaired", { fixes: fixes.join(t("common.clauseSep")) }) : null, "info");
   } catch (e) {
     clearShareHash();
     s.setToast(t("viewer.openFailed", { error: errorMessage(e) }));

@@ -374,7 +374,7 @@ export const useGraphStore = create<GraphStore>()(
           projectId: typeof saved.projectId === "string" ? saved.projectId : "",
           activeId: typeof saved.activeId === "string" ? saved.activeId : "",
         });
-        const notice = fixes.length ? { toast: t("toast.savedRepaired", { fixes: fixes.join("; ") }), toastKind: "info" as const } : {};
+        const notice = fixes.length ? { toast: t("toast.savedRepaired", { fixes: fixes.join(t("common.clauseSep")) }), toastKind: "info" as const } : {};
         return { ...current, ...ws, ...notice };
       },
       // A check that was running when the page closed never finished: say so rather than pretend it passed.

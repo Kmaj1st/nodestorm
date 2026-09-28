@@ -20,6 +20,8 @@ export const en = {
   "common.install": "Install",
   "common.dismiss": "Dismiss",
   "common.label": "{label}:",
+  /** Between clauses of a list that already uses commas (repairs made, cycles found). */
+  "common.clauseSep": "; ",
   "common.loading": "Loading…",
   "common.reload": "Reload",
   "common.loadFailed": "This part of NodeStorm couldn't be loaded. Check your connection, then reload — your graph is saved.",

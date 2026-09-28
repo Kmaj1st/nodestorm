@@ -4,6 +4,7 @@ import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode }
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
+import { siteLabel } from "../lib/export";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
 import { whenElement } from "../lib/whenElement";
@@ -226,7 +227,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               const open = expanded.has(s.id);
               // Out of the Tab order unless the keyboard is on this source; each names its source for screen readers.
               const tab = !s.passage || active === s.id ? undefined : -1;
-              const of = (action: string) => t("sources.actionOf", { action, site: s.site });
+              const site = siteLabel(s.site);
+              const of = (action: string) => t("sources.actionOf", { action, site });
               return (
                 <div
                   key={s.id}
@@ -246,7 +248,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                       aria-describedby={`${id}-text`}
                     />
                     <label htmlFor={id} className="src__label">
-                      <span className="src__site">{s.site}</span>
+                      <span className="src__site">{site}</span>
                       {/* An encyclopedia entry by its own name (Wikidata's page title is only an id). */}
                       {(s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title) !== s.site && (
                         <span className="src__title">{s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title}</span>
@@ -322,7 +324,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               onChange={() => setChoice({ kind: "selection", ...picked })}
             />
             <span>
-              <b>{t("sources.selectionFrom", { site: pickedSource.site })}</b>
+              <b>{t("sources.selectionFrom", { site: siteLabel(pickedSource.site) })}</b>
               <span className="small src__quote">{picked.text}</span>
             </span>
           </label>
@@ -355,7 +357,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                 />
                 {copy && ownDef.trim() && (
                   <span id={`${uid}-copy`} className={`small src__copy${copyKept ? "" : " src__copy--changed"}`} role="status" data-testid="source-copy-note">
-                    {t(copyKept ? "sources.copyExact" : "sources.copyChanged", { site: copy.site })}
+                    {t(copyKept ? "sources.copyExact" : "sources.copyChanged", { site: siteLabel(copy.site) })}
                   </span>
                 )}
               </>
@@ -386,7 +388,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         <div className="sources__preview small" data-testid="source-preview">
           <span className="muted">
             {t("common.label", { label: t("sources.savedAs") })}{" "}
-            {result.source.site === OWN_SOURCE.site ? t("source.you") : result.source.site}
+            {result.source.site === OWN_SOURCE.site ? t("source.you") : siteLabel(result.source.site ?? "")}
           </span>
           <MathText text={result.definition} />
         </div>
