@@ -3,9 +3,9 @@ import type { WebSearchResult } from "../src/lib/webSearch";
 
 /**
  * A stand-in for lib/webSearch.ts in tests (`vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"))`):
- * one engine that finds a demo encyclopedia's page for each meaning the offline demo knows for a name (its knowledge
- * base's definition; several pages for an ambiguous name such as "Expectation"), which the offline demo's source
- * check rates reliable. `fake.pages` replaces the pages, `fake.ready = false` turns search off; `fake.calls` counts.
+ * one engine that finds a demo encyclopedia's page and a lecture notes page for each meaning the offline demo knows
+ * for a name (its knowledge base's definition; pages for several meanings for an ambiguous name such as
+ * "Expectation"), which the offline demo's source check rates reliable. `fake.pages` replaces the pages, `fake.ready = false` turns search off; `fake.calls` counts.
  */
 export const fake = {
   ready: true,
@@ -24,13 +24,14 @@ const AMBIGUOUS: Record<string, { name: string; definition: string }[]> = {
 
 export async function defaultPages(name: string): Promise<WebSearchResult["results"]> {
   const kb = kbDefinition(name);
-  return (AMBIGUOUS[normalizeName(name)] ?? (kb ? [{ name, definition: kb.definition }] : [])).map((s) => ({
-    engine: "demo" as const,
-    title: `${s.name} - Demo Encyclopedia`,
-    url: `https://demo-encyclopedia.example/wiki/${encodeURIComponent(s.name.replace(/\s+/g, "_"))}`,
-    site: "demo-encyclopedia.example",
-    text: s.definition,
-  }));
+  return (AMBIGUOUS[normalizeName(name)] ?? (kb ? [{ name, definition: kb.definition }] : [])).flatMap((s) => {
+    const slug = encodeURIComponent(s.name.replace(/\s+/g, "_"));
+    return [
+      { engine: "demo" as const, title: `${s.name} - Demo Encyclopedia`, url: `https://demo-encyclopedia.example/wiki/${slug}`, site: "demo-encyclopedia.example", text: s.definition },
+      // A second site that agrees, so a page can be taken unasked (one no other source backs never is).
+      { engine: "demo" as const, title: `${s.name} - Demo Lecture Notes`, url: `https://demo-lecture-notes.example/${slug}`, site: "demo-lecture-notes.example", text: s.definition },
+    ];
+  });
 }
 
 export const ENGINE_NAME = { tavily: "Tavily", serper: "Serper", brave: "Brave Search", searxng: "SearXNG", demo: "Offline demo" };

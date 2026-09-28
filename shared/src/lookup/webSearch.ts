@@ -81,7 +81,8 @@ export function webSearchRequest(engine: SearchEngineId, query: WebSearchQuery, 
     throw new ProviderError(`${provider}: no API key is set.`, 400, undefined, { code: "noKey", params: { provider } });
   }
   // No cookies or other credentials go along: the key is the only identification. The key engines' APIs never
-  // redirect, and a redirect elsewhere would carry their custom key headers (x-api-key…) along: refused.
+  // redirect, and a redirect elsewhere would carry their custom key headers (x-api-key…) along: refused. A SearXNG
+  // instance's redirects are followed (on the local server only to the same host: see `redirects` below).
   const base: RequestInit = { credentials: "omit", referrerPolicy: "no-referrer", redirect: engine === "searxng" ? "follow" : "error" };
   switch (engine) {
     case "tavily":
@@ -267,7 +268,34 @@ export interface WebSearchFetchOptions {
   /** Per request (default 12 s). */
   timeoutMs?: number;
   fetch?: typeof fetch;
+  /**
+   * How a SearXNG instance's redirects are followed. "follow" (the browser's own fetch: a page can't use the user's
+   * browser to reach anything it couldn't anyway); "sameHost" (the local server, which can reach internal addresses
+   * such as 169.254.169.254 a page can't): at most REDIRECTS_MAX, each to the same host and port, or from http to https
+   * on the same host; any other redirect is an `unreachable` error. The key engines never follow a redirect.
+   */
+  redirects?: "follow" | "sameHost";
 }
+
+/** Most redirects of a SearXNG instance followed with `redirects: "sameHost"`. */
+export const REDIRECTS_MAX = 2;
+
+/** Where a redirect from `from` to `location` goes, when it stays on the same host (or moves to its https); else null. */
+export function sameHostRedirect(from: string, location: string | null): string | null {
+  if (!location) return null;
+  try {
+    const a = new URL(from);
+    const b = new URL(location, a);
+    if (b.username || b.password || b.hostname.toLowerCase() !== a.hostname.toLowerCase()) return null;
+    if (b.protocol === a.protocol) return b.port === a.port ? b.href : null;
+    // http to https on the same host: its default port, or the same port number given explicitly.
+    return a.protocol === "http:" && b.protocol === "https:" && (b.port === "" || b.port === a.port) ? b.href : null;
+  } catch {
+    return null;
+  }
+}
+
+const REDIRECT_STATUS = new Set([301, 302, 303, 307, 308]);
 
 /**
  * One search on one engine, straight to the engine. Network failures (including a browser's CORS refusal) and time-outs
@@ -280,16 +308,32 @@ export async function fetchWebSearch(engine: SearchEngineId, query: WebSearchQue
   const timeoutMs = opts.timeoutMs ?? 12_000;
   try {
     return await withDeadline(provider, { signal: opts.signal, timeoutMs }, async (signal) => {
-      let res: Response;
-      try {
-        res = await f(url, { ...init, signal });
-      } catch (e) {
-        if (signal.aborted) throw new CancelledError();
-        throw new ProviderError(`Can't reach ${provider}.`, 502, undefined, {
-          code: "unreachable",
-          params: { provider },
-          detail: redactSecret(e instanceof Error ? e.message : String(e), auth.key),
-        });
+      const manual = opts.redirects === "sameHost" && init.redirect === "follow";
+      const send = async (to: string) => {
+        try {
+          return await f(to, { ...init, ...(manual ? { redirect: "manual" as const } : {}), signal });
+        } catch (e) {
+          if (signal.aborted) throw new CancelledError();
+          throw new ProviderError(`Can't reach ${provider}.`, 502, undefined, {
+            code: "unreachable",
+            params: { provider },
+            detail: redactSecret(e instanceof Error ? e.message : String(e), auth.key),
+          });
+        }
+      };
+      let at = url;
+      let res = await send(at);
+      for (let hops = 0; manual && REDIRECT_STATUS.has(res.status); hops++) {
+        const next = sameHostRedirect(at, res.headers.get("location"));
+        await res.body?.cancel().catch(() => {});
+        if (!next || hops >= REDIRECTS_MAX) {
+          throw new ProviderError(`Can't reach ${provider}.`, 502, undefined, {
+            code: "unreachable",
+            params: { provider },
+            detail: next ? "too many redirects" : "redirect to another address refused",
+          });
+        }
+        res = await send((at = next));
       }
       if (!res.ok) throw webSearchError(engine, res.status, (await readCapped(res, 64_000, true).catch(() => "")) ?? "", auth.key);
       const body = await readCapped(res, SEARCH_BODY_MAX).catch(() => {

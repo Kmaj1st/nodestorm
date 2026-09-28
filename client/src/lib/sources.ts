@@ -2,6 +2,8 @@ import {
   ASSESS_MAX,
   ASSESS_TEXT_MAX,
   CancelledError,
+  HINT_MAX,
+  NAME_MAX,
   normalizeName,
   type AssessRating,
   type LookupSense,
@@ -238,22 +240,38 @@ export function groupBySense(sources: Source[]): SenseGroup[] {
   return [...groups.values(), ...(rest.length ? [{ sense: "", sources: rest }] : [])];
 }
 
+const reliable = (s: Source) => s.reliability === "high" || s.reliability === "medium";
+
+/**
+ * Does another source back `top`: an encyclopedia, or a page of another site, that the AI rated high or medium for the
+ * same meaning of the name? A web page's text can steer the AI that rates it (a prompt injection), but not the others.
+ */
+function backed(top: Source, sources: Source[]): boolean {
+  const meaning = normalizeName(top.sense);
+  const site = (s: Source) => (s.kind === "web" ? (s.url && hostOf(s.url)) || s.site : s.site).toLowerCase();
+  return sources.some(
+    (s) => s !== top && reliable(s) && normalizeName(s.sense) === meaning && (s.kind === "encyclopedia" || site(s) !== site(top)),
+  );
+}
+
 /**
  * The passage a concept takes without asking (Settings: use the AI right away, and Install all): the most reliable
  * source's, when the AI rated it high or medium, unless equally reliable sources describe different meanings of the
- * name (the user then picks the meaning). Without a rating only an encyclopedia page of exactly the name, found alone,
- * is taken (as the look-ups always did). Undefined: the user chooses (or writes) the definition.
+ * name (the user then picks the meaning). A web page (or an encyclopedia rated only medium) is taken only when another
+ * site or an encyclopedia was rated high or medium for the same meaning; an encyclopedia page of exactly the name rated
+ * high can be taken alone. Without a rating only an encyclopedia page of exactly the name, found alone, is taken (as
+ * the look-ups always did). Undefined: the user chooses (or writes) the definition.
  */
 export function autoPick(g: Pick<Gathered, "sources" | "rated">): Source | undefined {
   if (g.rated) {
     // An encyclopedia's near match (a page for another name, "Normal subgroup" for "Normal") is never taken unasked.
-    const top = g.sources.find(
-      (s) => s.passage && (s.reliability === "high" || s.reliability === "medium") && (s.kind === "web" || s.exact),
-    );
+    const top = g.sources.find((s) => s.passage && reliable(s) && (s.kind === "web" || s.exact));
     if (!top) return undefined;
     const peers = g.sources.filter((s) => s.passage && s.reliability === top.reliability);
     const meanings = new Set(peers.map((s) => normalizeName(s.sense)).filter(Boolean));
-    return meanings.size > 1 ? undefined : top;
+    if (meanings.size > 1) return undefined;
+    const alone = top.kind === "encyclopedia" && top.reliability === "high";
+    return alone || backed(top, g.sources) ? top : undefined;
   }
   const [only] = g.sources;
   return g.sources.length === 1 && only.kind === "encyclopedia" && only.exact && only.passage ? only : undefined;
@@ -318,41 +336,86 @@ export const SOURCES_CACHE_KEY = "nodestorm-sources-cache";
 export const SOURCES_CACHE_CHARS = 500_000;
 
 const isStr = (v: unknown): v is string => typeof v === "string";
+/** A string of at most `max` characters. */
+const str = (v: unknown, max: number): v is string => typeof v === "string" && v.length <= max;
 const RELIABILITIES = new Set(["high", "medium", "low", "unusable"]);
+/** Longest stored text of a source (an encyclopedia's definition can be longer than a page's excerpt). */
+const STORED_TEXT_MAX = 20_000;
+/** Most sources, and sites or engines asked, in one stored entry. */
+const STORED_LIST_MAX = 60;
 
-/** A stored source, checked field by field (the storage may hold anything: an older version's, or damaged data). */
+/** A stored page link: https only, no user name or password, as the pop-up links it. */
+function storedUrl(v: unknown): boolean {
+  if (!str(v, 2000) || !isHttps(v)) return false;
+  try {
+    const u = new URL(v);
+    return u.protocol === "https:" && !u.username && !u.password;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * A stored source, checked field by field as the web search cache checks its entries (the storage may hold anything:
+ * an older version's, damaged or edited data): strings of bounded length, https links only, a known reliability, and
+ * a passage that is the source's own words.
+ */
 function storedSource(v: unknown): v is Source {
   if (!v || typeof v !== "object") return false;
   const s = v as Record<string, unknown>;
   return (
-    isStr(s.id) && (s.kind === "encyclopedia" || s.kind === "web") && isStr(s.site) && isStr(s.title) && isStr(s.text) &&
-    (s.url === undefined || isStr(s.url)) && (s.reliability === null || RELIABILITIES.has(s.reliability as string)) &&
-    isStr(s.reasons) && isStr(s.sense) && isStr(s.passage) && typeof s.pointed === "boolean"
+    str(s.id, 40) && (s.kind === "encyclopedia" || s.kind === "web") && str(s.site, 200) && str(s.title, 300) && str(s.text, STORED_TEXT_MAX) &&
+    (s.kind === "web" ? storedUrl(s.url) : s.url === undefined || storedUrl(s.url)) &&
+    (s.name === undefined || str(s.name, 300)) && (s.domain === undefined || str(s.domain, 300)) &&
+    (s.exact === undefined || typeof s.exact === "boolean") &&
+    (s.reliability === null || RELIABILITIES.has(s.reliability as string)) &&
+    str(s.reasons, 1000) && str(s.sense, 200) && str(s.passage, STORED_TEXT_MAX) && s.text.includes(s.passage) && typeof s.pointed === "boolean" &&
+    (s.compared === undefined || (typeof s.compared === "number" && s.compared >= 0 && s.compared <= 100))
   );
 }
+
+/** The AI's stored rating of one of `sources`: a known reliability (or none), bounded text, a passage from that source. */
+function storedRating(v: unknown, sources: Source[]): boolean {
+  if (!v || typeof v !== "object") return false;
+  const r = v as Record<string, unknown>;
+  const src = sources.find((s) => s.id === r.id);
+  return (
+    Boolean(src) && (r.reliability === null || RELIABILITIES.has(r.reliability as string)) && str(r.reasons, 1000) && str(r.sense, 200) &&
+    str(r.passage, STORED_TEXT_MAX) && src!.text.includes(r.passage)
+  );
+}
+
+const names = (v: unknown) => Array.isArray(v) && v.length <= STORED_LIST_MAX && v.every((x) => str(x, 100));
 
 function storedEntry(v: unknown): v is Entry {
   if (!v || typeof v !== "object") return false;
   const e = v as Record<string, unknown>;
   const f = e.found as Record<string, unknown> | undefined;
   if (typeof e.at !== "number" || !f || typeof f !== "object") return false;
-  if (!Array.isArray(f.sources) || !f.sources.every(storedSource)) return false;
-  if (!Array.isArray(f.asked) || !f.asked.every(isStr) || !Array.isArray(f.failed) || !f.failed.every(isStr) || typeof f.web !== "boolean") return false;
+  if (!Array.isArray(f.sources) || f.sources.length > STORED_LIST_MAX || !f.sources.every(storedSource)) return false;
+  if (!names(f.asked) || !names(f.failed) || typeof f.web !== "boolean") return false;
   if (e.rating === undefined) return true;
   const r = e.rating as Record<string, unknown> | null;
-  return Boolean(r) && isStr(r!.note) && Array.isArray(r!.ratings) && r!.ratings.every((x) => x && typeof x === "object" && isStr((x as Record<string, unknown>).id));
+  return (
+    Boolean(r) && str(r!.note, 2000) && Array.isArray(r!.ratings) && r!.ratings.length <= STORED_LIST_MAX &&
+    r!.ratings.every((x) => storedRating(x, f.sources as Source[]))
+  );
 }
 
 function loadCache(): Map<string, Entry> {
   if (cache) return cache;
   cache = new Map();
   try {
-    const raw: unknown = JSON.parse(localStorage.getItem(SOURCES_CACHE_KEY) ?? "[]");
+    const json = localStorage.getItem(SOURCES_CACHE_KEY) ?? "[]";
+    // More than this module ever writes: not its data (or tampered with), so not read at all.
+    if (json.length > SOURCES_CACHE_CHARS) return cache;
+    const raw: unknown = JSON.parse(json);
     const now = Date.now();
     // Oldest first, as the Map keeps them: the first ones go when it is full.
     if (Array.isArray(raw)) {
-      for (const item of raw) {
-        if (Array.isArray(item) && isStr(item[0]) && storedEntry(item[1]) && now - item[1].at < CACHE_MS) cache.set(item[0], item[1]);
+      for (const item of raw.slice(-CACHE_MAX)) {
+        // A bad entry is left out (that name is gathered again); the others are kept.
+        if (Array.isArray(item) && str(item[0], 2000) && storedEntry(item[1]) && now - item[1].at < CACHE_MS) cache.set(item[0], item[1]);
       }
     }
   } catch {
@@ -464,9 +527,9 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
     try {
       rating = await api.assess(
         {
-          name,
-          hint: opts.hint,
-          context: (opts.context ?? []).slice(0, 40),
+          name: name.slice(0, NAME_MAX),
+          hint: opts.hint?.slice(0, HINT_MAX),
+          context: (opts.context ?? []).slice(0, 40).map((c) => c.slice(0, 200)),
           sources: sent.map((s) => ({ id: s.id, kind: s.kind, site: s.site, title: s.title, url: s.url ?? "", text: s.text.slice(0, ASSESS_TEXT_MAX) })),
         },
         signal,

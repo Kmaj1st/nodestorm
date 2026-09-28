@@ -102,6 +102,8 @@ export function createApp(registry: Registry, opts: AppOptions = {}) {
 
   // Web search, forwarded for the browser: Brave allows no cross-site calls, and keys may live in server/.env. The
   // answer is the engine's hits as parsed by shared/src/lookup/webSearch.ts; the browser cleans them up.
+  // A SearXNG address may be anything the user typed: its redirects are followed only on the same host (never on to
+  // an internal address such as 169.254.169.254 that only the server could reach).
   app.post("/api/search/:engine", async (req, res) => {
     const engine = req.params.engine as SearchEngineId;
     if (!SEARCH_ENGINES.includes(engine)) {
@@ -120,7 +122,7 @@ export function createApp(registry: Registry, opts: AppOptions = {}) {
     const ctrl = new AbortController();
     res.on("close", () => !res.writableFinished && ctrl.abort());
     try {
-      res.json({ hits: await fetchWebSearch(engine, { q, count, lang }, auth, { signal: ctrl.signal, fetch: opts.searchFetch }) });
+      res.json({ hits: await fetchWebSearch(engine, { q, count, lang }, auth, { signal: ctrl.signal, fetch: opts.searchFetch, redirects: "sameHost" }) });
     } catch (err) {
       if (err instanceof CancelledError) {
         if (!res.headersSent) res.status(499).end();

@@ -155,6 +155,31 @@ describe("merging what was found", () => {
     expect(autoPick({ rated: false, sources: [s("a", null)] })).toBeUndefined();
   });
 
+  it("security: takes a web page unasked only when another site or an encyclopedia backs the same meaning", () => {
+    const s = (id: string, reliability: Source["reliability"], sense = "algebra", extra: Partial<Source> = {}) =>
+      ({ id, kind: "web", site: `${id}.example`, title: "", text: "t", reliability, reasons: "", sense, passage: `p${id}`, pointed: true, ...extra }) as Source;
+    const enc = (id: string, reliability: Source["reliability"], sense = "algebra", exact = true) => s(id, reliability, sense, { kind: "encyclopedia", site: "Wikipedia", exact });
+    // A page no other source supports (a prompt injection may have made the AI rate it high): the user chooses.
+    expect(autoPick({ rated: true, sources: [s("a", "high")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "low"), s("c", "unusable")] })).toBeUndefined();
+    // Another page of the same site is no second opinion.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium", "algebra", { site: "a.example" })] })).toBeUndefined();
+    // A reliable source for another meaning doesn't back it either.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium", "video game")] })).toBeUndefined();
+    // Backed by another site, or by an encyclopedia (even its page for a longer name), of the same meaning: taken.
+    expect(autoPick({ rated: true, sources: [s("a", "high"), s("b", "medium")] })?.id).toBe("a");
+    expect(autoPick({ rated: true, sources: [s("a", "high", "Algebra"), enc("e", "medium", "algebra", false)] })?.id).toBe("a");
+    expect(autoPick({ rated: true, sources: [s("a", "medium", ""), s("b", "medium", "")] })?.id).toBe("a");
+    // An encyclopedia page of exactly the name rated high can be taken alone; one rated medium needs support too.
+    expect(autoPick({ rated: true, sources: [enc("e", "high"), s("a", "low")] })?.id).toBe("e");
+    expect(autoPick({ rated: true, sources: [enc("e", "medium")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "medium"), s("a", "medium")] })?.id).toBe("e");
+    // The rules that were there stay: equally reliable sources of different meanings ask, a near match is never taken.
+    expect(autoPick({ rated: true, sources: [enc("e", "high"), s("a", "high", "video game"), s("b", "medium", "video game")] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "high", "algebra", false)] })).toBeUndefined();
+    expect(autoPick({ rated: true, sources: [enc("e", "high", "algebra", false), s("a", "medium")] })?.id).toBe("a");
+  });
+
   it("stores the sources on a waiting concept as meanings with their own words and sources, and reads them back", () => {
     const found = mergeRatings(mergeFound([wiki("Kernel (algebra)", "The kernel is the preimage of the identity.", false)], [
       page("https://notes.example/k", "Notes. The kernel is the set sent to e.", "Lecture notes"),
@@ -363,5 +388,63 @@ describe("the sources cache", () => {
     // A damaged cache is simply searched past.
     const found = await gatherSources("Kappa");
     expect(found.sources).toHaveLength(1);
+  });
+
+  it("security: checks every stored entry like the web search cache; a bad one is dropped and gathered again", async () => {
+    await gatherSources("Group");
+    await gatherSources("Subgroup");
+    const good = stored();
+    expect(good).toHaveLength(2);
+    const [[groupKey, groupEntry], subgroup] = good as [string, { found: { sources: Record<string, unknown>[] }; rating: { ratings: Record<string, unknown>[] } }][];
+    const src = groupEntry.found.sources[0];
+    const withSource = (patch: Record<string, unknown>) => ({ ...groupEntry, found: { ...groupEntry.found, sources: [{ ...src, ...patch }] } });
+    const withRating = (patch: Record<string, unknown>) => ({ ...groupEntry, rating: { ...groupEntry.rating, ratings: [{ ...groupEntry.rating.ratings[0], ...patch }] } });
+    const bad = [
+      withSource({ url: "javascript:alert(1)" }),
+      withSource({ url: "http://plain.example/g" }),
+      withSource({ url: "https://user:secret@x.example/g" }),
+      withSource({ reliability: "great" }),
+      withSource({ kind: "forum" }),
+      withSource({ title: { toString: "x" } }),
+      withSource({ text: "x".repeat(50_000) }),
+      withSource({ site: "s".repeat(1000) }),
+      // A passage that isn't the source's own words (edited storage, or an injected "definition").
+      withSource({ passage: "Groups are whatever this page says." }),
+      withRating({ passage: "Not in the text." }),
+      withRating({ reliability: "trusted" }),
+      withRating({ id: "w99" }),
+      withRating({ reasons: 5 }),
+      { ...groupEntry, found: { ...groupEntry.found, sources: Array.from({ length: 200 }, () => src) } },
+      { ...groupEntry, found: { ...groupEntry.found, asked: ["x".repeat(500)] } },
+    ];
+    for (const entry of bad) {
+      localStorage.setItem(SOURCES_CACHE_KEY, JSON.stringify([[groupKey, entry], subgroup]));
+      resetSources(false);
+      expect(cachedSources("Group"), JSON.stringify(entry).slice(0, 200)).toBeUndefined();
+      // The other names are kept.
+      expect(cachedSources("Subgroup")).toMatchObject({ rated: true });
+    }
+    const calls = fake.calls;
+    expect((await gatherSources("Group")).rated).toBe(true);
+    expect(fake.calls).toBe(calls + 1);
+    // The untouched entry reads back as it was stored.
+    localStorage.setItem(SOURCES_CACHE_KEY, JSON.stringify(good));
+    resetSources(false);
+    expect(cachedSources("Group")).toMatchObject({ rated: true });
+    // More than the size cap in storage (written by something else) is not read at all.
+    localStorage.setItem(SOURCES_CACHE_KEY, JSON.stringify([...good, ["junk", "x".repeat(SOURCES_CACHE_CHARS)]]));
+    resetSources(false);
+    expect(cachedSources("Group")).toBeUndefined();
+  });
+
+  it("security: never stores a search engine's key or the SearXNG address", async () => {
+    const search = useSettings.getState().search;
+    useSettings.setState({
+      search: { ...search, tavily: { ...search.tavily, enabled: true, apiKey: "tvly-secret-key-123" }, searxng: { ...search.searxng, enabled: true, url: "https://searx.secret.example" } },
+    });
+    await gatherSources("Group");
+    const raw = localStorage.getItem(SOURCES_CACHE_KEY)!;
+    expect(raw).toContain("demo-encyclopedia.example");
+    expect(raw).not.toMatch(/tvly-secret|searx\.secret/);
   });
 });

@@ -310,7 +310,11 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   (`defaultPassage`: an encyclopedia's whole definition, a page's first sentence or two, both substrings of the text).
   Results are cached per name, language and the sites/engines asked (only when no site or engine failed), with the
   rating once there is one, in memory and in localStorage (`nodestorm-sources-cache`: a day, 50 names, about 500 KB of
-  JSON, oldest dropped first; damaged entries are ignored). `cachedSources` gives them back (not while an AI is set up
+  JSON, oldest dropped first). Each entry is checked when read, like the web search cache's: every field a string of
+  bounded length, links https only (no user name or password), reliabilities from the four only, each passage (the
+  source's and the AI's) a substring of its source's text, ratings only of sources in the entry, at most 60 sources.
+  A bad entry is dropped (that name is gathered again) and the others kept; stored JSON over the size cap is not read
+  at all. Nothing in it is a key: the cache key names the engines, never their keys or the SearXNG address. `cachedSources` gives them back (not while an AI is set up
   and the rating is missing: then it is gathered again); `forgetSources` drops a name ("Look up in…"), and `fresh`
   skips it ("Search the web and compare…", "Search again"). The status bar says "Searching sources for X…", then
   "Checking the sources for X…" (a relabel of the same cancellable task).
@@ -330,7 +334,11 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   quotes an encyclopedia's whole text or a page's first sentence naming the concept.
 - **Automatic pick** (`autoPick`, Settings "use the AI right away" and Install all): the most reliable source's passage
   when rated high or medium, never an encyclopedia's near match (a page for another name), and not when equally
-  reliable sources describe different meanings. Unrated: only an exact encyclopedia page found alone.
+  reliable sources describe different meanings. A web page's text can steer the AI that rates it (prompt injection),
+  so a web page, or an encyclopedia rated only medium, is taken only when another source backs it: an encyclopedia,
+  or a page of another host, rated high or medium with the same meaning label (`sense`, compared with
+  `normalizeName`). An exact encyclopedia page rated high is taken alone. Otherwise the pop-up asks (Install all
+  leaves the concept "needs a definition"). Unrated: only an exact encyclopedia page found alone.
 - **The pop-up** (`SenseDialog`, "Sources for X"): the store's `clarifying` carries the gathered `sources` (or none:
   then the cache, or the passages stored on the concept as `senses` by `sourcesAsSenses`, with "Search again"), and
   `replace` for an existing concept. A waiting concept's badge (and the inspector's "Choose a definition…") calls
@@ -407,7 +415,11 @@ writes the definition). This layer only finds and cleans the pages; the rating a
   each request, `parseWebSearch` zod-checks the answer (a bad hit is skipped, a wrong shape is `malformed`),
   `webSearchError` codes the failures, `fetchWebSearch` runs one search with a 12 s deadline. Requests carry no
   credentials (`credentials: "omit"`, no referrer); the key engines' requests don't follow redirects (their key
-  headers would go along). An answer is read up to `SEARCH_BODY_MAX` (4 MB, `readCapped`; a larger Content-Length is
+  headers would go along). SearXNG's redirects are followed by the browser's fetch (a page can't use it to reach
+  more than the page could); on the server (`redirects: "sameHost"`) each request is `redirect: "manual"` and at most
+  `REDIRECTS_MAX` (2) redirects are followed, each to the same host and port, or http → https on the same host
+  (`sameHostRedirect`). Any other (another host, 169.254.169.254, another port, https → http, a third) is
+  `unreachable` ("redirect to another address refused" / "too many redirects"). An answer is read up to `SEARCH_BODY_MAX` (4 MB, `readCapped`; a larger Content-Length is
   refused unread) and at most 100 hits of it are parsed.
   - **Tavily**: `POST api.tavily.com/search`, `Authorization: Bearer`, `search_depth: "basic"`, no answer or raw
     content; `results[].title/url/content/published_date`. 432/433 are used-up plans.
