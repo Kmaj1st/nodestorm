@@ -6,6 +6,7 @@ import {
   clipText,
   htmlToText,
   mergeResults,
+  mixedContent,
   resetWebSearch,
   searchEngines,
   searchQuery,
@@ -125,6 +126,38 @@ describe("which engines", () => {
     expect(searchQuery("群")).toBe("群 定义");
     expect(searchQuery("ベクトル空間")).toBe("ベクトル空間 定義");
     expect(searchQuery("군")).toBe("군 정의");
+  });
+});
+
+describe("SearXNG on plain http", () => {
+  it("is mixed content on an https page, unless it is this machine", () => {
+    expect(mixedContent("http://searx.example.org", "https:")).toBe(true);
+    expect(mixedContent("http://192.168.1.5:8888/search", "https:")).toBe(true);
+    expect(mixedContent("https://searx.example.org", "https:")).toBe(false);
+    expect(mixedContent("searx.example.org", "https:")).toBe(false); // no scheme: https is assumed
+    for (const local of ["http://localhost:8888", "http://127.0.0.1:8080", "http://[::1]:8888", "http://searx.localhost"]) {
+      expect(mixedContent(local, "https:")).toBe(false);
+    }
+    expect(mixedContent("http://searx.example.org", "http:")).toBe(false); // the page itself is http (development)
+    expect(mixedContent("", "https:")).toBe(false);
+    expect(mixedContent("ftp://x", "https:")).toBe(false);
+  });
+
+  it("Test says why instead of making a request the browser would block", async () => {
+    const was = Object.getOwnPropertyDescriptor(globalThis, "location");
+    Object.defineProperty(globalThis, "location", { value: { protocol: "https:" }, configurable: true });
+    try {
+      answer(() => json({ results: [] }));
+      const search = { ...defaultSearch(), searxng: { enabled: true, url: "http://searx.example.org" } };
+      await expect(testSearchEngine("searxng", search, "browser")).rejects.toThrow(/mixed content/);
+      expect(calls).toEqual([]);
+      // Through the local server the page doesn't fetch the instance itself: no such error.
+      await testSearchEngine("searxng", search, "server").catch(() => {});
+      expect(calls.length).toBe(1);
+    } finally {
+      if (was) Object.defineProperty(globalThis, "location", was);
+      else delete (globalThis as { location?: unknown }).location;
+    }
   });
 });
 

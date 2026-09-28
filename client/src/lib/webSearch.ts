@@ -291,10 +291,27 @@ async function serverSearch(engine: SearchEngineId, query: WebSearchQuery, auth:
   });
 }
 
+/**
+ * An http:// SearXNG address that the browser won't let this page reach: the page is on https, and the address isn't
+ * the user's own machine (localhost and 127.x count as secure, so they are allowed). Such a request is "mixed
+ * content", blocked before it leaves the browser, and fails with no useful message.
+ */
+export function mixedContent(url: string | undefined, page = typeof location === "undefined" ? "" : location.protocol): boolean {
+  const base = searxngBase(url);
+  if (!base || page !== "https:") return false;
+  const { protocol, hostname } = new URL(base);
+  if (protocol !== "http:") return false;
+  const host = hostname.replace(/^\[|\]$/g, "").toLowerCase();
+  return !(host === "localhost" || host.endsWith(".localhost") || /^127(\.\d{1,3}){3}$/.test(host) || host === "::1");
+}
+
 /** One engine's hits for `q`, straight from the page or through the local server. */
 function runEngine(engine: SearchEngineId, query: WebSearchQuery, search: SearchSettings, connection: Connection, signal?: AbortSignal): Promise<RawWebHit[]> {
   const auth = authOf(engine, search);
-  return connection === "server" ? serverSearch(engine, query, auth, signal) : fetchWebSearch(engine, query, auth, { signal });
+  if (connection === "server") return serverSearch(engine, query, auth, signal);
+  // Say why instead of the browser's bare "Failed to fetch".
+  if (engine === "searxng" && mixedContent(search.searxng.url)) return Promise.reject(new Error(t("settings.searchMixedError")));
+  return fetchWebSearch(engine, query, auth, { signal });
 }
 
 /**

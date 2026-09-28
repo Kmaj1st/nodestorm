@@ -2283,6 +2283,22 @@ try {
     await audit("sources pop-up, dark theme");
     await page.screenshot({ path: `${shots}39-sources-dark.png` });
     await dlg.getByRole("button", { name: "Later" }).click();
+    // After a reload too: the rated sources are kept (a day) in localStorage, so reopening searches nothing, neither
+    // the web nor the encyclopedias, and asks the AI nothing.
+    await page.waitForFunction(() => (localStorage.getItem("nodestorm-sources-cache") ?? "").includes("demo-forum.example"));
+    await page.reload();
+    const requests = [];
+    const countRequest = (req) => !/^http:\/\/(localhost|127\.0\.0\.1)[:/]/.test(req.url()) && requests.push(req.url());
+    page.on("request", countRequest);
+    await badge("Homomorphism").click();
+    await item("demo-forum.example").waitFor();
+    assert(
+      (await dlg.getByTestId("sources-note").count()) === 1 && (await dlg.getByTestId("sources-searching").count()) === 0 && (await dlg.getByTestId("source-reliability").first().textContent()) === "Reliable",
+      "after a reload, the badge reopens the rated sources…",
+    );
+    assert(requests.length === 0, `…without searching again (${requests.length} requests: ${requests.join(", ")})`);
+    page.off("request", countRequest);
+    await dlg.getByRole("button", { name: "Later" }).click();
     await setTheme("light");
     await badge("Homomorphism").click();
     await item("demo-forum.example").waitFor();
@@ -2303,6 +2319,11 @@ try {
       (await src.getAttribute("href")).startsWith("https://demo-lecture-notes.example/") && (await src.textContent()).startsWith("demo-lecture-notes.example:"),
       "…with the page as its source",
     );
+    // The AI's rating of that source stays with the definition, its reason one click away.
+    const rating = page.getByTestId("source-rating");
+    assert(/^ · Reliable \(AI check of \d+ sources\)$/.test(await rating.textContent()), `the inspector shows the AI's rating of the source (${await rating.textContent()})`);
+    await page.getByTestId("node-panel").getByText("Why?").click();
+    assert((await page.getByTestId("source-rating-reasons").textContent()).length > 0, "…and why");
 
     // Select other words of a source with the mouse: exactly that selection is used.
     await addByName("Group");
@@ -2325,6 +2346,10 @@ try {
     await node("Group").click();
     assert((await (await definitionField()).inputValue()) === selected, `the definition is exactly the selected text (${selected})`);
     assert((await page.getByTestId("definition-source").textContent()).includes("demo-encyclopedia.example"), "…from that page");
+    // Edited by hand, the definition is the user's: the source and its rating go.
+    await (await definitionField()).fill(`${selected} (edited)`);
+    await page.waitForFunction(() => document.querySelector('[data-testid="definition-source"]')?.textContent.includes("written by you"));
+    assert((await page.getByTestId("source-rating").count()) === 0, "a definition edited by hand drops the AI's rating of its old source");
 
     // Formulas in a source's text are typeset; a selection that ends inside one takes the whole formula, as LaTeX.
     await addByName("Normal Subgroup");

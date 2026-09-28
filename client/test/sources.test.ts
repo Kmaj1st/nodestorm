@@ -1,6 +1,9 @@
 import type { Graph, LookupSense } from "@nodestorm/shared";
-import { beforeEach, describe, expect, it, vi } from "vitest";
-import { addConcept, compareSources, installAllMissing, installDep } from "../src/lib/actions";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { addConcept, compareSources, installAllMissing, installDep, openSources, relookup } from "../src/lib/actions";
+import { toMarkdown } from "../src/lib/export";
+import { repairImport } from "../src/lib/importRepair";
+import { decodeShare, encodeShare } from "../src/lib/share";
 import * as ops from "../src/lib/graphOps";
 import { resetLookup } from "../src/lib/lookup";
 import {
@@ -11,6 +14,11 @@ import {
   mergeFound,
   mergeRatings,
   resetSources,
+  cachedSources,
+  gatherSources,
+  sourceRef,
+  SOURCES_CACHE_CHARS,
+  SOURCES_CACHE_KEY,
   sourcesAsSenses,
   sourcesFromSenses,
   type Source,
@@ -30,6 +38,10 @@ vi.hoisted(() => {
     setItem: (k: string, v: string) => void data.set(k, v),
     removeItem: (k: string) => void data.delete(k),
   };
+});
+
+afterEach(() => {
+  vi.useRealTimers();
 });
 
 const store = () => useGraphStore.getState();
@@ -147,15 +159,20 @@ describe("merging what was found", () => {
       { id: "w2", reliability: "unusable", reasons: "an advert", sense: "", passage: "" },
     ]);
     const senses = sourcesAsSenses(found, "Kernel");
+    // Each with the AI's rating of it (3 sources were compared), never text the AI wrote for the definition.
     expect(senses).toEqual([
-      { name: "Kernel (algebra)", domain: "algebra", definition: "The kernel is the preimage of the identity.", kind: null, source: { site: "Wikipedia", title: "Kernel (algebra)", url: "https://en.wikipedia.org/wiki/Kernel (algebra)" } },
-      { name: "Kernel", domain: "algebra", definition: "The kernel is the set sent to e.", kind: null, source: { site: "notes.example", title: "Lecture notes", url: "https://notes.example/k" } },
+      { name: "Kernel (algebra)", domain: "algebra", definition: "The kernel is the preimage of the identity.", kind: null, source: { site: "Wikipedia", title: "Kernel (algebra)", url: "https://en.wikipedia.org/wiki/Kernel (algebra)", rating: { reliability: "high", reasons: "", compared: 3 } } },
+      { name: "Kernel", domain: "algebra", definition: "The kernel is the set sent to e.", kind: null, source: { site: "notes.example", title: "Lecture notes", url: "https://notes.example/k", rating: { reliability: "medium", reasons: "", compared: 3 } } },
     ]);
     const back = sourcesFromSenses([...senses, { name: "K", domain: "", definition: "AI text", source: { site: "AI", title: "Demo" } }]);
-    expect(back.map((s) => [s.kind, s.site, s.passage, s.reliability])).toEqual([
-      ["encyclopedia", "Wikipedia", "The kernel is the preimage of the identity.", null],
-      ["web", "notes.example", "The kernel is the set sent to e.", null],
+    expect(back.map((s) => [s.kind, s.site, s.passage, s.reliability, s.sense, s.compared])).toEqual([
+      ["encyclopedia", "Wikipedia", "The kernel is the preimage of the identity.", "high", "algebra", 3],
+      ["web", "notes.example", "The kernel is the set sent to e.", "medium", "algebra", 3],
     ]);
+    // Unrated (older projects, no AI): no rating stored or read back.
+    const unrated = sourcesAsSenses(mergeFound([], [page("https://notes.example/k", "Notes.")]), "Kernel");
+    expect(unrated[0].source).toEqual({ site: "notes.example", title: "Page", url: "https://notes.example/k" });
+    expect(sourcesFromSenses(unrated)[0]).toMatchObject({ reliability: null, reasons: "", sense: "" });
   });
 });
 
@@ -206,6 +223,139 @@ describe("no definition from the AI through the look-up paths", () => {
       reliability: null,
       passage: "A subset of a group that is itself a group under the same operation.",
     });
+    // Not offered again unrated from the cache: its badge asks the AI again (the search itself is cached).
+    expect(cachedSources("Subgroup")).toBeUndefined();
     vi.restoreAllMocks();
+  });
+});
+
+describe("the AI's rating kept with the chosen definition", () => {
+  const rated = (): Source => ({
+    id: "w1",
+    kind: "web",
+    site: "notes.example",
+    title: "Lecture notes",
+    url: "https://notes.example/k",
+    text: "The kernel is the set sent to e.",
+    reliability: "high",
+    reasons: "Lecture notes; agrees with the encyclopedia.",
+    sense: "algebra",
+    passage: "The kernel is the set sent to e.",
+    pointed: true,
+    compared: 3,
+  });
+
+  it("is recorded with the source: reliability, the short reason, how many were compared", () => {
+    expect(sourceRef(rated())).toEqual({
+      site: "notes.example",
+      title: "Lecture notes",
+      url: "https://notes.example/k",
+      rating: { reliability: "high", reasons: "Lecture notes; agrees with the encyclopedia.", compared: 3 },
+    });
+    expect(sourceRef({ ...rated(), reasons: "x".repeat(2000) }).rating!.reasons).toHaveLength(500);
+    expect(sourceRef({ ...rated(), reliability: null }).rating).toBeUndefined();
+    expect(sourceRef({ site: "Wikipedia", title: "Group" }).rating).toBeUndefined();
+  });
+
+  it("is stored when a concept takes a rated source's passage, and dropped when the definition is written by hand", async () => {
+    useSettings.setState({ newConcepts: "auto" });
+    const id = addConcept({ name: "Quotient Group" });
+    await idle();
+    const n = graph().nodes.find((x) => x.id === id)!;
+    expect(n.source).toMatchObject({ site: "demo-encyclopedia.example", rating: { reliability: "high" } });
+    expect(n.source!.rating!.compared).toBeGreaterThanOrEqual(1);
+    // The inspector's definition field sets the source to "you" on a hand edit: no rating goes with it.
+    store().mutate((g) => ops.updateNode(g, id, { definition: "My words.", source: ops.OWN_SOURCE }));
+    expect(graph().nodes.find((x) => x.id === id)!.source).toEqual({ site: "you", title: "" });
+  });
+
+  it("goes through import repair, share links and the Markdown export", async () => {
+    const g = ops.addNode(ops.emptyGraph(), { name: "Kernel", definition: "The kernel is the set sent to e.", source: sourceRef(rated()) }).graph;
+    const back = repairImport({ format: "nodestorm/v1", graphs: [g] }).doc.graphs[0].nodes[0];
+    expect(back.source).toEqual(sourceRef(rated()));
+    const shared = await decodeShare(await encodeShare(g, "x"));
+    expect(shared.graph.nodes[0].source).toEqual(sourceRef(rated()));
+    // A damaged rating is dropped; the source itself is kept.
+    const damaged = repairImport({ format: "nodestorm/v1", graphs: [{ ...g, nodes: [{ ...g.nodes[0], source: { ...sourceRef(rated()), rating: { reliability: "great" } } }] }] });
+    expect(damaged.doc.graphs[0].nodes[0].source).toEqual({ site: "notes.example", title: "Lecture notes", url: "https://notes.example/k" });
+    expect(toMarkdown(g)).toContain(
+      "*Source:* [notes.example: Lecture notes](https://notes.example/k) · Reliable (AI check of 3 sources): Lecture notes; agrees with the encyclopedia.",
+    );
+  });
+});
+
+describe("the sources cache", () => {
+  const stored = () => JSON.parse(localStorage.getItem(SOURCES_CACHE_KEY) ?? "[]") as [string, unknown][];
+
+  it("keeps the rated sources across a reload, for a day, so the badge shows them without searching again", async () => {
+    const found = await gatherSources("Group");
+    expect(found.rated).toBe(true);
+    expect(fake.calls).toBeGreaterThan(0);
+    const calls = fake.calls;
+    expect(stored()).toHaveLength(1);
+    resetSources(false); // a reload: memory is gone, localStorage stays
+    const again = cachedSources("Group");
+    expect(again).toMatchObject({ rated: true, note: found.note });
+    expect(again!.sources.map((s) => [s.site, s.reliability])).toEqual(found.sources.map((s) => [s.site, s.reliability]));
+    await gatherSources("Group");
+    expect(fake.calls).toBe(calls);
+    // A day later it is gone.
+    vi.useFakeTimers({ now: Date.now() + 25 * 60 * 60_000 });
+    resetSources(false);
+    expect(cachedSources("Group")).toBeUndefined();
+  });
+
+  it("the badge of a concept with nothing gathered yet searches (web and rating), and one with a cached search doesn't", async () => {
+    const g = ops.addNode(graph(), { name: "Group" });
+    store().mutate(() => ops.updateNode(g.graph, g.id, { status: "unclear", senses: [] }));
+    const before = fake.calls;
+    openSources(g.id);
+    expect(store().clarifying).toMatchObject({ nodeId: g.id });
+    await idle();
+    expect(fake.calls).toBe(before + 1);
+    expect(store().clarifying).toMatchObject({ nodeId: g.id, sources: { rated: true } });
+    store().setClarifying(null);
+    openSources(g.id);
+    await idle();
+    expect(fake.calls).toBe(before + 1);
+    expect(store().clarifying).toEqual({ graphId: store().activeId, nodeId: g.id });
+    // Closed before the search ends: it doesn't pop up again.
+    resetSources();
+    openSources(g.id);
+    store().setClarifying(null);
+    await idle();
+    expect(store().clarifying).toBeNull();
+  });
+
+  it("is dropped by “Look up in…” and “Search the web and compare…”", async () => {
+    const id = addConcept({ name: "Group" });
+    await idle();
+    expect(cachedSources("Group")).toBeDefined();
+    await relookup(id, undefined, "wikipedia");
+    expect(cachedSources("Group")).toBeUndefined();
+    await gatherSources("Group");
+    const calls = fake.calls;
+    await compareSources(id, undefined, { fresh: true });
+    expect(fake.calls).toBe(calls + 1);
+  });
+
+  it("stays under its size cap, oldest names first, and ignores damaged data", async () => {
+    fake.pages = (name) => [{ engine: "demo" as const, ...page(`https://long.example/${encodeURIComponent(name)}`, `${name} is ${"very long text ".repeat(4000)}`) }];
+    for (const n of ["Alpha", "Beta", "Gamma", "Delta", "Epsilon", "Zeta", "Eta", "Theta", "Iota", "Kappa"]) await gatherSources(n);
+    const raw = localStorage.getItem(SOURCES_CACHE_KEY)!;
+    expect(raw.length).toBeLessThanOrEqual(SOURCES_CACHE_CHARS);
+    const names = stored().map(([k]) => k.split(":").at(-1));
+    expect(names.length).toBeGreaterThan(0);
+    expect(names.at(-1)).toBe("kappa");
+    expect(names).not.toContain("alpha");
+
+    for (const bad of ["{not json", JSON.stringify({ a: 1 }), JSON.stringify([["k", { at: "yesterday" }], 5, null]), JSON.stringify([[stored()[0][0], { at: Date.now(), found: { sources: [{ id: 1 }] } }]])]) {
+      localStorage.setItem(SOURCES_CACHE_KEY, bad);
+      resetSources(false);
+      expect(cachedSources("Kappa")).toBeUndefined();
+    }
+    // A damaged cache is simply searched past.
+    const found = await gatherSources("Kappa");
+    expect(found.sources).toHaveLength(1);
   });
 });

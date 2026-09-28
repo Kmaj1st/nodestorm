@@ -892,7 +892,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 }
 .src--on { border-color: var(--accent); background: var(--accent-soft); }
 .src__head { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }
-.src__head input[type="radio"] { margin: 0; align-self: center; }
+.src__head input[type="radio"] { margin: 0.2em 0 0; align-self: flex-start; }
 .src__label { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; flex: 1; min-width: 0; cursor: pointer; overflow-wrap: anywhere; }
 .src__site { font-weight: 600; }
 /* A typeset formula in a source's text is selected as a whole (it stands for its whole LaTeX source). */
@@ -924,6 +924,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
   background: var(--surface); overflow-wrap: anywhere;
 }
 .sources__searched:empty { display: none; }
+.sources__searching { display: flex; gap: var(--space-2); align-items: center; }
 .sources__engine { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 
 /* Find concept (command palette) */
@@ -1145,6 +1146,13 @@ kbd {
 /* Where a definition came from (inspector), and indented sub-options in Settings. */
 .source-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin-top: calc(-1 * var(--space-2)); }
 .source-line a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
+/* The source's link flows with "Source:" and the AI's rating as one line of text (wrapping between words). */
+.source-line > .muted { min-width: 0; overflow-wrap: anywhere; }
+.source-line > .muted > a { display: inline; }
+.source-line > .muted > a .icon { display: inline-block; vertical-align: -1px; margin-left: 3px; }
+.source-line__why { margin-top: 2px; }
+.source-line__why summary { cursor: pointer; color: var(--muted); width: fit-content; }
+.source-line__why p { margin: 4px 0 0; color: var(--muted); overflow-wrap: anywhere; }
 .check.indent { padding-left: var(--space-5); min-height: 28px; }
 /* Settings → Web search: one block per engine, its key field and Test indented under the tick box. */
 .web-search__engine { display: flex; flex-direction: column; gap: var(--space-1); }

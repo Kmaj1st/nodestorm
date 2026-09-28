@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
-import { chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
+import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
 import { cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
@@ -44,6 +44,17 @@ const RELIABILITY_LABEL: Record<Reliability, MessageKey> = {
 const SHORT = 360;
 /** Context kept around the passage in the short view. */
 const AROUND = 90;
+/** How far a cut looks for a space, so it doesn't split a word (Chinese has none: it cuts where it is). */
+const WORD = 40;
+
+/**
+ * The short view's lengths for `text`: Chinese, Japanese and Korean pack about twice as much into a character, so
+ * such a text is cut at half the length.
+ */
+function limits(text: string): { short: number; around: number } {
+  const dense = (text.match(/[\u3040-\u30ff\u3400-\u9fff\uac00-\ud7af]/g)?.length ?? 0) > text.length / 3;
+  return dense ? { short: SHORT / 2, around: AROUND / 2 } : { short: SHORT, around: AROUND };
+}
 
 function SourcesChoice({ graphId, node, found, replace }: { graphId: string; node: ConceptNode; found?: Gathered; replace: boolean }) {
   const t = useT();
@@ -104,7 +115,11 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   };
   const result = chosen();
 
-  const close = () => setClarifying(null); // a waiting concept stays "unclear"; its badge reopens this
+  // A waiting concept stays "unclear"; its badge reopens this. A search still running for it is stopped ("Later").
+  const close = () => {
+    if (searching) cancelTask(relookupKey(graphId, node.id));
+    setClarifying(null);
+  };
   const confirm = () => {
     if (!result) return;
     if (replace) replaceDefinition(graphId, node.id, result);
@@ -168,8 +183,16 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
           {found.assessError ? t("sources.assessFailed", { error: found.assessError }) : t("sources.notRated")}
         </p>
       )}
-      {!found && sources.length > 0 && <p className="small muted">{t("sources.stored")}</p>}
-      {!sources.length && (
+      {!found && searching && (
+        <p className="small sources__searching" role="status" data-testid="sources-searching">
+          <span className="spinner spinner--xs" aria-hidden="true" />
+          {t("sources.searching", { name: node.name })}
+        </p>
+      )}
+      {!found && !searching && sources.length > 0 && (
+        <p className="small muted">{t(sources.some((s) => s.reliability) ? "sources.storedRated" : "sources.stored")}</p>
+      )}
+      {!sources.length && !(searching && !found) && (
         <p className="small" data-testid="sources-nothing">
           {found || node.senses ? t("sources.nothing", { name: node.name }) : t("sense.nothingOff")}
         </p>
@@ -180,12 +203,12 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
           <Fragment key={grp.sense || `g${gi}`}>
             {groups.length > 1 && (
               <h3 className="sources__meaning small">
-                {grp.sense ? t("sources.meaning", { sense: grp.sense }) : t("reliability.none")}
+                {grp.sense ? t("sources.meaning", { sense: grp.sense }) : t(grp.sources.some((s) => s.reliability) ? "sources.otherMeaning" : "reliability.none")}
               </h3>
             )}
             {grp.sources.map((s) => {
               const id = `${uid}-${s.id}`;
-              const long = s.text.length > SHORT;
+              const long = s.text.length > limits(s.text).short;
               const open = expanded.has(s.id);
               return (
                 <div key={s.id} className={`src${on(s.id) ? " src--on" : ""}`} data-testid="source-item" data-site={s.site}>
@@ -338,7 +361,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         <div className="sources__engine small">
           {found && !found.web && <span className="muted">{t("sources.noEngine")}</span>}
           {!found && (
-            <button type="button" className="small-btn" disabled={searching} onClick={() => void compareSources(node.id, graphId)} data-testid="sources-search-again">
+            <button type="button" className="small-btn" disabled={searching} onClick={() => void compareSources(node.id, graphId, { fresh: true })} data-testid="sources-search-again">
               {t("sources.searchAgain")}
             </button>
           )}
@@ -437,15 +460,20 @@ function SourceText({ source, full, markTitle }: { source: Source; full: boolean
   let from = 0;
   let to = text.length;
   if (!full) {
+    const { short, around } = limits(text);
     if (at >= 0) {
-      from = Math.max(0, at - AROUND);
-      to = Math.min(text.length, Math.max(at + passage.length + AROUND, from + SHORT));
-    } else to = Math.min(text.length, SHORT);
-    // Cut at spaces, not inside words.
-    if (from > 0) from = Math.max(from, text.lastIndexOf(" ", from) + 1);
+      from = Math.max(0, at - around);
+      to = Math.min(text.length, Math.max(at + passage.length + around, from + short));
+    } else to = Math.min(text.length, short);
+    // Cut at spaces, not inside words: the start after the next space, the end at the next space (when one is near;
+    // never into the passage).
+    if (from > 0 && /\S/.test(text[from - 1])) {
+      const sp = text.indexOf(" ", from);
+      if (sp >= 0 && sp - from < WORD && (at < 0 || sp < at)) from = sp + 1;
+    }
     if (to < text.length) {
       const sp = text.indexOf(" ", to);
-      to = sp < 0 ? text.length : sp;
+      if (sp < 0 ? text.length - to < WORD : sp - to < WORD) to = sp < 0 ? text.length : sp;
     }
     // Nor inside a formula.
     for (const f of formulas) {

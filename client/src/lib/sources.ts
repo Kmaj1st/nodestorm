@@ -47,6 +47,8 @@ export interface Source {
   passage: string;
   /** True when the AI pointed at the passage (false: the non-AI default, or none). */
   pointed: boolean;
+  /** How many sources the AI compared when it rated this one (set with `reliability`). */
+  compared?: number;
 }
 
 export interface Gathered {
@@ -118,12 +120,20 @@ export function defaultPassage(s: Pick<Source, "kind" | "text">): string {
   return s.kind === "encyclopedia" ? s.text.trim() : leadSentences(s.text);
 }
 
-/** The source recorded with a definition taken from `s`: its site, title and (https) page. */
-export function sourceRef(s: Pick<Source, "site" | "title" | "url">): SourceRef {
+/** Longest AI reason kept with a chosen definition's source. */
+const REASONS_MAX = 500;
+
+/**
+ * The source recorded with a definition taken from `s`: its site, title and (https) page, and the AI's rating of it
+ * when it was rated (its reliability, short reason and how many sources were compared; never text for the definition).
+ */
+export function sourceRef(s: Pick<Source, "site" | "title" | "url"> & Partial<Pick<Source, "reliability" | "reasons" | "compared">>): SourceRef {
+  const compared = Math.min(100, Math.max(1, Math.round(s.compared ?? 0)));
   return {
     site: s.site.slice(0, 100),
     title: (s.title || s.site).slice(0, 300),
     ...(s.url && /^https:\/\//.test(s.url) ? { url: s.url.slice(0, 2000) } : {}),
+    ...(s.reliability && s.compared ? { rating: { reliability: s.reliability, reasons: (s.reasons ?? "").trim().slice(0, REASONS_MAX), compared } } : {}),
   };
 }
 
@@ -180,6 +190,7 @@ export function mergeFound(found: LookupSense[], web: { title: string; url: stri
  */
 export function mergeRatings(sources: Source[], ratings: AssessRating[]): Source[] {
   const by = new Map(ratings.map((r) => [r.id, r]));
+  const compared = sources.filter((s) => by.get(s.id)?.reliability).length;
   return sortSources(
     sources.map((s) => {
       const r = by.get(s.id);
@@ -193,6 +204,7 @@ export function mergeRatings(sources: Source[], ratings: AssessRating[]): Source
         sense: r.sense,
         passage: pointed ? r.passage : s.passage,
         pointed,
+        ...(r.reliability ? { compared } : {}),
       };
     }),
   );
@@ -258,8 +270,9 @@ export function sourcesAsSenses(sources: Source[], name: string): Sense[] {
 }
 
 /**
- * Sources rebuilt from a concept's stored meanings (after a reload, when the gathered ones are gone): not rated, the
- * stored passage as their text. Meanings the AI wrote (older projects) are left out.
+ * Sources rebuilt from a concept's stored meanings (after a reload, when the gathered ones are gone): the stored
+ * passage as their text, with the AI's rating when one was kept with it. Meanings the AI wrote (older projects) are
+ * left out.
  */
 export function sourcesFromSenses(senses: readonly Sense[]): Source[] {
   return senses
@@ -274,27 +287,115 @@ export function sourcesFromSenses(senses: readonly Sense[]): Source[] {
       text: s.definition,
       name: s.name,
       domain: s.domain,
-      reliability: null,
-      reasons: "",
-      sense: "",
+      reliability: s.source!.rating?.reliability ?? null,
+      reasons: s.source!.rating?.reasons ?? "",
+      // A rated source's meaning was stored as its domain (see sourcesAsSenses).
+      sense: s.source!.rating ? s.domain : "",
       passage: s.definition,
       pointed: false,
+      ...(s.source!.rating ? { compared: s.source!.rating.compared } : {}),
     }));
 }
 
 type Found = Pick<Gathered, "sources" | "asked" | "failed" | "web">;
 type Rating = { ratings: AssessRating[]; note: string };
 
-/** Sources found this session (a search costs the user's quota), with the AI's rating once it has one. */
-const cache = new Map<string, { at: number; found: Found; rating?: Rating }>();
+type Entry = { at: number; found: Found; rating?: Rating };
+
+/**
+ * Sources found lately (a search costs the user's quota, a rating an AI call), with the AI's rating once it has one.
+ * Kept in memory and in localStorage (a day, 50 names, about 500 KB), so the badge reopens the rated sources after a
+ * reload without searching again. "Look up in…" and "Search the web and compare…" drop a name's entry.
+ */
+let cache: Map<string, Entry> | null = null;
 const CACHE_MAX = 50;
-const CACHE_MS = 60 * 60_000;
+const CACHE_MS = 24 * 60 * 60_000;
+export const SOURCES_CACHE_KEY = "nodestorm-sources-cache";
+/** Characters of JSON kept in localStorage at most (oldest names go first). */
+export const SOURCES_CACHE_CHARS = 500_000;
+
+const isStr = (v: unknown): v is string => typeof v === "string";
+const RELIABILITIES = new Set(["high", "medium", "low", "unusable"]);
+
+/** A stored source, checked field by field (the storage may hold anything: an older version's, or damaged data). */
+function storedSource(v: unknown): v is Source {
+  if (!v || typeof v !== "object") return false;
+  const s = v as Record<string, unknown>;
+  return (
+    isStr(s.id) && (s.kind === "encyclopedia" || s.kind === "web") && isStr(s.site) && isStr(s.title) && isStr(s.text) &&
+    (s.url === undefined || isStr(s.url)) && (s.reliability === null || RELIABILITIES.has(s.reliability as string)) &&
+    isStr(s.reasons) && isStr(s.sense) && isStr(s.passage) && typeof s.pointed === "boolean"
+  );
+}
+
+function storedEntry(v: unknown): v is Entry {
+  if (!v || typeof v !== "object") return false;
+  const e = v as Record<string, unknown>;
+  const f = e.found as Record<string, unknown> | undefined;
+  if (typeof e.at !== "number" || !f || typeof f !== "object") return false;
+  if (!Array.isArray(f.sources) || !f.sources.every(storedSource)) return false;
+  if (!Array.isArray(f.asked) || !f.asked.every(isStr) || !Array.isArray(f.failed) || !f.failed.every(isStr) || typeof f.web !== "boolean") return false;
+  if (e.rating === undefined) return true;
+  const r = e.rating as Record<string, unknown> | null;
+  return Boolean(r) && isStr(r!.note) && Array.isArray(r!.ratings) && r!.ratings.every((x) => x && typeof x === "object" && isStr((x as Record<string, unknown>).id));
+}
+
+function loadCache(): Map<string, Entry> {
+  if (cache) return cache;
+  cache = new Map();
+  try {
+    const raw: unknown = JSON.parse(localStorage.getItem(SOURCES_CACHE_KEY) ?? "[]");
+    const now = Date.now();
+    // Oldest first, as the Map keeps them: the first ones go when it is full.
+    if (Array.isArray(raw)) {
+      for (const item of raw) {
+        if (Array.isArray(item) && isStr(item[0]) && storedEntry(item[1]) && now - item[1].at < CACHE_MS) cache.set(item[0], item[1]);
+      }
+    }
+  } catch {
+    /* unavailable or damaged: start empty */
+  }
+  return cache;
+}
+
+function saveCache() {
+  const c = loadCache();
+  const now = Date.now();
+  for (const [k, e] of c) if (now - e.at >= CACHE_MS) c.delete(k);
+  while (c.size > CACHE_MAX) c.delete(c.keys().next().value!);
+  const entries = [...c];
+  let json = JSON.stringify(entries);
+  // Over the size cap (long pages), or the storage full: the oldest names go until it fits.
+  while (entries.length) {
+    if (json.length <= SOURCES_CACHE_CHARS) {
+      try {
+        localStorage.setItem(SOURCES_CACHE_KEY, json);
+        return;
+      } catch {
+        /* full: drop more */
+      }
+    }
+    entries.shift();
+    json = JSON.stringify(entries);
+  }
+  try {
+    localStorage.removeItem(SOURCES_CACHE_KEY);
+  } catch {
+    /* unavailable */
+  }
+}
 
 /** Per name, language and what is asked (another site, wiki or engine set up in Settings is another answer). */
 const cacheKey = (name: string) => {
   const { language, lookup } = useSettings.getState();
   return [lookupLanguage(language, name), everySite(name).join(","), lookup.fandom, lookup.bwiki, searchEngines().join(","), normalizeName(name)].join(":");
 };
+
+/** Forget what was found for `name` ("Look up in…", "Search the web and compare…": the user wants a fresh look). */
+export function forgetSources(name: string) {
+  const c = loadCache();
+  if (c.delete(cacheKey(name))) saveCache();
+}
 
 async function find(name: string, signal?: AbortSignal): Promise<Found> {
   const web = searchReady();
@@ -332,23 +433,24 @@ export interface GatherOptions {
 /**
  * Every source for `name`: the encyclopedias and wikis, and the web search engines when one is set up, asked side by
  * side; merged (one per page) and, with an AI set up, rated by the AI in one call. Without an AI the sources are
- * unrated, in the order found, each with its default passage. Cached for the session per name; throws only
+ * unrated, in the order found, each with its default passage. Cached per name (a day, also across reloads); throws only
  * CancelledError (a failing site, engine or AI check is reported in the result).
  */
 export async function gatherSources(name: string, opts: GatherOptions = {}): Promise<Gathered> {
   const { signal } = opts;
   const key = cacheKey(name);
+  const cache = loadCache();
   let hit = opts.fresh ? undefined : cache.get(key);
   // Results from before a search engine was set up (or while it failed) are asked again.
   if (hit && (Date.now() - hit.at > CACHE_MS || hit.found.web !== searchReady())) hit = undefined;
   const found = hit?.found ?? (await find(name, signal));
   if (signal?.aborted) throw new CancelledError();
   if (!hit) {
-    cache.delete(key);
+    const had = cache.delete(key);
     if (!found.failed.length) {
       cache.set(key, { at: Date.now(), found });
-      if (cache.size > CACHE_MAX) cache.delete(cache.keys().next().value!);
-    }
+      saveCache();
+    } else if (had) saveCache();
   }
   const out: Gathered = { name, ...found, sources: sortSources(found.sources), note: "", rated: false };
   if (!found.sources.length || !isReady(useSettings.getState())) return out;
@@ -371,23 +473,34 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
       return { ...out, assessError: errorMessage(e) };
     }
     const entry = cache.get(key);
-    if (entry && entry.found === found) entry.rating = rating;
+    if (entry && entry.found === found) {
+      entry.rating = rating;
+      saveCache();
+    }
   }
   return { ...out, sources: mergeRatings(found.sources, rating.ratings), note: rating.note, rated: true };
 }
 
 /**
- * What this session already found (and rated) for `name`, as when it was gathered: the pop-up reopened from a
+ * What was found (and rated) for `name` lately, also before a reload, as when it was gathered: the pop-up reopened from a
  * concept's badge shows it again without searching. Undefined when nothing is cached.
  */
 export function cachedSources(name: string): Gathered | undefined {
-  const hit = cache.get(cacheKey(name));
+  const hit = loadCache().get(cacheKey(name));
   if (!hit || Date.now() - hit.at > CACHE_MS) return undefined;
+  // Found but not rated while an AI is set up: the rating is still running (or failed), so gather again.
+  if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState())) return undefined;
   const out: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources), note: "", rated: false };
   return hit.rating ? { ...out, sources: mergeRatings(hit.found.sources, hit.rating.ratings), note: hit.rating.note, rated: true } : out;
 }
 
-/** For tests. */
-export function resetSources() {
-  cache.clear();
+/** For tests: `stored` also clears localStorage's copy; otherwise the next use reads it again (as after a reload). */
+export function resetSources(stored = true) {
+  cache = null;
+  if (!stored) return;
+  try {
+    localStorage.removeItem(SOURCES_CACHE_KEY);
+  } catch {
+    /* unavailable */
+  }
 }
