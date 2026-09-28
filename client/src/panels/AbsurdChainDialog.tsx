@@ -13,6 +13,7 @@ import { t as tr, useT, type MessageKey } from "../i18n";
 import {
   ABSURD_LENGTHS,
   ABSURD_STYLES,
+  addAbsurdChainToSandbox,
   chainToText,
   intermediates,
   isStop,
@@ -20,7 +21,7 @@ import {
   type AbsurdLength,
   type AbsurdStop,
 } from "../lib/absurd";
-import { absurdChain, absurdKey, addAbsurdChainToSandbox, cancelTask } from "../lib/actions";
+import { absurdChain, absurdKey, cancelTask } from "../lib/actions";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
 import { ChainGame } from "./ChainGame";

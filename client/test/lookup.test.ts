@@ -12,6 +12,7 @@ import { useSettings } from "../src/store/settingsStore";
 // search (off unless a test turns it on) and the offline mock AI, which rates the sources but never writes a definition.
 
 vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+vi.mock("../src/lib/webSearchReady", () => import("./fakeWebSearch"));
 const { fake } = await import("./fakeWebSearch");
 
 vi.hoisted(() => {

@@ -66,7 +66,7 @@ import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
-import { useDerive } from "../store/deriveStore";
+import { openDerivePanel } from "../store/deriveOpen";
 import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
 import { useWalkthrough } from "../store/walkthroughStore";
@@ -358,7 +358,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
         {!viewing && (
           <button
             onClick={() =>
-              void useDerive.getState().openPanel({
+              void openDerivePanel({
                 problem: { statement: t("dt.fromNode.statement", { name: node.name, definition: node.definition || node.name }) },
               })}
             title={t("dt.fromNode.title")}

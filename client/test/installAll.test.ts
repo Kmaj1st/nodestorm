@@ -10,6 +10,7 @@ import { useSettings } from "../src/store/settingsStore";
 // The stores persist to localStorage; give them an in-memory one (hoisted above the imports).
 // Web search as in the offline demo: a page defining any name (see fakeWebSearch.ts).
 vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+vi.mock("../src/lib/webSearchReady", () => import("./fakeWebSearch"));
 
 vi.hoisted(() => {
   const data = new Map<string, string>();

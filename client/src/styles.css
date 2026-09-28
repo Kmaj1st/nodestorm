@@ -912,6 +912,9 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 .src {
   display: flex; flex-direction: column; gap: 6px; border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 10px var(--space-3); min-width: 0;
+  /* Long texts full of formulas: a source scrolled out of view isn't laid out or painted, and one in view is painted
+     on its own, so typing a definition or dragging a selection doesn't repaint the whole list. */
+  content-visibility: auto; contain-intrinsic-size: auto 9em;
 }
 .src--on { border-color: var(--accent); background: var(--accent-soft); }
 .src__head { display: flex; gap: var(--space-2); align-items: baseline; flex-wrap: wrap; }

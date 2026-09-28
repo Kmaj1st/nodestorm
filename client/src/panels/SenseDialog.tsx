@@ -1,6 +1,6 @@
 import type { ConceptNode, Reliability, SourceRef } from "@nodestorm/shared";
 import { ExternalLink } from "lucide-react";
-import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
@@ -89,21 +89,32 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const uid = useId();
 
   // What the user selected with the mouse or a finger, when it lies inside one source's text: exactly those
-  // characters of the source (anything else, such as a selection across two sources, doesn't count).
+  // characters of the source (anything else, such as a selection across two sources, doesn't count). A drag fires
+  // many selection changes: they are mapped once per frame, and the pop-up only re-renders when the text changed.
   useEffect(() => {
-    const onChange = () => {
+    let frame = 0;
+    const map = () => {
+      frame = 0;
       const sel = document.getSelection();
-      if (!sel || sel.isCollapsed || !sel.rangeCount) return setSelection(null);
-      const holder = (n: Node | null) => (n instanceof Element ? n : n?.parentElement)?.closest<HTMLElement>("[data-source-text]");
-      const a = holder(sel.anchorNode);
-      if (!a || a !== holder(sel.focusNode)) return setSelection(null);
-      const src = sources.find((s) => s.id === a.dataset.sourceText);
-      const span = src && selectedSpan(a, sel.getRangeAt(0));
-      const text = src && span ? src.text.slice(span.from, span.to).trim() : "";
-      setSelection(src && text.length > 1 ? { id: src.id, text } : null);
+      let next: { id: string; text: string } | null = null;
+      if (sel && !sel.isCollapsed && sel.rangeCount) {
+        const holder = (n: Node | null) => (n instanceof Element ? n : n?.parentElement)?.closest<HTMLElement>("[data-source-text]");
+        const a = holder(sel.anchorNode);
+        const src = a && a === holder(sel.focusNode) ? sources.find((s) => s.id === a.dataset.sourceText) : undefined;
+        const span = src && selectedSpan(a!, sel.getRangeAt(0));
+        const text = src && span ? src.text.slice(span.from, span.to).trim() : "";
+        if (src && text.length > 1) next = { id: src.id, text };
+      }
+      setSelection((cur) => (cur?.id === next?.id && cur?.text === next?.text ? cur : next));
+    };
+    const onChange = () => {
+      frame ||= requestAnimationFrame(map);
     };
     document.addEventListener("selectionchange", onChange);
-    return () => document.removeEventListener("selectionchange", onChange);
+    return () => {
+      document.removeEventListener("selectionchange", onChange);
+      cancelAnimationFrame(frame);
+    };
   }, [sources]);
 
   const copy = copyOf ? byId(copyOf) : undefined;
@@ -494,9 +505,9 @@ function Pieces({ text, from, to, formulas }: { text: string; from: number; to: 
 /**
  * A source's text, formulas typeset, the passage marked. What the user selects still maps back to exactly the source's
  * characters (see selectedSpan). Short: the passage with some context around it, the cut-off parts as "…" that can't
- * be selected.
+ * be selected. Memoized: typing a definition or selecting words re-renders the pop-up, not every source's text.
  */
-function SourceText({ source, full, markTitle }: { source: Source; full: boolean; markTitle: string }) {
+const SourceText = memo(function SourceText({ source, full, markTitle }: { source: Source; full: boolean; markTitle: string }) {
   const { text, passage } = source;
   const formulas = useMemo(() => mathRanges(text), [text]);
   const at = passage ? text.indexOf(passage) : -1;
@@ -536,4 +547,4 @@ function SourceText({ source, full, markTitle }: { source: Source; full: boolean
       {to < text.length && <span className="src__cut" aria-hidden="true"> …</span>}
     </>
   );
-}
+});

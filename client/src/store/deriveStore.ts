@@ -26,6 +26,7 @@ import { readPdf, renderPageImage, titleFromFile } from "../lib/pdf";
 import { buildIndex, chunkPages, search, type Index } from "../lib/retrieve";
 import { uid } from "../lib/graphOps";
 import { viewport } from "../lib/viewport";
+import { useDeriveOpen } from "./deriveOpen";
 import { useGraphStore } from "./graphStore";
 import { autoSnapshot } from "./snapshotStore";
 
@@ -390,10 +391,12 @@ export const useDerive = create<DeriveStore>()((set, get) => {
   };
 });
 
-/** Follow project switches while the panel is open; forget a deleted project's documents and sessions. */
+/** Follow project switches while the panel is open (deriveOpen.ts forgets a deleted project's documents and sessions). */
 useGraphStore.subscribe((s, prev) => {
   if (s.projectId !== prev.projectId && useDerive.getState().open) void useDerive.getState().load(s.projectId);
-  for (const id of Object.keys(prev.projects)) {
-    if (!s.projects[id]) db.deleteProjectData(id).catch(() => undefined);
-  }
+});
+
+/** The toolbar and DeriveHost read whether the panel is open from deriveOpen.ts, without loading this store. */
+useDerive.subscribe((s, prev) => {
+  if (s.open !== prev.open) useDeriveOpen.setState({ open: s.open });
 });

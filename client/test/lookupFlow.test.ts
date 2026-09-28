@@ -12,6 +12,7 @@ import { useSettings } from "../src/store/settingsStore";
 // here unless a test turns it on) are offered, rated by the AI; the AI checks prerequisites only when the user says so.
 
 vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+vi.mock("../src/lib/webSearchReady", () => import("./fakeWebSearch"));
 const { fake } = await import("./fakeWebSearch");
 
 vi.hoisted(() => {

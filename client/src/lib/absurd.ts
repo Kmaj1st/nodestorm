@@ -1,6 +1,9 @@
 import { findByName, normalizeName, type AbsurdChainResponse, type AbsurdStyle, type Graph } from "@nodestorm/shared";
 import { t, useLocale } from "../i18n";
+import { useGraphStore } from "../store/graphStore";
+import { analyzeNode, inViewer } from "./actions";
 import * as ops from "./graphOps";
+import { viewport } from "./viewport";
 
 /**
  * "Absurd chain" (parody mode): true links between two concepts, narrated comically. Pure functions only; the dialog
@@ -183,4 +186,27 @@ export function surprisePair(
   let pair = pick();
   for (let tries = 0; tries < 10 && shown(pair); tries++) pair = pick();
   return pair;
+}
+
+/**
+ * Put an absurd chain into a new sandbox forked from the active graph and named after the chain, as one undo step
+ * there, and switch to it: the user's graph only changes if they merge the sandbox back. The new concepts are then
+ * checked quietly, like extracted ones (the hop that introduced each one tells the AI which meaning is meant). A new
+ * custom stop of the user's (`via`) with a description keeps it as its definition (source: you).
+ */
+export function addAbsurdChainToSandbox(res: AbsurdChainResponse, via: AbsurdStop[] = []): string | undefined {
+  const s = useGraphStore.getState();
+  if (inViewer(s.activeId)) return undefined;
+  s.forkActive(sandboxName(res.title));
+  const sandboxId = useGraphStore.getState().activeId;
+  let added: { id: string; fact: string }[] = [];
+  useGraphStore.getState().mutate((g) => {
+    const r = applyAbsurdChain(g, res, viewport.center(), via);
+    added = r.added;
+    return r.graph;
+  }, sandboxId);
+  for (const a of added) void analyzeNode(a.id, sandboxId, t("absurd.hint", { fact: a.fact }), { quiet: true });
+  useGraphStore.getState().setToast(t("absurd.added", { n: added.length, name: useGraphStore.getState().graphs[sandboxId]?.name ?? "" }), "info");
+  viewport.fit();
+  return sandboxId;
 }
