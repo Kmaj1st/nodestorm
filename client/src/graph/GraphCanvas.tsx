@@ -331,13 +331,20 @@ export function GraphCanvas() {
 
   // The inspector also opens concepts without a click on their card (a new concept, a prerequisite's link, Find): that
   // card becomes the selected one, so its highlight, and Delete, H and F, go with what is open. A selection of several
-  // (for Mix or Derive) is left as it is.
+  // (for Mix or Derive) is left as it is. Once per concept opened (a new card is waited for), so a drag that selects
+  // its card, or Physics moving them, never fights it.
   const inspectedId = useGraphStore((s) => (s.inspect?.kind === "node" ? s.inspect.id : null));
+  const synced = useRef<string | null>(null);
   useEffect(() => {
-    if (!inspectedId || useView.getState().selecting) return;
+    if (synced.current === inspectedId) return;
+    if (!inspectedId || useView.getState().selecting) {
+      synced.current = inspectedId;
+      return;
+    }
+    if (!nodes.some((n) => n.id === inspectedId && !n.hidden)) return;
+    synced.current = inspectedId;
     const selected = nodes.filter((n) => n.selected);
     if (selected.length > 1 || (selected.length === 1 && selected[0].id === inspectedId)) return;
-    if (!nodes.some((n) => n.id === inspectedId && !n.hidden)) return;
     setNodes((ns) => ns.map((n) => (!!n.selected === (n.id === inspectedId) ? n : { ...n, selected: n.id === inspectedId })));
   }, [inspectedId, nodes]);
 

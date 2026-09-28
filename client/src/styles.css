@@ -1169,7 +1169,6 @@ kbd {
   /* Above the details sheet the canvas is short and the attribution lands on cards: a small panel keeps it legible. */
   .react-flow__attribution {
     background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 4px;
-    line-height: 1;
   }
   .react-flow__controls { margin-bottom: 32px; }
   .modal__body { width: 100%; padding: 0 var(--space-4) var(--space-4); }
