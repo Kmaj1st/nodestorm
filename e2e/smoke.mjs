@@ -695,6 +695,8 @@ try {
   {
     const st = await openSettings();
     assert(/This session: ~[\d.]+k tokens/.test(await st.getByTestId("token-usage").textContent()), "token usage of this session shown in Settings");
+    // Back to Auto: the offline demo follows the answer language too, and the later sections expect its English.
+    await st.getByLabel("AI answers in").selectOption({ label: "Auto (match the concept names)" });
     await st.getByLabel("Concurrent AI requests").fill("1");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
@@ -2200,7 +2202,7 @@ try {
     // "Ambiguous names" served other Expectation fixtures: forget the cached look-ups and this session's sources.
     await page.evaluate(() => localStorage.removeItem("nodestorm-lookup-cache"));
     await page.reload();
-    // Wikipedia's language follows the AI answer language, which an earlier section set to 中文.
+    // Wikipedia's language follows the AI answer language: make sure it is Auto.
     const lang = await openSettings();
     await lang.getByLabel("AI answers in").selectOption({ label: "Auto (match the concept names)" });
     await lang.getByRole("button", { name: "Save", exact: true }).click();
@@ -2399,6 +2401,45 @@ try {
       await zh.getByTestId("source-item").first().waitFor();
       assert((await zh.getByText("存疑").count()) === 1 && (await zh.getByRole("button", { name: "使用这段文字" }).count()) === 1, "in 中文 the pop-up is Chinese");
       await p.screenshot({ path: `${shots}39-sources-zh.png` });
+      await zh.getByRole("button", { name: "稍后" }).click();
+
+      // The offline demo in Chinese: on the Chinese example, Mix and the sources of a new concept are Chinese too.
+      const projects = await openMenu(p.getByRole("button", { name: /^项目：/ }), p.getByRole("menu", { name: "项目" }), p);
+      await projects.getByRole("menuitem", { name: "新建项目", exact: true }).click();
+      await p.getByLabel("项目名称").press("Enter");
+      await p.getByRole("button", { name: "载入示例：群论" }).click();
+      await p.getByTestId("node-核").waitFor();
+      await p.getByTestId("node-核").click();
+      await p.getByTestId("node-同态").click({ modifiers: ["Shift"] });
+      await p.getByRole("button", { name: /混合/ }).click();
+      await p.getByTestId("relation-panel").waitFor();
+      // The panel may open on 同态's side (no relation that way): look at what 核 does to 同态.
+      const other = p.getByRole("button", { name: "查看 核 对 同态 的作用" });
+      if (await other.count()) await other.click();
+      const kind = await p.getByTestId("relation-kind").inputValue();
+      const why = await p.getByTestId("relation-explanation").inputValue();
+      assert(kind === "使用" && why === "核是对同态定义的。", `Mix in the Chinese example gives a Chinese relation label (${kind}: ${why})`);
+      await p.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+      await p.getByRole("button", { name: "添加概念", exact: true }).click();
+      await p.getByLabel("概念名称").fill("拉格朗日定理");
+      await p.getByRole("button", { name: "添加", exact: true }).click();
+      await zh.getByText("“拉格朗日定理”的来源").waitFor();
+      await zh.getByTestId("source-item").first().waitFor();
+      const sites = await zh.getByTestId("source-item").evaluateAll((els) => els.map((e) => e.dataset.site));
+      assert(
+        ["zh.demo-encyclopedia.example", "zh.demo-lecture-notes.example", "zh.demo-forum.example"].every((s) => sites.includes(s)),
+        `a Chinese name finds the demo's Chinese pages (${sites})`,
+      );
+      const forum = zh.locator('[data-site="zh.demo-forum.example"]');
+      await forum.getByText("原因").click();
+      const reasons = await zh.getByTestId("source-reasons").allTextContents();
+      assert(
+        reasons.length >= 3 && reasons.every((r) => /\p{Script=Han}/u.test(r) && !/[A-Za-z]{4}/.test(r)) &&
+          (await forum.getByTestId("source-reasons").textContent()).startsWith("论坛帖子") &&
+          (await zh.getByTestId("sources-note").textContent()).includes("与其他来源矛盾"),
+        `…rated with Chinese reasons and note (${reasons.join(" | ")})`,
+      );
+      await p.screenshot({ path: `${shots}39-sources-zh-demo.png` });
       await ctx.close();
     }
     const s2 = await openSettings();
