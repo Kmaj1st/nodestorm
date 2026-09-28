@@ -41,7 +41,7 @@ import { providerName } from "../lib/online";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
 import { useAbsurd } from "../store/absurdStore";
-import { useDerive } from "../store/deriveStore";
+import { closeDerivePanel, openDerivePanel, useDeriveOpen } from "../store/deriveOpen";
 import { useQuiz } from "../store/quizStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { isReady, useSettings } from "../store/settingsStore";
@@ -321,7 +321,7 @@ function FileMenu() {
           { head: "file.versionsHead", label: "file.snapshot", title: "file.snapshotTitle", icon: Save, action: () => setVersions("save") },
           { label: "file.versions", title: "file.versionsTitle", icon: History, action: () => setVersions("list") },
           { head: "file.studyHead", label: "file.quiz", title: "file.quizTitle", icon: GraduationCap, action: () => useQuiz.getState().openQuiz() },
-          { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => useDerive.getState().openPanel() },
+          { label: "file.deriveTogether", title: "file.deriveTogetherTitle", icon: PenLine, action: () => openDerivePanel() },
           { label: "file.absurd", title: "file.absurdTitle", icon: Drama, action: () => useAbsurd.getState().openAbsurd() },
         ] satisfies Item[])),
     // Read-only, so the share viewer has them too: presenting a shared graph is a main use.
@@ -460,11 +460,11 @@ function FileMenu() {
 /** Opens (or closes) the "Derive together" panel. */
 function DeriveTogetherButton() {
   const t = useT();
-  const open = useDerive((s) => s.open);
+  const open = useDeriveOpen((s) => s.open);
   return (
     <button
       aria-pressed={open}
-      onClick={() => (open ? useDerive.getState().close() : void useDerive.getState().openPanel())}
+      onClick={() => (open ? closeDerivePanel() : void openDerivePanel())}
       title={t("toolbar.deriveTogetherTitle")}
       data-testid="derive-together"
     >

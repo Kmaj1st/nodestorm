@@ -28,13 +28,12 @@ import { hiddenIn, useView } from "../store/viewStore";
 import { isReady, useSettings } from "../store/settingsStore";
 import { api, NeedsSetupError } from "./api";
 import { errorMessage } from "./errors";
-import { applyAbsurdChain, sandboxName, type AbsurdStop } from "./absurd";
+import type { AbsurdStop } from "./absurd";
 import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from "./extract";
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { lookupDefinitions, lookupReady, type Site } from "./lookup";
-import { autoPick, cachedSources, forgetSources, gatherSources, sourceRef, sourcesAsSenses } from "./sources";
-import { searchReady } from "./webSearch";
+import { searchReady } from "./webSearchReady";
 import { isOnline } from "./online";
 import { withoutHidden } from "./view";
 import { viewport } from "./viewport";
@@ -50,6 +49,8 @@ import { updateMastery, type Grade } from "./quiz";
 
 const store = () => useGraphStore.getState();
 const graph = (id: string) => store().graphs[id];
+/** Gathering and rating sources (encyclopedias, wikis, the web): loaded on the first concept that needs a definition. */
+const loadSources = () => import("./sources");
 
 /** Report an AI failure; a missing key opens Settings instead of just complaining. */
 function reportError(e: unknown, prefix = "") {
@@ -172,8 +173,8 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
       ? await withBusy(
           key,
           t("task.sources", { name: node.name }),
-          (signal) =>
-            gatherSources(node.name, {
+          async (signal) =>
+            (await loadSources()).gatherSources(node.name, {
               signal,
               hint,
               context: relatedNames(graph(graphId), nodeId),
@@ -183,16 +184,17 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
         )
       : undefined;
     if (cancelled) return;
-    const pick = found && autoPick(found);
+    const src = found && (await loadSources()); // loaded already: it gathered them
+    const pick = src && src.autoPick(found);
     if (pick) {
       const cur = find();
       const alias = pick.name?.trim() && normalizeName(pick.name) !== normalizeName(node.name) ? [pick.name.trim()] : [];
-      set({ definition: pick.passage, source: sourceRef(pick), aliases: [...new Set([...(cur?.aliases ?? node.aliases), ...alias])] });
+      set({ definition: pick.passage, source: src.sourceRef(pick), aliases: [...new Set([...(cur?.aliases ?? node.aliases), ...alias])] });
       lookedUp = true;
     } else {
       // Sources, but none to take as it stands: the user chooses in the pop-up. Nothing found: the concept needs a
       // definition (its badge opens the pop-up), and no pop-up interrupts.
-      set({ status: "unclear", senses: sourcesAsSenses(found?.sources ?? [], node.name) });
+      set({ status: "unclear", senses: src ? src.sourcesAsSenses(found.sources, node.name) : [] });
       if (!find()) return;
       if (!opts.quiet && found?.sources.length) store().setClarifying({ graphId, nodeId, sources: found });
       return; // continues in chooseSense once the user picks a passage or writes a definition
@@ -298,7 +300,8 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
   if (!node) return;
   const clarify = useSettings.getState().clarify;
   if (from ? !isOnline() : !lookupReady()) return void store().setToast(t("toast.lookupUnavailable"), "info");
-  forgetSources(node.name); // a fresh look: the sources pop-up doesn't reopen what was found before
+  // A fresh look: the sources pop-up doesn't reopen what was found before.
+  await loadSources().then((m) => m.forgetSources(node.name), () => {});
   const senses = await withBusy(relookupKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) =>
     lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true, ...(from ? { sites: [from] } : {}) }),
   );
@@ -327,8 +330,8 @@ export async function compareSources(nodeId: string, graphId = store().activeId,
   if (!node) return;
   if (!isOnline()) return void store().setToast(t("toast.lookupUnavailable"), "info");
   const key = relookupKey(graphId, nodeId);
-  const found = await withBusy(key, t("task.sources", { name: node.name }), (signal) =>
-    gatherSources(node.name, {
+  const found = await withBusy(key, t("task.sources", { name: node.name }), async (signal) =>
+    (await loadSources()).gatherSources(node.name, {
       signal,
       fresh: opts.fresh,
       context: relatedNames(graph(graphId), nodeId),
@@ -337,6 +340,7 @@ export async function compareSources(nodeId: string, graphId = store().activeId,
   );
   const cur = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!found || !cur) return;
+  const { sourcesAsSenses } = await loadSources(); // loaded already: it gathered them
   // Gathered for a pop-up that was open (its badge): not shown again once the user closed it or opened another.
   const open = store().clarifying;
   if (opts.ifOpen && (open?.graphId !== graphId || open.nodeId !== nodeId)) return;
@@ -356,8 +360,14 @@ export function openSources(nodeId: string, graphId = store().activeId) {
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
   store().setClarifying({ graphId, nodeId });
-  if (store().view?.id === graphId || cachedSources(node.name) || store().busy[relookupKey(graphId, nodeId)]) return;
-  if (isOnline() && (lookupReady() || searchReady())) void compareSources(nodeId, graphId, { ifOpen: true });
+  if (store().view?.id === graphId || store().busy[relookupKey(graphId, nodeId)]) return;
+  if (!isOnline() || !(lookupReady() || searchReady())) return;
+  // Once the sources code is loaded (normally at once): still open, nothing cached and no search running yet.
+  void loadSources().then(({ cachedSources }) => {
+    const open = store().clarifying;
+    if (open?.graphId !== graphId || open.nodeId !== nodeId || cachedSources(node.name) || store().busy[relookupKey(graphId, nodeId)]) return;
+    void compareSources(nodeId, graphId, { ifOpen: true });
+  });
 }
 
 /** A definition chosen in the sources pop-up for a concept that already had one: replaces it (one undo step). */
@@ -562,8 +572,8 @@ export async function lookUpChoices(nodeId: string, graphId = store().activeId, 
   const r = await lookUpFor(
     nodeId,
     graphId,
-    (name, signal) =>
-      gatherSources(name, {
+    async (name, signal) =>
+      (await loadSources()).gatherSources(name, {
         signal,
         context: relatedNames(graph(graphId), nodeId),
         onChecking: () => store().setBusy(key, t("task.assess", { name }), undefined, "rating"),
@@ -572,7 +582,8 @@ export async function lookUpChoices(nodeId: string, graphId = store().activeId, 
   );
   if (!r?.run) return;
   if (r.stale) return afterStale(nodeId, graphId, r.stale, () => void lookUpChoices(nodeId, graphId, opts));
-  r.set({ status: "unclear", senses: sourcesAsSenses(r.res?.sources ?? [], r.cur?.name ?? "") });
+  const senses = r.res ? (await loadSources()).sourcesAsSenses(r.res.sources, r.cur?.name ?? "") : []; // loaded: it gathered them
+  r.set({ status: "unclear", senses });
   if (!r.res || opts.quiet || !r.cur) return;
   store().setClarifying({ graphId, nodeId, sources: r.res });
 }
@@ -1064,7 +1075,7 @@ export const absurdKey = "absurd";
  * "Absurd chain": ask the AI for a chain of true links from one concept to another, narrated in `style`. The ends
  * are names: a concept of the active graph (by name or alias) goes with its definition, anything else as typed.
  * The user's stops (`via`) go the same way, a custom one with the description the user wrote as its definition.
- * Nothing changes in the graph; see addAbsurdChainToSandbox.
+ * Nothing changes in the graph; see addAbsurdChainToSandbox (absurd.ts).
  */
 export function absurdChain(
   from: string,
@@ -1096,25 +1107,3 @@ export function absurdChain(
   );
 }
 
-/**
- * Put an absurd chain into a new sandbox forked from the active graph and named after the chain, as one undo step
- * there, and switch to it: the user's graph only changes if they merge the sandbox back. The new concepts are then
- * checked quietly, like extracted ones (the hop that introduced each one tells the AI which meaning is meant). A new
- * custom stop of the user's (`via`) with a description keeps it as its definition (source: you).
- */
-export function addAbsurdChainToSandbox(res: AbsurdChainResponse, via: AbsurdStop[] = []): string | undefined {
-  const s = store();
-  if (inViewer(s.activeId)) return undefined;
-  s.forkActive(sandboxName(res.title));
-  const sandboxId = store().activeId;
-  let added: { id: string; fact: string }[] = [];
-  store().mutate((g) => {
-    const r = applyAbsurdChain(g, res, viewport.center(), via);
-    added = r.added;
-    return r.graph;
-  }, sandboxId);
-  for (const a of added) void analyzeNode(a.id, sandboxId, t("absurd.hint", { fact: a.fact }), { quiet: true });
-  store().setToast(t("absurd.added", { n: added.length, name: graph(sandboxId)?.name ?? "" }), "info");
-  viewport.fit();
-  return sandboxId;
-}

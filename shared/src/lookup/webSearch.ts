@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { CancelledError, ProviderError, redactSecret, withDeadline } from "../ai/provider";
+import { SEARCH_ENGINE_LABEL, searxngBase, type SearchEngineId } from "./searchEngines";
 
 /**
  * Web search engines that find pages defining a concept (Tavily, Serper's Google results, Brave Search, a SearXNG
@@ -8,16 +9,6 @@ import { CancelledError, ProviderError, redactSecret, withDeadline } from "../ai
  * (client/src/lib/webSearch.ts) and in the local server (`POST /api/search/:engine`), which forwards what the browser
  * can't call itself (Brave allows no cross-site requests). Text cleanup, dedupe, caching and pauses are the client's.
  */
-
-export type SearchEngineId = "tavily" | "serper" | "brave" | "searxng";
-export const SEARCH_ENGINES: SearchEngineId[] = ["tavily", "serper", "brave", "searxng"];
-
-export const SEARCH_ENGINE_LABEL: Record<SearchEngineId, string> = {
-  tavily: "Tavily",
-  serper: "Serper",
-  brave: "Brave Search",
-  searxng: "SearXNG",
-};
 
 export interface WebSearchQuery {
   q: string;
@@ -40,24 +31,6 @@ export interface RawWebHit {
   text: string;
   /** The engine's date, as it wrote it ("2021-03-03T00:00:00", "Mar 3, 2021", "2 days ago"). */
   date?: string;
-}
-
-/**
- * A SearXNG instance's base address, or null when it isn't an http(s) URL. A pasted `…/search` or query is cut off.
- * Plain http is allowed: a self-hosted instance often runs on this machine or the local network.
- */
-export function searxngBase(raw: string | undefined): string | null {
-  const v = raw?.trim();
-  if (!v) return null;
-  try {
-    const u = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(v) ? v : `https://${v}`);
-    if (u.protocol !== "https:" && u.protocol !== "http:") return null;
-    if (u.username || u.password) return null;
-    const path = u.pathname.replace(/\/+$/, "").replace(/\/search$/, "");
-    return `${u.origin}${path}`;
-  } catch {
-    return null;
-  }
 }
 
 const clampCount = (n: number, max: number) => Math.max(1, Math.min(max, Math.round(n) || 1));

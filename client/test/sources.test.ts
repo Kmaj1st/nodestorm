@@ -29,6 +29,7 @@ import { useSettings } from "../src/store/settingsStore";
 // Sources for a definition: encyclopedias and web pages in one list, rated by the AI, never written by it.
 
 vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"));
+vi.mock("../src/lib/webSearchReady", () => import("./fakeWebSearch"));
 const { fake } = await import("./fakeWebSearch");
 
 vi.hoisted(() => {
@@ -359,6 +360,7 @@ describe("the sources cache", () => {
     const before = fake.calls;
     openSources(g.id);
     expect(store().clarifying).toMatchObject({ nodeId: g.id });
+    await settle(); // the search starts once the sources code is loaded
     await idle();
     expect(fake.calls).toBe(before + 1);
     expect(store().clarifying).toMatchObject({ nodeId: g.id, sources: { rated: true } });

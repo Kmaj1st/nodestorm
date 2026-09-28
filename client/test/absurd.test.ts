@@ -1,7 +1,7 @@
 import type { AbsurdChainResponse, Graph } from "@nodestorm/shared";
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { applyAbsurdChain, chainConcepts, chainToText, hopExplanation, intermediates, isStop, sandboxName } from "../src/lib/absurd";
-import { absurdChain, addAbsurdChainToSandbox } from "../src/lib/actions";
+import { addAbsurdChainToSandbox, applyAbsurdChain, chainConcepts, chainToText, hopExplanation, intermediates, isStop, sandboxName } from "../src/lib/absurd";
+import { absurdChain } from "../src/lib/actions";
 import { api } from "../src/lib/api";
 import * as ops from "../src/lib/graphOps";
 import { useAbsurd } from "../src/store/absurdStore";

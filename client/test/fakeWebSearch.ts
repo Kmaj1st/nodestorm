@@ -2,7 +2,7 @@ import { kbDefinition, normalizeName } from "@nodestorm/shared";
 import type { WebSearchResult } from "../src/lib/webSearch";
 
 /**
- * A stand-in for lib/webSearch.ts in tests (`vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"))`):
+ * A stand-in for lib/webSearch.ts (and webSearchReady.ts) in tests (`vi.mock("../src/lib/webSearch", () => import("./fakeWebSearch"))`):
  * one engine that finds a demo encyclopedia's page and a lecture notes page for each meaning the offline demo knows
  * for a name (its knowledge base's definition; pages for several meanings for an ambiguous name such as
  * "Expectation"), which the offline demo's source check rates reliable. `fake.pages` replaces the pages, `fake.ready = false` turns search off; `fake.calls` counts.

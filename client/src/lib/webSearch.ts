@@ -17,6 +17,9 @@ import { t } from "../i18n";
 import { useSettings, type Connection, type SearchSettings } from "../store/settingsStore";
 import { lookupLanguage } from "./lookup";
 import { isOnline } from "./online";
+import { engineUsable, isPaused, pauseEngine, pausedEngines, searchEngines, searchReady, unpauseEngine, clearPauses, type Engine } from "./webSearchReady";
+
+export { engineUsable, pausedEngines, searchEngines, searchReady, type Engine };
 
 /**
  * Pages that define a concept, from the web search engines the user set up in Settings (Tavily, Serper, Brave
@@ -28,7 +31,6 @@ import { isOnline } from "./online";
  * demo provider searches a pretend web ("demo") built from its knowledge base (lib/webSearchDemo.ts).
  */
 
-export type Engine = "tavily" | "serper" | "brave" | "searxng" | "demo";
 export interface WebResult {
   engine: Engine;
   /** Page title (plain text). */
@@ -52,8 +54,6 @@ export const TEXT_MAX = 4000;
 const CACHE_KEY = "nodestorm-websearch-cache";
 const CACHE_MAX = 500;
 const CACHE_DAYS = 30;
-/** An engine that rejected the key, rate-limited us or ran out of credits is left alone this long. */
-const PAUSE_MS = 10 * 60_000;
 
 /** An engine's name as shown to the user. */
 export const ENGINE_NAME: Record<Engine, string> = {
@@ -72,31 +72,7 @@ export const ENGINE_KEY_URL: Record<SearchEngineId, string> = {
 };
 
 // ---------------------------------------------------------------------------------------------------------------
-// Which engines
-
-/** Can `engine` run with these settings? Brave only through the local server, which may hold the key itself. */
-export function engineUsable(engine: SearchEngineId, search: SearchSettings, connection: Connection): boolean {
-  if (!search[engine].enabled) return false;
-  if (connection === "server") return true; // keys and the SearXNG address may be in server/.env
-  if (engine === "brave") return false;
-  if (engine === "searxng") return Boolean(searxngBase(search.searxng.url));
-  return Boolean(search[engine].apiKey?.trim());
-}
-
-/** Engines the user configured (key/URL present, enabled) and that can run here (Brave only through the local server). */
-export function searchEngines(): Engine[] {
-  const s = useSettings.getState();
-  if (s.provider === "mock") return ["demo"];
-  return SEARCH_ENGINES.filter((e) => engineUsable(e, s.search, s.connection));
-}
-
-/** True when at least one engine is usable right now (online, configured, not paused). */
-export function searchReady(): boolean {
-  const engines = searchEngines();
-  if (engines.includes("demo")) return true;
-  const now = Date.now();
-  return isOnline() && engines.some((e) => !isPaused(e as SearchEngineId, now));
-}
+// The query
 
 /**
  * What a search for `name` sends: `"<name>" definition` (quoted, so the engine keeps the words together), or the
@@ -112,20 +88,10 @@ export function searchQuery(name: string): string {
 }
 
 // ---------------------------------------------------------------------------------------------------------------
-// Pauses and the cache
+// Pauses (kept in webSearchReady.ts) and the cache
 
-const paused = new Map<string, number>();
-/** Paused per engine and key, so a corrected key is tried at once. */
-const pauseId = (engine: SearchEngineId, search = useSettings.getState().search) =>
-  `${engine}|${engine === "searxng" ? search.searxng.url ?? "" : search[engine].apiKey ?? ""}`;
-const isPaused = (engine: SearchEngineId, now = Date.now(), search?: SearchSettings) => (paused.get(pauseId(engine, search)) ?? 0) > now;
 /** Failures worth leaving the engine alone for a while: asking again soon would fail the same way. */
 const pausing = (e: unknown) => e instanceof ProviderError && (e.code === "invalidKey" || e.code === "rateLimited" || e.code === "quota");
-
-/** Engines paused after a refusal (for Settings to say so). */
-export function pausedEngines(now = Date.now()): SearchEngineId[] {
-  return SEARCH_ENGINES.filter((e) => isPaused(e, now));
-}
 
 type Entry = { at: number; results: WebResult[] };
 let cache: Record<string, Entry> | null = null;
@@ -365,7 +331,7 @@ export async function searchWeb(name: string, opts: { max: number; signal?: Abor
       } catch (e) {
         if (e instanceof CancelledError || signal?.aborted) throw new CancelledError();
         failed.push(engine);
-        if (pausing(e)) paused.set(pauseId(engine, s.search), Date.now() + PAUSE_MS);
+        if (pausing(e)) pauseEngine(engine, s.search);
         console.warn(`Web search on ${ENGINE_NAME[engine]} failed:`, e);
         return [];
       }
@@ -386,12 +352,12 @@ export async function searchWeb(name: string, opts: { max: number; signal?: Abor
  */
 export async function testSearchEngine(engine: SearchEngineId, search: SearchSettings, connection: Connection, signal?: AbortSignal): Promise<number> {
   const hits = await runEngine(engine, { q: searchQuery("group"), count: 1, lang: "en" }, search, connection, signal);
-  paused.delete(pauseId(engine, search));
+  unpauseEngine(engine, search);
   return hits.length;
 }
 
 /** For tests: as after a reload (the cache is read from storage again). */
 export function resetWebSearch() {
   cache = null;
-  paused.clear();
+  clearPauses();
 }
