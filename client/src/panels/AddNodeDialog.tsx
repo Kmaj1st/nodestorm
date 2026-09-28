@@ -1,4 +1,4 @@
-import type { NameCandidate } from "@nodestorm/shared";
+import { HINT_MAX, type NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
@@ -71,6 +71,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               autoFocus
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={HINT_MAX}
               rows={4}
               placeholder={t("add.describePlaceholder")}
               aria-label={t("add.describeAria")}

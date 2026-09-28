@@ -294,7 +294,7 @@ function FileMenu() {
   const doImport = async (file: File) => {
     try {
       const { name, fixes } = importJson(await file.text());
-      const repairs = fixes.length ? ` ${tr("file.importRepairs", { fixes: fixes.join("; ") })}` : "";
+      const repairs = fixes.length ? ` ${tr("file.importRepairs", { fixes: fixes.join(tr("common.clauseSep")) })}` : "";
       setToast(tr("file.imported", { name }) + repairs, "info");
     } catch (e) {
       setToast(tr("file.importFailed", { error: errorMessage(e) }));

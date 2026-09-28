@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { listJoin, useLocale } from "../src/i18n";
 import { chainToText, FUN_ENDS, FUN_ENDS_ZH, surprisePair } from "../src/lib/absurd";
 import { errorMessage } from "../src/lib/errors";
-import { sourceLabel } from "../src/lib/export";
+import { siteLabel, sourceLabel } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
 import * as proj from "../src/lib/projects";
 import { texReview } from "../src/lib/texImport";
@@ -124,6 +124,10 @@ describe("small Chinese details", () => {
   it("labels take the Chinese colon", () => {
     zh();
     expect(sourceLabel({ site: "Wikidata", title: "Q83478" })).toBe("Wikidata： Q83478");
+    // The Chinese encyclopedias are stored by their English names and shown by their Chinese ones.
+    expect(sourceLabel({ site: "Baidu Baike", title: "群" })).toBe("百度百科： 群");
+    expect(siteLabel("Moegirl")).toBe("萌娘百科");
+    expect(siteLabel("Moegirl", "en")).toBe("Moegirl");
     const text = chainToText({ title: "T", chain: [{ from: "A", to: "B", kind: "", fact: "F", quip: "" }], moral: "M", plausibility: "" });
     expect(text).toContain("事实： F");
     expect(text).not.toMatch(/[^\s]: /);
