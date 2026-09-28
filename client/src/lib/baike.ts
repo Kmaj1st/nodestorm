@@ -1,5 +1,5 @@
 import { CancelledError, normalizeName, SiteBlockedError, type LookupSense } from "@nodestorm/shared";
-import { z } from "zod";
+import * as z from "zod/mini";
 import { baikeFrameDoc } from "./baikeFrame";
 
 /**
@@ -14,10 +14,10 @@ const TIMEOUT_MS = 8000;
 
 /** The part of Baidu Baike's answer we use (it has many more fields); `{}` when there is no entry. */
 export const BaikeAnswer = z.object({
-  title: z.string().max(300).optional(),
-  abstract: z.string().max(20_000).optional(),
-  desc: z.string().max(300).optional(),
-  url: z.string().max(2000).optional(),
+  title: z.optional(z.string().check(z.maxLength(300))),
+  abstract: z.optional(z.string().check(z.maxLength(20_000))),
+  desc: z.optional(z.string().check(z.maxLength(300))),
+  url: z.optional(z.string().check(z.maxLength(2000))),
 });
 export type BaikeAnswer = z.infer<typeof BaikeAnswer>;
 

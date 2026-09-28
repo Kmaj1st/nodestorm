@@ -1,4 +1,11 @@
-import { z } from "zod";
+// zod/mini: the functional API, which bundlers tree-shake (the classic method API put ~60 kB more into the app's main
+// chunk). scripts/zod-mini-codemod.mts converts classic-style schemas.
+import * as z from "zod/mini";
+import en from "zod/v4/locales/en.js";
+
+// English issue messages, as the classic API sets up on import (zod/mini has none: every issue would say "Invalid
+// input"). The AI is shown them when its answer doesn't match (runStructured), and the server returns them.
+z.config(en());
 
 // ---------- Graph model ----------
 
@@ -6,7 +13,7 @@ export const DepRole = z.enum(["uses", "derives", "assumes"]);
 export type DepRole = z.infer<typeof DepRole>;
 
 /** A role in an AI answer: case-insensitive ("Uses", " DERIVES "); an unknown one still makes the answer malformed. */
-export const AiDepRole = z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), DepRole);
+export const AiDepRole = z.pipe(z.transform((v) => (typeof v === "string" ? v.trim().toLowerCase() : v)), DepRole);
 
 export const MissingDep = z.object({
   name: z.string(),
@@ -43,21 +50,21 @@ export type ExplainVoice = z.infer<typeof ExplainVoice>;
 
 /** A longer AI explanation of one concept (the "explain" task's answer). */
 export const Explanation = z.object({
-  summary: z.string().min(1),
-  intuition: z.string().default(""),
-  keyPoints: z.array(z.string()).default([]),
-  examples: z.array(z.object({ title: z.string(), body: z.string() })).default([]),
-  pitfalls: z.array(z.string()).default([]),
+  summary: z.string().check(z.minLength(1)),
+  intuition: z._default(z.string(), ""),
+  keyPoints: z._default(z.array(z.string()), []),
+  examples: z._default(z.array(z.object({ title: z.string(), body: z.string() })), []),
+  pitfalls: z._default(z.array(z.string()), []),
   /** Sources described in words (a textbook chapter, a classic paper…), never URLs the model could invent. */
-  furtherReading: z.array(z.object({ title: z.string(), hint: z.string().default("") })).default([]),
+  furtherReading: z._default(z.array(z.object({ title: z.string(), hint: z._default(z.string(), "") })), []),
 });
 export type Explanation = z.infer<typeof Explanation>;
 
 /** The latest explanation stored on a node, with how and when it was asked for. */
-export const NodeExplanation = Explanation.extend({
+export const NodeExplanation = z.extend(Explanation, {
   level: ExplainLevel,
   /** Absent in data from before voices existed, and for plain explanations. */
-  voice: ExplainVoice.optional(),
+  voice: z.optional(ExplainVoice),
   createdAt: z.number(),
 });
 export type NodeExplanation = z.infer<typeof NodeExplanation>;
@@ -67,8 +74,8 @@ export type NodeExplanation = z.infer<typeof NodeExplanation>;
  * know) … 1 (knew it), a running average of the grades; `reviews` counts them and `reviewedAt` is the last one (ms).
  */
 export const Mastery = z.object({
-  score: z.number().min(0).max(1),
-  reviews: z.number().int().min(1),
+  score: z.number().check(z.minimum(0), z.maximum(1)),
+  reviews: z.number().check(z.int(), z.minimum(1)),
   reviewedAt: z.number(),
 });
 export type Mastery = z.infer<typeof Mastery>;
@@ -100,31 +107,32 @@ export const isTheoremLike = (kind: ConceptKind | null | undefined): boolean => 
  * A kind in an AI answer: case-insensitive, and an unknown or missing value becomes null instead of failing the
  * whole answer (older prompts, and models that invent "remark" or "principle").
  */
-export const AiConceptKind = z
-  .preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), ConceptKind.nullish())
-  .catch(null);
+export const AiConceptKind = z.catch(
+  z.pipe(z.transform((v) => (typeof v === "string" ? v.trim().toLowerCase() : v)), z.nullish(ConceptKind)),
+  null,
+);
 
 /** One hypothesis of a theorem-like statement, why it is there, and what goes wrong without it. */
 export const AnatomyHypothesis = z.object({
-  text: z.string().default(""),
-  whyNeeded: z.string().default(""),
-  counterexampleIfDropped: z.string().default(""),
+  text: z._default(z.string(), ""),
+  whyNeeded: z._default(z.string(), ""),
+  counterexampleIfDropped: z._default(z.string(), ""),
 });
 export type AnatomyHypothesis = z.infer<typeof AnatomyHypothesis>;
 
 /** "Theorem anatomy": a theorem taken apart (the "anatomy" task's answer). */
 export const TheoremAnatomy = z.object({
-  hypotheses: z.array(AnatomyHypothesis).default([]),
-  conclusion: z.string().trim().min(1),
+  hypotheses: z._default(z.array(AnatomyHypothesis), []),
+  conclusion: z.string().check(z.trim(), z.minLength(1)),
   /** A sketch of the proof in a few sentences, never a full proof. */
-  proofIdea: z.string().default(""),
-  examples: z.array(z.string()).default([]),
-  nonExamples: z.array(z.string()).default([]),
+  proofIdea: z._default(z.string(), ""),
+  examples: z._default(z.array(z.string()), []),
+  nonExamples: z._default(z.array(z.string()), []),
 });
 export type TheoremAnatomy = z.infer<typeof TheoremAnatomy>;
 
 /** The latest anatomy stored on a node, with when it was asked for. */
-export const NodeAnatomy = TheoremAnatomy.extend({ createdAt: z.number() });
+export const NodeAnatomy = z.extend(TheoremAnatomy, { createdAt: z.number() });
 export type NodeAnatomy = z.infer<typeof NodeAnatomy>;
 
 export const ConceptNode = z.object({
@@ -138,34 +146,34 @@ export const ConceptNode = z.object({
   dependsOn: z.array(z.string()),
   /** Prerequisites the AI found that are not yet in the graph. */
   missingDeps: z.array(MissingDep),
-  error: z.string().optional(),
+  error: z.optional(z.string()),
   /** Candidate meanings offered while the node is "unclear". */
-  senses: z.array(z.lazy(() => Sense)).optional(),
+  senses: z.optional(z.array(z.lazy(() => Sense))),
   /** The latest "Explain more" answer. */
-  explanation: NodeExplanation.optional(),
+  explanation: z.optional(NodeExplanation),
   /** The user's own free-text notes (Markdown-ish plain text). */
-  notes: z.string().optional(),
+  notes: z.optional(z.string()),
   /** Quiz progress. Personal study data, so share links leave it out (see packGraph in client/src/lib/share.ts). */
-  mastery: Mastery.optional(),
+  mastery: z.optional(Mastery),
   /** Its counterparts in Lean's Mathlib, each checked to exist (see "Find in Mathlib"). */
-  formal: z.lazy(() => NodeFormal).optional(),
+  formal: z.optional(z.lazy(() => NodeFormal)),
   /** Published papers about it, found on OpenAlex (see "Find papers"). Personal lookup data: not in share links. */
-  papers: z.lazy(() => NodePapers).optional(),
+  papers: z.optional(z.lazy(() => NodePapers)),
   /** Where the concept came from: an imported document and page (see "Derive together"). */
-  source: z.lazy(() => SourceRef).optional(),
+  source: z.optional(z.lazy(() => SourceRef)),
   /** Definition, theorem, lemma…: set by the AI's check (only while unset) or by hand in the inspector. */
-  kind: ConceptKind.optional(),
+  kind: z.optional(ConceptKind),
   /** True once the user picked or cleared the kind by hand: the AI then leaves it alone (even when cleared). */
-  kindByUser: z.boolean().optional(),
+  kindByUser: z.optional(z.boolean()),
   /** Held in place by the user: Physics and its springs leave it where it is. */
-  pinned: z.boolean().optional(),
+  pinned: z.optional(z.boolean()),
   /**
    * A basic concept: a foundation the user takes as given. It never has missing prerequisites and no prerequisite
    * check is run for it (see setBasic in client/src/lib/graphOps.ts). Links the user made stay.
    */
-  basic: z.boolean().optional(),
+  basic: z.optional(z.boolean()),
   /** The latest "Theorem anatomy" answer (theorem-like kinds). AI study material, like `explanation`. */
-  anatomy: NodeAnatomy.optional(),
+  anatomy: z.optional(NodeAnatomy),
 });
 export type ConceptNode = z.infer<typeof ConceptNode>;
 
@@ -186,7 +194,7 @@ export const Relation = z.object({
   b: z.string(),
   aToB: DirRel,
   bToA: DirRel,
-  origin: RelationOrigin.default("mix"),
+  origin: z._default(RelationOrigin, "mix"),
 });
 export type Relation = z.infer<typeof Relation>;
 
@@ -196,15 +204,15 @@ export const Graph = z.object({
   nodes: z.array(ConceptNode),
   relations: z.array(Relation),
   /** Set for sandboxes: the graph this one was forked from. */
-  parentId: z.string().optional(),
-  forkedAt: z.number().optional(),
+  parentId: z.optional(z.string()),
+  forkedAt: z.optional(z.number()),
 });
 export type Graph = z.infer<typeof Graph>;
 
 export const GraphExport = z.object({
   format: z.literal("nodestorm/v1"),
   /** The exported project (older files have none; import then names the project after the main graph). */
-  project: z.object({ name: z.string() }).optional(),
+  project: z.optional(z.object({ name: z.string() })),
   /** Main graph first, then its sandboxes. */
   graphs: z.array(Graph),
 });
@@ -212,60 +220,60 @@ export type GraphExport = z.infer<typeof GraphExport>;
 
 /** Where something came from: a page of an imported document, or an encyclopedia entry (`site` + `url`). */
 export const SourceRef = z.object({
-  title: z.string().max(300),
-  page: z.number().int().min(1).optional(),
+  title: z.string().check(z.maxLength(300)),
+  page: z.optional(z.number().check(z.int(), z.minimum(1))),
   /** The site a looked-up definition came from ("ProofWiki", "Wikipedia", "Fandom (minecraft)"…) and its page. */
-  site: z.string().max(100).optional(),
-  url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
+  site: z.optional(z.string().check(z.maxLength(100))),
+  url: z.optional(z.string().check(z.maxLength(2000), z.regex(/^https:\/\//, "Only https links are kept."))),
   /** The AI's rating of this source when it was chosen among others (see SourceRating); never the definition itself. */
-  rating: z.lazy(() => SourceRating).optional(),
+  rating: z.optional(z.lazy(() => SourceRating)),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
 
 /** A Lean 4 declaration a concept corresponds to, verified to exist in Mathlib. */
 export const FormalDecl = z.object({
-  name: z.string().max(300),
-  type: z.string().max(4000),
-  module: z.string().max(300),
-  doc: z.string().max(4000).optional(),
+  name: z.string().check(z.maxLength(300)),
+  type: z.string().check(z.maxLength(4000)),
+  module: z.string().check(z.maxLength(300)),
+  doc: z.optional(z.string().check(z.maxLength(4000))),
   /** Why the AI thinks it matches. */
-  why: z.string().max(500).optional(),
+  why: z.optional(z.string().check(z.maxLength(500))),
 });
 export type FormalDecl = z.infer<typeof FormalDecl>;
 
 export const NodeFormal = z.object({
-  decls: z.array(FormalDecl).max(12),
+  decls: z.array(FormalDecl).check(z.maxLength(12)),
   /** Names the AI suggested that Mathlib doesn't have (so the user sees what was checked). */
-  unverified: z.array(z.string().max(300)).max(12).default([]),
+  unverified: z._default(z.array(z.string().check(z.maxLength(300))).check(z.maxLength(12)), []),
   /** Names that couldn't be checked (Loogle timed out or failed for them): neither kept nor ruled out. */
-  unchecked: z.array(z.string().max(300)).max(12).optional(),
+  unchecked: z.optional(z.array(z.string().check(z.maxLength(300))).check(z.maxLength(12))),
   checkedAt: z.number(),
 });
 export type NodeFormal = z.infer<typeof NodeFormal>;
 
 /** A link the app may open: https only, so an imported file can't smuggle in `javascript:` or plain http. */
-const HttpsUrl = z.string().max(1000).regex(/^https:\/\/[^\s]+$/);
+const HttpsUrl = z.string().check(z.maxLength(1000), z.regex(/^https:\/\/[^\s]+$/));
 
 /** A published work about a concept, as OpenAlex lists it (see `findPapers` in shared/src/lookup/openalex.ts). */
 export const PaperWork = z.object({
   /** OpenAlex work id ("W2741809807"). */
-  id: z.string().regex(/^W\d{1,20}$/),
-  title: z.string().min(1).max(500),
-  year: z.number().int().min(0).max(3000).optional(),
+  id: z.string().check(z.regex(/^W\d{1,20}$/)),
+  title: z.string().check(z.minLength(1), z.maxLength(500)),
+  year: z.optional(z.number().check(z.int(), z.minimum(0), z.maximum(3000))),
   /** The first three authors, then "et al.". */
-  authors: z.string().max(300),
-  venue: z.string().max(300).optional(),
-  doi: z.string().max(300).optional(),
+  authors: z.string().check(z.maxLength(300)),
+  venue: z.optional(z.string().check(z.maxLength(300))),
+  doi: z.optional(z.string().check(z.maxLength(300))),
   url: HttpsUrl,
-  citedBy: z.number().int().min(0),
-  openAccessUrl: HttpsUrl.optional(),
+  citedBy: z.number().check(z.int(), z.minimum(0)),
+  openAccessUrl: z.optional(HttpsUrl),
 });
 export type PaperWork = z.infer<typeof PaperWork>;
 
 export const NodePapers = z.object({
-  works: z.array(PaperWork).max(25),
+  works: z.array(PaperWork).check(z.maxLength(25)),
   /** The search expression that found them (OpenAlex's title-and-abstract search syntax). */
-  query: z.string().max(1000),
+  query: z.string().check(z.maxLength(1000)),
   checkedAt: z.number(),
 });
 export type NodePapers = z.infer<typeof NodePapers>;
@@ -283,29 +291,29 @@ export const BRIEF_LIST_MAX = 500;
 
 /** Lightweight description of a node sent to the AI as context. */
 export const NodeBrief = z.object({
-  name: z.string().max(NAME_MAX),
-  definition: z.string().max(BRIEF_DEFINITION_MAX).default(""),
-  aliases: z.array(z.string().max(NAME_MAX)).max(BRIEF_ALIASES_MAX).default([]),
+  name: z.string().check(z.maxLength(NAME_MAX)),
+  definition: z._default(z.string().check(z.maxLength(BRIEF_DEFINITION_MAX)), ""),
+  aliases: z._default(z.array(z.string().check(z.maxLength(NAME_MAX))).check(z.maxLength(BRIEF_ALIASES_MAX)), []),
 });
 export type NodeBrief = z.infer<typeof NodeBrief>;
-const BriefList = z.array(NodeBrief).max(BRIEF_LIST_MAX);
+const BriefList = z.array(NodeBrief).check(z.maxLength(BRIEF_LIST_MAX));
 
 export const NameRequest = z.object({
-  description: z.string().min(1),
-  context: BriefList.default([]),
+  description: z.string().check(z.minLength(1)),
+  context: z._default(BriefList, []),
 });
 export type NameRequest = z.infer<typeof NameRequest>;
 
 export const NameCandidate = z.object({
   name: z.string(),
   definition: z.string(),
-  aliases: z.array(z.string()).default([]),
+  aliases: z._default(z.array(z.string()), []),
   kind: AiConceptKind,
 });
 export type NameCandidate = z.infer<typeof NameCandidate>;
 
 export const NameResponse = z.object({
-  candidates: z.array(NameCandidate).min(1),
+  candidates: z.array(NameCandidate).check(z.minLength(1)),
 });
 export type NameResponse = z.infer<typeof NameResponse>;
 
@@ -317,7 +325,7 @@ export type RelateResponse = z.infer<typeof RelateResponse>;
 
 export const DepsRequest = z.object({
   node: NodeBrief,
-  existing: BriefList.default([]),
+  existing: z._default(BriefList, []),
 });
 export type DepsRequest = z.infer<typeof DepsRequest>;
 
@@ -326,7 +334,7 @@ export const Prerequisite = z.object({
   role: AiDepRole,
   reason: z.string(),
   /** Name of an existing node the model believes this prerequisite corresponds to. */
-  matchesExisting: z.string().nullish(),
+  matchesExisting: z.nullish(z.string()),
 });
 export type Prerequisite = z.infer<typeof Prerequisite>;
 
@@ -343,22 +351,22 @@ export const Sense = z.object({
   domain: z.string(),
   definition: z.string(),
   /** Set when the meaning was looked up in an encyclopedia rather than suggested by the AI. */
-  source: z.lazy(() => SourceRef).optional(),
+  source: z.optional(z.lazy(() => SourceRef)),
   kind: AiConceptKind,
 });
 export type Sense = z.infer<typeof Sense>;
 
 export const DeriveRequest = z.object({
-  selected: BriefList.min(1),
-  context: BriefList.default([]),
-  goal: z.string().optional(),
+  selected: BriefList.check(z.minLength(1)),
+  context: z._default(BriefList, []),
+  goal: z.optional(z.string()),
 });
 export type DeriveRequest = z.infer<typeof DeriveRequest>;
 
 export const DerivedProposal = z.object({
   name: z.string(),
   definition: z.string(),
-  aliases: z.array(z.string()).default([]),
+  aliases: z._default(z.array(z.string()), []),
   kind: AiConceptKind,
   /** How the proposal relates to the selected nodes (by name). */
   links: z.array(
@@ -387,10 +395,10 @@ export type ExplainRelation = z.infer<typeof ExplainRelation>;
 export const ExplainRequest = z.object({
   node: NodeBrief,
   /** Its prerequisites that are in the graph. */
-  prerequisites: BriefList.default([]),
-  relations: z.array(ExplainRelation).default([]),
-  level: ExplainLevel.default("intuitive"),
-  voice: ExplainVoice.default("plain"),
+  prerequisites: z._default(BriefList, []),
+  relations: z._default(z.array(ExplainRelation), []),
+  level: z._default(ExplainLevel, "intuitive"),
+  voice: z._default(ExplainVoice, "plain"),
 });
 export type ExplainRequest = z.infer<typeof ExplainRequest>;
 
@@ -398,9 +406,9 @@ export const ExplainResponse = Explanation;
 export type ExplainResponse = Explanation;
 
 export const AnatomyRequest = z.object({
-  node: NodeBrief.extend({ kind: ConceptKind.optional() }),
+  node: z.extend(NodeBrief, { kind: z.optional(ConceptKind) }),
   /** Its prerequisites that are in the graph. */
-  prerequisites: BriefList.default([]),
+  prerequisites: z._default(BriefList, []),
 });
 export type AnatomyRequest = z.infer<typeof AnatomyRequest>;
 
@@ -415,22 +423,22 @@ export const QuizStyle = z.enum(["recall", "apply", "connect"]);
 export type QuizStyle = z.infer<typeof QuizStyle>;
 
 export const QuizRequest = z.object({
-  node: NodeBrief.extend({ notes: z.string().max(4000).optional() }),
+  node: z.extend(NodeBrief, { notes: z.optional(z.string().check(z.maxLength(4000))) }),
   /** Its prerequisites that are in the graph (a "connect" question picks one of them). */
-  prerequisites: BriefList.default([]),
-  style: QuizStyle.default("recall"),
+  prerequisites: z._default(BriefList, []),
+  style: z._default(QuizStyle, "recall"),
   /** Ask for four choices with one correct answer instead of a free-recall question. */
-  multipleChoice: z.boolean().default(false),
+  multipleChoice: z._default(z.boolean(), false),
 });
 export type QuizRequest = z.infer<typeof QuizRequest>;
 
 export const QuizResponse = z.object({
-  question: z.string().trim().min(1),
-  answer: z.string().trim().min(1),
-  hints: z.array(z.string()).default([]),
+  question: z.string().check(z.trim(), z.minLength(1)),
+  answer: z.string().check(z.trim(), z.minLength(1)),
+  hints: z._default(z.array(z.string()), []),
   /** Multiple choice only: exactly four options and the index of the right one (tasks.quiz drops malformed sets). */
-  choices: z.array(z.string()).nullish(),
-  correctIndex: z.number().int().nullish(),
+  choices: z.nullish(z.array(z.string())),
+  correctIndex: z.nullish(z.number().check(z.int())),
 });
 export type QuizResponse = z.infer<typeof QuizResponse>;
 
@@ -438,19 +446,19 @@ export type QuizResponse = z.infer<typeof QuizResponse>;
 export const CycleLink = z.object({
   from: NodeBrief,
   to: NodeBrief,
-  reason: z.string().default(""),
+  reason: z._default(z.string(), ""),
 });
 export type CycleLink = z.infer<typeof CycleLink>;
 
 /** A dependency cycle (A needs B … needs A) to break: the links in order, each "from" needing "to". */
 export const ResolveCycleRequest = z.object({
-  links: z.array(CycleLink).min(2).max(12),
+  links: z.array(CycleLink).check(z.minLength(2), z.maxLength(12)),
 });
 export type ResolveCycleRequest = z.infer<typeof ResolveCycleRequest>;
 
 export const ResolveCycleResponse = z.object({
   /** Indexes (into `links`) of the links that are wrong and should be removed; at least one. */
-  remove: z.array(z.number().int().min(0)).min(1),
+  remove: z.array(z.number().check(z.int(), z.minimum(0))).check(z.minLength(1)),
   /** One or two sentences on why, shown to the user. */
   reason: z.string(),
 });
@@ -460,24 +468,24 @@ export type ResolveCycleResponse = z.infer<typeof ResolveCycleResponse>;
 export const EXTRACT_MAX_CHARS = 12_000;
 
 export const ExtractRequest = z.object({
-  text: z
-    .string()
-    .trim()
-    .min(1, "Paste some text to extract concepts from.")
-    .max(EXTRACT_MAX_CHARS, `The text is too long: at most ${EXTRACT_MAX_CHARS} characters per extraction.`),
+  text: z.string().check(
+    z.trim(),
+    z.minLength(1, "Paste some text to extract concepts from."),
+    z.maxLength(EXTRACT_MAX_CHARS, `The text is too long: at most ${EXTRACT_MAX_CHARS} characters per extraction.`),
+  ),
   /** The graph's concepts, so the model reuses their exact names. */
-  existing: BriefList.default([]),
+  existing: z._default(BriefList, []),
   /** Optional hint on what to pick out, e.g. "only the theorems". */
-  focus: z.string().max(500).optional(),
+  focus: z.optional(z.string().check(z.maxLength(500))),
 });
 export type ExtractRequest = z.infer<typeof ExtractRequest>;
 
 export const ExtractedConcept = z.object({
-  name: z.string().trim().min(1),
-  definition: z.string().default(""),
-  aliases: z.array(z.string()).default([]),
+  name: z.string().check(z.trim(), z.minLength(1)),
+  definition: z._default(z.string(), ""),
+  aliases: z._default(z.array(z.string()), []),
   /** A short excerpt of the text that supports the concept. */
-  quote: z.string().nullish(),
+  quote: z.nullish(z.string()),
   kind: AiConceptKind,
 });
 export type ExtractedConcept = z.infer<typeof ExtractedConcept>;
@@ -496,14 +504,14 @@ export const ExtractedPrerequisite = z.object({
   dependent: z.string(),
   prerequisite: z.string(),
   role: AiDepRole,
-  reason: z.string().default(""),
+  reason: z._default(z.string(), ""),
 });
 export type ExtractedPrerequisite = z.infer<typeof ExtractedPrerequisite>;
 
 export const ExtractResponse = z.object({
   concepts: z.array(ExtractedConcept),
-  relations: z.array(ExtractedRelation).default([]),
-  prerequisites: z.array(ExtractedPrerequisite).default([]),
+  relations: z._default(z.array(ExtractedRelation), []),
+  prerequisites: z._default(z.array(ExtractedPrerequisite), []),
 });
 export type ExtractResponse = z.infer<typeof ExtractResponse>;
 
@@ -530,76 +538,80 @@ export function absurdHops(hops: { min: number; max: number }, stops: number): {
   return { min: Math.max(hops.min, need), max: Math.max(hops.max, need) };
 }
 
-export const AbsurdChainRequest = z
-  .object({
+export const AbsurdChainRequest = z.pipe(
+  z.object({
     from: NodeBrief,
     to: NodeBrief,
-    style: AbsurdStyle.default("deadpan"),
-    hops: z
-      .object({
-        min: z.number().int().min(ABSURD_MIN_HOPS).max(ABSURD_MAX_HOPS),
-        max: z.number().int().min(ABSURD_MIN_HOPS).max(ABSURD_MAX_HOPS),
-      })
-      .refine((h) => h.min <= h.max, "hops.min must not exceed hops.max")
-      .default({ min: 3, max: 5 }),
+    style: z._default(AbsurdStyle, "deadpan"),
+    hops: z._default(
+      z
+        .object({
+          min: z.number().check(z.int(), z.minimum(ABSURD_MIN_HOPS), z.maximum(ABSURD_MAX_HOPS)),
+          max: z.number().check(z.int(), z.minimum(ABSURD_MIN_HOPS), z.maximum(ABSURD_MAX_HOPS)),
+        })
+        .check(z.refine((h) => h.min <= h.max, "hops.min must not exceed hops.max")),
+      { min: 3, max: 5 },
+    ),
     /** Concepts in the graph, as background (the chain may pass through them). */
-    context: z.array(NodeBrief).max(80).default([]),
+    context: z._default(z.array(NodeBrief).check(z.maxLength(80)), []),
     /** Intermediate concepts of earlier rolls, so "Roll again" takes a different route. */
-    avoid: z.array(z.string().max(200)).max(40).default([]),
+    avoid: z._default(z.array(z.string().check(z.maxLength(200))).check(z.maxLength(40)), []),
     /**
      * The user's stops, in order: the chain passes through each one. A concept of the graph comes with its own
      * definition; a custom stop with the description the user wrote (what the stop means).
      */
-    via: z.array(NodeBrief).max(ABSURD_MAX_VIA).default([]),
-  })
-  .refine((r) => normalizeName(r.from.name) !== "" && normalizeName(r.to.name) !== "", "Name both ends of the chain.")
-  .refine((r) => normalizeName(r.from.name) !== normalizeName(r.to.name), "The two ends of the chain must be different concepts.")
-  .refine((r) => r.via.every((v) => normalizeName(v.name) !== ""), "Name every stop of the chain.")
-  .refine((r) => {
-    const names = [r.from, r.to, ...r.via].map((n) => normalizeName(n.name));
-    return new Set(names).size === names.length;
-  }, "Each stop must differ from the ends and from the other stops.")
+    via: z._default(z.array(NodeBrief).check(z.maxLength(ABSURD_MAX_VIA)), []),
+  }).check(
+    z.refine((r) => normalizeName(r.from.name) !== "" && normalizeName(r.to.name) !== "", "Name both ends of the chain."),
+    z.refine((r) => normalizeName(r.from.name) !== normalizeName(r.to.name), "The two ends of the chain must be different concepts."),
+    z.refine((r) => r.via.every((v) => normalizeName(v.name) !== ""), "Name every stop of the chain."),
+    z.refine((r) => {
+      const names = [r.from, r.to, ...r.via].map((n) => normalizeName(n.name));
+      return new Set(names).size === names.length;
+    }, "Each stop must differ from the ends and from the other stops."),
+  ),
   // Older callers ask for a hop range without thinking of stops: it grows to leave a link before every stop.
-  .transform((r) => ({ ...r, hops: absurdHops(r.hops, r.via.length) }));
+  z.transform((r) => ({ ...r, hops: absurdHops(r.hops, r.via.length) })),
+);
 export type AbsurdChainRequest = z.infer<typeof AbsurdChainRequest>;
 
 /** One link of the chain: a true, checkable relation (`fact`), narrated comically (`quip`). */
 export const AbsurdHop = z.object({
-  from: z.string().trim().min(1),
-  to: z.string().trim().min(1),
+  from: z.string().check(z.trim(), z.minLength(1)),
+  to: z.string().check(z.trim(), z.minLength(1)),
   /** Short relation label, e.g. "is solved by", "browns through". */
-  kind: z.string().trim().default(""),
+  kind: z._default(z.string().check(z.trim()), ""),
   /** The sober, accurate statement of the relation. */
-  fact: z.string().trim().min(1),
+  fact: z.string().check(z.trim(), z.minLength(1)),
   /** The funny narration of the same step. */
-  quip: z.string().trim().default(""),
+  quip: z._default(z.string().check(z.trim()), ""),
 });
 export type AbsurdHop = z.infer<typeof AbsurdHop>;
 
 export const AbsurdChainResponse = z.object({
-  title: z.string().trim().default(""),
-  chain: z.array(AbsurdHop).min(1),
+  title: z._default(z.string().check(z.trim()), ""),
+  chain: z.array(AbsurdHop).check(z.minLength(1)),
   /** A funny closing line. */
-  moral: z.string().trim().default(""),
+  moral: z._default(z.string().check(z.trim()), ""),
   /** A sober note on how solid the links are (which ones are loose, if any). */
-  plausibility: z.string().trim().default(""),
+  plausibility: z._default(z.string().check(z.trim()), ""),
 });
 export type AbsurdChainResponse = z.infer<typeof AbsurdChainResponse>;
 
 /** Lean 4 Mathlib names that may formalise a concept; the client checks each with Loogle before showing it. */
 export const MathlibRequest = z.object({
   node: NodeBrief,
-  context: z.array(NodeBrief).max(80).default([]),
+  context: z._default(z.array(NodeBrief).check(z.maxLength(80)), []),
 });
 export type MathlibRequest = z.infer<typeof MathlibRequest>;
 
 export const MathlibCandidate = z.object({
-  name: z.string().trim().min(1).max(300),
-  why: z.string().default(""),
+  name: z.string().check(z.trim(), z.minLength(1), z.maxLength(300)),
+  why: z._default(z.string(), ""),
 });
 export type MathlibCandidate = z.infer<typeof MathlibCandidate>;
 
-export const MathlibResponse = z.object({ candidates: z.array(MathlibCandidate).default([]) });
+export const MathlibResponse = z.object({ candidates: z._default(z.array(MathlibCandidate), []) });
 export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
 // ---------- Suggest connections ----------
@@ -611,26 +623,26 @@ export const HINT_MAX = 2000;
 export const ConnectRequest = z.object({
   node: NodeBrief,
   /** Concepts already in the graph (a suggestion that is one of them uses its exact name). */
-  existing: z.array(NodeBrief).max(200).default([]),
+  existing: z._default(z.array(NodeBrief).check(z.maxLength(200)), []),
   /** Names already linked to the concept: not suggested again. */
-  linked: z.array(z.string().max(NAME_MAX)).max(200).default([]),
-  count: z.number().int().min(1).max(12).default(8),
+  linked: z._default(z.array(z.string().check(z.maxLength(NAME_MAX))).check(z.maxLength(200)), []),
+  count: z._default(z.number().check(z.int(), z.minimum(1), z.maximum(12)), 8),
 });
 export type ConnectRequest = z.infer<typeof ConnectRequest>;
 
 export const ConnectSuggestion = z.object({
-  name: z.string().trim().min(1).max(200),
+  name: z.string().check(z.trim(), z.minLength(1), z.maxLength(200)),
   /** The word or phrase in the concept's definition that points to it ("" when none does). */
-  keyword: z.string().default(""),
-  definition: z.string().default(""),
-  kind: ConceptKind.nullable().optional().catch(null),
+  keyword: z._default(z.string(), ""),
+  definition: z._default(z.string(), ""),
+  kind: z.catch(z.optional(z.nullable(ConceptKind)), null),
   /** aToB: what the concept does to the suggestion; bToA: what the suggestion does to the concept. */
   aToB: DirRel,
   bToA: DirRel,
 });
 export type ConnectSuggestion = z.infer<typeof ConnectSuggestion>;
 
-export const ConnectResponse = z.object({ suggestions: z.array(ConnectSuggestion).default([]) });
+export const ConnectResponse = z.object({ suggestions: z._default(z.array(ConnectSuggestion), []) });
 export type ConnectResponse = z.infer<typeof ConnectResponse>;
 
 // ---------- Assess sources ----------
@@ -645,8 +657,8 @@ export type Reliability = z.infer<typeof Reliability>;
  */
 export const SourceRating = z.object({
   reliability: Reliability,
-  reasons: z.string().max(1000).default(""),
-  compared: z.number().int().min(1).max(100),
+  reasons: z._default(z.string().check(z.maxLength(1000)), ""),
+  compared: z.number().check(z.int(), z.minimum(1), z.maximum(100)),
 });
 export type SourceRating = z.infer<typeof SourceRating>;
 
@@ -657,12 +669,12 @@ export const ASSESS_MAX = 10;
 
 /** One source found for a concept's name: an encyclopedia entry or a web search result, with the text we have of it. */
 export const AssessSource = z.object({
-  id: z.string().min(1).max(40),
+  id: z.string().check(z.minLength(1), z.maxLength(40)),
   kind: z.enum(["encyclopedia", "web"]),
-  site: z.string().max(200),
-  title: z.string().max(300).default(""),
-  url: z.string().max(2000).default(""),
-  text: z.string().max(ASSESS_TEXT_MAX),
+  site: z.string().check(z.maxLength(200)),
+  title: z._default(z.string().check(z.maxLength(300)), ""),
+  url: z._default(z.string().check(z.maxLength(2000)), ""),
+  text: z.string().check(z.maxLength(ASSESS_TEXT_MAX)),
 });
 export type AssessSource = z.infer<typeof AssessSource>;
 
@@ -671,31 +683,34 @@ export type AssessSource = z.infer<typeof AssessSource>;
  * word from that source's text. It never writes a definition itself.
  */
 export const AssessRequest = z.object({
-  name: z.string().min(1).max(NAME_MAX),
+  name: z.string().check(z.minLength(1), z.maxLength(NAME_MAX)),
   /** Extra context, e.g. why a dependent concept needs this one. */
-  hint: z.string().max(HINT_MAX).optional(),
+  hint: z.optional(z.string().check(z.maxLength(HINT_MAX))),
   /** Names of related concepts in the graph (which meaning is meant). */
-  context: z.array(z.string().max(200)).max(40).default([]),
-  sources: z.array(AssessSource).min(1).max(ASSESS_MAX),
+  context: z._default(z.array(z.string().check(z.maxLength(200))).check(z.maxLength(40)), []),
+  sources: z.array(AssessSource).check(z.minLength(1), z.maxLength(ASSESS_MAX)),
 });
 export type AssessRequest = z.infer<typeof AssessRequest>;
 
 export const AssessRating = z.object({
   id: z.string(),
   /** Null when the answer's value isn't one of the four (the source then counts as not rated). */
-  reliability: z.preprocess((v) => (typeof v === "string" ? v.trim().toLowerCase() : v), Reliability.nullable()).catch(null),
-  reasons: z.string().default(""),
+  reliability: z.catch(
+    z.pipe(z.transform((v) => (typeof v === "string" ? v.trim().toLowerCase() : v)), z.nullable(Reliability)),
+    null,
+  ),
+  reasons: z._default(z.string(), ""),
   /** A short label of the meaning of the name the source describes (sources about different meanings are grouped). */
-  sense: z.string().default(""),
+  sense: z._default(z.string(), ""),
   /** The sentence(s) of the source that define the concept, copied verbatim ("" when there is none). */
-  passage: z.string().default(""),
+  passage: z._default(z.string(), ""),
 });
 export type AssessRating = z.infer<typeof AssessRating>;
 
 export const AssessResponse = z.object({
-  ratings: z.array(AssessRating).default([]),
+  ratings: z._default(z.array(AssessRating), []),
   /** How far the sources agree, and where they conflict. */
-  note: z.string().default(""),
+  note: z._default(z.string(), ""),
 });
 export type AssessResponse = z.infer<typeof AssessResponse>;
 
@@ -707,11 +722,11 @@ export const PAGE_IMAGE_MAX = 8_000_000;
 /** Read a scanned page: its text, formulas as LaTeX. */
 export const ReadPageRequest = z.object({
   mediaType: z.enum(["image/jpeg", "image/png", "image/webp"]),
-  data: z.string().min(1).max(PAGE_IMAGE_MAX, "The page image is too large."),
+  data: z.string().check(z.minLength(1), z.maxLength(PAGE_IMAGE_MAX, "The page image is too large.")),
 });
 export type ReadPageRequest = z.infer<typeof ReadPageRequest>;
 
-export const ReadPageResponse = z.object({ text: z.string().default("") });
+export const ReadPageResponse = z.object({ text: z._default(z.string(), "") });
 export type ReadPageResponse = z.infer<typeof ReadPageResponse>;
 
 /** Longest stretch of a problem sheet `splitProblems` reads at once (characters). */
@@ -719,21 +734,21 @@ export const PROBLEMS_MAX_CHARS = 12_000;
 
 export const SplitProblemsRequest = z.object({
   /** Pages of the sheet, in order. */
-  pages: z
-    .array(z.object({ page: z.number().int().min(1), text: z.string() }))
-    .min(1)
-    .refine(
+  pages: z.array(z.object({ page: z.number().check(z.int(), z.minimum(1)), text: z.string() })).check(
+    z.minLength(1),
+    z.refine(
       (ps) => ps.reduce((n, p) => n + p.text.length, 0) <= PROBLEMS_MAX_CHARS,
       `Too much text: at most ${PROBLEMS_MAX_CHARS} characters at a time.`,
     ),
+  ),
 });
 export type SplitProblemsRequest = z.infer<typeof SplitProblemsRequest>;
 
 export const SheetProblem = z.object({
   /** How the sheet numbers it ("1", "2(b)", "Exercise 4.3"). */
-  label: z.string().default(""),
-  statement: z.string().trim().min(1),
-  page: z.number().int().min(1).nullish(),
+  label: z._default(z.string(), ""),
+  statement: z.string().check(z.trim(), z.minLength(1)),
+  page: z.nullish(z.number().check(z.int(), z.minimum(1))),
 });
 export type SheetProblem = z.infer<typeof SheetProblem>;
 
@@ -742,46 +757,46 @@ export type SplitProblemsResponse = z.infer<typeof SplitProblemsResponse>;
 
 /** A retrieved passage of a reference document; the tutor cites it as [n]. */
 export const RefChunk = z.object({
-  n: z.number().int().min(1),
-  title: z.string().max(300),
-  page: z.number().int().min(1),
-  text: z.string().max(2000),
+  n: z.number().check(z.int(), z.minimum(1)),
+  title: z.string().check(z.maxLength(300)),
+  page: z.number().check(z.int(), z.minimum(1)),
+  text: z.string().check(z.maxLength(2000)),
 });
 export type RefChunk = z.infer<typeof RefChunk>;
 
 const TutorBase = z.object({
-  problem: z.string().trim().min(1, "Choose a problem first.").max(4000),
+  problem: z.string().check(z.trim(), z.minLength(1, "Choose a problem first."), z.maxLength(4000)),
   /** The user's steps so far, in order. */
-  steps: z.array(z.string().max(4000)).max(60).default([]),
-  references: z.array(RefChunk).max(8).default([]),
+  steps: z._default(z.array(z.string().check(z.maxLength(4000))).check(z.maxLength(60)), []),
+  references: z._default(z.array(RefChunk).check(z.maxLength(8)), []),
   /** Concepts in the graph, so the tutor uses their names. */
-  context: z.array(NodeBrief).max(80).default([]),
+  context: z._default(z.array(NodeBrief).check(z.maxLength(80)), []),
 });
 
-export const TutorHintRequest = TutorBase.extend({
+export const TutorHintRequest = z.extend(TutorBase, {
   /** 1 for the first hint on this step, higher when the user asks again: each hint may say a little more. */
-  nth: z.number().int().min(1).max(10).default(1),
+  nth: z._default(z.number().check(z.int(), z.minimum(1), z.maximum(10)), 1),
 });
 export type TutorHintRequest = z.infer<typeof TutorHintRequest>;
 
 /** A concept the tutor refers to, which the user may add to the graph. */
 export const TutorConcept = z.object({
-  name: z.string().trim().min(1),
-  definition: z.string().default(""),
+  name: z.string().check(z.trim(), z.minLength(1)),
+  definition: z._default(z.string(), ""),
 });
 export type TutorConcept = z.infer<typeof TutorConcept>;
 
 export const TutorHintResponse = z.object({
-  hint: z.string().min(1),
+  hint: z.string().check(z.minLength(1)),
   /** Numbers of the references the hint relies on. */
-  cites: z.array(z.number().int()).default([]),
-  concepts: z.array(TutorConcept).default([]),
+  cites: z._default(z.array(z.number().check(z.int())), []),
+  concepts: z._default(z.array(TutorConcept), []),
 });
 export type TutorHintResponse = z.infer<typeof TutorHintResponse>;
 
-export const CheckStepRequest = TutorBase.extend({
+export const CheckStepRequest = z.extend(TutorBase, {
   /** The step to check; `steps` holds the ones before it. */
-  step: z.string().trim().min(1, "Write the step first.").max(4000),
+  step: z.string().check(z.trim(), z.minLength(1, "Write the step first."), z.maxLength(4000)),
 });
 export type CheckStepRequest = z.infer<typeof CheckStepRequest>;
 
@@ -791,30 +806,30 @@ export type StepVerdict = z.infer<typeof StepVerdict>;
 
 export const CheckStepResponse = z.object({
   verdict: StepVerdict,
-  comment: z.string().default(""),
+  comment: z._default(z.string(), ""),
   /** Facts or concepts the step relies on without saying so. */
-  missing: z.array(z.string()).default([]),
-  cites: z.array(z.number().int()).default([]),
+  missing: z._default(z.array(z.string()), []),
+  cites: z._default(z.array(z.number().check(z.int())), []),
   /** Concepts the step uses. */
-  concepts: z.array(TutorConcept).default([]),
+  concepts: z._default(z.array(TutorConcept), []),
   /** True when this step completes the derivation. */
-  solved: z.boolean().default(false),
+  solved: z._default(z.boolean(), false),
 });
 export type CheckStepResponse = z.infer<typeof CheckStepResponse>;
 
 /** An earlier tutor check of step `step` (1-based), passed to the referee so it can build on it. */
 export const StepCheckBrief = z.object({
-  step: z.number().int().min(1),
+  step: z.number().check(z.int(), z.minimum(1)),
   verdict: StepVerdict,
-  comment: z.string().max(1000).default(""),
+  comment: z._default(z.string().check(z.maxLength(1000)), ""),
   /** The tutor said this step completes the solution. */
-  solved: z.boolean().default(false),
+  solved: z._default(z.boolean(), false),
 });
 export type StepCheckBrief = z.infer<typeof StepCheckBrief>;
 
 /** "Reviewer 2": a pedantic (but accurate) referee report on the derivation so far. */
-export const RefereeRequest = TutorBase.extend({
-  checks: z.array(StepCheckBrief).max(60).default([]),
+export const RefereeRequest = z.extend(TutorBase, {
+  checks: z._default(z.array(StepCheckBrief).check(z.maxLength(60)), []),
 });
 export type RefereeRequest = z.infer<typeof RefereeRequest>;
 
@@ -829,17 +844,20 @@ const lenientWords = (v: unknown) => (typeof v === "string" ? v.trim().toLowerCa
 export const RefereePoint = z.object({
   /** The step it is about (1-based), or none for the derivation as a whole. */
   // A step the model numbers 0 (or oddly) is read as "the derivation as a whole", not an error for the report.
-  step: z.preprocess((v) => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : undefined), z.number().int().min(1).optional()),
-  severity: z.preprocess(lenientWords, RefereeSeverity).catch("minor"),
-  comment: z.string().trim().min(1),
+  step: z.pipe(
+    z.transform((v) => (typeof v === "number" && Number.isInteger(v) && v >= 1 ? v : undefined)),
+    z.optional(z.number().check(z.int(), z.minimum(1))),
+  ),
+  severity: z.catch(z.pipe(z.transform(lenientWords), RefereeSeverity), "minor"),
+  comment: z.string().check(z.trim(), z.minLength(1)),
 });
 export type RefereePoint = z.infer<typeof RefereePoint>;
 
 export const RefereeResponse = z.object({
-  verdict: z.preprocess(lenientWords, RefereeVerdict),
-  summary: z.string().trim().min(1),
-  points: z.array(RefereePoint).default([]),
-  grudgingPraise: z.string().default(""),
+  verdict: z.pipe(z.transform(lenientWords), RefereeVerdict),
+  summary: z.string().check(z.trim(), z.minLength(1)),
+  points: z._default(z.array(RefereePoint), []),
+  grudgingPraise: z._default(z.string(), ""),
 });
 export type RefereeResponse = z.infer<typeof RefereeResponse>;
 

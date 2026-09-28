@@ -130,6 +130,16 @@ describe("tasks with mock provider", () => {
     await expect(tasks.explain(bad, { node: { name: "X" } })).rejects.toThrow(/malformed output/);
     expect(calls).toBe(2);
   });
+
+  it("tells the AI what was wrong in zod's English messages (zod/mini has none of its own)", async () => {
+    const asked: ChatMessage[][] = [];
+    const bad: Provider = {
+      id: "bad", label: "Bad", model: "m", configured: true, listModels: async () => [],
+      complete: async (msgs) => { asked.push(msgs); return '{"summary":"","keyPoints":"not a list"}'; },
+    };
+    await expect(tasks.explain(bad, { node: { name: "X" } })).rejects.toThrow(/Too small: expected string to have >=1 characters/);
+    expect(asked[1].at(-1)!.content).toContain("Too small: expected string to have >=1 characters");
+  });
 });
 
 describe("structured output retry", () => {

@@ -9,7 +9,9 @@ import {
   type SearchEngineId,
   type TaskName,
 } from "@nodestorm/shared";
-import { z, ZodError } from "zod";
+import { z } from "zod";
+// The shared schemas are zod/mini ones, whose errors are $ZodError (the classic ZodError is one too).
+import { $ZodError } from "zod/v4/core";
 import type { Registry } from "./providers/registry.js";
 
 /**
@@ -146,7 +148,7 @@ export function createApp(registry: Registry, opts: AppOptions = {}) {
       } catch (err) {
         if (err instanceof CancelledError) {
           if (!res.headersSent) res.status(499).end();
-        } else if (err instanceof ZodError) {
+        } else if (err instanceof $ZodError) {
           res.status(400).json({ error: "Invalid request", details: err.issues });
         } else if (err instanceof ProviderError) {
           res.status(err.status).json({ error: err.message, ...err.info });

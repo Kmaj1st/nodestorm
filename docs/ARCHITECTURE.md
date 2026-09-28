@@ -44,6 +44,11 @@ Layering inside the client, from the bottom up:
 ## 2. Data model
 
 Everything is defined with zod in `shared/src/model.ts`; the TypeScript types are `z.infer`s of the schemas.
+The schemas the browser uses (`model.ts`, `lookup/webSearch.ts`, `client/src/lib/baike.ts`) are written with
+`zod/mini`'s functional API (`z.optional(z.string().check(z.maxLength(300)))`), which the bundler tree-shakes: the
+classic method API cost ~58 kB more in the main chunk. `model.ts` installs zod's English messages (mini has none), so
+issues read exactly as before. Only the server's own request schema (`server/src/app.ts`) uses classic `zod`; it
+catches `$ZodError`, which both flavours throw. `scripts/zod-mini-codemod.mts` converts classic-style schemas.
 
 ```mermaid
 classDiagram
@@ -846,6 +851,10 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   (KaTeX chunk and fonts from the cache), a failed chunk load, the update notice, and a Chinese PDF whose font isn't
   embedded read offline once its CMaps were used online.
 - **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph; `PERF_PROFILE=1` prints hot functions.
+  `--built` (or `E2E_BUILT=1`) measures a production build instead (`client/dist-perf`, built with
+  `VITE_PERF_HOOKS=1`, which only adds `client/src/perfHooks.ts`: the stores the sections drive). `node
+  e2e/firstload.mjs` (after `npm run build`) times the first load on Fast 3G with a 4x slower CPU;
+  `FIRSTLOAD_LANG=zh` for the Chinese interface. See **Performance** below for reference numbers.
 - **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
   once against a real provider using `server/.env`, validates against the same schemas, prints timings.
 - **CI** (`.github/workflows/ci.yml`): on every push and PR: `npm ci`, typecheck, test, install Chromium, e2e,

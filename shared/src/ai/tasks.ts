@@ -43,7 +43,7 @@ import {
   AssessResponse,
   type AssessRating,
 } from "../model";
-import type { z } from "zod";
+import type * as z from "zod/mini";
 import { isLeanName } from "../lookup/loogle";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
 import {
@@ -176,7 +176,7 @@ function matchingBrace(body: string, start: number): number {
   return -1;
 }
 
-async function runStructured<S extends z.ZodTypeAny>(
+async function runStructured<S extends z.ZodMiniType>(
   provider: Provider,
   messages: ChatMessage[],
   schema: S,
