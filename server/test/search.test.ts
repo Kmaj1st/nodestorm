@@ -160,6 +160,43 @@ describe("server: web search", () => {
       expect(upstream.map((u) => u.init.redirect)).toEqual(["error", "error", "error"]);
     });
 
+    it("follows a SearXNG redirect only to the same host (or its https), at most twice: never to an internal address", async () => {
+      const redirect = (location: string, status = 302) => new Response(null, { status, headers: { location } });
+      const ok = () => new Response(JSON.stringify({ results: [{ title: "G", url: "https://ncatlab.org/nlab/show/group", content: "A group…" }] }));
+      const run = async (hops: (() => Response)[], url = "http://searx.example.org/") => {
+        upstream.length = 0;
+        let i = 0;
+        reply = () => (hops[i++] ?? ok)();
+        return search("searxng", { q: "x", count: 1, lang: "en", url });
+      };
+      // The same host (a moved path, or its https) is followed; each request is sent without following on its own.
+      let res = await run([() => redirect("/searx/search?q=x&format=json"), () => redirect("https://searx.example.org/searx/search?q=x&format=json", 301)]);
+      expect(res.status).toBe(200);
+      expect((await res.json()).hits).toHaveLength(1);
+      expect(upstream.map((u) => u.url)).toEqual([
+        "http://searx.example.org/search?q=x&format=json&language=en",
+        "http://searx.example.org/searx/search?q=x&format=json",
+        "https://searx.example.org/searx/search?q=x&format=json",
+      ]);
+      expect(upstream.map((u) => u.init.redirect)).toEqual(["manual", "manual", "manual"]);
+      // A cloud metadata address, another host, a downgrade to http, another port, or a third redirect: refused.
+      for (const hops of [
+        [() => redirect("http://169.254.169.254/latest/meta-data/")],
+        [() => redirect("https://evil.example/search")],
+        [() => redirect("http://searx.example.org.evil.example/")],
+        [() => redirect("http://searx.example.org:6379/")],
+        [() => redirect("/a"), () => redirect("/b"), () => redirect("/c")],
+      ]) {
+        res = await run(hops);
+        expect(res.status).toBe(502);
+        expect(await res.json()).toMatchObject({ code: "unreachable", params: { provider: "SearXNG" }, detail: expect.stringContaining("redirect") });
+        expect(upstream.some((u) => /169\.254|evil|6379|\/c$/.test(u.url))).toBe(false);
+      }
+      res = await run([() => redirect("http://searx.example.org/x")], "https://searx.example.org/");
+      expect(res.status).toBe(502);
+      expect(upstream).toHaveLength(1);
+    });
+
     it("no part of a key reaches the error detail, even where the detail is cut short", async () => {
       reply = () =>
         new Response(JSON.stringify({ error: { code: "SUBSCRIPTION_TOKEN_INVALID", detail: `${"x".repeat(185)} token env-brave-key-123 is invalid` } }), { status: 422 });
