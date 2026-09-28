@@ -47,12 +47,20 @@ let opening: Promise<IDBDatabase> | null = null;
  * Sessions and document metadata are saved in the background while the user works, and a transaction that hasn't
  * committed when the page goes (a reload, a closed tab) is aborted: the last change would be lost. So each such write
  * is first noted in localStorage, synchronously, and the note is dropped once the transaction completes. The first
- * open of the database in a page writes through whatever notes are left (`null` notes a deletion). Only small records
- * go here; pages are written before the document shows.
+ * open of the database in a page writes through whatever notes are left (`null` notes a deletion). Imported pages are
+ * written before the document shows; a page's text changed later (`updatePage`) is noted too, while the page notes
+ * stay under PAGE_NOTES_MAX in all. A bigger one is kept in memory instead and noted, as far as localStorage takes it,
+ * only when the page is hidden or goes (`pagehide`, `visibilitychange`), which is when a reload could lose it.
  */
 const PENDING_KEY = "nodestorm-docs-pending";
-type Journaled = "sessions" | "docs";
+type Journaled = "sessions" | "docs" | "pages";
 type Pending = Partial<Record<Journaled, Record<string, unknown>>>;
+
+/** Characters of page text (as JSON) the page notes may hold at once: localStorage has ~5 MB for the whole app. */
+export const PAGE_NOTES_MAX = 200_000;
+
+/** A page's key in the notes. */
+const pageKey = (p: { docId: string; page: number }) => JSON.stringify([p.docId, p.page]);
 
 function readPending(): Pending {
   try {
@@ -80,6 +88,51 @@ function note(store: Journaled, id: string, value: unknown) {
   return JSON.stringify(value);
 }
 
+/** Page writes too big to note right away, by page key: noted when the page is hidden or goes (see PENDING_KEY). */
+const unnoted = new Map<string, DocPage>();
+let flushing = false;
+
+function flushUnnoted() {
+  if (!unnoted.size) return;
+  const p = readPending();
+  p.pages = { ...p.pages };
+  for (const [id, page] of unnoted) p.pages[id] = page;
+  writePending(p); // storage full: those writes just aren't protected
+}
+
+/** Note a page write if the page notes stay small enough, else keep it for `flushUnnoted`. Returns the note. */
+function notePage(page: DocPage): string {
+  const id = pageKey(page);
+  const others = Object.entries(readPending().pages ?? {}).filter(([k]) => k !== id);
+  if (JSON.stringify(Object.fromEntries(others)).length + JSON.stringify(page).length <= PAGE_NOTES_MAX) {
+    unnoted.delete(id);
+    return note("pages", id, page);
+  }
+  unnoted.set(id, page);
+  if (!flushing && typeof addEventListener === "function" && typeof document !== "undefined") {
+    flushing = true;
+    addEventListener("pagehide", flushUnnoted);
+    document.addEventListener("visibilitychange", () => document.visibilityState === "hidden" && flushUnnoted());
+  }
+  return JSON.stringify(page);
+}
+
+/** Drop the notes (made or waiting) of these documents' pages: the documents were replaced or deleted. */
+function forgetPages(docIds: ReadonlySet<string>) {
+  const ofDocs = (id: string) => {
+    try {
+      return docIds.has(JSON.parse(id)[0]);
+    } catch {
+      return false;
+    }
+  };
+  for (const id of unnoted.keys()) if (ofDocs(id)) unnoted.delete(id);
+  const p = readPending();
+  if (!p.pages) return;
+  for (const id of Object.keys(p.pages)) if (ofDocs(id)) delete p.pages[id];
+  writePending(p);
+}
+
 /** The write is in IndexedDB: drop its note, unless a newer write of the same record noted something else since. */
 function settle(store: Journaled, id: string, noted: string) {
   const p = readPending();
@@ -92,11 +145,16 @@ function settle(store: Journaled, id: string, noted: string) {
 /** Write through the notes an earlier page left (its writes may not have committed). */
 async function replayPending(db: IDBDatabase) {
   const p = readPending();
-  const entries = (["sessions", "docs"] as const).flatMap((store) => Object.entries(p[store] ?? {}).map(([id, v]) => ({ store, id, v })));
+  // Pages first, so that a document deleted afterwards takes them along.
+  const entries = (["pages", "sessions", "docs"] as const).flatMap((store) => Object.entries(p[store] ?? {}).map(([id, v]) => ({ store, id, v })));
   if (!entries.length) return;
   const tx = db.transaction(["sessions", "docs", "pages"], "readwrite");
   for (const { store, id, v } of entries) {
-    if (v && typeof v === "object" && (v as { id?: unknown }).id === id) tx.objectStore(store).put(v);
+    if (store === "pages") {
+      const page = v as Partial<DocPage> | null;
+      const valid = typeof page?.docId === "string" && typeof page.page === "number" && typeof page.text === "string";
+      if (valid && pageKey(page as DocPage) === id) tx.objectStore("pages").put(page);
+    } else if (v && typeof v === "object" && (v as { id?: unknown }).id === id) tx.objectStore(store).put(v);
     else if (v === null) {
       tx.objectStore(store).delete(id);
       if (store === "docs") tx.objectStore("pages").delete(pageRange(id));
@@ -170,13 +228,15 @@ export async function docsAvailable(): Promise<boolean> {
 }
 
 /** Store a document with its pages, replacing any earlier copy with the same id (and all of that copy's pages). */
-export const putDoc = (meta: DocMeta, pages: DocPage[]) =>
-  run(["docs", "pages"], "readwrite", (tx) => {
+export const putDoc = (meta: DocMeta, pages: DocPage[]) => {
+  forgetPages(new Set([meta.id])); // an earlier copy's page edits must not come back over this one
+  return run(["docs", "pages"], "readwrite", (tx) => {
     const store = tx.objectStore("pages");
     store.delete(pageRange(meta.id));
     tx.objectStore("docs").put(meta);
     for (const p of pages) store.put({ ...p, docId: meta.id });
   });
+};
 
 /** A project's documents, oldest first. */
 export const listDocs = (projectId: string) =>
@@ -192,11 +252,16 @@ export const getPages = (docId: string) =>
     return pages.sort((a, b) => a.page - b.page);
   });
 
-/** Replace one page (e.g. with text a vision model read off a scan). */
-export const updatePage = (page: DocPage) =>
-  run(["pages"], "readwrite", (tx) => {
+/** Replace one page (e.g. with text a vision model read off a scan, or pasted), noted first (see PENDING_KEY). */
+export async function updatePage(page: DocPage) {
+  const id = pageKey(page);
+  const noted = notePage(page);
+  await run(["pages"], "readwrite", (tx) => {
     tx.objectStore("pages").put(page);
   });
+  if (unnoted.get(id) === page) unnoted.delete(id);
+  settle("pages", id, noted);
+}
 
 /** A write of one record in the background, noted first so a reload right after it can't lose it (see PENDING_KEY). */
 async function noted(store: Journaled, id: string, value: object | null, write: () => Promise<void>) {
@@ -223,7 +288,9 @@ export const deleteProjectData = (projectId: string) => {
   writePending(p);
   return run(["docs", "pages", "sessions"], "readwrite", async (tx) => {
     const docs = await done(tx.objectStore("docs").getAll() as IDBRequest<DocMeta[]>);
-    for (const d of docs.filter((d) => d.projectId === projectId)) {
+    const gone = docs.filter((d) => d.projectId === projectId);
+    forgetPages(new Set(gone.map((d) => d.id)));
+    for (const d of gone) {
       tx.objectStore("docs").delete(d.id);
       tx.objectStore("pages").delete(pageRange(d.id));
     }
@@ -233,13 +300,15 @@ export const deleteProjectData = (projectId: string) => {
 };
 
 /** Delete a document and all its pages. */
-export const deleteDoc = (id: string) =>
-  noted("docs", id, null, () =>
+export const deleteDoc = (id: string) => {
+  forgetPages(new Set([id]));
+  return noted("docs", id, null, () =>
     run(["docs", "pages"], "readwrite", (tx) => {
       tx.objectStore("docs").delete(id);
       tx.objectStore("pages").delete(pageRange(id));
     }),
   );
+};
 
 /** Every `[docId, page]` key of one document: page numbers are numbers, and every number sorts before any array. */
 const pageRange = (docId: string) => IDBKeyRange.bound([docId, -Infinity], [docId, []]);
@@ -271,4 +340,5 @@ export async function closeDocDb() {
   const db = await opening?.catch(() => null);
   db?.close();
   opening = null;
+  unnoted.clear();
 }

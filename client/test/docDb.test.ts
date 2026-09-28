@@ -9,6 +9,7 @@ import {
   docsAvailable,
   getPages,
   listDocs,
+  PAGE_NOTES_MAX,
   listSessions,
   putDoc,
   putSession,
@@ -152,16 +153,25 @@ describe("docDb", () => {
 describe("docDb and a reload right after a change", () => {
   // localStorage keeps a note of each background write until its transaction completes.
   const data = new Map<string, string>();
-  const g = globalThis as { localStorage?: unknown };
+  const g = globalThis as { localStorage?: unknown; addEventListener?: unknown; document?: unknown };
+  // The window and document events a page gets as it is hidden or goes.
+  const win = new EventTarget();
+  const doc = Object.assign(new EventTarget(), { visibilityState: "visible" as DocumentVisibilityState });
   beforeEach(() => {
     data.clear();
+    g.addEventListener = win.addEventListener.bind(win);
+    g.document = doc;
     g.localStorage = {
       getItem: (k: string) => data.get(k) ?? null,
       setItem: (k: string, v: string) => void data.set(k, v),
       removeItem: (k: string) => void data.delete(k),
     };
   });
-  afterEach(() => delete g.localStorage);
+  afterEach(() => {
+    delete g.localStorage;
+    delete g.addEventListener;
+    delete g.document;
+  });
 
   const useDb = async (db: IDBFactory) => {
     await closeDocDb();
@@ -217,6 +227,56 @@ describe("docDb and a reload right after a change", () => {
     await running;
     expect(await listSessions("p2")).toEqual([]);
     expect(data.size).toBe(0);
+  });
+
+  it("a page's text changed just before the reload is still there, and the note is gone once written", async () => {
+    await reloadLosing(
+      () => updatePage(page("a", 2, "typed in")),
+      () => putDoc(meta("a"), [page("a", 1), page("a", 2, "")]),
+    );
+    expect(data.size).toBe(1);
+    expect(await getPages("a")).toEqual([page("a", 1), page("a", 2, "typed in")]);
+    expect(data.size).toBe(0);
+  });
+
+  it("a page too big to note at once is noted when the page is hidden or goes", async () => {
+    const big = "x".repeat(PAGE_NOTES_MAX);
+    for (const leave of ["pagehide", "visibilitychange"]) {
+      await reloadLosing(
+        () => {
+          const running = updatePage(page("a", 1, big));
+          expect(data.size).toBe(0); // not noted yet: it would crowd out the rest of localStorage
+          if (leave === "visibilitychange") {
+            doc.visibilityState = "hidden";
+            doc.dispatchEvent(new Event("visibilitychange"));
+          } else win.dispatchEvent(new Event("pagehide"));
+          return running;
+        },
+        () => putDoc(meta("a"), [page("a", 1)]),
+      );
+      expect((await getPages("a"))[0].text).toBe(big);
+      doc.visibilityState = "visible";
+    }
+    // Small ones are still noted right away beside a big one waiting.
+    await putDoc(meta("b"), [page("b", 1)]);
+    const running = Promise.all([updatePage(page("b", 1, big)), updatePage(page("b", 2, "small"))]);
+    expect(data.get("nodestorm-docs-pending")).toContain("small");
+    expect(data.get("nodestorm-docs-pending")).not.toContain(big);
+    await running;
+    expect(data.size).toBe(0);
+  });
+
+  it("a page changed and then its document deleted before the reload doesn't come back", async () => {
+    await reloadLosing(
+      async () => {
+        const edit = updatePage(page("a", 1, "typed in"));
+        await deleteDoc("a");
+        await edit;
+      },
+      () => putDoc(meta("a"), [page("a", 1)]),
+    );
+    expect(await listDocs("p1")).toEqual([]);
+    expect(await getPages("a")).toEqual([]);
   });
 
   it("drops a garbled note instead of failing", async () => {
