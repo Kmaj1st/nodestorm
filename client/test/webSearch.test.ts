@@ -1,4 +1,4 @@
-import { CancelledError, webSearchRequest } from "@nodestorm/shared";
+import { CancelledError, MockProvider, tasks, webSearchRequest } from "@nodestorm/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { useLocale } from "../src/i18n";
 import { errorMessage } from "../src/lib/errors";
@@ -384,6 +384,23 @@ describe("the offline demo's pretend web", () => {
   it("finds aliases, and nothing for a concept it doesn't know", () => {
     expect(demoResults("Factor group")[0].title).toBe("Quotient Group - Demo Encyclopedia");
     expect(demoResults("Banach space")).toEqual([]);
+  });
+
+  it("Chinese pages for a Chinese name (or alias), the forum still wrong; the demo's check rates them in Chinese", async () => {
+    const res = demoResults("因子群");
+    expect(res.map((r) => r.site)).toEqual(["zh.demo-encyclopedia.example", "zh.demo-lecture-notes.example", "zh.demo-forum.example"]);
+    expect(res[0].title).toBe("商群 - 演示百科");
+    const def = "正规子群 $N$ 的陪集构成的群 $G/N$，运算为 $(aN)(bN) = abN$。";
+    expect(res[0].text).toContain(def);
+    expect(res[1].text).toContain(def);
+    expect(res[2].text).not.toContain(def);
+    expect(res.every((r) => r.url.startsWith("https://") && r.engine === "demo")).toBe(true);
+    expect(demoResults("拓扑空间")).toEqual([]);
+    const sources = res.map((r, i) => ({ id: `w${i}`, kind: "web", site: r.site, title: r.title, url: r.url, text: r.text }));
+    const rated = await tasks.assess(new MockProvider(), { name: "因子群", sources });
+    expect(rated.ratings.map((r) => r.reliability)).toEqual(["high", "high", "low"]);
+    expect(rated.ratings.slice(0, 2).map((r) => r.passage)).toEqual([def, def]);
+    expect(rated.ratings.every((r) => /\p{Script=Han}/u.test(r.reasons))).toBe(true);
   });
 });
 

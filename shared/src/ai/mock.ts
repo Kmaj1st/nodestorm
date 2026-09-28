@@ -1,5 +1,6 @@
 import { normalizeName, type ConceptKind, type TheoremAnatomy } from "../model";
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
+import { ABSURD_VOICE_ZH, ANATOMY_ZH, BRIDGE_NAME_ZH, BRIDGES_ZH, EXPLAIN_VOICE_ZH, EXPLAIN_ZH, KB_ZH, MATHLIB_WHY_ZH } from "./mockZh";
 
 /** The offline demo's Mathlib names for its concepts (real Mathlib declarations), plus one that doesn't exist. */
 const MATHLIB: Record<string, { name: string; why: string }[]> = {
@@ -104,7 +105,13 @@ const kindOf = (key: string): ConceptKind => KB_KIND[key] ?? "definition";
 /** A kind read off a name that says what it is ("Zorn's lemma", "Axiom of choice"), else null. */
 export function kindFromName(name: string): ConceptKind | null {
   const m = name.toLowerCase().match(/\b(theorem|lemma|proposition|corollary|axiom|conjecture|notation|example|definition)\b/);
-  return m ? (m[1] as ConceptKind) : null;
+  if (m) return m[1] as ConceptKind;
+  // The same words in Chinese ("中值定理", "佐恩引理", "选择公理").
+  const zh = name.match(/(定理|引理|命题|推论|公理|猜想|记号|例子|定义)/)?.[1];
+  const ZH_KIND: Record<string, ConceptKind> = {
+    定理: "theorem", 引理: "lemma", 命题: "proposition", 推论: "corollary", 公理: "axiom", 猜想: "conjecture", 记号: "notation", 例子: "example", 定义: "definition",
+  };
+  return zh ? ZH_KIND[zh] : null;
 }
 
 /** "Theorem anatomy" answers for the KB theorems; other theorems get one built from their definition. */
@@ -152,9 +159,21 @@ const ANATOMY: Record<string, TheoremAnatomy> = {
   },
 };
 
-function anatomyOf(node: { name: string; definition?: string }): TheoremAnatomy {
+function anatomyOf(node: { name: string; definition?: string }, zh = false): TheoremAnatomy {
   const entry = kbGet(node.name);
-  if (entry && ANATOMY[entry.key]) return ANATOMY[entry.key];
+  if (entry && ANATOMY[entry.key]) return zh ? ANATOMY_ZH[entry.key] : ANATOMY[entry.key];
+  if (zh) {
+    const statement = node.definition?.trim() || (entry && KB_ZH[entry.key].definition) || `${node.name}，如图谱中所述。`;
+    // "若 A，则 B" / "对 A，B" / "设 A，B": a hypothesis and a conclusion; otherwise the whole statement concludes.
+    const m = statement.match(/^(?:若|如果|对于?|设)\s*(.+?)[，,]\s*(?:则\s*)?(.+)$/);
+    return {
+      hypotheses: m ? [{ text: m[1], whyNeeded: "这个命题只在这个假设下成立。", counterexampleIfDropped: "" }] : [],
+      conclusion: m ? m[2] : statement,
+      proofIdea: `离线演示没有${node.name}的证明梗概；看看它的前置知识是如何组合起来的。`,
+      examples: [],
+      nonExamples: [],
+    };
+  }
   const statement = node.definition?.trim() || entry?.definition || `${node.name}, as stated in your graph.`;
   // Split "If A, then B" / "For A, B" into a hypothesis and a conclusion; otherwise the whole statement concludes.
   const m = statement.match(/^(?:if|for|let)\s+(.+?),\s*(?:then\s+)?(.+)$/i);
@@ -326,18 +345,81 @@ const ABSURD_VOICE: Record<string, { title: Quip; moral: string; quips: Quip[] }
   },
 };
 
+/** The KB entry for a name or alias, English or Chinese. */
 function kbGet(name: string) {
   const key = normalizeName(name);
   const entry = Object.entries(KB).find(
-    ([k, v]) => normalizeName(k) === key || v.aliases.some((a) => normalizeName(a) === key),
+    ([k, v]) =>
+      normalizeName(k) === key ||
+      v.aliases.some((a) => normalizeName(a) === key) ||
+      [KB_ZH[k].name, ...KB_ZH[k].aliases].some((a) => normalizeName(a) === key),
   );
   return entry && { key: entry[0], ...entry[1] };
 }
 
-/** The knowledge base's entry for a name or alias: the offline demo's web search builds its pages from it. */
-export function kbDefinition(name: string): { name: string; definition: string; aliases: string[] } | null {
+/** A KB entry's name, definition, aliases and prerequisite reasons in the answer's language. */
+function kbText(key: string, zh: boolean) {
+  const v = KB[key];
+  if (!zh) return { name: title(key), definition: v.definition, aliases: v.aliases, deps: v.deps };
+  const z = KB_ZH[key];
+  const deps = v.deps.map((d, i) => ({ ...d, name: KB_ZH[kbGet(d.name)!.key].name, reason: z.reasons[i] ?? d.reason }));
+  return { name: z.name, definition: z.definition, aliases: z.aliases, deps };
+}
+
+const HAN = /\p{Script=Han}/u;
+
+/**
+ * Whether the answer is in Chinese, as the real prompts ask (see languageInstruction in prompts.ts): a language
+ * setting that names Chinese, or "auto" (or none) with names written in Chinese characters.
+ */
+export function answersInChinese(language: string | undefined, names: string[]): boolean {
+  const lang = (language ?? "").trim();
+  if (lang && lang.toLowerCase() !== "auto") return /chinese|中文|^zh\b/i.test(lang);
+  return names.some((n) => HAN.test(n));
+}
+
+/**
+ * The output language the prompt asks for: the request's `language` option, else the system message's
+ * "Output language" paragraph ("the same language as the concept names…" is "auto").
+ */
+function languageOf(messages: ChatMessage[], opts: CompleteOptions): string | undefined {
+  if (opts.language) return opts.language;
+  const m = textOf(messages[0]?.content ?? "").match(/^Output language: [^\n]*\) in ([^\n]+)\.$/m);
+  if (!m) return undefined;
+  return m[1].startsWith("the same language as") ? "auto" : m[1];
+}
+
+/**
+ * KB concepts named in Chinese in a text (Chinese has no spaces to find words by), with where and as what they first
+ * appear. Longer names are matched first and blanked out, so "正规子群" doesn't also count as "子群" or "群".
+ */
+function zhMentions(text: string): { key: string; at: number; hit: string }[] {
+  if (!HAN.test(text)) return [];
+  const names = Object.entries(KB_ZH)
+    .flatMap(([key, z]) => [z.name, ...z.aliases].map((n) => ({ key, n })))
+    .sort((a, b) => b.n.length - a.n.length);
+  let rest = text;
+  const out: { key: string; at: number; hit: string }[] = [];
+  for (const { key, n } of names) {
+    const at = rest.indexOf(n);
+    if (at < 0) continue;
+    const seen = out.find((o) => o.key === key);
+    if (!seen) out.push({ key, at, hit: n });
+    else if (at < seen.at) Object.assign(seen, { at, hit: n });
+    rest = rest.split(n).join("\u0000".repeat(n.length));
+  }
+  return out;
+}
+
+/**
+ * The knowledge base's entry for a name or alias (English or Chinese): the offline demo's web search builds its pages
+ * from it, in Chinese with `zh`.
+ */
+export function kbDefinition(name: string, zh = false): { name: string; definition: string; aliases: string[] } | null {
   const e = kbGet(name);
-  return e ? { name: title(e.key), definition: e.definition, aliases: e.aliases } : null;
+  if (!e) return null;
+  const t = kbText(e.key, zh);
+  return { name: t.name, definition: t.definition, aliases: t.aliases };
 }
 
 /** The plain demo explanation in one of the parody voices (content untouched; "plain" or unknown: as is). */
@@ -345,12 +427,13 @@ function voiced<T extends { intuition: string; keyPoints: string[]; examples: { 
   ex: T,
   name: string,
   voice: unknown,
+  zh = false,
 ): T {
-  const w = typeof voice === "string" ? EXPLAIN_VOICE[voice] : undefined;
+  const w = typeof voice === "string" ? (zh ? EXPLAIN_VOICE_ZH : EXPLAIN_VOICE)[voice] : undefined;
   if (!w) return ex;
   return {
     ...ex,
-    intuition: `${w.open(name)} ${ex.intuition}`,
+    intuition: `${w.open(name)}${zh ? "" : " "}${ex.intuition}`,
     keyPoints: ex.keyPoints.map(w.point),
     examples: ex.examples.map((x) => ({ ...x, body: w.example(x.body) })),
     pitfalls: ex.pitfalls.map(w.pitfall),
@@ -362,8 +445,8 @@ function voiced<T extends { intuition: string; keyPoints: string[]; examples: { 
  * medium; a page that never uses a word of mathematics is about another meaning. Each passage is copied from the
  * source's text: an encyclopedia's whole definition, or a page's first sentence that reads as a definition.
  */
-function assessSources(name: string, sources: { id: string; kind: string; site: string; title?: string; text: string }[]) {
-  const math = /\b(group|set|element|operation|homomorphism|subgroup|map|identity|theorem|function|bird)\b|\$/i;
+function assessSources(name: string, sources: { id: string; kind: string; site: string; title?: string; text: string }[], zh = false) {
+  const math = /\b(group|set|element|operation|homomorphism|subgroup|map|identity|theorem|function|bird)\b|\$|群|集合|元素|运算|同态|映射|单位元|定理|函数|鸟/i;
   const sentences = (text: string) => text.match(/[\s\S]*?(?:(?<!\b(?:e\.g|i\.e|cf|etc|vs))[.!?](?=\s|$)|[。！？])/g) ?? [text];
   const key = name.toLowerCase();
   const ratings = sources.map((s) => {
@@ -373,27 +456,45 @@ function assessSources(name: string, sources: { id: string; kind: string; site: 
     // An encyclopedia's text is already its definition; a web page's is the first sentence naming the concept.
     // A defining sentence reads like one ("A …", "The …", "For …, …", "If …"), not like a heading or an aside.
     const all = sentences(s.text).map((x) => x.trim());
-    const defining = all.find((x) => x.length >= 20 && /^(A|An|The|For|If|Let|Given)\s/.test(x));
+    // A Chinese page says "定义：…" before its definition; the passage is what follows (still the page's own words).
+    const labelled = all.find((x) => /^定义[：:]\s*\S/.test(x))?.replace(/^定义[：:]\s*/, "");
+    const defining = labelled ?? all.find((x) => x.length >= 20 && /^(A|An|The|For|If|Let|Given)\s/.test(x));
     const first = s.kind === "encyclopedia" ? s.text : (defining ?? all.find((x) => x.toLowerCase().includes(key)) ?? all[0] ?? "");
-    return {
-      id: s.id,
-      reliability: forum ? "low" : strong ? "high" : "medium",
-      reasons: forum
+    const reasons = zh
+      ? forum
+        ? "论坛帖子：没有编辑审核，而且说法与百科和讲义不一致。"
+        : other
+          ? "讲的是这个名称的另一个含义；就那个含义而言是可靠的页面。"
+          : strong
+            ? "百科或课程页面；与其他来源一致。"
+            : "普通网页；与其他来源一致，但没有列出参考文献。"
+      : forum
         ? "A forum post: no editorial review, and its wording disagrees with the encyclopedia and the lecture notes."
         : other
           ? "Describes another meaning of the name; a reliable page for that meaning."
           : strong
             ? "An encyclopedia or course page; agrees with the other sources."
-            : "A general web page; agrees with the other sources but names no references.",
-      // Another meaning is labelled by the page's first words (the demo can't tell meanings apart any better).
-      sense: other ? s.text.split(/\s+/).slice(0, 3).join(" ").replace(/[.,;:]$/, "") : "mathematics",
+            : "A general web page; agrees with the other sources but names no references.";
+    // Another meaning is labelled by the page's first words (the demo can't tell meanings apart any better).
+    const otherSense = HAN.test(s.text.slice(0, 20))
+      ? s.text.split(/[，。：；,.;:\s]/)[0].slice(0, 8)
+      : s.text.split(/\s+/).slice(0, 3).join(" ").replace(/[.,;:]$/, "");
+    return {
+      id: s.id,
+      reliability: forum ? "low" : strong ? "high" : "medium",
+      reasons,
+      sense: other ? otherSense : zh ? "数学" : "mathematics",
       passage: first.trim(),
     };
   });
   const low = ratings.filter((r) => r.reliability === "low").map((r) => sources.find((s) => s.id === r.id)!.site);
-  const note = low.length
-    ? `The sources agree on the definition, except ${low.join(", ")}, which contradicts the others.`
-    : "The sources agree on the definition.";
+  const note = zh
+    ? low.length
+      ? `这些来源对定义的说法一致，只有 ${low.join("、")} 与其他来源矛盾。`
+      : "这些来源对定义的说法一致。"
+    : low.length
+      ? `The sources agree on the definition, except ${low.join(", ")}, which contradicts the others.`
+      : "The sources agree on the definition.";
   return { ratings, note };
 }
 
@@ -420,36 +521,49 @@ export class MockProvider implements Provider {
   async complete(messages: ChatMessage[], opts: CompleteOptions = {}): Promise<string> {
     // Honour cancellation like a real provider; the answer itself is instant.
     return withDeadline(this.label, { signal: opts.signal, timeoutMs: opts.timeoutMs ?? 10_000 }, async () =>
-      this.answer(messages),
+      this.answer(messages, languageOf(messages, opts)),
     );
   }
 
-  private answer(messages: ChatMessage[]): string {
+  private answer(messages: ChatMessage[], language: string | undefined): string {
     const task = textOf(messages[0]?.content ?? "").match(/\[task:(\w+)\]/)?.[1];
     const inp = parseInput(messages);
+    // Chinese or English, by the language setting or ("auto") the script of the names the task is about.
+    const zhFor = (...xs: unknown[]) => answersInChinese(language, xs.map((x) => String(x ?? "")));
+    const nodeZh = () => zhFor(inp.node?.name);
     switch (task) {
       case "name":
-        return JSON.stringify(this.name(String(inp.description ?? "")));
+        return JSON.stringify(this.name(String(inp.description ?? ""), zhFor(inp.description)));
       case "relate":
-        return JSON.stringify(this.relate(inp.a.name, inp.b.name));
+        return JSON.stringify(this.relate(inp.a.name, inp.b.name, zhFor(inp.a.name, inp.b.name)));
       case "deps":
-        return JSON.stringify(this.deps(inp.node.name, inp.existing ?? []));
-      case "derive":
-        return JSON.stringify(this.derive(inp.selected ?? []));
-      case "explain":
+        return JSON.stringify(this.deps(inp.node.name, inp.existing ?? [], nodeZh()));
+      case "derive": {
+        const selected: { name: string }[] = inp.selected ?? [];
+        return JSON.stringify(this.derive(selected, zhFor(...selected.map((s) => s.name))));
+      }
+      case "explain": {
+        const zh = nodeZh();
         return JSON.stringify(
-          voiced(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive")), inp.node?.name ?? "", inp.voice),
+          voiced(this.explain(inp.node, inp.prerequisites ?? [], String(inp.level ?? "intuitive"), zh), inp.node?.name ?? "", inp.voice, zh),
         );
+      }
       case "extract":
-        return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? []));
-      case "resolveCycle":
-        return JSON.stringify(this.resolveCycle(inp.links ?? []));
+        return JSON.stringify(this.extract(String(inp.text ?? ""), inp.existing ?? [], zhFor(inp.text)));
+      case "resolveCycle": {
+        const links: { from: { name: string }; to: { name: string } }[] = inp.links ?? [];
+        return JSON.stringify(this.resolveCycle(links, zhFor(...links.flatMap((l) => [l.from?.name, l.to?.name]))));
+      }
       case "quiz":
-        return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice)));
+        return JSON.stringify(this.quiz(inp.node, inp.prerequisites ?? [], String(inp.style ?? "recall"), Boolean(inp.multipleChoice), nodeZh()));
       case "connect":
-        return JSON.stringify(this.connect(inp));
-      case "mathlib":
-        return JSON.stringify({ candidates: MATHLIB[normalizeName(String(inp.node?.name ?? ""))] ?? [] });
+        return JSON.stringify(this.connect(inp, nodeZh()));
+      case "mathlib": {
+        // The names are Lean identifiers in any language; only the "why" is translated.
+        const name = String(inp.node?.name ?? "");
+        const found = MATHLIB[kbGet(name)?.key ?? normalizeName(name)] ?? [];
+        return JSON.stringify({ candidates: nodeZh() ? found.map((c) => ({ ...c, why: MATHLIB_WHY_ZH[c.name] ?? c.why })) : found });
+      }
       case "readPage":
         return JSON.stringify({ text: SCANNED_PAGE });
       case "splitProblems":
@@ -461,11 +575,11 @@ export class MockProvider implements Provider {
       case "refereeReport":
         return JSON.stringify(this.referee(inp));
       case "absurdChain":
-        return JSON.stringify(this.absurdChain(inp));
+        return JSON.stringify(this.absurdChain(inp, zhFor(inp.from?.name, inp.to?.name)));
       case "anatomy":
-        return JSON.stringify(anatomyOf(inp.node ?? { name: "" }));
+        return JSON.stringify(anatomyOf(inp.node ?? { name: "" }, nodeZh()));
       case "assess":
-        return JSON.stringify(assessSources(String(inp.name ?? ""), inp.sources ?? []));
+        return JSON.stringify(assessSources(String(inp.name ?? ""), inp.sources ?? [], zhFor(inp.name)));
       default:
         return "{}";
     }
@@ -478,26 +592,42 @@ export class MockProvider implements Provider {
    * The user's stops (`via`) are visited in order, one shortest route per leg, never through a concept an earlier leg
    * used; a leg with no such route (two unknown stops in a row both need "Written language") is one generic hop.
    */
-  private absurdChain(inp: { from: { name: string }; to: { name: string }; via?: { name: string }[]; style?: string; avoid?: string[] }) {
+  private absurdChain(inp: { from: { name: string }; to: { name: string }; via?: { name: string }[]; style?: string; avoid?: string[] }, zh = false) {
     const from = inp.from.name;
     const to = inp.to.name;
     const via = (inp.via ?? []).map((v) => v.name);
-    const stops = [from, ...via, to];
-    const known = (name: string) =>
-      [...new Set(BRIDGES.flatMap((l) => [l.a, l.b]))].find((n) => normalizeName(n) === normalizeName(name));
+    const named = [from, ...via, to];
+    // The links in the answer's language; a name in the other language (or a KB alias) still finds its concept.
+    const bridges = zh
+      ? BRIDGES.map((l, i) => ({ a: BRIDGE_NAME_ZH[l.a], b: BRIDGE_NAME_ZH[l.b], ...BRIDGES_ZH[i] }))
+      : BRIDGES;
+    const written = zh ? BRIDGE_NAME_ZH[WRITTEN] : WRITTEN;
+    const english = [...new Set(BRIDGES.flatMap((l) => [l.a, l.b]))];
+    const known = (name: string) => {
+      const k = normalizeName(name);
+      // A Chinese alias of a KB concept ("同态核", "鸡蛋") finds it too.
+      const kb = HAN.test(name) ? kbGet(name)?.key : undefined;
+      const en = english.find(
+        (n) => normalizeName(n) === k || normalizeName(BRIDGE_NAME_ZH[n]) === k || (kb !== undefined && kbGet(n)?.key === kb),
+      );
+      return en && (zh ? BRIDGE_NAME_ZH[en] : en);
+    };
+    /** The chain's own name for a stop it knows, else the stop's name. */
+    const canonical = (name: string) => known(name) ?? name;
+    const stops = named.map(canonical);
     type Edge = { next: string; kind: string; fact: string };
     type Hop = { from: string; to: string; kind: string; fact: string };
     const edges = new Map<string, Edge[]>();
     const add = (x: string, e: Edge) => edges.set(normalizeName(x), [...(edges.get(normalizeName(x)) ?? []), e]);
-    for (const l of BRIDGES) {
+    for (const l of bridges) {
       add(l.a, { next: l.b, kind: l.kind, fact: l.fact });
       add(l.b, { next: l.a, kind: l.back, fact: l.fact });
     }
     for (const end of stops) {
       if (known(end)) continue;
-      const fact = `The name “${end}” is written with the letters of a writing system.`;
-      add(end, { next: WRITTEN, kind: "using the letters of", fact });
-      add(WRITTEN, { next: end, kind: "writing", fact });
+      const fact = zh ? `名称“${end}”是用某种文字系统的字符写成的。` : `The name “${end}” is written with the letters of a writing system.`;
+      add(end, { next: written, kind: zh ? "借用字符于" : "using the letters of", fact });
+      add(written, { next: end, kind: zh ? "书写" : "writing", fact });
     }
     /** The shortest route from `a` to `b` that passes through none of `blocked`. */
     const route = (a: string, b: string, blocked: Set<string>): Hop[] | null => {
@@ -524,7 +654,7 @@ export class MockProvider implements Provider {
       return hops.length ? hops : null;
     };
     const avoid = inp.avoid ?? [];
-    const avoided = avoid.map(normalizeName);
+    const avoided = avoid.map((a) => normalizeName(canonical(a)));
     const used = new Set<string>();
     const hops: Hop[] = [];
     for (let s = 0; s + 1 < stops.length; s++) {
@@ -532,13 +662,18 @@ export class MockProvider implements Provider {
       // Never through a concept already on the chain, nor through a stop still to come.
       const blocked = new Set([...used, ...stops.slice(s + 2).map(normalizeName)]);
       const leg = route(a, b, new Set([...blocked, ...avoided])) ??
-        route(a, b, blocked) ?? [{ from: a, to: b, kind: "sharing a sentence with", fact: `“${a}” and “${b}” can be named in the same sentence, as this one does.` }];
-      leg[0] = { ...leg[0], from: a };
-      leg[leg.length - 1] = { ...leg[leg.length - 1], to: b };
+        route(a, b, blocked) ?? [
+          zh
+            ? { from: a, to: b, kind: "同句提及", fact: `“${named[s]}”和“${named[s + 1]}”可以在同一个句子里提到，就像这句话一样。` }
+            : { from: a, to: b, kind: "sharing a sentence with", fact: `“${named[s]}” and “${named[s + 1]}” can be named in the same sentence, as this one does.` },
+        ];
       for (const h of leg) used.add(normalizeName(h.from));
+      // The ends and stops keep the names the user gave them.
+      leg[0] = { ...leg[0], from: named[s] };
+      leg[leg.length - 1] = { ...leg[leg.length - 1], to: named[s + 1] };
       hops.push(...leg);
     }
-    const voice = ABSURD_VOICE[inp.style ?? "deadpan"] ?? ABSURD_VOICE.deadpan;
+    const voice = (zh ? ABSURD_VOICE_ZH : ABSURD_VOICE)[inp.style ?? "deadpan"] ?? (zh ? ABSURD_VOICE_ZH : ABSURD_VOICE).deadpan;
     const n = voice.quips.length;
     return {
       title: voice.title(from, to),
@@ -547,7 +682,9 @@ export class MockProvider implements Provider {
         quip: voice.quips[(i + (avoid.length ? 1 : 0)) % n](h.from, h.to),
       })),
       moral: voice.moral,
-      plausibility: "Offline demo: the links come from a short built-in list of true facts, and the jokes from templates.",
+      plausibility: zh
+        ? "离线演示：连线来自一份内置的简短真实事实列表，笑话来自模板。"
+        : "Offline demo: the links come from a short built-in list of true facts, and the jokes from templates.",
     };
   }
 
@@ -675,52 +812,73 @@ export class MockProvider implements Provider {
     return { verdict, summary, points: points.slice(0, 8), grudgingPraise: praise };
   }
 
-  private name(desc: string) {
+  private name(desc: string, zh = false) {
     const d = desc.toLowerCase();
-    const pick = (k: string) => ({ name: title(k), definition: KB[k].definition, aliases: KB[k].aliases, kind: kindOf(k) });
-    if (d.includes("bijective") || d.includes("same structure")) return { candidates: [pick("isomorphism"), pick("homomorphism")] };
-    if (d.includes("preserv")) return { candidates: [pick("homomorphism"), pick("isomorphism")] };
-    if (d.includes("identity") && d.includes("send")) return { candidates: [pick("kernel")] };
+    const pick = (k: string) => {
+      const t = kbText(k, zh);
+      return { name: t.name, definition: t.definition, aliases: t.aliases, kind: kindOf(k) };
+    };
+    if (d.includes("bijective") || d.includes("same structure") || /双射|相同的结构|同样的结构/.test(d)) {
+      return { candidates: [pick("isomorphism"), pick("homomorphism")] };
+    }
+    if (d.includes("preserv") || d.includes("保持")) return { candidates: [pick("homomorphism"), pick("isomorphism")] };
+    if ((d.includes("identity") && d.includes("send")) || (d.includes("单位元") && /映|送/.test(d))) return { candidates: [pick("kernel")] };
+    if (zh && HAN.test(desc)) {
+      // Chinese has no spaces between words: the description's first phrase, cut short.
+      const words = desc.trim().split(/[，。；：、,.;:!?！？\s]/)[0].slice(0, 8);
+      return { candidates: [{ name: words || "未命名的想法", definition: desc, aliases: [], kind: kindFromName(desc) }] };
+    }
     const words = desc.split(/\s+/).filter(Boolean).slice(0, 3).join(" ");
-    return { candidates: [{ name: title(words || "Unnamed idea"), definition: desc, aliases: [], kind: kindFromName(desc) }] };
+    return { candidates: [{ name: title(words || (zh ? "未命名的想法" : "Unnamed idea")), definition: desc, aliases: [], kind: kindFromName(desc) }] };
   }
 
   /**
    * Offline answer: drop the link whose prerequisite is the "bigger" idea (longer definition, i.e. the less basic
    * concept) — a stand-in for judgement that's deterministic for tests.
    */
-  private resolveCycle(links: { from: { name: string; definition?: string }; to: { name: string; definition?: string } }[]) {
+  private resolveCycle(links: { from: { name: string; definition?: string }; to: { name: string; definition?: string } }[], zh = false) {
     let worst = 0;
     links.forEach((l, i) => {
       if ((l.to.definition ?? "").length > (links[worst].to.definition ?? "").length) worst = i;
     });
     const l = links[worst];
+    if (zh) return { remove: [worst], reason: l ? `“${l.to.name}”建立在“${l.from.name}”之上，而不是反过来。` : "没有要删除的连线。" };
     return {
       remove: [worst],
       reason: l ? `"${l.to.name}" builds on "${l.from.name}", not the other way round.` : "No link to remove.",
     };
   }
 
-  private relate(a: string, b: string) {
+  private relate(a: string, b: string, zh = false) {
     const ka = kbGet(a)?.key;
     const kb = kbGet(b)?.key;
-    const depOf = (x?: string, y?: string) => (x && y ? KB[x].deps.find((d) => normalizeName(d.name) === normalizeName(y)) : undefined);
+    const depOf = (x?: string, y?: string) => {
+      if (!x || !y) return undefined;
+      const i = KB[x].deps.findIndex((d) => normalizeName(d.name) === normalizeName(y));
+      return i < 0 ? undefined : kbText(x, zh).deps[i];
+    };
     const ab = depOf(ka, kb);
     const ba = depOf(kb, ka);
     // One active label on the side that does something; the other side is "none" (no passive "is used by").
-    const phrase = (d: Dep) => (d.role === "derives" ? "deriving an instance of" : d.role === "uses" ? "using" : "assuming");
+    const phrase = (d: Dep) =>
+      zh
+        ? d.role === "derives" ? "推导出" : d.role === "uses" ? "使用" : "假设"
+        : d.role === "derives" ? "deriving an instance of" : d.role === "uses" ? "using" : "assuming";
     const inverse = (_d: Dep) => "none";
+    const block = (x: string, y: string, d: Dep) => (zh ? `${x}是${y}的构件：${d.reason}` : `${x} is a building block of ${y}: ${d.reason}`);
+    const unknown = (x: string, y: string) =>
+      zh ? `离线模型不知道${x}对${y}有什么直接影响。` : `No direct influence of ${x} on ${y} is known to the offline model.`;
     return {
       aToB: ab
         ? { kind: phrase(ab), explanation: ab.reason }
         : ba
-          ? { kind: inverse(ba), explanation: `${a} is a building block of ${b}: ${ba.reason}` }
-          : { kind: "none", explanation: `No direct influence of ${a} on ${b} is known to the offline model.` },
+          ? { kind: inverse(ba), explanation: block(a, b, ba) }
+          : { kind: "none", explanation: unknown(a, b) },
       bToA: ba
         ? { kind: phrase(ba), explanation: ba.reason }
         : ab
-          ? { kind: inverse(ab), explanation: `${b} is a building block of ${a}: ${ab.reason}` }
-          : { kind: "none", explanation: `No direct influence of ${b} on ${a} is known to the offline model.` },
+          ? { kind: inverse(ab), explanation: block(b, a, ab) }
+          : { kind: "none", explanation: unknown(b, a) },
     };
   }
 
@@ -728,46 +886,54 @@ export class MockProvider implements Provider {
    * Suggested connections from the KB: what the concept's definition mentions, what it builds on, and what builds on
    * it. An existing concept keeps the graph's name; the demo's relation labels are active ("using"), one side "none".
    */
-  private connect(inp: { node: { name: string; definition?: string }; existing?: { name: string; aliases?: string[] }[]; count?: number }) {
+  private connect(inp: { node: { name: string; definition?: string }; existing?: { name: string; aliases?: string[] }[]; count?: number }, zh = false) {
     const self = kbGet(inp.node.name);
-    const text = ` ${normalizeName(inp.node.definition ?? self?.definition ?? "")} `;
+    const definition = inp.node.definition ?? (self ? kbText(self.key, zh).definition : "");
+    const text = ` ${normalizeName(definition)} `;
     const graphName = (key: string) =>
-      (inp.existing ?? []).find((e) => [e.name, ...(e.aliases ?? [])].some((n) => kbGet(n)?.key === key))?.name ?? title(key);
+      (inp.existing ?? []).find((e) => [e.name, ...(e.aliases ?? [])].some((n) => kbGet(n)?.key === key))?.name ?? kbText(key, zh).name;
     const out: { name: string; keyword: string; definition: string; kind: ConceptKind; aToB: { kind: string; explanation: string }; bToA: { kind: string; explanation: string } }[] = [];
     const add = (key: string, keyword: string, uses: boolean, why: string) => {
       if (key === self?.key || out.some((o) => normalizeName(o.name) === normalizeName(graphName(key)))) return;
       const none = { kind: "none", explanation: "" };
-      const rel = { kind: "using", explanation: why };
-      out.push({ name: graphName(key), keyword, definition: KB[key].definition, kind: kindOf(key), aToB: uses ? rel : none, bToA: uses ? none : rel });
+      const rel = { kind: zh ? "使用" : "using", explanation: why };
+      out.push({ name: graphName(key), keyword, definition: kbText(key, zh).definition, kind: kindOf(key), aToB: uses ? rel : none, bToA: uses ? none : rel });
     };
+    const zhHits = zhMentions(definition);
     for (const [k, v] of Object.entries(KB)) {
-      const hit = [k, ...v.aliases].find((n) => text.includes(` ${normalizeName(n)} `));
-      if (hit) add(k, hit, true, `Its definition mentions ${hit}.`);
+      const hit = [k, ...v.aliases].find((n) => text.includes(` ${normalizeName(n)} `)) ?? zhHits.find((h) => h.key === k)?.hit;
+      if (hit) add(k, hit, true, zh ? `它的定义提到了“${hit}”。` : `Its definition mentions ${hit}.`);
     }
-    for (const d of self?.deps ?? []) {
+    for (const d of self ? kbText(self.key, zh).deps : []) {
       const key = kbGet(d.name)?.key;
       if (key) add(key, "", true, d.reason);
     }
     for (const [k, v] of Object.entries(KB)) {
-      if (self && v.deps.some((d) => kbGet(d.name)?.key === self.key)) add(k, "", false, `${title(k)} builds on ${inp.node.name}.`);
+      if (self && v.deps.some((d) => kbGet(d.name)?.key === self.key)) {
+        add(k, "", false, zh ? `${graphName(k)}建立在${inp.node.name}之上。` : `${title(k)} builds on ${inp.node.name}.`);
+      }
     }
     return { suggestions: out.slice(0, Number(inp.count ?? 8)) };
   }
 
-  private deps(name: string, existing: { name: string; aliases?: string[] }[]) {
+  private deps(name: string, existing: { name: string; aliases?: string[] }[], zh = false) {
     const entry = kbGet(name);
     return {
-      prerequisites: (entry?.deps ?? []).map((d) => {
-        const match = existing.find(
-          (e) => normalizeName(e.name) === normalizeName(d.name) || (e.aliases ?? []).some((a) => normalizeName(a) === normalizeName(d.name)),
-        );
+      prerequisites: (entry ? kbText(entry.key, zh).deps : []).map((d) => {
+        const key = kbGet(d.name)?.key;
+        // By name or alias, or (in the other language) by the KB concept the existing one names.
+        const match =
+          existing.find(
+            (e) => normalizeName(e.name) === normalizeName(d.name) || (e.aliases ?? []).some((a) => normalizeName(a) === normalizeName(d.name)),
+          ) ?? existing.find((e) => [e.name, ...(e.aliases ?? [])].some((n) => key !== undefined && kbGet(n)?.key === key));
         return { ...d, matchesExisting: match?.name ?? null };
       }),
       kind: entry ? kindOf(entry.key) : kindFromName(name),
     };
   }
 
-  private explain(node: { name: string; definition?: string }, prereqs: { name: string }[], level: string) {
+  private explain(node: { name: string; definition?: string }, prereqs: { name: string }[], level: string, zh = false) {
+    if (zh) return this.explainZh(node, prereqs, level);
     const entry = kbGet(node.name);
     const extra = entry && EXPLAIN[entry.key];
     const style =
@@ -800,28 +966,77 @@ export class MockProvider implements Provider {
     };
   }
 
+  /** The explanation in Chinese: the same material as `explain`, from the KB's Chinese entries. */
+  private explainZh(node: { name: string; definition?: string }, prereqs: { name: string }[], level: string) {
+    const entry = kbGet(node.name);
+    const extra = entry && EXPLAIN_ZH[entry.key];
+    const style = level === "rigorous" ? "严格地说：" : level === "example-driven" ? "先看例子：" : "直观地说：";
+    const builds = prereqs.length ? `它建立在${prereqs.map((p) => p.name).join("、")}之上。` : "";
+    if (entry) {
+      const t = kbText(entry.key, true);
+      return {
+        summary: t.definition,
+        intuition: style + (extra?.intuition ?? `${t.name}是抽象代数的一个基本概念。`) + builds,
+        keyPoints: extra?.keyPoints ?? [t.definition, ...t.deps.map((d) => d.reason)],
+        examples: extra?.examples ?? [],
+        pitfalls: extra?.pitfalls ?? [],
+        furtherReading: [{ title: "任何一本本科抽象代数教材", hint: `介绍“${t.name}”的那一章。` }],
+      };
+    }
+    const definition = node.definition?.trim();
+    return {
+      summary: definition || `${node.name}不在离线模型的知识库中。`,
+      intuition: `${style}离线演示只能复述图谱中关于${node.name}的内容。${builds}`,
+      keyPoints: definition ? [definition] : [],
+      examples: [],
+      pitfalls: [],
+      furtherReading: [{ title: `一本关于${node.name}的入门读物`, hint: "找找它的定义和第一个例子。" }],
+    };
+  }
+
   /**
    * A question built from the concept's definition (or KB entry), its KB dependency reasons and examples. Multiple
    * choice takes three other KB definitions as the wrong options; the right one's position depends on the name only.
    */
-  private quiz(node: { name: string; definition?: string }, prereqs: { name: string }[], style: string, choice: boolean) {
+  private quiz(node: { name: string; definition?: string }, prereqs: { name: string }[], style: string, choice: boolean, zh = false) {
     const entry = kbGet(node.name);
+    const kb = entry && kbText(entry.key, zh);
     const name = node.name;
-    const definition = node.definition?.trim() || entry?.definition || `${name}, as described in your graph.`;
+    const definition = node.definition?.trim() || kb?.definition || (zh ? `${name}，如图谱中所述。` : `${name}, as described in your graph.`);
     const pre = prereqs[0];
     let question: string;
     let answer: string;
     let hints: string[];
     if (style === "connect" && pre) {
-      const dep = entry?.deps.find((d) => normalizeName(d.name) === normalizeName(pre.name));
-      question = `How does ${name} build on ${pre.name}?`;
-      answer = dep?.reason ?? `${name} relies on ${pre.name}: ${definition}`;
-      hints = [`Recall what ${pre.name} is.`, `Look for ${pre.name} in the definition of ${name}.`];
+      const i = entry?.deps.findIndex((d) => normalizeName(d.name) === normalizeName(pre.name) || kbGet(d.name)?.key === kbGet(pre.name)?.key) ?? -1;
+      const dep = i >= 0 ? kb!.deps[i] : undefined;
+      if (zh) {
+        question = `${name}是如何建立在${pre.name}之上的？`;
+        answer = dep?.reason ?? `${name}依赖于${pre.name}：${definition}`;
+        hints = [`回忆一下${pre.name}是什么。`, `在${name}的定义中找找${pre.name}。`];
+      } else {
+        question = `How does ${name} build on ${pre.name}?`;
+        answer = dep?.reason ?? `${name} relies on ${pre.name}: ${definition}`;
+        hints = [`Recall what ${pre.name} is.`, `Look for ${pre.name} in the definition of ${name}.`];
+      }
     } else if (style === "apply") {
-      const ex = entry && EXPLAIN[entry.key]?.examples[0];
-      question = `Give a concrete example of ${name} and check it against the definition.`;
-      answer = ex ? `${ex.title}: ${ex.body}` : `Anything that satisfies the definition: ${definition}`;
-      hints = [`Start from the definition of ${name}.`, ...(pre ? [`Build it from an example of ${pre.name}.`] : [])];
+      const ex = entry && (zh ? EXPLAIN_ZH : EXPLAIN)[entry.key]?.examples[0];
+      if (zh) {
+        question = `举一个${name}的具体例子，并对照定义检验它。`;
+        answer = ex ? `${ex.title}：${ex.body}` : `任何满足定义的东西：${definition}`;
+        hints = [`从${name}的定义出发。`, ...(pre ? [`从${pre.name}的一个例子构造它。`] : [])];
+      } else {
+        question = `Give a concrete example of ${name} and check it against the definition.`;
+        answer = ex ? `${ex.title}: ${ex.body}` : `Anything that satisfies the definition: ${definition}`;
+        hints = [`Start from the definition of ${name}.`, ...(pre ? [`Build it from an example of ${pre.name}.`] : [])];
+      }
+    } else if (zh) {
+      question = choice ? `下面哪一项是${name}的定义？` : `什么是${name}？`;
+      answer = definition;
+      // The definition's first phrase, cut short, without splitting a formula.
+      let lead = definition.split(/[，。；：,;:]/)[0].slice(0, 10);
+      if ((lead.match(/\$/g) ?? []).length % 2) lead = lead.slice(0, lead.lastIndexOf("$")).trim();
+      hints = [pre ? `它建立在${pre.name}之上。` : "它是所在领域的基本概念之一。", `它以“${lead}”开头……`];
     } else {
       question = choice ? `Which statement defines ${name}?` : `What is ${name}?`;
       answer = definition;
@@ -831,9 +1046,10 @@ export class MockProvider implements Provider {
       ];
     }
     if (!choice) return { question, answer, hints };
-    const wrong = Object.entries(KB)
-      .filter(([k, v]) => k !== entry?.key && normalizeName(v.definition) !== normalizeName(answer))
-      .map(([, v]) => v.definition)
+    const wrong = Object.keys(KB)
+      .map((k) => [k, kbText(k, zh).definition] as const)
+      .filter(([k, def]) => k !== entry?.key && normalizeName(def) !== normalizeName(answer))
+      .map(([, def]) => def)
       .slice(0, 3);
     const correctIndex = name.length % 4;
     const choices = [...wrong];
@@ -842,12 +1058,14 @@ export class MockProvider implements Provider {
   }
 
   /**
-   * Knowledge-base concepts named in the text (by name or alias, plural allowed), plus terms the text marks as new
-   * by quoting or bolding them. Relations and prerequisites come from the KB's dependencies between concepts found in
-   * the text or already in the graph; a marked term is related to the first KB concept of its sentence.
+   * Knowledge-base concepts named in the text (by name or alias, plural allowed; Chinese names anywhere in the text),
+   * plus terms the text marks as new by quoting or bolding them. Relations and prerequisites come from the KB's
+   * dependencies between concepts found in the text or already in the graph; a marked term is related to the first KB
+   * concept of its sentence.
    */
-  private extract(text: string, existing: { name: string; aliases?: string[] }[]) {
-    const sentences = text.split(/(?<=[.!?。！？])\s+|\n+/).map((s) => s.trim()).filter(Boolean);
+  private extract(text: string, existing: { name: string; aliases?: string[] }[], zh = false) {
+    // Chinese sentences end at 。！？ with no space after them.
+    const sentences = text.split(/(?<=[.!?。！？])\s+|(?<=[。！？])|\n+/).map((s) => s.trim()).filter(Boolean);
     const sentenceOf = (i: number) => {
       let at = 0;
       for (const s of sentences) {
@@ -863,38 +1081,52 @@ export class MockProvider implements Provider {
     };
     const escape = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
     const found: { key: string; at: number; re: RegExp }[] = [];
+    const zhHits = zhMentions(text);
     for (const [key, v] of Object.entries(KB)) {
       const re = new RegExp(`\\b(?:${[key, ...v.aliases].map(escape).join("|")})s?\\b`, "i");
       const at = text.search(re);
-      if (at >= 0) found.push({ key, at, re });
+      const zhAt = zhHits.find((h) => h.key === key)?.at ?? -1;
+      if (at >= 0 || zhAt >= 0) {
+        const names = [KB_ZH[key].name, ...KB_ZH[key].aliases].map(escape).join("|");
+        found.push({
+          key,
+          at: at >= 0 && (zhAt < 0 || at < zhAt) ? at : zhAt,
+          re: zhAt >= 0 ? new RegExp(`${re.source}|${names}`, "i") : re,
+        });
+      }
     }
     found.sort((a, b) => a.at - b.at);
     // Where a concept is already in the graph, answer with the graph's exact name (as the prompt asks).
     const display = (key: string) => {
       const e = existing.find((x) => kbGet(x.name)?.key === key || (x.aliases ?? []).some((a) => kbGet(a)?.key === key));
-      return e?.name ?? title(key);
+      return e?.name ?? kbText(key, zh).name;
     };
     const concepts: { name: string; definition: string; aliases: string[]; quote: string; kind: ConceptKind | null }[] = found.map((f) => ({
       name: display(f.key),
-      definition: KB[f.key].definition,
-      aliases: KB[f.key].aliases,
+      definition: kbText(f.key, zh).definition,
+      aliases: kbText(f.key, zh).aliases,
       quote: quoteAt(f.at),
       kind: kindOf(f.key),
     }));
     const relations: { from: string; to: string; aToB: { kind: string; explanation: string }; bToA: { kind: string; explanation: string } }[] = [];
-    for (const m of text.matchAll(/["“]([^"”\n]{2,60})["”]|\*\*([^*\n]{2,60})\*\*/g)) {
-      const term = (m[1] ?? m[2]).trim();
+    for (const m of text.matchAll(/["“]([^"”\n]{2,60})["”]|\*\*([^*\n]{2,60})\*\*|「([^」\n]{1,60})」/g)) {
+      const term = (m[1] ?? m[2] ?? m[3]).trim();
       if (kbGet(term) || concepts.some((c) => normalizeName(c.name) === normalizeName(term))) continue;
       const quote = quoteAt(m.index ?? 0);
       concepts.push({ name: title(term), definition: quote, aliases: [], quote, kind: kindFromName(term) });
       const sentence = sentenceOf(m.index ?? 0).replace(m[0], "");
       const near = found.find((f) => f.re.test(sentence));
       if (near) {
+        const [t, n] = [title(term), display(near.key)];
         relations.push({
-          from: title(term),
-          to: display(near.key),
-          aToB: { kind: "appearing alongside", explanation: `The text introduces ${title(term)} alongside ${display(near.key)}.` },
-          bToA: { kind: "setting the context for", explanation: `${display(near.key)} is the setting in which the text introduces ${title(term)}.` },
+          from: t,
+          to: n,
+          aToB: zh
+            ? { kind: "伴随出现", explanation: `文中在介绍${n}时一并引入了${t}。` }
+            : { kind: "appearing alongside", explanation: `The text introduces ${t} alongside ${n}.` },
+          bToA: zh
+            ? { kind: "提供背景", explanation: `${n}是文中引入${t}的背景。` }
+            : { kind: "setting the context for", explanation: `${n} is the setting in which the text introduces ${t}.` },
         });
       }
     }
@@ -902,7 +1134,7 @@ export class MockProvider implements Provider {
     const inGraph = Object.keys(KB).filter((k) => existing.some((e) => kbGet(e.name)?.key === k));
     const prerequisites: { dependent: string; prerequisite: string; role: Dep["role"]; reason: string }[] = [];
     for (const f of found) {
-      for (const d of KB[f.key].deps) {
+      for (const d of kbText(f.key, zh).deps) {
         const dk = kbGet(d.name)!.key;
         if (!found.some((x) => x.key === dk) && !inGraph.includes(dk)) continue;
         prerequisites.push({ dependent: display(f.key), prerequisite: display(dk), role: d.role, reason: d.reason });
@@ -911,23 +1143,45 @@ export class MockProvider implements Provider {
     return { concepts, relations, prerequisites };
   }
 
-  private derive(selected: { name: string }[]) {
+  private derive(selected: { name: string }[], zh = false) {
     const names = selected.map((s) => s.name);
     if (names.some((n) => kbGet(n)?.key === "homomorphism")) {
+      const kernel = kbText("kernel", zh);
       return {
         proposals: [
           {
-            name: "Kernel",
-            definition: KB.kernel.definition,
-            aliases: KB.kernel.aliases,
+            name: kernel.name,
+            definition: kernel.definition,
+            aliases: kernel.aliases,
             kind: "definition",
             links: [
               {
                 to: names.find((n) => kbGet(n)?.key === "homomorphism")!,
-                fromNew: { kind: "measuring the injectivity of", explanation: "The kernel is the preimage of the identity under a homomorphism." },
-                toNew: { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
+                fromNew: zh
+                  ? { kind: "衡量单射性", explanation: "核是单位元在同态下的原像。" }
+                  : { kind: "measuring the injectivity of", explanation: "The kernel is the preimage of the identity under a homomorphism." },
+                toNew: zh
+                  ? { kind: "决定", explanation: "每个同态都有核，它是定义域的一个正规子群。" }
+                  : { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
               },
             ],
+          },
+        ],
+      };
+    }
+    if (zh) {
+      return {
+        proposals: [
+          {
+            name: `${names.join("与")}的综合`,
+            definition: `综合了${names.join("、")}的一个想法。`,
+            aliases: [],
+            kind: "other",
+            links: names.map((n) => ({
+              to: n,
+              fromNew: { kind: "拓展", explanation: `拓展了${n}。` },
+              toNew: { kind: "促成", explanation: `${n}提供了这个综合的一部分。` },
+            })),
           },
         ],
       };
