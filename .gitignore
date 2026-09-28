@@ -4,3 +4,4 @@ dist/
 *.log
 e2e/screenshots/
 .claude/worktrees/
+dist-perf/

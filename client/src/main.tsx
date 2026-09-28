@@ -13,6 +13,8 @@ import "./styles.css";
 initTheme(); // before the first render, so a dark page never flashes white
 registerServiceWorker(); // production builds only: offline app shell + update notice
 startAutoSnapshots(); // version snapshots in IndexedDB: loads the list, then snapshots periodically while editing
+// Replaced at build time: only the benchmark's build (e2e/perf.mjs --built) has this import at all.
+if (import.meta.env.VITE_PERF_HOOKS === "1") void import("./perfHooks");
 
 // A Chinese interface waits for its messages (a chunk of their own) so the first paint isn't English.
 void localeReady.then(() => {
