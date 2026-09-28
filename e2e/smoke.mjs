@@ -1987,6 +1987,18 @@ try {
     assert((await panel.getByTestId("reader-text").textContent()).includes("is a normal subgroup of"), "a scanned page is read by the vision model");
     await panel.getByRole("button", { name: "Back" }).click();
 
+    // Chinese in a font the PDF only names (STSong-Light, predefined CMap UniGB-UCS2-H): its text is read with
+    // PDF.js's CMaps, which the app serves from its versioned pdfjs-<version>/ folder (pwa/pdfjsData.ts).
+    const cmap = page.waitForResponse((r) => /\/pdfjs-[\d.]+\/cmaps\/UniGB-UCS2-H\.bcmap$/.test(r.url()) && r.ok());
+    await page.getByTestId("import-reference").setInputFiles("e2e/fixtures/cjk.pdf");
+    await toast("Imported cjk (1 page)");
+    await cmap;
+    await panel.getByRole("button", { name: "cjk", exact: true }).click();
+    assert((await panel.getByTestId("reader-text").textContent()).includes("群论：正规子群与商群"), "a Chinese PDF with a font that isn't embedded is read with the CMaps");
+    await panel.getByRole("button", { name: "Back" }).click();
+    await panel.getByRole("button", { name: "Delete cjk" }).click();
+    await panel.getByRole("button", { name: "cjk", exact: true }).waitFor({ state: "detached" });
+
     // A problem sheet: its problems are found and listed.
     await page.getByTestId("import-problems").setInputFiles("e2e/fixtures/problems.pdf");
     await panel.getByRole("list", { name: "Problems on problems" }).waitFor();

@@ -586,7 +586,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 `FUN_ENDS`; avoids the pair on screen), and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
 | `chainGame.ts` | "Guess the chain": `newGame` (the intermediate concepts become stops, with aliases from the graph), per stop `hidden` → `clued` → `guessed`, or `revealed`; `guess` (checks every open stop, any order; `known` for an end or a found concept, else counts a wrong guess), `clue`, `reveal`, `revealAll`, `score` / `maxScore` / `tally` (`POINTS`: 3 alone, 2 after a clue, 0 revealed); `matchesName` (`normalizeName`, leading article, aliases, `editDistance` with transpositions within `typoAllowance`: 0 up to 4 characters, 1 up to 8, else 2); `mask` blanks hidden names as whole words (longest name first, so a shown "Heat equation" keeps its "Heat"); `linkView` (fact and narration once both ends are known, else the masked narration as a clue); best scores `bestFor` / `recordBest` (storage injectable, errors ignored). |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
-| `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. |
+| `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. pdf.js asks the page (`binaryDataFactory`) for its WebAssembly decoders (hashed assets), CMaps and standard fonts (`pdfData.ts`: the build's `pdfjs-<version>/cmaps/` and `standard_fonts/`). |
 | `texImport.ts` | LaTeX import, no AI. `theoremEnvs` reads the `\newtheorem` declarations. `parseTexResults` finds each theorem-like environment with its kind, title, labels and refs (statement plus the following proof), and the terms a definition defines. `texToText` turns prose into text: maths is kept, display maths becomes `$$…$$`, and refs become names. `texReview` builds an `ExtractReview` (unique names, `\ref` links, optional unticked mention links) for `ExtractDialog`'s `initial` prop. |
 | `quiz.ts` | Spaced-repetition-lite: `updateMastery`, `strength`, `masteryLevel`, `studyOrder`, `quizPlan`, `nextConcept`, `pickStyle`, `summarize`. |
 | `snapshots.ts` / `snapshotDb.ts` | Version capture, hash, prune plan, diff, `keepMastery` / IndexedDB wrapper. |
@@ -792,7 +792,11 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   build files (navigations get the cached `index.html`), never `/api/*` or provider calls, and doesn't
   `skipWaiting` on its own: `client/src/lib/pwa.ts` shows `UpdateNotice` and sends `SKIP_WAITING` when the user
   presses Reload. `vite dev` never registers it. Manifest: `client/public/manifest.webmanifest`; icons are rendered
-  by `node client/pwa/make-icons.mjs`.
+  by `node client/pwa/make-icons.mjs`. One exception to "every built file": `client/pwa/pdfjsData.ts` copies
+  pdf.js's CMaps and standard fonts (~170 + 20 files, 2 MB, needed only by some PDFs) into `dist/pdfjs-<version>/`
+  (and serves them from `node_modules` in `vite dev`); they are left out of the precache (4.80 MB, unchanged) and
+  listed as `RUNTIME` folders instead, whose files the worker caches on first use in a cache named after the folder
+  (`nodestorm-data-pdfjs-<version>`, kept across app updates, dropped once a build no longer has that folder).
 
 ## 9. Testing and CI
 
@@ -820,7 +824,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
 - **PWA e2e** (`npm run e2e:pwa` → build + `e2e/pwa.mjs`): serves `client/dist` with `vite preview` (port
   `E2E_WEB_PORT`, default 4273), checks the manifest and service worker, offline start, typesetting a formula offline
-  (KaTeX chunk and fonts from the cache), a failed chunk load and the update notice.
+  (KaTeX chunk and fonts from the cache), a failed chunk load, the update notice, and a Chinese PDF whose font isn't
+  embedded read offline once its CMaps were used online.
 - **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph; `PERF_PROFILE=1` prints hot functions.
 - **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
   once against a real provider using `server/.env`, validates against the same schemas, prints timings.
@@ -939,8 +944,9 @@ and server-binding items are real problems worth fixing.
   - Retrieval is keyword-based (BM25), not embeddings, so a reference that words things differently can be missed.
   - Documents stay in this browser: they are not in JSON exports or share links.
   - Scanned pages need a vision-capable model; server mode caps a page image at 10 MB.
-  - pdf.js runs without its wasm, standard-font and CMap assets (not bundled), so JPEG 2000 / JBIG2 scans may render
-    blank, and CJK PDFs without embedded fonts may give wrong text.
+  - pdf.js has its wasm decoders, CMaps and standard fonts, but no ICC colour profiles (colours are approximated).
+    CMaps and standard fonts are cached on first use, so offline a PDF needing one not yet used reads without it
+    (a CJK font that isn't embedded then gives no text).
   - The pdf.js worker (~1.3 MB) is precached by the service worker like every chunk. It ends in `.mjs`, which a static
     host must serve as JavaScript.
 - **Parody voices and Reviewer 2**: like the Absurd chain, correctness rests on the prompt; a model may still let a

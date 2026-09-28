@@ -1,4 +1,5 @@
 import type { PDFDocumentProxy, PDFPageProxy } from "pdfjs-dist";
+import { pdfDataDir } from "./pdfData";
 
 /**
  * Reading imported PDFs for "Derive together": the text of every page, and a page picture for pages without a text
@@ -54,23 +55,42 @@ function pdfjs(): Promise<Loaded> {
 }
 
 /**
- * Hands PDF.js the WebAssembly decoders for the picture formats of scans: JBIG2 and CCITT fax (black-and-white
- * scanners) in jbig2.wasm, JPEG 2000 in openjpeg.wasm. Without them such a page renders blank, and the vision model
- * gets an empty picture. PDF.js would fetch them itself from one folder (`wasmUrl`), with fixed names; this
- * factory serves them from the build's hashed assets instead, which the service worker precaches like every other
- * file, so it works offline too. Nothing else is served: no CMaps or standard fonts (PDF.js falls back to what
- * the page embeds and the system's fonts), and no ICC colour profiles (qcms_bg.wasm; colours are approximated).
+ * Hands PDF.js the files it fetches on demand:
+ * - The WebAssembly decoders for the picture formats of scans: JBIG2 and CCITT fax (black-and-white scanners) in
+ *   jbig2.wasm, JPEG 2000 in openjpeg.wasm. Without them such a page renders blank, and the vision model gets an
+ *   empty picture. PDF.js would fetch them itself from one folder (`wasmUrl`), with fixed names; they are served
+ *   from the build's hashed assets instead, which the service worker precaches like every other file.
+ * - CMaps (`cmaps/*.bcmap`): the text of a font that isn't embedded and uses a predefined CMap (UniGB-UCS2-H with
+ *   STSong-Light, as many Chinese papers and textbooks do; the Japanese and Korean ones alike) can only be read with
+ *   them. Without, the page's text comes out empty.
+ * - Standard font data (`standard_fonts/`): the 14 standard fonts (Helvetica, Times, Courier, Symbol, ZapfDingbats)
+ *   when a PDF only names them. Symbol and ZapfDingbats always come from here; the others do where the system has
+ *   no such font (PDF.js then points the page's @font-face at these files itself, with `standardFontDataUrl`).
+ * The last two are under `dataUrl` (see pdfData.ts): ~2 MB in all, so the service worker caches each file on its
+ * first use rather than precaching them. No ICC colour profiles (qcms_bg.wasm; colours are approximated).
  */
-function binaryDataFactory(wasm: Record<string, string>) {
+function binaryDataFactory(wasm: Record<string, string>, dataUrl: string) {
   return class {
     async fetch({ kind, filename }: { kind: string; filename: string }): Promise<Uint8Array> {
-      const url = kind === "wasmUrl" ? wasm[filename] : undefined;
+      const plain = /^[\w+-][\w.+-]*$/.test(filename); // a file name, never a path
+      const url =
+        kind === "wasmUrl" ? wasm[filename]
+        : !plain ? undefined
+        : kind === "cMapUrl" ? `${dataUrl}cmaps/${filename}`
+        : kind === "standardFontDataUrl" ? `${dataUrl}standard_fonts/${filename}`
+        : undefined;
       if (!url) throw new Error(`Not available: ${filename}`);
       const res = await fetch(url);
       if (!res.ok) throw new Error(`HTTP ${res.status} for ${filename}`);
       return new Uint8Array(await res.arrayBuffer());
     }
   };
+}
+
+/** The folder of CMaps and standard fonts; an absolute URL in a page, as @font-face rules made from it need one. */
+function pdfDataUrl(lib: PdfJs): string {
+  const dir = pdfDataDir(lib.version);
+  return typeof document === "undefined" ? dir : new URL(dir, document.baseURI).href;
 }
 
 /** Fewer than this many non-whitespace characters on a page: treat it as a scan (page numbers, a stray header). */
@@ -133,13 +153,18 @@ export async function readPdf(
   aborted(signal);
   // Files are untrusted: no XFA forms. PDF scripts never run here (only PDF.js's viewer, not used, has a scripting
   // sandbox), and the production build's CSP (pwa/csp.ts) forbids eval and inline code besides (it allows compiling
-  // WebAssembly only). `useWorkerFetch: false`: the worker asks this page for the decoders (see binaryDataFactory).
+  // WebAssembly only). `useWorkerFetch: false`: the worker asks this page for the decoders, CMaps and fonts (see
+  // binaryDataFactory). The two folders are named as well: PDF.js writes the fonts' one into @font-face rules.
+  const dataUrl = pdfDataUrl(lib);
   const task = lib.getDocument({
     data: new Uint8Array(data.slice(0)),
     verbosity: lib.VerbosityLevel.ERRORS,
     enableXfa: false,
     useWorkerFetch: false,
-    BinaryDataFactory: binaryDataFactory(wasm),
+    cMapUrl: `${dataUrl}cmaps/`,
+    cMapPacked: true,
+    standardFontDataUrl: `${dataUrl}standard_fonts/`,
+    BinaryDataFactory: binaryDataFactory(wasm, dataUrl),
   });
   const stop = () => void task.destroy();
   signal?.addEventListener("abort", stop, { once: true });
