@@ -33,6 +33,7 @@ export function App() {
   const selection = useGraphStore((s) => s.selection);
   const toast = useGraphStore((s) => s.toast);
   const toastKind = useGraphStore((s) => s.toastKind);
+  const toastSeq = useGraphStore((s) => s.toastSeq);
   const setToast = useGraphStore((s) => s.setToast);
   const settingsOpen = useGraphStore((s) => s.settingsOpen);
   const setSettingsOpen = useGraphStore((s) => s.setSettingsOpen);
@@ -109,11 +110,12 @@ export function App() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  // Each toast shown (the same message again too) gets its full 6 s.
   useEffect(() => {
     if (!toast) return;
     const t = setTimeout(() => setToast(null), 6000);
     return () => clearTimeout(t);
-  }, [toast, setToast]);
+  }, [toast, toastSeq, setToast]);
 
   // Ctrl/Cmd+K opens "find concept" from anywhere (and toggles it closed again).
   useEffect(() => {
@@ -141,7 +143,8 @@ export function App() {
           <Onboarding />
         </main>
         <StatusBar />
-        {toast && <Toast text={toast} kind={toastKind} onDismiss={() => setToast(null)} />}
+        {/* Keyed by the count: a repeated message is a new live region, so screen readers announce it again. */}
+        {toast && <Toast key={toastSeq} text={toast} kind={toastKind} onDismiss={() => setToast(null)} />}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
         <SenseDialog />
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}

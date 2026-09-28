@@ -28,6 +28,8 @@ interface State {
   toast: string | null;
   /** "info" for confirmations and summaries; "error" (default) for failures. */
   toastKind: ToastKind;
+  /** Counts the toasts shown, so the same message shown again is a new toast (its timer restarts). */
+  toastSeq: number;
   settingsOpen: boolean;
   /**
    * The concept whose definition is being chosen in the sources pop-up. `sources`: what a fresh search found (without
@@ -181,6 +183,7 @@ export const useGraphStore = create<GraphStore>()(
       busy: {},
       toast: null,
       toastKind: "error",
+      toastSeq: 0,
       settingsOpen: false,
       clarifying: null,
       history: {},
@@ -229,7 +232,8 @@ export const useGraphStore = create<GraphStore>()(
         const startedAt = state === "running" ? Date.now() : task.startedAt;
         set({ busy: { ...get().busy, [key]: { ...task, state, startedAt } } });
       },
-      setToast: (toast, toastKind = "error") => set({ toast, toastKind }),
+      setToast: (toast, toastKind = "error") =>
+        set((s) => ({ toast, toastKind, toastSeq: toast ? s.toastSeq + 1 : s.toastSeq })),
       setHighlight: (highlight) => set({ highlight }),
       switchTo: (activeId) => set({ activeId, selection: [], inspect: null }),
 
