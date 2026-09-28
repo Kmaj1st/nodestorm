@@ -81,6 +81,7 @@ try {
   const assets = readdirSync(`${dist}assets`).filter((f) => !f.endsWith(".map"));
   const missing = assets.filter((f) => !sw.cached.includes(`${base}assets/${f}`));
   assert(assets.length > 3 && !missing.length, `every chunk of the build is precached, lazy ones included (${assets.length} files)${missing.length ? `; missing: ${missing}` : ""}`);
+  assert(!sw.cached.some((u) => u.includes("/pdfjs-")), "PDF.js's CMaps and standard fonts are not precached");
   const fonts = assets.filter((f) => f.startsWith("KaTeX_"));
   assert(fonts.length > 10 && fonts.every((f) => f.endsWith(".woff2")), `KaTeX's fonts are in the build as woff2 only (${fonts.length} files)`);
 
@@ -135,6 +136,39 @@ try {
   const after = await page.evaluate(async () => ({ keys: await caches.keys(), controlled: !!navigator.serviceWorker.controller }));
   assert(after.controlled && after.keys.length === 1 && after.keys[0].endsWith("-next"), "Reload switches to the new version and drops the old cache");
   assert((await page.getByTestId("update-notice").count()) === 0, "…and the notice is gone");
+
+  console.log("PDF data offline");
+  {
+    // PDF.js's CMaps are cached on first use: a Chinese PDF whose font isn't embedded (it needs them) is read
+    // online once, then again offline. The Kernel concept added above keeps the canvas from showing the welcome.
+    const panel = page.getByTestId("derive-panel");
+    const importCjk = async () => {
+      await page.getByTestId("import-reference").setInputFiles("e2e/fixtures/cjk.pdf");
+      await panel.getByRole("button", { name: "cjk", exact: true }).click();
+      await panel.getByTestId("reader-text").filter({ hasText: "群论：正规子群与商群" }).waitFor({ timeout: 15000 });
+      await panel.getByRole("button", { name: "Back" }).click();
+      await panel.getByRole("button", { name: "Delete cjk" }).click();
+      await panel.getByRole("button", { name: "cjk", exact: true }).waitFor({ state: "detached" });
+    };
+    await page.getByTestId("derive-together").click();
+    await importCjk();
+    const data = await page.evaluate(async () => {
+      const key = (await caches.keys()).find((k) => k.startsWith("nodestorm-data-pdfjs-"));
+      return key ? (await (await caches.open(key)).keys()).map((r) => r.url) : [];
+    });
+    assert(data.some((u) => u.endsWith("/cmaps/UniGB-UCS2-H.bcmap")), `the CMaps a PDF used are cached on first use (${data.length} files)`);
+    stopServer();
+    await waitDown(base);
+    await context.setOffline(true);
+    await page.reload();
+    await addButton.waitFor({ timeout: 10000 });
+    await page.getByTestId("derive-together").click();
+    await importCjk();
+    assert(true, "…so the Chinese PDF is read offline too");
+    await context.setOffline(false);
+    startServer();
+    await waitFor(base);
+  }
 
   console.log("Failed chunk load");
   {

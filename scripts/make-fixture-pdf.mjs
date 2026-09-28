@@ -3,6 +3,9 @@
 //   e2e/fixtures/scanned.pdf   one page with only a drawn rectangle, i.e. what a scan without OCR looks like
 //   e2e/fixtures/scanned-fax.pdf  one page that is a CCITT Group 4 (fax) picture, as black-and-white scanners write
 //                                 them: a black bar on white. PDF.js decodes these (and JBIG2) with WebAssembly.
+//   e2e/fixtures/cjk.pdf       one line of Chinese in STSong-Light, not embedded, with the predefined CMap
+//                              UniGB-UCS2-H (as many Chinese papers and textbooks are written): its text can only be
+//                              read with PDF.js's CMaps (UniGB-UCS2-H to CIDs, Adobe-GB1-UCS2 back to Unicode).
 // The output is deterministic (no dates, no ids), so rerunning it leaves the committed files unchanged.
 // Usage: node scripts/make-fixture-pdf.mjs
 import { mkdirSync, writeFileSync } from "node:fs";
@@ -15,20 +18,25 @@ const str = (s) => `(${s.replace(/[\\()]/g, (c) => `\\${c}`)})`;
 /** Content stream drawing one line of text per entry: [size, x, y, text]. */
 const textStream = (lines) => lines.map(([size, x, y, text]) => `BT /F1 ${size} Tf ${x} ${y} Td ${str(text)} Tj ET`).join("\n");
 
+const HELVETICA = { dict: () => "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>", extra: [] };
+
 /**
  * A complete PDF (1.4, US Letter pages) from one content stream per page. Objects: 1 catalog, 2 page tree,
- * 3 font, then a page and its content stream for each page, then `image` if given (an image XObject `/Im1` every
- * page can draw: its dictionary entries and its bytes). The xref table holds byte offsets, and every entry
- * is exactly 20 bytes ("0000000015 00000 n" plus a space and a newline), as the spec requires.
+ * 3 font `/F1`, then a page and its content stream for each page, then `image` if given (an image XObject `/Im1`
+ * every page can draw: its dictionary entries and its bytes), then the font's `extra` objects (`font.dict(id)` gets
+ * the id of the first of them). The xref table holds byte offsets, and every entry is exactly 20 bytes
+ * ("0000000015 00000 n" plus a space and a newline), as the spec requires.
  */
-function makePdf(pages, image) {
+function makePdf(pages, image, font = HELVETICA) {
   const objects = [];
   const pageIds = pages.map((_, i) => 4 + i * 2);
   const imageId = 4 + pages.length * 2;
   const xobject = image ? ` /XObject << /Im1 ${imageId} 0 R >>` : "";
   objects[1] = "<< /Type /Catalog /Pages 2 0 R >>";
   objects[2] = `<< /Type /Pages /Kids [${pageIds.map((id) => `${id} 0 R`).join(" ")}] /Count ${pages.length} >>`;
-  objects[3] = "<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica /Encoding /WinAnsiEncoding >>";
+  const extraId = imageId + (image ? 1 : 0);
+  objects[3] = font.dict(extraId);
+  font.extra.forEach((obj, i) => { objects[extraId + i] = obj(extraId); });
   pages.forEach((content, i) => {
     const pageId = pageIds[i];
     objects[pageId] =
@@ -74,10 +82,28 @@ const scannedFax = makePdf(["q 400 0 0 200 106 296 cm /Im1 Do Q"], {
   data: Buffer.from("26a0786ffffc8a17fffffffffffffff8ffff001001", "hex"),
 });
 
+// A Type0 font that is only named, not embedded: STSong-Light (one of the Adobe-GB1 fonts every PDF reader is
+// expected to supply), with the predefined CMap UniGB-UCS2-H, so the text is written as UCS-2 codes. Object `id` is
+// its CIDFont, `id + 1` the descriptor. No /ToUnicode: the reader maps codes to CIDs and CIDs back to Unicode with
+// the predefined CMaps.
+const CJK_TEXT = "群论：正规子群与商群";
+const stSong = {
+  dict: (id) => `<< /Type /Font /Subtype /Type0 /BaseFont /STSong-Light /Encoding /UniGB-UCS2-H /DescendantFonts [${id} 0 R] >>`,
+  extra: [
+    (id) =>
+      `<< /Type /Font /Subtype /CIDFontType0 /BaseFont /STSong-Light /CIDSystemInfo << /Registry (Adobe) /Ordering (GB1) /Supplement 4 >> /FontDescriptor ${id + 1} 0 R /DW 1000 >>`,
+    () =>
+      "<< /Type /FontDescriptor /FontName /STSong-Light /Flags 6 /FontBBox [-25 -254 1000 880] /ItalicAngle 0 /Ascent 880 /Descent -120 /CapHeight 880 /StemV 93 >>",
+  ],
+};
+const ucs2 = (s) => `<${[...s].map((c) => c.codePointAt(0).toString(16).toUpperCase().padStart(4, "0")).join("")}>`;
+const cjk = makePdf([`BT /F1 24 Tf 72 700 Td ${ucs2(CJK_TEXT)} Tj ET`], undefined, stSong);
+
 mkdirSync(out, { recursive: true });
 writeFileSync(new URL("problems.pdf", out), problems);
 writeFileSync(new URL("scanned.pdf", out), scanned);
 writeFileSync(new URL("scanned-fax.pdf", out), scannedFax);
+writeFileSync(new URL("cjk.pdf", out), cjk);
 console.log(
-  `wrote e2e/fixtures/problems.pdf (${problems.length} bytes), scanned.pdf (${scanned.length} bytes) and scanned-fax.pdf (${scannedFax.length} bytes)`,
+  `wrote e2e/fixtures/problems.pdf (${problems.length} bytes), scanned.pdf (${scanned.length} bytes), scanned-fax.pdf (${scannedFax.length} bytes) and cjk.pdf (${cjk.length} bytes)`,
 );

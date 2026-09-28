@@ -16,6 +16,19 @@ const wasmDataUrl = async (name: string) => {
 };
 vi.mock("pdfjs-dist/wasm/jbig2.wasm?url", () => wasmDataUrl("jbig2.wasm"));
 vi.mock("pdfjs-dist/wasm/openjpeg.wasm?url", () => wasmDataUrl("openjpeg.wasm"));
+// The CMaps and standard fonts are fetched from the build's folder for them (pdfData.ts), a relative URL under Node:
+// served here from pdfjs-dist itself, and noted. With `dataMissing` they are 404s, as from a build without them.
+const dataFetched: string[] = [];
+let dataMissing = false;
+const nodeFetch = globalThis.fetch;
+globalThis.fetch = (async (input: RequestInfo | URL, init?: RequestInit) => {
+  const m = typeof input === "string" ? /^pdfjs-[\d.]+\/((?:cmaps|standard_fonts)\/[\w.+-]+)$/.exec(input) : null;
+  if (!m) return nodeFetch(input, init);
+  dataFetched.push(m[1]);
+  if (dataMissing) return new Response("Not found", { status: 404 });
+  const { createRequire } = await import("node:module");
+  return new Response(new Uint8Array(readFileSync(createRequire(import.meta.url).resolve(`pdfjs-dist/${m[1]}`))));
+}) as typeof fetch;
 
 import { looksScanned, readPdf, renderPageImage, textFromItems, titleFromFile } from "../src/lib/pdf";
 
@@ -88,6 +101,37 @@ describe("readPdf (fixtures)", { timeout: 20_000 }, () => {
       expect(data.byteLength).toBeGreaterThan(0); // the caller's bytes aren't handed over to PDF.js
     } finally {
       await doc.destroy();
+    }
+  });
+
+  it("fetches the data of a standard font the PDF only names", async () => {
+    dataFetched.length = 0;
+    const { doc } = await readPdf(fixture("problems.pdf"));
+    await doc.destroy();
+    // Helvetica, not embedded: Liberation Sans stands in for it (under Node always; in a browser without the font).
+    expect(dataFetched).toContain("standard_fonts/LiberationSans-Regular.ttf");
+  });
+
+  // Chinese in STSong-Light, not embedded, with the predefined CMap UniGB-UCS2-H: readable only with the CMaps.
+  it("reads Chinese text written with a predefined CMap", async () => {
+    dataFetched.length = 0;
+    const { pages, doc } = await readPdf(fixture("cjk.pdf"));
+    await doc.destroy();
+    expect(pages).toEqual([{ page: 1, text: "群论：正规子群与商群", scanned: false }]);
+    expect(dataFetched).toEqual(expect.arrayContaining(["cmaps/UniGB-UCS2-H.bcmap", "cmaps/Adobe-GB1-UCS2.bcmap"]));
+  });
+
+  // What the app did before the CMaps were served: PDF.js can't map the codes to characters, and the page reads as
+  // empty (so it would be sent to the vision model as a scan, whose picture has no text either: no font).
+  it("without the CMaps, the Chinese page's text is lost", async () => {
+    dataMissing = true;
+    try {
+      const { pages, doc } = await readPdf(fixture("cjk.pdf"));
+      await doc.destroy();
+      expect(pages[0].text).not.toContain("群论");
+      expect(pages[0].text).toBe("");
+    } finally {
+      dataMissing = false;
     }
   });
 
