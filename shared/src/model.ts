@@ -594,13 +594,18 @@ export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
 // ---------- Suggest connections ----------
 
+/** Longest concept name a request names on its own (the concept looked up or rated, a name already linked). */
+export const NAME_MAX = 300;
+/** Longest hint sent with a request (why a dependent concept needs this one, an absurd chain's fact). */
+export const HINT_MAX = 2000;
+
 /** Keywords to connect a concept to: the concepts it most directly relates to, for the user to pick from. */
 export const ConnectRequest = z.object({
   node: NodeBrief,
   /** Concepts already in the graph (a suggestion that is one of them uses its exact name). */
   existing: z.array(NodeBrief).max(200).default([]),
   /** Names already linked to the concept: not suggested again. */
-  linked: z.array(z.string()).max(200).default([]),
+  linked: z.array(z.string().max(NAME_MAX)).max(200).default([]),
   count: z.number().int().min(1).max(12).default(8),
 });
 export type ConnectRequest = z.infer<typeof ConnectRequest>;
@@ -658,9 +663,9 @@ export type AssessSource = z.infer<typeof AssessSource>;
  * word from that source's text. It never writes a definition itself.
  */
 export const AssessRequest = z.object({
-  name: z.string().min(1),
+  name: z.string().min(1).max(NAME_MAX),
   /** Extra context, e.g. why a dependent concept needs this one. */
-  hint: z.string().optional(),
+  hint: z.string().max(HINT_MAX).optional(),
   /** Names of related concepts in the graph (which meaning is meant). */
   context: z.array(z.string().max(200)).max(40).default([]),
   sources: z.array(AssessSource).min(1).max(ASSESS_MAX),

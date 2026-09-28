@@ -1,4 +1,5 @@
 import { describe, expect, it } from "vitest";
+import { AssessRequest, ConnectRequest, HINT_MAX, NAME_MAX } from "../src/model";
 import { cleanAssessment, matchPassage, tasks } from "../src/ai/tasks";
 import { MockProvider } from "../src/ai/mock";
 import { assessPrompt } from "../src/ai/prompts";
@@ -149,5 +150,20 @@ describe("assess task", () => {
     expect(sys.content).toMatch(/never paraphrase/);
     expect(sys.content).toMatch(/comparing the sources against each other/);
     expect(sys.content).toMatch(/Different meanings of the name are not errors/);
+  });
+});
+
+describe("request size caps", () => {
+  const source = { id: "w1", kind: "web" as const, site: "a.example", title: "A", url: "https://a.example/", text: "A group is a set." };
+
+  it("security: an assessment's name and hint are capped like the other requests' text", () => {
+    expect(AssessRequest.safeParse({ name: "Group", hint: "Needed by Quotient group", sources: [source] }).success).toBe(true);
+    expect(AssessRequest.safeParse({ name: "x".repeat(NAME_MAX + 1), sources: [source] }).success).toBe(false);
+    expect(AssessRequest.safeParse({ name: "Group", hint: "x".repeat(HINT_MAX + 1), sources: [source] }).success).toBe(false);
+  });
+
+  it("security: suggesting connections caps the names already linked", () => {
+    expect(ConnectRequest.safeParse({ node: { name: "Group" }, linked: ["Subgroup"] }).success).toBe(true);
+    expect(ConnectRequest.safeParse({ node: { name: "Group" }, linked: ["x".repeat(NAME_MAX + 1)] }).success).toBe(false);
   });
 });

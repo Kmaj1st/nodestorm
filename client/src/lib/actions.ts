@@ -1,6 +1,7 @@
 import {
   CancelledError,
   findByName,
+  NAME_MAX,
   normalizeName,
   type AbsurdChainResponse,
   type AbsurdStyle,
@@ -1011,7 +1012,7 @@ export async function suggestConnections(nodeId: string, graphId = store().activ
       {
         node: toBrief(node),
         existing: g.nodes.filter((n) => n.id !== nodeId).slice(0, 200).map(toBrief),
-        linked: g.nodes.filter((n) => linkedIds.has(n.id)).map((n) => n.name),
+        linked: g.nodes.filter((n) => linkedIds.has(n.id)).slice(0, 200).map((n) => n.name.slice(0, NAME_MAX)),
       },
       signal,
     ),

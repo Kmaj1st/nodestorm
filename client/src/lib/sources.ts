@@ -2,6 +2,8 @@ import {
   ASSESS_MAX,
   ASSESS_TEXT_MAX,
   CancelledError,
+  HINT_MAX,
+  NAME_MAX,
   normalizeName,
   type AssessRating,
   type LookupSense,
@@ -464,9 +466,9 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
     try {
       rating = await api.assess(
         {
-          name,
-          hint: opts.hint,
-          context: (opts.context ?? []).slice(0, 40),
+          name: name.slice(0, NAME_MAX),
+          hint: opts.hint?.slice(0, HINT_MAX),
+          context: (opts.context ?? []).slice(0, 40).map((c) => c.slice(0, 200)),
           sources: sent.map((s) => ({ id: s.id, kind: s.kind, site: s.site, title: s.title, url: s.url ?? "", text: s.text.slice(0, ASSESS_TEXT_MAX) })),
         },
         signal,
