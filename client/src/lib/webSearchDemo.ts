@@ -14,6 +14,7 @@ export function demoResults(name: string): WebResult[] {
   if (!kb) return [];
   const n = kb.name;
   const lower = n.toLowerCase();
+  const a = /^[aeiou]/.test(lower) ? "an" : "a"; // "an isomorphism"
   const slug = encodeURIComponent(n.replace(/ /g, "_"));
   const also = kb.aliases.length ? ` Also called: ${kb.aliases.join(", ")}.` : "";
   return [
@@ -34,10 +35,10 @@ export function demoResults(name: string): WebResult[] {
     },
     {
       engine: "demo",
-      title: `What is a ${lower}? - Demo Forum`,
+      title: `What is ${a} ${lower}? - Demo Forum`,
       url: `https://demo-forum.example/t/what-is-a-${slug.toLowerCase()}`,
       site: "demo-forum.example",
-      text: `Honestly a ${lower} is basically just any set of numbers you can add together, no rules needed. That's all you need for the exam, trust me.`,
+      text: `Honestly ${a} ${lower} is basically just any set of numbers you can add together, no rules needed. That's all you need for the exam, trust me.`,
     },
   ];
 }

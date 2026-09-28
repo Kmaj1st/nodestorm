@@ -1,6 +1,6 @@
-import type { NameCandidate } from "@nodestorm/shared";
+import { HINT_MAX, type NameCandidate } from "@nodestorm/shared";
 import { useState } from "react";
-import { listJoin, useT } from "../i18n";
+import { listJoin, useLang, useT } from "../i18n";
 import { addCandidate, addConcept, cancelTask, suggestNames } from "../lib/actions";
 import { OWN_SOURCE } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
@@ -9,6 +9,7 @@ import { Modal } from "./Modal";
 
 export function AddNodeDialog({ onClose }: { onClose: () => void }) {
   const t = useT();
+  const lang = useLang();
   const [mode, setMode] = useState<"name" | "describe">("name");
   const [name, setName] = useState("");
   const [definition, setDefinition] = useState("");
@@ -54,7 +55,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
             />
           </label>
           <label>
-            <span>{t("add.definition")} <span className="muted">{t("add.optional")}</span></span>
+            <span>{t("add.definition")}{lang === "zh" ? "" : " "}<span className="muted">{t("add.optional")}</span></span>
             <textarea value={definition} onChange={(e) => setDefinition(e.target.value)} rows={3} />
           </label>
           <div className="form__actions">
@@ -70,6 +71,7 @@ export function AddNodeDialog({ onClose }: { onClose: () => void }) {
               autoFocus
               value={description}
               onChange={(e) => setDescription(e.target.value)}
+              maxLength={HINT_MAX}
               rows={4}
               placeholder={t("add.describePlaceholder")}
               aria-label={t("add.describeAria")}

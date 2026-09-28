@@ -288,6 +288,11 @@ export const BRIEF_DEFINITION_MAX = 4000;
 export const BRIEF_ALIASES_MAX = 12;
 /** Most NodeBriefs in one list of a request (the graph as context, prerequisites…); see toBriefs. */
 export const BRIEF_LIST_MAX = 500;
+/**
+ * Longest free text the user writes for a request (a description to name, a goal to derive towards) and longest hint
+ * sent with one (why a dependent concept needs this one, why a prerequisite link was added).
+ */
+export const HINT_MAX = 2000;
 
 /** Lightweight description of a node sent to the AI as context. */
 export const NodeBrief = z.object({
@@ -299,7 +304,7 @@ export type NodeBrief = z.infer<typeof NodeBrief>;
 const BriefList = z.array(NodeBrief).check(z.maxLength(BRIEF_LIST_MAX));
 
 export const NameRequest = z.object({
-  description: z.string().check(z.minLength(1)),
+  description: z.string().check(z.minLength(1), z.maxLength(HINT_MAX)),
   context: z._default(BriefList, []),
 });
 export type NameRequest = z.infer<typeof NameRequest>;
@@ -359,7 +364,7 @@ export type Sense = z.infer<typeof Sense>;
 export const DeriveRequest = z.object({
   selected: BriefList.check(z.minLength(1)),
   context: z._default(BriefList, []),
-  goal: z.optional(z.string()),
+  goal: z.optional(z.string().check(z.maxLength(HINT_MAX))),
 });
 export type DeriveRequest = z.infer<typeof DeriveRequest>;
 
@@ -386,7 +391,7 @@ export type DeriveResponse = z.infer<typeof DeriveResponse>;
 
 /** One relation of the explained concept, seen from it: what it does to `other`, and what `other` does to it. */
 export const ExplainRelation = z.object({
-  other: z.string(),
+  other: z.string().check(z.maxLength(NAME_MAX)),
   toOther: DirRel,
   fromOther: DirRel,
 });
@@ -396,7 +401,7 @@ export const ExplainRequest = z.object({
   node: NodeBrief,
   /** Its prerequisites that are in the graph. */
   prerequisites: z._default(BriefList, []),
-  relations: z._default(z.array(ExplainRelation), []),
+  relations: z._default(z.array(ExplainRelation).check(z.maxLength(BRIEF_LIST_MAX)), []),
   level: z._default(ExplainLevel, "intuitive"),
   voice: z._default(ExplainVoice, "plain"),
 });
@@ -446,7 +451,7 @@ export type QuizResponse = z.infer<typeof QuizResponse>;
 export const CycleLink = z.object({
   from: NodeBrief,
   to: NodeBrief,
-  reason: z._default(z.string(), ""),
+  reason: z._default(z.string().check(z.maxLength(HINT_MAX)), ""),
 });
 export type CycleLink = z.infer<typeof CycleLink>;
 
@@ -528,6 +533,9 @@ export const ABSURD_MAX_HOPS = 7;
 export const ABSURD_HARD_MAX = 10;
 /** Most stops ("via") the user may put between the ends; each needs a link before it, so 6 stops fill 7 hops. */
 export const ABSURD_MAX_VIA = ABSURD_MAX_HOPS - 1;
+/** Most concepts of earlier rolls "Roll again" asks to avoid, and the longest name of one. */
+export const ABSURD_AVOID_MAX = 40;
+export const ABSURD_AVOID_NAME_MAX = 200;
 
 /**
  * The hop range for a chain through `stops` stops: every stop needs a link before it and the end one after the last,
@@ -555,7 +563,10 @@ export const AbsurdChainRequest = z.pipe(
     /** Concepts in the graph, as background (the chain may pass through them). */
     context: z._default(z.array(NodeBrief).check(z.maxLength(80)), []),
     /** Intermediate concepts of earlier rolls, so "Roll again" takes a different route. */
-    avoid: z._default(z.array(z.string().check(z.maxLength(200))).check(z.maxLength(40)), []),
+    avoid: z._default(
+      z.array(z.string().check(z.maxLength(ABSURD_AVOID_NAME_MAX))).check(z.maxLength(ABSURD_AVOID_MAX)),
+      [],
+    ),
     /**
      * The user's stops, in order: the chain passes through each one. A concept of the graph comes with its own
      * definition; a custom stop with the description the user wrote (what the stop means).
@@ -615,9 +626,6 @@ export const MathlibResponse = z.object({ candidates: z._default(z.array(Mathlib
 export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
 // ---------- Suggest connections ----------
-
-/** Longest hint sent with a request (why a dependent concept needs this one, an absurd chain's fact). */
-export const HINT_MAX = 2000;
 
 /** Keywords to connect a concept to: the concepts it most directly relates to, for the user to pick from. */
 export const ConnectRequest = z.object({
@@ -731,11 +739,14 @@ export type ReadPageResponse = z.infer<typeof ReadPageResponse>;
 
 /** Longest stretch of a problem sheet `splitProblems` reads at once (characters). */
 export const PROBLEMS_MAX_CHARS = 12_000;
+/** Most pages of a problem sheet in one `splitProblems` request. */
+export const PROBLEMS_MAX_PAGES = 200;
 
 export const SplitProblemsRequest = z.object({
   /** Pages of the sheet, in order. */
   pages: z.array(z.object({ page: z.number().check(z.int(), z.minimum(1)), text: z.string() })).check(
     z.minLength(1),
+    z.maxLength(PROBLEMS_MAX_PAGES),
     z.refine(
       (ps) => ps.reduce((n, p) => n + p.text.length, 0) <= PROBLEMS_MAX_CHARS,
       `Too much text: at most ${PROBLEMS_MAX_CHARS} characters at a time.`,

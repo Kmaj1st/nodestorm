@@ -492,9 +492,9 @@ export interface GatherOptions {
   context?: string[];
   /** Called when the search is done and the AI starts checking the sources (the status bar says so). */
   onChecking?: () => void;
-  /** Search again instead of using this session's results. */
   /** With `fresh`: ask the web search engines too instead of their 30-day cache (an explicit "Search again"; uses quota). */
   requery?: boolean;
+  /** Search again instead of using the sources found before (this cache: a day, also across reloads). */
   fresh?: boolean;
 }
 

@@ -396,6 +396,14 @@ describe("the offline demo's pretend web", () => {
     expect(demoResults("Banach space")).toEqual([]);
   });
 
+  it("titles keep an apostrophe's s small, and the forum asks about 'an' isomorphism", () => {
+    expect(demoResults("Lagrange's theorem")[0].title).toBe("Lagrange's Theorem - Demo Encyclopedia");
+    const forum = demoResults("Isomorphism")[2];
+    expect(forum.title).toBe("What is an isomorphism? - Demo Forum");
+    expect(forum.text.startsWith("Honestly an isomorphism is")).toBe(true);
+    expect(demoResults("Kernel")[2].title).toBe("What is a kernel? - Demo Forum");
+  });
+
   it("Chinese pages for a Chinese name (or alias), the forum still wrong; the demo's check rates them in Chinese", async () => {
     const res = demoResults("因子群");
     expect(res.map((r) => r.site)).toEqual(["zh.demo-encyclopedia.example", "zh.demo-lecture-notes.example", "zh.demo-forum.example"]);

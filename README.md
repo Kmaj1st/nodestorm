@@ -1,337 +1,350 @@
 # NodeStorm
 
-An AI-aided brainstorming graph. You add concepts as nodes; the AI names what you can only describe, finds how two
-concepts relate (separately in each direction), checks every concept's prerequisites and installs the missing ones,
-proposes new concepts, pulls concepts out of pasted notes, explains them and quizzes you on them. It runs entirely in
-the browser with your own API key (or an offline demo that needs none); an optional local server can hold the keys
-instead. Your work stays in your browser.
+**English** · [中文](README.zh.md)
 
-Maintainers: see **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)** for how it's built and how to change it.
+NodeStorm is a brainstorming and study graph for concepts. Each concept is a card on a canvas. You add concepts by
+name, and NodeStorm finds definitions for them in encyclopedias, wikis and web search results, **in the sources' own
+words**. An AI rates those sources, but it doesn't write the definition you keep. Ask the AI and it finds each
+concept's prerequisites (which block the concept until you install them), works out how two concepts relate in each
+direction, proposes new concepts, explains them and quizzes you on them. It also tutors you through a problem while
+giving hints only.
 
-## Quick start
+It runs entirely in your browser with your own API key, or with an offline demo that needs no key. Your graphs stay
+in your browser. An optional local server can hold the keys instead.
 
-```bash
-npm install
-npm run web        # UI only: http://localhost:5173
-```
+- **Try it:** <https://kmaj1st.github.io/nodestorm/>. Pick **Offline demo** in Settings to try it without a key.
+- **Maintainers:** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) explains how it's built, and
+  [CHANGELOG.md](CHANGELOG.md) what changed recently. See also [Developer guide](#developer-guide) below.
 
-Click **Set up AI** in the toolbar (the status chip at the right) (afterwards it shows the chosen model), choose a provider and paste your API key.
-The model list loads straight from the provider's API; start typing to filter it, then pick a model. To try the app
-without a key, choose **Offline demo**: it has a tiny built-in abstract-algebra knowledge base.
+**Contents:** [Getting started](#getting-started) · [Setting up an AI provider](#setting-up-an-ai-provider) ·
+[How definitions work](#how-definitions-work) · [Prerequisites](#prerequisites-check-with-ai-install-install-all) ·
+[Building the graph](#building-the-graph) · [Views and big graphs](#views-and-big-graphs) ·
+[Study tools](#study-tools) · [Mathematics and formal sciences](#mathematics-and-formal-sciences) ·
+[Parody modes](#parody-modes) · [Projects and versions](#projects-sandboxes-and-versions) ·
+[Export and share](#export-and-share) · [Offline and installable](#offline-and-installable) ·
+[Keyboard shortcuts](#keyboard-shortcuts) · [Languages and accessibility](#languages-phones-and-accessibility) ·
+[Privacy](#privacy-what-is-sent-where) · [Local server](#the-local-server-optional) ·
+[Developer guide](#developer-guide)
 
-A first visit shows a welcome card with three starts: a **1-minute tour**, the **Group theory example** (built offline,
-no key needed) or an empty graph.
+## Getting started
 
-## Feature tour
+1. Open the [live site](https://kmaj1st.github.io/nodestorm/), or run it yourself (`npm install`, then `npm run web`
+   and open <http://localhost:5173>).
+2. A first visit shows a welcome card with three starts: the **1-minute tour**, the **Group theory example** (built
+   offline, no key needed) or an empty graph.
+3. Click **Set up AI**, the status chip at the right of the toolbar, and choose a provider (see below). With no key,
+   choose **Offline demo**. It has a small built-in abstract-algebra knowledge base, a pretend web search built from
+   it, and it answers in Chinese for Chinese concept names.
+4. Click **Add concept**, type a name (*Kernel*, *Homomorphism*, *First Isomorphism Theorem*) and pick a definition
+   from the sources found. Then press the concept's **check with AI** badge to find its prerequisites.
 
-### Graph and AI
+The example graph comes in the interface language: in Chinese it is 群论 (群、子群、正规子群、同态、核、商群、第一同构定理).
+One of its concepts is blocked on a missing prerequisite, so you can try **Install** straight away.
 
-- **Naming.** If you can only *describe* something, the AI suggests the established names and definitions for it.
-  Ambiguous names ("Expectation") show their sources grouped by meaning, to pick one.
-- **Mix.** Select two concepts and the AI finds how they relate, **separately in each direction**. Each relation line
-  has an arrowhead at both ends: the one at B shows what A does to B, the one at A what B does to A.
-- **Dependencies.** Every new concept is checked for direct prerequisites. Those already in the graph are linked with
-  dashed dependency edges; missing ones **block** the concept until you **Install** them, which creates the missing
-  concept, links it and checks its own prerequisites.
-  *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem uses homomorphisms and derives an
-  isomorphism, so it shows as blocked with *Isomorphism* missing. Install it and the theorem becomes ready.
-  - **Install all…** installs every missing prerequisite, then theirs, breadth-first, up to a depth limit (default 3)
-    and a cap on new concepts (default 15), both in Settings. The run shows in the status bar, where cancelling stops
-    the whole run. Concepts with ambiguous names are skipped and listed in the summary.
-  - **Learning path** (inspector) lists everything a concept builds on, in study order, marking prerequisites still
-    missing. **Highlight** shows that chain on the canvas and dims everything else.
-  - **Dependency cycles** (A needs B needs A) usually mean a wrong AI answer, so they are resolved automatically: the
-    AI reads the reason each link was added with and removes the wrong one (without an AI answer, the link the latest
-    check added goes). A notice says which link went and why, and Ctrl+Z brings it back. Turn this off in Settings →
-    *Dependency cycles* to only get a warning; the inspector's warning also has **Resolve with AI** and per-link
-    **Remove this link**.
-- **Derive** proposes new concepts from the selected ones, with their relations.
-- **Extract from text** (**File → Extract from text…**) takes pasted notes, a book paragraph or a messy list (or a
-  dropped / loaded `.txt` or `.md` file), up to 12,000 characters, with an optional *focus* hint. The AI lists
-  candidate concepts (definition plus a short supporting quote), the relations (both directions) and prerequisites the
-  text states. You review them first: candidates already in the graph (by name, plural or alias) are unticked and
-  flagged, and their relations link to the existing concept instead. You can rename candidates and untick concepts or
-  relations. **Add selected** places the new concepts in layers near the middle of the view, adds the relations (a
-  dotted line; **View** can hide them as *Extracted relations*) and checks each new concept's prerequisites through
-  the AI queue. The whole insert is one undo step. The offline demo recognises its algebra concepts and terms in
-  "quotes" or **bold**.
-- **Absurd chain** (the theatre-masks button next to **Mix**, or **File → Absurd chain…**) is a parody mode: real
-  facts, ridiculous reasoning. Give it two concepts, the two selected ones or any two you type (*Fourier transform*
-  and *Toast* work without being in the graph), pick a style (*deadpan*, *conspiracy*, *epic saga*, *bureaucratic*,
-  *academic overkill*) and a length (3 to 7 links). The AI builds a chain A → X1 → … → B in which every link is a
-  true, checkable relation stated soberly as a **fact**; only the narration under it, the title and the closing
-  **moral** are silly. **Roll again** asks for a different route, **Copy as text** puts the chain on the clipboard,
-  and **Add to a sandbox** forks the graph into a sandbox named after the chain and adds its concepts and links there
-  (one undo step), so your graph only changes if you merge it back. **Surprise me** picks two random concepts of the
-  graph (with fewer than two, fun ends such as *Cicada* or *Sunflower*) and builds a chain between them straight
-  away. The facts come from an AI: check before quoting one.
-  **Guess the chain** builds the same kind of chain as a game: you see the two ends, how many links there are and
-  each link's relation (*is exemplified by*, *was invented to solve*…), and guess the concepts hidden in between, in
-  any order. Guessing is forgiving (case, plurals, a leading "the", the concept's aliases and small typos don't
-  matter). A right guess scores 3, or 2 after a **Clue** (the link's funny narration with the hidden names blanked
-  out); **Reveal** gives one away for nothing and **Show the answer** ends the game. The summary shows the chain's
-  title, your score, the moral and your best score for that pair of ends (kept in this browser); **Play again** takes
-  another route between the same ends. Right and wrong guesses are announced to screen readers.
-- **Fix anything by hand.** Rename a concept (the old name stays as an alias), edit a relation's text in the inspector,
-  **Delete** removes the selected concepts or the open relation. **Ctrl/Cmd+Z** undoes and **Ctrl/Cmd+Shift+Z** (or
-  Ctrl+Y) redoes, separately for each sandbox. AI results that arrive later never become undo steps of their own.
-- **Math.** Write formulas as LaTeX: `$\varphi(ab) = \varphi(a)\varphi(b)$` or `\(…\)` inline, `$$G/\ker\varphi \cong
-  \operatorname{im}\varphi$$` or `\[…\]` on a line of their own. They're typeset (with KaTeX) on the cards, in the
-  inspector (a *Formatted* preview under the definition and relation fields, which stay plain text to edit), in
-  explanations, quizzes and the AI's proposals; the AI is asked to write its notation this way too. `\$` is a literal
-  dollar, and prices like "$5 and $10" stay text (a `$` followed by a space can't open a formula, and one after a
-  space or before a digit can't close it). A formula KaTeX can't read is shown as written.
+## Setting up an AI provider
 
-- **Definitions from encyclopedias and the web**, never written by the AI. When you add a concept without a definition,
-  NodeStorm looks it up in these sources, in this order (and with the web search engines of Settings → **Web search**):
-  - **ProofWiki**, for rigorous maths definitions. Its macros become standard LaTeX.
-  - **Wikipedia and Wikidata**, in your answer language. Formulas are kept as LaTeX.
+Open **Settings** (the AI status chip) and choose how to connect:
 
-  The pop-up **Sources for "X"** lists what was found, grouped by meaning, each naming its site; with an AI set up, the AI
-  rates them against each other and marks a passage, but only a source's own words (or yours) become the definition.
-  The definition keeps a link to its source, and the inspector can **Look up again**. With no AI key set up you still
-  get definitions, unrated. Settings → **Definitions** switches each source on or off.
+- **Directly from this browser** (the default): paste your API key. No server is needed.
+- **Through the local NodeStorm server**: the keys stay in `server/.env` on your computer (see
+  [The local server](#the-local-server-optional)).
 
-  Concept names are sent to the sites you enable. ProofWiki sits behind a Cloudflare bot check that often refuses
-  apps; NodeStorm then skips it for 10 minutes and uses Wikipedia. `npm run smoke:lookup` checks the sites from your
-  machine.
+Then choose a provider and a model. The model list loads straight from the provider's API; type to filter it.
 
-### Mathematics, logic and other formal sciences
-
-- **Concept kinds.** A concept can be a *definition*, *theorem*, *lemma*, *proposition*, *corollary*, *axiom*,
-  *conjecture*, *example*, *notation* or *other*. The AI's check sets the kind while it is unset (as do naming, the
-  sources pop-up, Derive and Extract from text, which follows the text's own "Lemma 2.1"); you can change
-  it in the inspector's **Kind** field, and the AI never overrides your choice. Each card shows its kind as a small
-  colour-coded label (the proved results share a colour, and so do definitions and notation). **View** can hide
-  concepts by kind (only the kinds in the graph are listed, plus *No kind set*). The kind is kept in JSON exports,
-  share links and the Markdown notes, and the Group theory example is typed.
-- **Theorem anatomy** (inspector, for theorems, lemmas, propositions, corollaries and conjectures): **Take apart** asks
-  the AI for each hypothesis with *why it is needed* and a *counterexample without it*, the conclusion, a proof idea
-  (a sketch in a few sentences, never a full proof; for a conjecture, why it is believed), examples and non-examples,
-  all typeset. It is kept on the concept like an explanation (not an undo step), can be cancelled while it runs, and
-  appears in the Markdown notes; share links leave it out.
-- **Lean / Mathlib** (inspector: **Find in Mathlib**): the Lean 4 declarations in Mathlib that formalise a concept.
-  - The AI suggests names, and each one is checked against Mathlib with Loogle.
-  - Only declarations that really exist are listed, each with its type, docstring and a link to the Mathlib docs.
-  - Names that don't exist are shown as dropped. Formal-science work can go straight from an idea to its formal
-    statement.
-- **Papers** (inspector: **Find papers**): published papers about a concept, from [OpenAlex](https://openalex.org), the
-  open index of research. An AI's "further reading" can invent sources; every paper here exists. No AI needed.
-  - Works with the concept's name in their title or abstract, most relevant first (relevance counts citations). A
-    one-word name such as "Kernel" is searched together with its prerequisites, so group theory doesn't turn up
-    machine-learning kernels.
-  - Each shows its title (linked to the DOI or publisher page), authors, year, journal, citation count and a free copy
-    when one exists, plus a link to search OpenAlex yourself.
-  - Kept on the concept (not an undo step), in JSON exports, the Markdown notes and as *Further reading* in the LaTeX
-    export; share links leave it out.
-  - OpenAlex gives every network about 100 free searches a day without a key (renewed at midnight UTC); after that
-    NodeStorm says the allowance is used up. `npm run smoke:papers` checks it from your machine.
-- **Import LaTeX** (**File → Import LaTeX (.tex)…**): every definition, theorem, lemma, proposition, corollary… of a
-  paper or lecture notes becomes a concept of that kind. Environments that `\newtheorem` declares are included.
-  - **Links**: a result needs whatever it `\ref`s, in its statement or in the proof that follows it.
-  - **Names**: each concept is named by its optional title, or by the term a definition `\emph`s, or else "Theorem 3".
-  - **Maths**: formulas are kept as LaTeX (`align` becomes `aligned`), and references read as the names they point to.
-  - **Review**: you review it like Extract from text, including optional links through defined terms a result mentions.
-    The whole import is one undo step, and no AI is involved.
-- **LaTeX document** (**File → LaTeX document (.tex)**): an `amsart` article with one `amsthm` environment per concept
-  (Definition, Theorem, Lemma…; concepts without a kind are *Concept*), in study order, each labelled and saying what
-  it uses (*Uses: Definition 3 (Kernel)*, as `\ref`s), with missing prerequisites, aliases, sources, your notes as
-  remarks and a stored anatomy's proof idea as a proof sketch. Text is escaped for LaTeX (`# % & _ { } ~ ^ \` and
-  common symbols like → or φ) while `$…$` formulas are kept as written. It compiles with `pdflatex`; a graph with
-  Chinese, Japanese or Korean text asks for `xelatex` (and loads `xeCJK` there).
-- **Notation…** (**File**): a glossary of the symbols the graph introduces, built without the AI: for every
-  *definition* and *notation* concept, the left-hand side of its defining equation (`$\ker\varphi = …$` gives
-  $\ker\varphi$) or else its first short formula that isn't a lone variable, in study order. Each entry links to its
-  concept (turning off a View filter that hid it).
-
-### Study tools
-
-- **Explain more.** In the inspector pick a level (*intuitive*, *rigorous* or *example-driven*). The AI writes a
-  summary, the intuition, key points, examples, common pitfalls and further reading (described in words, never
-  links), building on the concept's prerequisites and relations. Next to the level, pick a **narrator**: the plain
-  voice, or a parody one (*nature documentary*, *sports commentator*, *noir detective*, *medieval scholar*,
-  *overexcited infomercial*, *Shakespearean*). A narrator changes only the telling: the mathematics stays correct and
-  at the chosen level, formulas are still typeset, and the summary stays a plain definition. The explanation's heading
-  says who told it. The latest explanation is kept on the concept;
-  **Use summary as definition** copies its summary. Each concept also has a free-text **My notes** field. Both appear
-  in the Markdown export, and **Ctrl/Cmd+K** also finds concepts by words in their notes (after name and alias
-  matches).
-- **Quiz me** (**File → Quiz me…** for the whole graph or the selected concept's learning path, or the inspector's
-  **Quiz me on this and its prerequisites**). Questions come one concept at a time, prerequisites first. Kinds:
-  *recall*, *apply* (use it on an example), *connect* (how it builds on a prerequisite) or *mixed*, which moves from
-  recall to the others as you improve. Tick *Multiple choice* for four options instead of free recall with **Show
-  answer**; hints come one at a time. Grade yourself **Knew it / Partly / Didn't know**: the grade is stored on the
-  concept as its mastery (score and time of last review), shown as a dot after the name (green strong, amber fair,
-  red weak). Mastery fades over time, more slowly the more often you reviewed, so the next quiz asks what you didn't
-  know, or haven't seen for a while, first; a prerequisite you know well no longer has to come first. Blocked and
-  unclear concepts are skipped and listed with the reason, and a summary ends the quiz. Grades are never undo steps.
-  Mastery is kept in JSON exports and imports but left out of share links (it is your own progress, like notes and
-  explanations); the share viewer has no quiz.
-- **Walkthrough** (**File → Walkthrough…**, or the inspector's **Walk through the learning path**): a full-screen,
-  read-only presentation, one concept per slide in study order (←/→, Space, Home/End); it works in the share viewer too.
-- **Derive together** (toolbar, **File → Derive together…**, or the inspector's **Derive together**): work a problem
-  out yourself with an AI tutor that **only gives hints**. It never writes a step or the answer for you.
-  - **Import documents** (PDF, text or Markdown). A **problem sheet** is split into its problems, and you pick one to
-    start. **Reference** material (notes, a textbook chapter) is what the tutor cites, as `[1] Notes, p. 4`. Click a
-    citation to open that page.
-  - **Scanned PDF pages** (no text layer) are sent as a picture to a **vision model**, which reads formulas as LaTeX.
-    Set it in Settings → **Vision model**; SiliconFlow defaults to Qwen2.5-VL. A page that can't be read can have its
-    text pasted in.
-  - **Choosing a problem**: select a passage in a document and choose **Use selection as problem**, or type any problem.
-  - **Steps**: write each step. **Check** marks it *Correct*, *Gap* (true, but relies on something unstated, which it
-    names), *Error* or *Unclear*. **Hint** gets more specific each time you ask for the same step.
-  - **Reviewer 2**: a referee report on your derivation so far, in the style of the infamously pedantic anonymous
-    referee: a verdict (*accept*, *minor* or *major revisions*, *reject*), a weary summary, points by step with their
-    severity (*fatal*, *major*, *minor*, *pedantic*) and some grudging praise. The tone is a parody; every point is
-    meant to be a real gap, error or notation problem, and like the tutor it never writes the fix or the answer. The
-    report is kept with the derivation (and in **Copy as Markdown**) and says when your steps changed after it.
-  - **Add to graph**: tick what goes in. The problem becomes a concept that depends on the concepts it used, with the
-    source page recorded and your steps saved in its notes. It is one undo step.
-  - Documents and derivations are kept per project in this browser (IndexedDB). They are not part of JSON exports or
-    share links; **Copy as Markdown** exports a derivation.
-
-### Organising
-
-- **Projects.** Several independent brainstorms, each with its own main graph and sandboxes. The project menu at the
-  left of the toolbar switches, creates, renames, duplicates and deletes them; the graph selector lists only the
-  current project's graphs. A new, empty project offers **Load example: Group theory**, built offline; one of its
-  concepts is blocked on a missing prerequisite, so you can try **Install** straight away.
-- **Sandboxes.** **Fork sandbox** (the branch icon next to the graph selector) copies the current graph. Derive, mix and install in
-  the copy without touching the original, then **Merge back** or **Discard** from the sandbox banner.
-- **Layout and navigation.** New concepts appear in a free spot near what you're looking at (or near the concept they
-  relate to) and the view pans to them. **Tidy** (⊞) arranges the graph in layers, prerequisites above their
-  dependents. **🔍** or **Ctrl/Cmd+K** finds a concept by name or alias, selects it and centres on it.
-- **Bigger graphs.**
-  - **Focus** (◎, or **F** on the canvas) shows only the selected concept and what is within 1–3 relations of it.
-    Selecting another concept moves the focus; **Esc** or the focus control's close (X) button shows everything again.
-  - **View** (the eye icon) hides relation kinds (dependency links, mixed, derived or extracted relations) or relation labels;
-    **To-do only** leaves just blocked, unclear and failed concepts. These choices are remembered in this browser.
-    Hidden concepts and relations can't be deleted with the Delete key.
-  - Relation labels are left out when zoomed far out, and from 150 concepts only what's on screen is rendered.
-    `node e2e/perf.mjs` times a generated 300-concept, 600-relation graph.
-- **Versions.** Undo history is in memory only, so each project also keeps restore points. One is saved automatically
-  before big changes (**Install all**, adding an **Extract from text** result, merging or discarding a sandbox,
-  **Tidy**, restoring a version) and every 10 minutes while you edit, never twice for an unchanged project.
-  **File → Save snapshot…** saves a named one with an optional label. **File → Versions…** lists them, newest
-  first. **Compare** says what restoring would bring back, remove or change in the main graph; **Preview** opens the
-  version read-only; **Restore** replaces the project (main graph and sandboxes) after saving the current state as
-  *Before restoring a version*, so a restore can be undone the same way; **Restore as new project** leaves the current
-  one alone. Mastery is kept when you restore. The last 20 automatic versions per project are kept, named ones until
-  you delete them, and old automatic ones are dropped to stay under about 20 MB. Versions live in IndexedDB (not
-  localStorage) and are read back through the same repair as imports, so older versions still open. Where IndexedDB
-  is blocked (some private windows) the dialog says so and everything else works. The read-only viewer has no
-  Versions.
-
-### Sharing and export
-
-Projects autosave to your browser's localStorage (data from earlier versions becomes the project *My brainstorm*).
-**File** imports and exports:
-
-- **JSON (this project)**: the current project, including sandboxes. **Import JSON…** adds a file as a new project and
-  never overwrites an existing one. Import repairs files from older or newer versions and hand-edited files instead
-  of rejecting them: it fills in missing fields and drops relations or prerequisite links that point to missing
-  concepts, and a notice lists what was fixed.
-- **Markdown notes**: the current graph as study notes, in study order (prerequisites first), with aliases,
-  kinds, definitions and prerequisites, stored explanations and theorem anatomies, and every relation written out in
-  both directions. Formulas are kept as `$…$`, which GitHub and most Markdown editors typeset.
-- **LaTeX document (.tex)**: the current graph as a compilable `amsart` article, one theorem-style environment per
-  concept (see *Mathematics, logic and other formal sciences* above).
-- **Mermaid diagram**: flowchart text for GitHub, Notion, etc., copied to the clipboard and downloaded.
-- **PNG image**: a picture of the whole current graph.
-- **Flashcards (Anki)…**: the current graph, or the selected concept's learning path, as question-and-answer cards
-  in study order (prerequisites first). Tick the card types: *definitions* (name → definition and other names),
-  *prerequisites* ("What does X build on?") and *relations* ("How does A relate to B?", one card per direction). The
-  dialog previews the first cards and counts them.
-  - **Anki** (`<project>-anki.txt`): in Anki ≥ 2.1.55 use **File → Import**. The file's header lines set the tab
-    separator, HTML fields, the *Basic* note type, the deck (editable, default the project name; `::` makes a subdeck)
-    and the tags column, so no import settings are needed. Cards are tagged with the project name, the concept's
-    status (`status::ready`, `status::blocked`, …) and the card type (`card::definition`, …). Formulas written as
-    `$…$` / `$$…$$` are converted to `\(…\)` / `\[…\]`, which Anki's built-in MathJax renders. In an Anki whose
-    note types have translated names, pick the Basic type in the import dialog.
-  - **CSV** (`<project>-flashcards.csv`): `front,back,tags` in plain UTF-8 text (RFC 4180 quoting, with a byte-order
-    mark for Excel) for Quizlet, RemNote, a spreadsheet and the like; formulas stay as typed.
-  - Quiz questions aren't stored (only your grades are), so there are no quiz cards. Works in the share viewer too.
-- **Share link…** packs the current graph (without its sandboxes) into a link. No account or server is involved: the
-  graph is compressed into the part of the URL after `#`, which browsers never send to a server, so it works on the
-  static GitHub Pages site too. The dialog shows the link's length; some chat apps and mail clients cut off links
-  longer than about 8,000 characters, so for big graphs send the JSON export instead. Opening a link shows the graph
-  **read-only** (*Viewing a shared graph*): editing and AI controls are hidden, export still works, **Save a copy**
-  adds it as a new project and **Close** goes back to your work. Damaged or oversized links show an error and open the
-  normal app.
-
-### Offline and installable app
-
-The built site (`npm run build`, or the GitHub Pages deployment) is an installable web app: in Chrome or Edge use
-**Install app** in the address bar or menu; on iPhone and iPad use Safari's **Share → Add to Home Screen**.
-
-After the first visit a service worker keeps a copy of the app itself, so it also opens without a network (your
-projects are in localStorage anyway). While offline a banner says so, and AI actions stop right away with a message
-instead of waiting for a timeout; the **Offline demo** provider (and a local Ollama) still work. Only the app's own
-files are stored: calls to AI providers and to the local server's `/api/*` always go to the network and are never
-cached. When a new version has been deployed, a **New version available — Reload** notice appears; nothing changes
-until you press **Reload**. `npm run web` / `npm run dev` never register the service worker.
-
-The icons are drawn in `client/public/icon.svg` and `client/pwa/icon-maskable.svg`; `node client/pwa/make-icons.mjs`
-renders the PNGs from them.
-
-### Interface, languages and accessibility
-
-- **Settings** (the AI status chip) → *Interface*: theme **Auto** (follows the system), **Light** or **Dark**, and the **interface
-  language**, English or 中文 (Simplified Chinese), by default following the browser. This only changes menus,
-  buttons and messages; the language the AI writes in is the separate **AI answers in** setting (see below).
-- The toolbar keeps to one row from 1200px up; icon buttons explain themselves in a tooltip. On phones the less-used
-  buttons fold into a **More tools** menu and the inspector becomes a collapsible bottom sheet.
-- Everything works from the keyboard (press **?** for the shortcuts): dialogs trap focus and close with Escape, and
-  Tab reaches each relation arrowhead (Enter opens it).
-- The tour (welcome card, or **Show tour again** in the **?** dialog) is a few popovers on the real controls (Add
-  concept, Install, a relation's arrowheads, Mix, Fork sandbox, File, Settings). It offers to load the example first,
-  works from the keyboard (Enter/→ next, ← back, Esc skips) and skips what isn't on screen. The welcome card never
-  appears in the share viewer or once you have concepts; dismissing it is remembered in this browser.
-
-## AI providers
-
-| Provider | Model discovery | Notes |
+| Provider | Default model | Notes |
 |---|---|---|
-| SiliconFlow (default) | `GET /v1/models?type=text&sub_type=chat` | default model `deepseek-ai/DeepSeek-V3` |
-| Anthropic Claude | `GET /v1/models` | default `claude-opus-5`; optional web search when naming/relating |
-| DeepSeek | `GET /v1/models` | default `deepseek-chat` |
-| Moonshot (Kimi) | `GET /v1/models` | default `moonshot-v1-8k` |
-| Zhipu (GLM) | `GET /api/paas/v4/models` | default `glm-4-flash` |
-| Alibaba Qwen (DashScope) | `GET /compatible-mode/v1/models` | default `qwen-plus` |
-| Ollama (local) | `GET {baseURL}/models` | no key, works offline; for browser mode start it with `OLLAMA_ORIGINS="*" ollama serve` |
-| OpenAI-compatible | `GET {baseURL}/models` (non-chat models hidden) | any other compatible endpoint: OpenAI, vLLM, LM Studio… |
-| Offline demo | built-in | no key; deterministic, used by tests |
+| SiliconFlow (default) | `deepseek-ai/DeepSeek-V3` | vision model `Qwen/Qwen2.5-VL-72B-Instruct` for scanned PDF pages |
+| Anthropic Claude | `claude-opus-5` | optional web search when naming and relating concepts |
+| DeepSeek | `deepseek-chat` | |
+| Moonshot (Kimi) | `moonshot-v1-8k` | |
+| Zhipu (GLM) | `glm-4-flash` | |
+| Alibaba Qwen (DashScope) | `qwen-plus` | |
+| Ollama (local) | `qwen2.5:7b` | no key, works offline; in browser mode start it with `OLLAMA_ORIGINS="*" ollama serve` |
+| OpenAI-compatible | `gpt-4o-mini` | any other compatible endpoint (OpenAI, vLLM, LM Studio…); non-chat models are hidden |
+| Offline demo | built in | no key, no network, deterministic (the tests use it) |
 
-The default models are a starting point: Settings lists the models your key can actually use.
+The default models are only a starting point: Settings lists the models your key can actually use.
 
-- **AI answers in** (Settings) picks the language for names, definitions and relations: *Auto* matches the language of
-  your concept names, or pick one (English, 中文, …) or type your own.
-- Rate limits (HTTP 429) and brief provider outages (5xx, network errors) are retried up to twice with backoff,
-  honouring `Retry-After`, within the request timeout.
-- At most 3 AI requests run at once (configurable); the rest show as *queued* in the status bar and can be cancelled
-  there.
-- In browser mode Settings also shows roughly how many tokens this session used.
+- **AI answers in** picks the language the AI writes in. *Auto* follows the language of your concept names; you can
+  also pick one (English, 中文, …) or type your own. The interface language is a separate setting.
+- **Vision model** is used to read scanned PDF pages in Derive together.
+- Rate limits (HTTP 429) and brief outages are retried up to twice, within the request timeout. At most 3 AI requests
+  run at once (you can change this); the others show as *queued* in the status bar, where you can cancel them.
+- In browser mode Settings shows roughly how many tokens this session used.
 
-To add a provider, see [docs/ARCHITECTURE.md → Add a provider preset](docs/ARCHITECTURE.md#add-a-provider-preset). In
-short: add it to `PROVIDERS` and `createProvider` in `shared/src/ai/factory.ts` (implementing the `Provider` interface,
-`complete(messages, opts)` and `listModels()`, if it isn't OpenAI-compatible); the server maps its env vars in
-`server/src/providers/registry.ts`.
+**Your key.** In browser mode the page calls the provider itself, so your key goes only to that provider. By default
+the key is kept for the current tab only and forgotten when you close it. Tick **Remember keys on this device** to keep
+it in the browser's localStorage. Only do that on your own device, because browser extensions and anyone using the
+same browser profile can read it. **Forget all saved keys** removes the saved keys. Use a separate key with a spending
+limit.
 
-### Where your key goes
+## How definitions work
 
-In **Directly from this browser** mode the page calls the provider itself. Your key goes only to that provider and
-never to a NodeStorm server.
+When you add a concept by name, NodeStorm asks these sources at the same time:
 
-- By default the key is kept only for the current tab and forgotten when you close it.
-- If you tick **Remember keys on this device**, it is saved in the browser's localStorage instead. Only do that on
-  your own device: browser extensions and anyone using the same browser profile can read it.
-- Use a separate key with a spending limit.
-- **Forget all saved keys** removes them.
+- **Encyclopedias and wikis** (Settings → **Definitions**): **ProofWiki** for rigorous mathematics (its macros
+  become standard LaTeX), **Wikipedia and Wikidata** in your answer language (formulas kept as LaTeX), **Baidu
+  Baike** (百度百科) and **Moegirl** (萌娘百科) for Chinese names (Moegirl for Japanese names too), and a **Fandom** or
+  **BWIKI** wiki that you name in Settings.
+- **Web search engines** (Settings → **Web search**): **Tavily**, **Serper** (Google results), **Brave Search**, and
+  **SearXNG** (your own instance). Each needs its own key (SearXNG needs its address) and has a **Test** button.
+  Up to 6 results are used by default. Brave's API doesn't answer web pages, so Brave only works through the local
+  server. A SearXNG instance must allow JSON output and requests from the site. On the https site, the browser blocks
+  an http:// address other than localhost, and Settings warns you about that.
 
-## Server mode (optional)
+With an AI set up, the AI **rates the sources against each other** as **Reliable**, **Fairly reliable**,
+**Doubtful** or **Unusable**. It says why: the site's authority, whether the source agrees with the others, whether
+the page is a forum or an advert, or whether it describes another meaning of the name. The AI also marks a passage in
+each source's text. It is told that page texts are data, never instructions, and a page that tries to steer it is
+rated unusable.
 
-If you'd rather keep keys out of the browser, put them in `server/.env` and switch Settings to **Through the local
-NodeStorm server**:
+The **Sources for "X"** pop-up lists them most reliable first, grouped by meaning when they describe different things.
+Each source shows its site, a link to the page, and the marked passage in the source's own text. You choose:
+
+- a source's marked passage, or
+- any other words of a source: select them and press **Use selected text**, or
+- **My own definition**. **Edit a copy** starts from a source's text. If you only cut it down, it stays that source's
+  words. If you change it, it is saved as written by you.
+
+The definition is always exactly the chosen words, saved with a link to the source's page and the AI's rating (the
+inspector shows "Reliable (AI check of 3 sources)" with **Why?**). A passage the AI "quotes" that isn't really in the
+source is dropped. **Later** leaves the concept waiting ("needs a definition"). Its badge reopens the pop-up.
+
+- **Without an AI** you still get the sources, unrated. **Without a search engine** only the encyclopedias are
+  asked, and the pop-up links to Settings → Web search.
+- **Choosing automatically.** By default the pop-up asks you. If you untick *When adding a concept, show the sources
+  and let me choose* in Settings, NodeStorm takes the most reliable passage itself. **Install all** always chooses
+  automatically. An automatic choice is only made when it is safe:
+  - An encyclopedia page for exactly that name, rated reliable, can be taken on its own.
+  - A web page needs a second opinion: an encyclopedia, or a page from another site, rated at least fairly reliable
+    for the same meaning.
+  - Nothing is taken when equally reliable sources describe different meanings, or when an encyclopedia page is for
+    another name.
+
+  In any of those cases the pop-up asks you (Install all leaves the concept "needs a definition").
+- **Look up in…** (inspector, next to the source) defines a concept again from one site, or with **Search the web
+  and compare…**. The change is one undo step. **Search again** in the pop-up asks the search engines again instead
+  of using their 30-day cache, so it uses search quota.
+- What was found is kept for a day, so a concept's badge reopens the rated sources after a reload without searching
+  again. Web search results are cached for 30 days. A site or engine that refuses is skipped for 10 minutes.
+- ProofWiki sits behind a Cloudflare bot check that often refuses apps, so definitions usually come from Wikipedia.
+  `npm run smoke:lookup` checks the sites from your machine.
+
+**Where the AI's own words do appear.** The AI never writes a definition that is looked up. Concepts that the AI
+itself proposes (naming something you describe, **Derive**, **Suggest connections**, **Extract from text**) and
+**Use summary as definition** in Explain arrive with the AI's text. Their source says "AI" with the provider and
+model, so you can always tell them apart. **Look up in…** replaces such a definition with a source's.
+
+## Prerequisites: Check with AI, Install, Install all
+
+- **Check with AI.** A concept with a definition shows a **check with AI** badge (or **Check prerequisites with AI**
+  in the inspector). The AI lists the concept's direct prerequisites. Those already in the graph are linked with a
+  dashed prerequisite link, labelled from the concept that needs them ("using", "deriving", "assuming"). A missing one
+  **blocks** the concept.
+  *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem shows as blocked with *Isomorphism*
+  missing. Install it and the theorem becomes ready.
+- **Install** (inspector) adds a missing prerequisite, links it and looks up its definition. With the pop-up setting
+  on (the default), a single Install takes only an encyclopedia page with exactly that name, without a web search, to
+  save your search quota. Otherwise the concept waits for you to choose.
+- **Install all…** installs every missing prerequisite, then theirs, breadth-first. It stops at a depth limit
+  (default 3) and a cap on new concepts (default 15), both set in Settings. The run shows in the status bar, where
+  cancelling stops all of it. A version is saved first.
+- **Basic concept** (inspector) marks a concept as taken as given. It needs no prerequisites: its missing ones are
+  removed, it is never blocked and no AI check runs for it. A blocked concept's missing list also offers "take it as
+  given".
+- **Learning path** (inspector) lists everything a concept builds on, in study order, and marks the prerequisites
+  that are still missing. **Highlight** shows that chain on the canvas.
+- **Dependency cycles** (A needs B needs A) usually mean a wrong AI answer. The AI reads why each link was added and
+  removes the wrong one, and Ctrl+Z brings it back. Turn this off in Settings → *Dependency cycles* to only get a
+  warning.
+
+## Building the graph
+
+- **Add concept.** Type a name, or choose **Describe it** and the AI suggests established names for what you describe.
+  A new concept appears in a free spot near what you're looking at.
+- **Mix.** Select two concepts and press **Mix**. The AI finds how they relate, **separately in each direction**.
+  Each relation line has an arrowhead at both ends: the one at B shows what A does to B. Click an arrowhead to read
+  it. When there is no relation either way, the line is drawn in its own colour, marked "no relation".
+- **Derive** proposes new concepts from the selected ones, with their relations. You accept each proposal. The dialog
+  can **Fork a sandbox** first, so your graph stays as it was.
+- **Suggest connections** (inspector → Relations) finds concepts this one can connect to. Concepts that its definition
+  names come first (found without the AI), then the AI's suggestions. You tick which to add.
+- **Extract from text** (**File → Extract from text…**) takes pasted notes, a book paragraph or a `.txt`/`.md` file
+  (up to 12,000 characters). You review the candidate concepts, relations and prerequisites before adding them.
+  Candidates already in the graph are recognised.
+- **Sandboxes.** **Fork sandbox** (the branch icon next to the graph selector) copies the current graph. Derive,
+  mix and install in the copy, then **Merge back** or **Discard** from the sandbox banner.
+- **Edit anything by hand.** Rename a concept (the old name stays as an alias), edit a definition or a relation's
+  text, set a relation side to **No relation this way**, or delete. **Ctrl/Cmd+Z** and **Ctrl/Cmd+Shift+Z** undo and
+  redo, separately for each graph. AI results that arrive later never become undo steps of their own.
+- **Relation colours** for each kind of line can be set in Settings. The View menu shows the legend.
+
+## Views and big graphs
+
+- **Tidy** arranges the graph in layers, with prerequisites above what depends on them. **Find** (Ctrl/Cmd+K) finds a
+  concept by name, alias or words in your notes, and centres on it.
+- **Focus** (**F** on the canvas) shows only the selected concept and what is within 1–3 relations of it. **Esc**
+  shows everything again.
+- **View** (the eye icon) hides kinds of relations, relation labels or concept kinds. **To-do only** leaves just the
+  blocked, unclear and failed concepts. These choices are remembered in this browser.
+- **Hide concepts for now.** **H** hides the selected concepts and **Shift+H** hides all the others. You can also use
+  the eye button in the inspector or **View → Hide selected / Hide others**. Hidden concepts leave the canvas,
+  minimap, Tidy and 3D view. Nothing is deleted, exported or shared, and a new tab shows everything. **"N hidden ·
+  Show all"** in the canvas corner lists them.
+- **Select several** (the button with the zoom controls) is for touch screens, which have no Shift key. While it's
+  on, taps add concepts to the selection or take them out, for Mix and Derive. Holding a card on a touch screen also
+  starts it. With a mouse, Shift- or Ctrl-click does the same.
+- **Layered view (2.5D)** (View → Layout) stands concepts on stacked plates, one per dependency depth. The **3D view**
+  (View → 3D view…) shows the layers in 3D: drag or use one finger to rotate, scroll or pinch to zoom. A list of the
+  layers beside it works without the canvas.
+- **Physics** (the magnet button) makes relations act as springs and cards push each other apart, so the graph sorts
+  itself by its connections. Double-click a card to pin it. It works on graphs of up to 400 concepts.
+- From 150 concepts only what's on screen is drawn, and relation labels are left out when you zoom far out.
+
+## Study tools
+
+- **Explain more** (inspector): pick a level (*intuitive*, *rigorous* or *example-driven*) and optionally a parody
+  narrator (*nature documentary*, *sports commentator*, *noir detective*, *medieval scholar*, *overexcited
+  infomercial*, *Shakespearean*). The narrator changes only the telling; the mathematics stays correct. The
+  explanation is kept on the concept, next to your own **My notes**.
+- **Quiz me** (**File → Quiz me…**, or the inspector): questions one concept at a time, prerequisites first, as free
+  recall or multiple choice. Grade yourself **Knew it / Partly / Didn't know**. The grade becomes the concept's
+  mastery, shown as a coloured dot. Mastery fades over time, so the next quiz asks what you didn't know first.
+- **Flashcards (Anki)…** (**File**): definition, prerequisite and relation cards for Anki (formulas converted for
+  Anki's MathJax) or as CSV. A theorem you took apart also gives cards for its hypotheses.
+- **Walkthrough…** (**File**, or the inspector): a full-screen, read-only presentation, one concept per slide in study
+  order.
+- **Derive together** (toolbar or **File**): work a problem out yourself with an AI tutor that **only gives hints**.
+  It never writes a step or the answer.
+  - **Documents:** import PDF, text or Markdown files. A **problem sheet** is split into its problems, and you pick
+    one. **Reference** material is what the tutor cites, as `[1] Notes, p. 4`. Click a citation to open that page.
+    Or select a passage and choose **Use selection as problem**, or type any problem.
+  - **PDF import** reads the text layer, including Chinese, Japanese and Korean PDFs whose fonts aren't embedded.
+    Scanned pages (also black-and-white fax, JBIG2 or JPEG 2000 scans) are sent as a picture to the **vision model**,
+    which reads formulas as LaTeX. You can paste in the text of a page that can't be read.
+  - **Steps:** **Check** marks each step *Correct*, *Gap*, *Error* or *Unclear*. **Hint** gets more specific each
+    time you ask. **Reviewer 2** writes a mock-pedantic referee report whose points are meant to be real.
+  - **Add to graph:** the problem becomes a concept linked to the concepts it used, with the source page and your
+    steps in its notes. Documents and derivations are kept per project in this browser; **Copy as Markdown** exports
+    a derivation.
+
+## Mathematics and formal sciences
+
+- **Formulas** as LaTeX (`$…$`, `\(…\)`, `$$…$$`, `\[…\]`) are typeset with KaTeX on cards, in the inspector, in
+  explanations, quizzes and proposals. Prices such as "$5 and $10" stay text.
+- **Concept kinds:** *definition*, *theorem*, *lemma*, *proposition*, *corollary*, *axiom*, *conjecture*, *example*,
+  *notation* or *other*, shown as a small label on each card. The AI suggests a kind only while it is unset, so your
+  own choice is never overridden.
+- **Theorem anatomy** (inspector, **Take apart**): each hypothesis with why it is needed and a counterexample without
+  it, the conclusion, a proof idea, examples and non-examples.
+- **Find in Mathlib** (inspector): the AI suggests Lean 4 declarations, and each one is checked against Mathlib with
+  Loogle. Only declarations that really exist are listed.
+- **Find papers** (inspector): real published papers about the concept from [OpenAlex](https://openalex.org). No AI
+  is involved. OpenAlex allows about 100 free searches a day per network.
+- **Import LaTeX (.tex)…** (**File**): each definition, theorem, lemma… of a paper becomes a concept of that kind,
+  linked by what it `\ref`s. You review it first, and no AI is involved.
+- **LaTeX document (.tex)** (**File**): a compilable `amsart` article with one theorem environment per concept, in
+  study order. **Notation…** lists the symbols the graph introduces.
+
+## Parody modes
+
+- **Absurd chain** (the theatre-masks button next to Mix, or **File → Absurd chain…**): real facts, ridiculous
+  reasoning. Give it two concepts (from the graph or typed in), pick a style (*deadpan*, *conspiracy*, *epic saga*,
+  *bureaucratic*, *academic overkill*) and a length (3 to 7 links). Every link is meant to be a true, checkable fact;
+  only the narration, the title and the moral are silly.
+  - **Stops along the way:** add up to 6 stops of your own, either concepts of your graph or your own with a short
+    description. The chain passes through them in order, and you can reorder them.
+  - **Roll again** takes another route, **Copy as text** copies it, and **Add to a sandbox** puts the chain into a new
+    sandbox, so your graph only changes if you merge it back. **Surprise me** picks two random ends.
+  - **Guess the chain** is a game: guess the concepts hidden between the two ends from each link's relation, with
+    clues and a best score per pair.
+- The facts come from an AI: check one before quoting it.
+
+## Projects, sandboxes and versions
+
+- **Projects** (the menu at the left of the toolbar): several independent brainstorms, each with its own main graph
+  and sandboxes. Everything autosaves in this browser.
+- **Versions** (**File → Versions…**): restore points, saved automatically before big changes (Install all, adding
+  extracted concepts, merging or discarding a sandbox, Tidy, restoring) and every 10 minutes while you edit. You can
+  also save one with **File → Save snapshot…**. **Compare**, **Preview** and **Restore** (or **Restore as new
+  project**) work from the list.
+
+## Export and share
+
+**File** has:
+
+- **JSON (this project)**, with its sandboxes. **Import JSON…** adds a file as a new project and repairs damaged or
+  hand-edited files instead of rejecting them.
+- **Markdown notes** (in the interface language, formulas as `$…$`), **LaTeX document**, **Mermaid diagram**, **PNG
+  image** and **Flashcards (Anki)…**.
+- **Share link…** packs the current graph into a link. No account or server is involved: the graph is compressed into
+  the part of the URL after `#`, which browsers never send to a server. The recipient sees it read-only and can **Save
+  a copy**. Your notes, explanations, quiz progress and stored look-ups are left out. Some chat apps cut links longer
+  than about 8,000 characters, so for big graphs send the JSON export instead.
+
+## Offline and installable
+
+The site is an installable web app: in Chrome or Edge use **Install app** in the address bar or menu, and on iPhone
+and iPad use Safari's **Share → Add to Home Screen**. After the first visit it also opens without a network. While
+offline, a banner says so and AI actions stop at once with a message. The **Offline demo** and a local Ollama still
+work. The offline copy holds only the app's own files: calls to AI providers, look-up sites, search engines and the
+local server always go to the network. When a new version is deployed, a
+**New version available — Reload** notice appears, and nothing changes until you press it.
+
+## Keyboard shortcuts
+
+Press **?** in the app for the full list and the tour.
+
+| Keys | What it does |
+|---|---|
+| Ctrl/Cmd+K | Find a concept |
+| ? | Keyboard shortcuts |
+| Esc | Close a dialog or menu; leave focus mode or Select several |
+| Ctrl/Cmd+Z, Ctrl/Cmd+Shift+Z (or Ctrl+Y) | Undo, redo |
+| Delete / Backspace | Delete the selected concepts, or the open relation |
+| F | Focus on the selected concept |
+| H, Shift+H | Hide the selected concepts, hide all the others |
+| Shift/Ctrl+click, Shift+drag | Select several concepts, select an area |
+| Tab, Enter | Move between relation arrowheads, open one |
+| ←/→, Space, Home/End | Move through the walkthrough |
+
+## Languages, phones and accessibility
+
+- **Settings → Interface:** theme **Auto**, **Light** or **Dark**, and the interface language, English or 中文
+  (Simplified Chinese). By default it follows the browser. The AI's answer language is a separate setting.
+- **Phones:** the less-used buttons fold into a **More tools** menu, the inspector becomes a bottom sheet, and **Select
+  several** replaces Shift-click. The 3D view knows finger gestures.
+- **Keyboard and screen readers:** everything works from the keyboard. Dialogs trap focus and give it back when they
+  close, and messages are announced. The end-to-end tests run an axe (WCAG A/AA) audit in both themes and in Chinese.
+
+## Privacy: what is sent where
+
+NodeStorm has no account and no NodeStorm server on the internet. Your projects, versions and documents stay in your
+browser (localStorage and IndexedDB).
+
+| What | Goes to |
+|---|---|
+| Concept names, definitions and the related concepts (up to 500) for each AI task; the sources' texts to rate; for Derive together, the problem, your steps and passages of your documents; a scanned page's picture | The AI provider you chose (directly, or through your local server) |
+| Concept names | The encyclopedias and wikis you enable (ProofWiki, Wikipedia/Wikidata, Baidu Baike and Moegirl for Chinese names, your Fandom/BWIKI wiki) |
+| `"<name>" definition` as a search query | Only the web search engines you tick in Settings → Web search |
+| Lean names the AI suggested | Loogle, when you press Find in Mathlib |
+| A concept name (plus some prerequisite names) | OpenAlex, when you press Find papers |
+| A shared graph | Nobody: it travels in the link's `#` part, which isn't sent to any server |
+
+- Look-ups and searches send no cookies. The Baidu Baike answer is read in a sandboxed frame that can't reach the
+  page, your keys or your storage.
+- **API keys** for AI providers and search engines stay in this browser tab (sessionStorage) unless you tick
+  **Remember keys on this device**, which keeps them in localStorage. They are never part of exports, share links or
+  versions. In browser mode each key goes only to its own service.
+- With the local server, the keys can stay in `server/.env` and never reach the browser.
+
+## The local server (optional)
+
+You need the local server when you want to:
+
+- keep your keys out of the browser (in `server/.env`), or
+- use **Brave Search**, whose API refuses calls from web pages, or
+- reach a SearXNG instance that doesn't allow requests from the site.
 
 ```bash
 cp server/.env.example server/.env   # add your keys
@@ -339,68 +352,76 @@ npm run dev                          # server on :8787 + UI on :5173
 npm run dev:mock                     # the same with the offline demo AI (no keys)
 ```
 
-The server has no login and spends the keys in `server/.env`, so it only listens on this computer (127.0.0.1). Set
-`HOST` (e.g. `HOST=0.0.0.0`) only if you put your own authentication in front of it. It also only answers requests
-addressed to `localhost`, `127.0.0.1`, `[::1]` or `HOST`, and none sent by pages of other sites (this stops DNS
-rebinding); list any other name you reach it by in `NODESTORM_ALLOWED_HOSTS` (comma-separated).
+Then choose **Through the local NodeStorm server** in Settings.
 
-Providers are configured by env vars named `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL` and `<PROVIDER>_MODEL` (e.g.
-`SILICONFLOW_API_KEY`, `DEEPSEEK_MODEL`), plus `AI_PROVIDER` (the default) and `ANTHROPIC_WEB_SEARCH=1`; see
-`server/.env.example`. The browser may choose the provider and model, never the key. The server has no
-authentication: run it on your own machine only.
+- AI providers are configured with `<PROVIDER>_API_KEY`, `<PROVIDER>_BASE_URL` and `<PROVIDER>_MODEL` (for example
+  `SILICONFLOW_API_KEY`, `DEEPSEEK_MODEL`), plus `AI_PROVIDER` (the default) and `ANTHROPIC_WEB_SEARCH=1`. The browser
+  may choose the provider and model, never the key.
+- Web search uses the key typed in Settings, or else `TAVILY_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY` and
+  `SEARXNG_URL` from `server/.env`.
+- **It has no login and spends your keys**, so it listens only on this computer (127.0.0.1, port `PORT`, default
+  8787). Set `HOST` (for example `HOST=0.0.0.0`) only behind your own authentication.
+- **DNS-rebinding protection:** it only answers requests addressed to `localhost`, `127.0.0.1`, `[::1]` or `HOST`,
+  and none sent by pages of other sites, so a malicious page can't spend your keys. If you reach it by another name,
+  list that name in `NODESTORM_ALLOWED_HOSTS` (comma-separated).
 
-**Web search** (Settings → Web search) also goes through the server in this mode. It uses the key typed in Settings,
-or `TAVILY_API_KEY`, `SERPER_API_KEY`, `BRAVE_API_KEY` and `SEARXNG_URL` from `server/.env`. Brave Search only works
-this way, because its API refuses calls from web pages.
+## Developer guide
 
-## Build and deploy
-
-`npm run build` produces a static site in `client/dist/` that runs without a server; you can open it from any static
-host.
-
-**GitHub Pages.** `.github/workflows/pages.yml` builds `client/` and publishes it. It only runs when you start it by
-hand from the Actions tab (**Run workflow**), because publishing a public site is your decision. Browser mode needs no
-server, so the published site works fully: visitors bring their own API key or use the offline demo. To turn it on
-once, open the repository's **Settings → Pages** and under **Build and deployment → Source** choose **GitHub
-Actions**, then run the workflow; the run shows the site's URL. To deploy on every push instead, add a
-`push: branches: [main]` trigger to the workflow.
-
-## Layout
+Requirements: Node 22 and npm. The repository is an npm-workspaces monorepo:
 
 ```
-shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
+shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks, the offline demo,
+          encyclopedia, web search, Loogle and OpenAlex clients
 server/   optional Express API: POST /api/<task> (name, relate, deps, derive, explain, anatomy, extract, quiz,
           resolveCycle, readPage, splitProblems, tutorHint, checkStep, refereeReport, absurdChain, mathlib, connect,
           assess), POST /api/search/<engine>, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
-e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
+e2e/      Playwright smoke test (runs against the offline demo), PWA check, perf timing
 scripts/  live smoke tests against real providers, the encyclopedias and OpenAlex
 docs/     ARCHITECTURE.md, the maintainer's guide
 ```
 
-## Checks
+### Scripts
 
 ```bash
+npm install
+npm run web        # UI only, http://localhost:5173
+npm run dev        # local server (:8787) + UI
+npm run dev:mock   # the same with the offline demo AI
+npm run build      # static site in client/dist/
 npm run typecheck
-npm test        # vitest: AI task parsing/validation, model discovery, graph logic, layout, export formats, import repair, projects, share links, quiz scheduling, version snapshots, flashcards
-npm run e2e     # starts server (mock) + UI and drives the full flow in Chromium, incl. settings and an axe (WCAG A/AA) audit
-npm run e2e:pwa # builds, serves client/dist, checks manifest + service worker (all chunks precached), offline start, a failed chunk load and the update notice
+npm test           # vitest (unit tests; the network is blocked in tests)
+npm run e2e        # starts server (offline demo) + UI and drives the whole app in Chromium, incl. an axe audit
+npm run e2e:pwa    # builds, serves client/dist, checks manifest, service worker, offline start and update notice
 ```
 
-The e2e scripts need Chromium for Playwright (`npx playwright install chromium`); `E2E_SERVER_PORT` and
-`E2E_WEB_PORT` override their ports.
+- The e2e scripts need Chromium for Playwright (`npx playwright install chromium`). `E2E_SERVER_PORT` (default 8799)
+  and `E2E_WEB_PORT` (default 5199; 4273 for `e2e:pwa`) change their ports, so several runs can share a machine.
+  `E2E_BUILT=1 npm run e2e` runs the same test against the production build (`npm run build` first) and fails on any
+  Content-Security-Policy violation. Screenshots go to `e2e/screenshots/`.
+- `node e2e/perf.mjs` times a generated 300-concept graph (it starts Vite itself; `PERF_PROFILE=status|inspect|drag|physics`
+  profiles one section).
+- Coverage, as a one-off: `npm i --no-save @vitest/coverage-v8@<vitest version>`, then `npx vitest run --coverage`.
+- The app icons are drawn in `client/public/icon.svg` and `client/pwa/icon-maskable.svg`; `node
+  client/pwa/make-icons.mjs` renders the PNGs.
 
-All of these use the offline demo AI. To check a **real** provider and model end to end, put its key in `server/.env`
-and run:
+All of these use the offline demo. To check a **real** provider end to end, put its key in `server/.env` and run
+`npm run smoke:live` (default provider), `npm run smoke:live -- anthropic`, or `npm run smoke:live -- siliconflow 中文`.
+It runs every AI task once, validates each answer against the app's schemas and prints the timings. It costs a few
+cents at most. `npm run smoke:lookup` and `npm run smoke:papers` check the encyclopedias and OpenAlex.
 
-```bash
-npm run smoke:live                        # default provider (AI_PROVIDER, else SiliconFlow)
-npm run smoke:live -- anthropic           # a specific provider
-npm run smoke:live -- siliconflow 中文     # …and an answer language
-```
+### CI and deployment
 
-It runs every AI task once, validates each answer against the same schemas the app uses and prints the timings. It
-costs a few cents at most.
+- `.github/workflows/ci.yml` runs typecheck, unit tests, e2e and e2e:pwa on every push and pull request. When an e2e
+  run fails, its screenshots are uploaded as the `e2e-screenshots` artifact.
+- `.github/workflows/pages.yml` builds `client/` and publishes it to GitHub Pages. It only runs when started by hand
+  (Actions → **Run workflow**), because publishing a public site is the owner's decision. To turn it on once, choose
+  **Settings → Pages → Build and deployment → Source: GitHub Actions**, then run the workflow. To deploy on every
+  push, add a `push: branches: [main]` trigger. The built site needs no server: visitors bring their own key or use
+  the offline demo.
 
-`.github/workflows/ci.yml` runs typecheck, tests, e2e and e2e:pwa on every push and pull request. When an e2e run
-fails, its screenshots are uploaded as the `e2e-screenshots` artifact.
+### Adding a provider
+
+See [docs/ARCHITECTURE.md → Add a provider preset](docs/ARCHITECTURE.md#add-a-provider-preset). In short: add it to
+`PROVIDERS` and `createProvider` in `shared/src/ai/factory.ts` (implementing the `Provider` interface if it isn't
+OpenAI-compatible); the server maps its env vars in `server/src/providers/registry.ts`.

@@ -1,4 +1,4 @@
-import { toBriefs, type SheetProblem } from "@nodestorm/shared";
+import { PROBLEMS_MAX_PAGES, toBriefs, type SheetProblem } from "@nodestorm/shared";
 import { create } from "zustand";
 import { t } from "../i18n";
 import { analyzeNode, cancelTask, inViewer, withBusy } from "../lib/actions";
@@ -276,12 +276,13 @@ export const useDerive = create<DeriveStore>()((set, get) => {
       const doc = get().docs.find((d) => d.id === docId);
       if (!doc) return;
       const pages = (await get().loadPages(docId)).filter((p) => p.text.trim());
-      // Batches of whole pages that fit one request; a single huge page is cut.
+      // Batches of whole pages that fit one request (in characters and in pages); a single huge page is cut.
       const batches: { page: number; text: string }[][] = [[]];
       let size = 0;
       for (const p of pages) {
         const text = p.text.slice(0, 11_000);
-        if (size + text.length > 11_000 && batches.at(-1)!.length) batches.push([]), (size = 0);
+        const last = batches.at(-1)!;
+        if ((size + text.length > 11_000 && last.length) || last.length >= PROBLEMS_MAX_PAGES) batches.push([]), (size = 0);
         batches.at(-1)!.push({ page: p.page, text });
         size += text.length;
       }
