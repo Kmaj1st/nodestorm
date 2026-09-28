@@ -778,6 +778,8 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
   display: flex; flex-direction: column; gap: var(--space-4); font-size: var(--text-md);
 }
 .modal__body:not(:has(> .modal__header)) { padding-top: 20px; }
+/* A part scrolled to (or a field tabbed to) stops below the sticky header, not under it. */
+.modal__body:has(> .modal__header) { scroll-padding-top: 72px; }
 /* Header: title and close button, kept in view while the dialog scrolls. */
 .modal__header {
   position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between;
@@ -871,11 +873,15 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 .choice input[type="radio"], .choice input[type="checkbox"] { margin-top: 2px; }
 .choice .check { flex-wrap: wrap; align-items: center; }
 .choice .check input[type="checkbox"] { margin-top: 0; }
+/* A checkbox's long label wraps beside the box, not under it (only the rows with number fields wrap as a whole). */
+.choice .check:has(> input[type="checkbox"]:first-child) { flex-wrap: nowrap; align-items: flex-start; }
+.choice .check > input[type="checkbox"]:first-child { flex: none; margin-top: 3px; }
 .check { display: flex; flex-direction: row; gap: var(--space-2); align-items: center; font-size: var(--text-md); cursor: pointer; }
 .form label.check { flex-direction: row; font-weight: 400; font-size: var(--text-md); }
 .field .row input { flex: 1; min-width: 0; }
+/* flex: none: in the scrolling Settings column it would otherwise shrink to its border and hide the models. */
 .model-list {
-  list-style: none; margin: 0; padding: var(--space-1); max-height: 184px; overflow-y: auto;
+  flex: none; list-style: none; margin: 0; padding: var(--space-1); max-height: 184px; overflow-y: auto;
   border: 1px solid var(--border); border-radius: var(--radius-md); display: flex; flex-direction: column; gap: 1px;
 }
 button.model {
@@ -1165,6 +1171,10 @@ kbd {
   .toast { top: var(--space-2); bottom: auto; }
   /* React Flow's attribution sits under the zoom buttons (bottom-left) instead of over the cards in the bottom-right. */
   .react-flow__attribution.right { right: auto; left: 12px; }
+  /* Above the details sheet the canvas is short and the attribution lands on cards: a small panel keeps it legible. */
+  .react-flow__attribution {
+    background: var(--panel); border: 1px solid var(--border); border-radius: var(--radius-sm); padding: 0 4px;
+  }
   .react-flow__controls { margin-bottom: 32px; }
   .modal__body { width: 100%; padding: 0 var(--space-4) var(--space-4); }
   .modal__body:not(:has(> .modal__header)) { padding-top: var(--space-4); }

@@ -137,14 +137,22 @@ export function Inspector() {
     <aside className="inspector inspector--help">
       <h3>{t("help.title")}</h3>
       <ol className="help">
-        {/* On a touch screen there is no Shift-click: Mix's step names "Select several" instead. */}
-        {HELP.map((k) => <li key={k}>{rich(k === "help.mix" && touchScreen() ? "help.mixTouch" : k)}</li>)}
+        {HELP.map((k) => <li key={k}>{rich(helpStep(k))}</li>)}
       </ol>
     </aside>
   );
 }
 
 const HELP: MessageKey[] = ["help.add", "help.deps", "help.path", "help.mix", "help.arrow", "help.sandbox", "help.keys"];
+/**
+ * A touch screen has no Shift-click, hover or keyboard: Mix's step names "Select several", the arrowhead is tapped and
+ * undo is the toolbar's arrows. On a small screen Fork sandbox is in the More tools menu.
+ */
+const HELP_TOUCH: Partial<Record<MessageKey, MessageKey>> = { "help.mix": "help.mixTouch", "help.arrow": "help.arrowTouch", "help.keys": "help.keysTouch" };
+function helpStep(k: MessageKey): MessageKey {
+  if (k === "help.sandbox") return typeof matchMedia === "function" && matchMedia("(max-width: 800px)").matches ? "help.sandboxNarrow" : k;
+  return (touchScreen() && HELP_TOUCH[k]) || k;
+}
 
 function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const t = useT();
@@ -367,7 +375,8 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             <Icon icon={PenLine} size={14} />{t("dt.fromNode")}
           </button>
         )}
-        {!node.basic && (
+        {/* A concept never checked has "Check prerequisites with AI" at the top instead of a second "Re-check". */}
+        {!node.basic && node.status !== "pending" && (
           <button onClick={() => analyzeNode(node.id)} disabled={node.status === "checking"}>
             <Icon icon={RefreshCw} size={14} />{t("node.recheck")}
           </button>
@@ -983,6 +992,7 @@ function RelationPanel({ graph, relationId, dir }: { graph: Graph; relationId: s
 /** Where the definition came from (an encyclopedia page, or a page of an imported document); a looked-up one can be redone. */
 function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) {
   const t = useT();
+  const lang = useLang();
   const graphId = useGraphStore((s) => s.activeId);
   const busy = useGraphStore((s) => Boolean(s.busy[relookupKey(graphId, node.id)]));
   const src = node.source;
@@ -1001,7 +1011,8 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
     <>
       <div className="source-line small" data-testid="definition-source">
         <span className="muted">
-          {t("common.label", { label: t("node.source") })}{" "}
+          {/* The Chinese colon has its own space. */}
+          {t("common.label", { label: t("node.source") })}{lang === "zh" ? "" : " "}
           {src?.url ? (
             <a href={src.url} target="_blank" rel="noopener noreferrer">
               {src.site ? t("node.sourceLink", { site: src.site, title: src.title }) : src.title}

@@ -15,6 +15,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **SearXNG on http:** Settings warns that an http:// address other than localhost is blocked on the https site (mixed content), and **Test** (and a search) says so instead of failing with no reason.
 - **Sources pop-up polish:** Chinese (and Japanese, Korean) texts are shortened at half the length, and a short view no longer runs to the end of a text without spaces; a cut starts at a word. Rated sources without a meaning label are headed "Other sources" instead of "Not rated". A long title keeps its radio button on the first line. The inspector's source link, its rating and the link icon flow as one line of text.
 - **Sources pop-up from the keyboard:** only the source you're on (its radio, reached with the arrow keys) has its actions (Why?, Open page, Show the whole text, Edit a copy) in the Tab order, so **Use this text** is 6 Tab presses from the first source instead of about 30 with 8 sources. Each action names its source for screen readers ("Edit a copy (demo-encyclopedia.example)"), and the list says how the keys work. Mouse, touch and a screen reader's reading mode reach every action as before.
+- **Web search settings** from the sources pop-up waits for Settings' Web search part to appear (up to 5 s, it may still be loading) and scrolls to it, instead of checking every 50 ms; closing the pop-up ends the wait. It really shows now: opening a dialog no longer scrolls it back to its first field, and a part scrolled to (or a field tabbed to) stops below a dialog's sticky header instead of under it.
 
 ### Security
 
@@ -33,7 +34,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **Holding a card** (Select several): a press right after a hold starts its own hold (it counted as a pinch, and the earlier hold's timer could cancel it), the tap ending a hold is swallowed once and its listeners go with it, and unmounting ends a press under way.
 - **Touch targets:** the zoom buttons and **Select several** are 40px (28px with a mouse), the open "N hidden" list moves clear of them, and the tour's Mix step says to tap **Select several** (or hold a concept) instead of Shift+click; its relation step says "tap".
 - **Notices on phones** show just under the toolbar instead of over the bottom of dialogs and the details sheet, and an open dialog (on any screen) keeps clear of a notice, so its buttons are never covered. They are still announced and dismissed with a tap.
-- **The React Flow attribution** sits under the zoom buttons on a phone instead of over the cards in the bottom-right corner.
+- **The React Flow attribution** sits under the zoom buttons on a phone instead of over the cards in the bottom-right corner. It sits on a small panel, legible where it meets a card above the details sheet (see the newcomer's walkthrough).
 
 ### Keyboard and focus
 
@@ -46,6 +47,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **The offline demo speaks Chinese:** with Chinese concept names (AI answer language "Auto") or the 中文 answer language, the demo AI answers in Chinese in every task: prerequisites and their reasons, Mix's relation labels (使用、推导出、假设), Derive's proposals, extraction from a Chinese text, explanations at every level and in every voice, theorem anatomy, quiz questions, absurd chains (with their stops), suggested connections, "describe it", cycle repairs, Mathlib's descriptions (the Lean names stay as they are) and the reasons and notes of its source check. Its knowledge base knows the Chinese names and aliases (群、核、商群、同态基本定理…), and its pretend web search has Chinese pages for them (百科, lecture notes and a forum post that is wrong). English names get exactly the English answers as before.
 - **File names:** exports of the main graph are named in the interface language ("nodestorm-main-graph-…", "nodestorm-主图谱-…"), and Chinese (or accented) graph and project names are kept in the file name instead of dropped. The graph menu shows a main graph that was renamed by its name.
 - **Chinese PDFs** whose fonts aren't embedded are read: see PDF import.
+- **中文, leftovers:** a definition from Baidu Baike or Moegirl names its source 百度百科 or 萌娘百科 (in the sources pop-up, the inspector, Derive together and the Markdown notes; saved definitions included), and the repairs listed after an import or a reload, and the cycles an **Install all** stopped at, are separated by ； instead of "; ". A first visit's project is called 我的头脑风暴 (it was "My brainstorm": it was named before the Chinese text had loaded); "来源：" and "定义（可选）" lose the stray space after the Chinese colon and before the bracket.
 
 ### Derive together and PDF import
 
@@ -61,11 +63,23 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 ### Reliability
 
 - **Big graphs with long definitions are never refused by the AI tasks:** a concept sent with a request (prerequisite checks, Mix, Derive, Extract, Explain, Quiz, Suggest connections, Absurd chain…) is clipped to limits the server and the in-page AI now check: a name of 300 characters, a definition of 4 000 and 12 aliases, clipped text ending in "…". The graph sent as context is at most 500 concepts, with shorter definitions when it is big, so the request stays well under the local server's 1 MB. A hand-made request over the limits gets a 400.
+  - The rest of the requests are capped too: **Describe it** and Derive's goal at 2 000 characters (the fields stop there, and what is sent is trimmed), the reason of a cycle's link and the names of Explain's relations, the concepts **Roll again** avoids (the latest 40, however many rolls) and the pages of a problem sheet in one request (200). Before, a long description, many rolls or a long relation name could make the call fail.
+- **A repeated notice** (the same message shown again while it is up) gets its full 6 seconds again and is read out again by screen readers, instead of vanishing with the first one's timer.
 
 ### Interface
 
 - **Derive's sandbox tip has a button:** **Fork a sandbox** in the tip forks like the toolbar's button and keeps the dialog open: it says which sandbox the accepted concepts now go to, and the focus goes to the goal field.
 - Add concept: "(optional)" stays beside "Definition". A relation's explanation is a bordered field like Notes (it showed a resize handle without a border).
+- **A newcomer's walkthrough, fixed along the way:**
+  - The welcome card and the tour's first step say that definitions come from sources you pick (encyclopedias and the web, rated by the AI) and that **Check with AI** finds the prerequisites (the tour still said every new concept was checked). The tour's Settings step names **Web search**; on a phone, whose tour has no Settings step, the **More tools** step says Settings is where an AI and web search are set up. The Settings button's tooltip names definitions and web search.
+  - "How to use" on a touch screen says **tap** an arrowhead and names the toolbar's undo/redo arrows and the details' Delete instead of keyboard keys; on a small screen **Fork sandbox** is said to be in the More tools menu.
+  - **Settings:** the list of models was squeezed to a thin empty line (it showed nothing); a checkbox's long label (Definitions, Ambiguous names, Dependency cycles) wraps beside its box instead of under it, most visibly on a phone.
+  - With the offline demo the toolbar's AI chip says **Offline demo** (离线演示) instead of the model name "mock-kb".
+  - A click on a concept's card opens it in the inspector even when the card was already selected (after a concept was added, or opened from a list, the inspector could stay on another one). A concept opened without a click on its card (added, installed, opened from Depends on or Find) becomes the selected card, so the highlight, and Delete, H and F, go with what the inspector shows.
+  - A concept never checked no longer shows **Re-check prerequisites** under its **Check prerequisites with AI**.
+  - The sources pop-up drops "Pick the passage…" when nothing was found. The View menu and Settings say **Prerequisite links** (前置知识连线) instead of "Dependency links".
+  - On a phone, React Flow's attribution sits on a small panel, legible where it meets a card above the details sheet.
+  - The offline demo's pretend web writes "Lagrange's Theorem" (not "Lagrange'S") and "What is an isomorphism?".
 
 ### Tests, tooling and cleanup
 
