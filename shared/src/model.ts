@@ -217,6 +217,8 @@ export const SourceRef = z.object({
   /** The site a looked-up definition came from ("ProofWiki", "Wikipedia", "Fandom (minecraft)"…) and its page. */
   site: z.string().max(100).optional(),
   url: z.string().max(2000).regex(/^https:\/\//, "Only https links are kept.").optional(),
+  /** The AI's rating of this source when it was chosen among others (see SourceRating); never the definition itself. */
+  rating: z.lazy(() => SourceRating).optional(),
 });
 export type SourceRef = z.infer<typeof SourceRef>;
 
@@ -640,6 +642,17 @@ export type ConnectResponse = z.infer<typeof ConnectResponse>;
 /** How far a source can be trusted for a concept's definition, as the AI judges it against the other sources. */
 export const Reliability = z.enum(["high", "medium", "low", "unusable"]);
 export type Reliability = z.infer<typeof Reliability>;
+
+/**
+ * The AI's rating kept with a definition taken from a rated source: how reliable it judged the source, its short
+ * reason, and how many sources it compared. Dropped when the definition is edited by hand (the source is then "you").
+ */
+export const SourceRating = z.object({
+  reliability: Reliability,
+  reasons: z.string().max(1000).default(""),
+  compared: z.number().int().min(1).max(100),
+});
+export type SourceRating = z.infer<typeof SourceRating>;
 
 /** Longest source text the AI is shown (a web page's excerpt is cut to this). */
 export const ASSESS_TEXT_MAX = 2500;

@@ -190,8 +190,8 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
         if (!isObj(s) || !str(s.name)) return [];
         const sense: Sense = { name: str(s.name), domain: str(s.domain), definition: str(s.definition) };
         // Where a meaning was looked up, and its kind, are kept (an unsafe link or unknown kind is left out).
-        const src = SourceRef.safeParse(s.source);
-        if (src.success) sense.source = src.data;
+        const src = parseSource(s.source);
+        if (src) sense.source = src;
         if (s.kind !== undefined) sense.kind = AiConceptKind.parse(s.kind);
         return [sense];
       })
@@ -234,8 +234,8 @@ function repairNode(n: unknown, index: number, fixes: Fixes): ConceptNode | null
     else fixes.add(t("repair.droppedPapers"));
   }
   if (n.source !== undefined) {
-    const src = SourceRef.safeParse(n.source);
-    if (src.success) node.source = src.data;
+    const src = parseSource(n.source);
+    if (src) node.source = src;
     else fixes.add(t("repair.droppedSource"));
   }
   if (n.kind !== undefined && n.kind !== null) {
@@ -294,3 +294,13 @@ class Fixes {
 const isObj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 const str = (v: unknown): string => (typeof v === "string" ? v : "");
 const num = (v: unknown): v is number => typeof v === "number" && Number.isFinite(v);
+
+/** A stored source; a damaged AI rating on it is dropped without losing the source itself. */
+function parseSource(raw: unknown): SourceRef | undefined {
+  const src = SourceRef.safeParse(raw);
+  if (src.success) return src.data;
+  if (!isObj(raw) || raw.rating === undefined) return undefined;
+  const { rating: _damaged, ...rest } = raw;
+  const bare = SourceRef.safeParse(rest);
+  return bare.success ? bare.data : undefined;
+}

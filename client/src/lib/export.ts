@@ -1,4 +1,4 @@
-import type { ConceptNode, ExplainLevel, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRef } from "@nodestorm/shared";
+import type { ConceptNode, ExplainLevel, Graph, NodeAnatomy, NodeExplanation, PaperWork, SourceRating, SourceRef } from "@nodestorm/shared";
 import { listJoin, translate, useLocale, type Lang, type MessageKey } from "../i18n";
 import { graphDisplayName, isUnrelated } from "./graphOps";
 import { KIND_LABEL } from "./kinds";
@@ -16,6 +16,11 @@ export function sourceLabel(s: SourceRef, lang: Lang = useLocale.getState().lang
   // A looked-up definition names its site ("Wikidata: Q83478" means little without it).
   const title = s.site && s.title ? `${translate(lang, "common.label", { label: s.site })} ${s.title}` : s.site || s.title;
   return s.page ? translate(lang, "dt.sourcePage", { title, page: s.page }) : title;
+}
+
+/** The AI's rating kept with a source: "Reliable (AI check of 3 sources)", in `lang`. */
+export function ratingLabel(r: SourceRating, lang: Lang = useLocale.getState().lang): string {
+  return translate(lang, "source.rating", { reliability: translate(lang, `reliability.${r.reliability}`), n: r.compared });
 }
 
 /** A message in the interface language (as `t`, without importing the component helpers). */
@@ -108,7 +113,10 @@ export function toMarkdown(g: Graph): string {
     }
     if (n.source) {
       const label = mdEscape(sourceLabel(n.source));
-      lines.push(`${em("node.source")} ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}`, "");
+      const r = n.source.rating;
+      // The AI's rating of the source, and why, when the definition was chosen among rated sources.
+      const rating = r ? ` · ${mdEscape(r.reasons ? `${t("common.label", { label: ratingLabel(r) })} ${r.reasons}` : ratingLabel(r))}` : "";
+      lines.push(`${em("node.source")} ${n.source.url ? `[${label}](${mdUrl(n.source.url)})` : label}${rating}`, "");
     }
     if (n.formal?.decls.length) lines.push(`${em("md.mathlib")} ${listJoin(n.formal.decls.map((d) => `\`${d.name}\``))}`, "");
     if (n.papers?.works.length) lines.push(t("md.papers"), "", ...n.papers.works.map((w) => `- ${paperMd(w)}`), "");

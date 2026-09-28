@@ -3,7 +3,7 @@ import { Check, Eye, EyeOff } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { listJoin, useT, type MessageKey } from "../i18n";
 import { errorMessage } from "../lib/errors";
-import { ENGINE_KEY_URL, ENGINE_NAME, engineUsable, pausedEngines, testSearchEngine } from "../lib/webSearch";
+import { ENGINE_KEY_URL, ENGINE_NAME, engineUsable, mixedContent, pausedEngines, testSearchEngine } from "../lib/webSearch";
 import type { Connection, SearchSettings } from "../store/settingsStore";
 import { Icon } from "../ui/Icon";
 
@@ -119,6 +119,9 @@ export function WebSearchSettings({
                     </button>
                   </div>
                   {connection === "server" && <span className="muted small">{t("settings.searchServerKey", { env: ENV[engine] })}</span>}
+                  {isUrl && connection === "browser" && mixedContent(field) && (
+                    <span className="warn small" data-testid="search-searxng-mixed">{t("settings.searchMixed")}</span>
+                  )}
                   {isUrl && <span className="muted small">{t("settings.searchUrlHint")}</span>}
                 </label>
                 <div aria-live="polite">

@@ -32,7 +32,7 @@ import { applyExtraction, buildReview, mentionedIn, type ExtractReview } from ".
 import * as ops from "./graphOps";
 import { layeredLayout } from "./layout";
 import { lookupDefinitions, lookupReady, type Site } from "./lookup";
-import { autoPick, gatherSources, sourceRef, sourcesAsSenses } from "./sources";
+import { autoPick, cachedSources, forgetSources, gatherSources, sourceRef, sourcesAsSenses } from "./sources";
 import { searchReady } from "./webSearch";
 import { isOnline } from "./online";
 import { withoutHidden } from "./view";
@@ -297,6 +297,7 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
   if (!node) return;
   const clarify = useSettings.getState().clarify;
   if (from ? !isOnline() : !lookupReady()) return void store().setToast(t("toast.lookupUnavailable"), "info");
+  forgetSources(node.name); // a fresh look: the sources pop-up doesn't reopen what was found before
   const senses = await withBusy(relookupKey(graphId, nodeId), t("task.lookup", { name: node.name }), (signal) =>
     lookupDefinitions(node.name, clarify.enabled ? clarify.options : 1, signal, { fresh: true, ...(from ? { sites: [from] } : {}) }),
   );
@@ -316,9 +317,10 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
 /**
  * "Look up in… → Search the web and compare": every source for an existing concept (encyclopedias, wikis, the web),
  * rated by the AI when one is set up, in the sources pop-up. Choosing there replaces the definition (one undo step).
- * For a concept waiting for a definition ("Search again"), the pop-up chooses as when it was added.
+ * For a concept waiting for a definition ("Search again", or its badge when nothing was gathered yet), the pop-up
+ * chooses as when it was added. `fresh`: skip what was found before (the menu and "Search again").
  */
-export async function compareSources(nodeId: string, graphId = store().activeId) {
+export async function compareSources(nodeId: string, graphId = store().activeId, opts: { fresh?: boolean; ifOpen?: boolean } = {}) {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
@@ -327,16 +329,34 @@ export async function compareSources(nodeId: string, graphId = store().activeId)
   const found = await withBusy(key, t("task.sources", { name: node.name }), (signal) =>
     gatherSources(node.name, {
       signal,
+      fresh: opts.fresh,
       context: relatedNames(graph(graphId), nodeId),
       onChecking: () => store().setBusy(key, t("task.assess", { name: node.name })),
     }),
   );
   const cur = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!found || !cur) return;
+  // Gathered for a pop-up that was open (its badge): not shown again once the user closed it or opened another.
+  const open = store().clarifying;
+  if (opts.ifOpen && (open?.graphId !== graphId || open.nodeId !== nodeId)) return;
   // A concept still waiting for a definition ("Search again" in the pop-up) keeps what was found to choose from.
   const waiting = cur.status === "unclear";
   if (waiting) store().mutate((g) => ops.updateNode(g, nodeId, { senses: sourcesAsSenses(found.sources, cur.name) }), graphId, { history: "background" });
   store().setClarifying({ graphId, nodeId, sources: found, replace: !waiting });
+}
+
+/**
+ * A waiting concept's badge (or the inspector's "Choose a definition…"): the sources pop-up, with what was gathered
+ * lately for its name when that is cached (rated, no new search). Otherwise the pop-up opens on the passages stored on
+ * the concept (an Install in ask-first mode stores an encyclopedia's only) and gathers every source, the web and the
+ * AI's rating included, while it says "Searching…".
+ */
+export function openSources(nodeId: string, graphId = store().activeId) {
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node) return;
+  store().setClarifying({ graphId, nodeId });
+  if (store().view?.id === graphId || cachedSources(node.name) || store().busy[relookupKey(graphId, nodeId)]) return;
+  if (isOnline() && (lookupReady() || searchReady())) void compareSources(nodeId, graphId, { ifOpen: true });
 }
 
 /** A definition chosen in the sources pop-up for a concept that already had one: replaces it (one undo step). */

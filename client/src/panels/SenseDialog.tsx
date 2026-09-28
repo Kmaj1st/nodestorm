@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { Fragment, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
-import { chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
+import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
 import { cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
@@ -104,7 +104,11 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   };
   const result = chosen();
 
-  const close = () => setClarifying(null); // a waiting concept stays "unclear"; its badge reopens this
+  // A waiting concept stays "unclear"; its badge reopens this. A search still running for it is stopped ("Later").
+  const close = () => {
+    if (searching) cancelTask(relookupKey(graphId, node.id));
+    setClarifying(null);
+  };
   const confirm = () => {
     if (!result) return;
     if (replace) replaceDefinition(graphId, node.id, result);
@@ -168,8 +172,16 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
           {found.assessError ? t("sources.assessFailed", { error: found.assessError }) : t("sources.notRated")}
         </p>
       )}
-      {!found && sources.length > 0 && <p className="small muted">{t("sources.stored")}</p>}
-      {!sources.length && (
+      {!found && searching && (
+        <p className="small sources__searching" role="status" data-testid="sources-searching">
+          <span className="spinner spinner--xs" aria-hidden="true" />
+          {t("sources.searching", { name: node.name })}
+        </p>
+      )}
+      {!found && sources.length > 0 && (
+        <p className="small muted">{t(sources.some((s) => s.reliability) ? "sources.storedRated" : "sources.stored")}</p>
+      )}
+      {!sources.length && !(searching && !found) && (
         <p className="small" data-testid="sources-nothing">
           {found || node.senses ? t("sources.nothing", { name: node.name }) : t("sense.nothingOff")}
         </p>
@@ -338,7 +350,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         <div className="sources__engine small">
           {found && !found.web && <span className="muted">{t("sources.noEngine")}</span>}
           {!found && (
-            <button type="button" className="small-btn" disabled={searching} onClick={() => void compareSources(node.id, graphId)} data-testid="sources-search-again">
+            <button type="button" className="small-btn" disabled={searching} onClick={() => void compareSources(node.id, graphId, { fresh: true })} data-testid="sources-search-again">
               {t("sources.searchAgain")}
             </button>
           )}

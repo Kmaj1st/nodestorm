@@ -39,6 +39,7 @@ import {
   analyzeNode,
   checkWithAi,
   compareSources,
+  openSources,
   sensesLookedUp,
   anatomyKey,
   connectKey,
@@ -60,7 +61,7 @@ import {
   resolveCycle,
 } from "../lib/actions";
 import { OWN_SOURCE, removeDependency, removeNode, removeRelation, renameNode, setBasic, setKind, typedKind, updateNode, updateRelation } from "../lib/graphOps";
-import { paperByline, sourceLabel } from "../lib/export";
+import { paperByline, ratingLabel, sourceLabel } from "../lib/export";
 import { KIND_LABEL, KINDS } from "../lib/kinds";
 import { hasMath } from "../lib/math";
 import { cycleThrough, learningPath } from "../lib/paths";
@@ -147,7 +148,6 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
   const t = useT();
   const mutate = useGraphStore((s) => s.mutate);
   const setInspect = useGraphStore((s) => s.setInspect);
-  const setClarifying = useGraphStore((s) => s.setClarifying);
   const viewing = useGraphStore(isViewing);
   const physicsOn = useView((v) => v.physics);
   const graphId = graph.id;
@@ -232,7 +232,7 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
           <p className="small">
             {t(!node.senses?.length ? "node.noDefinition" : lookedUp ? "node.definitionsFound" : "node.unclear", { name: node.name })}
           </p>
-          <button className="primary" onClick={() => setClarifying({ graphId, nodeId: node.id })}>
+          <button className="primary" onClick={() => openSources(node.id, graphId)}>
             {t(lookedUp ? "node.chooseDefinition" : "node.chooseMeaning")}
           </button>
         </div>
@@ -993,6 +993,8 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
       : src.site === "you"
         ? t("source.you")
         : sourceLabel(src);
+  // The AI's rating of the source, kept from when it was chosen among others (hand edits make the source "you").
+  const rating = src?.rating;
   return (
     <>
       <div className="source-line small" data-testid="definition-source">
@@ -1006,11 +1008,27 @@ function SourceLine({ node, viewing }: { node: ConceptNode; viewing: boolean }) 
           ) : (
             label
           )}
+          {rating && (
+            <span
+              className={`source-line__rating source-line__rating--${rating.reliability}`}
+              title={rating.reasons ? t("source.ratingTitle", { reasons: rating.reasons }) : undefined}
+              data-testid="source-rating"
+            >
+              {" · "}
+              {ratingLabel(rating)}
+            </span>
+          )}
         </span>
         {!viewing && (
           <LookupMenu node={node} graphId={graphId} busy={busy || node.status === "checking"} />
         )}
       </div>
+      {rating?.reasons && (
+        <details className="source-line__why small">
+          <summary>{t("sources.why")}</summary>
+          <p data-testid="source-rating-reasons">{rating.reasons}</p>
+        </details>
+      )}
     </>
   );
 }
@@ -1056,7 +1074,7 @@ function LookupMenu({ node, graphId, busy }: { node: ConceptNode; graphId: strin
   ];
   const pick = (from: Site | "compare") => {
     setOpen(false);
-    void (from === "compare" ? compareSources(node.id, graphId) : relookup(node.id, graphId, from));
+    void (from === "compare" ? compareSources(node.id, graphId, { fresh: true }) : relookup(node.id, graphId, from));
   };
   return (
     <div className="popover-anchor" ref={ref}>

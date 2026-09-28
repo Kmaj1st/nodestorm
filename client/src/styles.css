@@ -924,6 +924,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
   background: var(--surface); overflow-wrap: anywhere;
 }
 .sources__searched:empty { display: none; }
+.sources__searching { display: flex; gap: var(--space-2); align-items: center; }
 .sources__engine { display: flex; gap: var(--space-2); align-items: center; flex-wrap: wrap; }
 
 /* Find concept (command palette) */
@@ -1145,6 +1146,9 @@ kbd {
 /* Where a definition came from (inspector), and indented sub-options in Settings. */
 .source-line { display: flex; flex-wrap: wrap; align-items: center; gap: var(--space-1) var(--space-3); margin-top: calc(-1 * var(--space-2)); }
 .source-line a { display: inline-flex; align-items: center; gap: 3px; color: var(--accent); }
+.source-line__why { margin-top: 2px; }
+.source-line__why summary { cursor: pointer; color: var(--muted); width: fit-content; }
+.source-line__why p { margin: 4px 0 0; color: var(--muted); overflow-wrap: anywhere; }
 .check.indent { padding-left: var(--space-5); min-height: 28px; }
 /* Settings → Web search: one block per engine, its key field and Test indented under the tick box. */
 .web-search__engine { display: flex; flex-direction: column; gap: var(--space-1); }

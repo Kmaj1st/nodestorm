@@ -3,7 +3,7 @@ import { Handle, Position, type Node, type NodeProps } from "@xyflow/react";
 import { BrickWall, CircleDashed, Pin, RotateCcw, TriangleAlert } from "lucide-react";
 import { memo, useMemo } from "react";
 import { listJoin, useT, type MessageKey } from "../i18n";
-import { analyzeNode, checkWithAi, sensesLookedUp } from "../lib/actions";
+import { analyzeNode, checkWithAi, openSources, sensesLookedUp } from "../lib/actions";
 import { nameWrap } from "../lib/nameWrap";
 import { isViewing, useGraphStore } from "../store/graphStore";
 import { MathText } from "../panels/MathText";
@@ -26,7 +26,6 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
   const t = useT();
   const c = data.concept;
   const graphId = useGraphStore((s) => s.activeId);
-  const setClarifying = useGraphStore((s) => s.setClarifying);
   // Error, unclear and pending badges are buttons: retry, reopen the "what do you mean?" dialog, or check with the AI.
   // In the read-only share viewer the badges are plain labels (not buttons you can Tab to).
   const viewing = useGraphStore(isViewing);
@@ -35,7 +34,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
     : c.status === "error"
       ? () => analyzeNode(c.id, graphId)
       : c.status === "unclear"
-        ? () => setClarifying({ graphId, nodeId: c.id })
+        ? () => openSources(c.id, graphId)
         : c.status === "pending"
           ? () => checkWithAi(c.id, graphId)
           : undefined;

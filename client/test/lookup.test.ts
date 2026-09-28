@@ -79,7 +79,8 @@ describe("definitions from encyclopedias", () => {
     await analyzeNode(id);
     const n = node(id);
     expect(n.definition).toBe("The kernel of $\\phi$ is $\\phi^{-1} \\left(e_H\\right)$.");
-    expect(n.source).toEqual({ site: "ProofWiki", title: "Definition:Kernel", url: "https://proofwiki.org/wiki/Definition:Kernel" });
+    // With the offline demo's rating of the source kept with it.
+    expect(n.source).toMatchObject({ site: "ProofWiki", title: "Definition:Kernel", url: "https://proofwiki.org/wiki/Definition:Kernel", rating: { reliability: "high" } });
     expect(n.status).not.toBe("checking");
     expect(n.missingDeps.map((d) => d.name)).toContain("Homomorphism"); // the mock AI's prerequisites
   });
@@ -102,7 +103,7 @@ describe("definitions from encyclopedias", () => {
     expect(n.senses?.map((s) => [s.name, s.source?.site])).toEqual([["expectation", "Wikidata"], ["expected value", "Wikidata"]]);
     expect(store().clarifying).toMatchObject({ graphId: store().activeId, nodeId: id, sources: { rated: true } });
     chooseSense(store().activeId, id, n.senses![1]);
-    expect(node(id).source).toEqual({ site: "Wikidata", title: "Q1", url: "https://www.wikidata.org/wiki/Q1" });
+    expect(node(id).source).toMatchObject({ site: "Wikidata", title: "Q1", url: "https://www.wikidata.org/wiki/Q1" });
     expect(node(id).definition).toBe("average of a random variable");
   });
 
@@ -161,7 +162,8 @@ describe("definitions from encyclopedias", () => {
     await analyzeNode(id);
     const n = node(id);
     expect(n.definition).toBe("A map between algebraic structures that preserves the operations, e.g. $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for groups.");
-    expect(n.source).toEqual({ site: "demo-encyclopedia.example", title: "Homomorphism - Demo Encyclopedia", url: "https://demo-encyclopedia.example/wiki/Homomorphism" });
+    expect(n.source).toMatchObject({ site: "demo-encyclopedia.example", title: "Homomorphism - Demo Encyclopedia", url: "https://demo-encyclopedia.example/wiki/Homomorphism" });
+    expect(n.source?.rating).toMatchObject({ reliability: "high", compared: 1 });
     expect(n.status).not.toBe("unclear");
   });
 
