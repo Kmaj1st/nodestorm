@@ -482,12 +482,14 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
 }
 
 /**
- * What this session already found (and rated) for `name`, as when it was gathered: the pop-up reopened from a
+ * What was found (and rated) for `name` lately, also before a reload, as when it was gathered: the pop-up reopened from a
  * concept's badge shows it again without searching. Undefined when nothing is cached.
  */
 export function cachedSources(name: string): Gathered | undefined {
   const hit = loadCache().get(cacheKey(name));
   if (!hit || Date.now() - hit.at > CACHE_MS) return undefined;
+  // Found but not rated while an AI is set up: the rating is still running (or failed), so gather again.
+  if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState())) return undefined;
   const out: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources), note: "", rated: false };
   return hit.rating ? { ...out, sources: mergeRatings(hit.found.sources, hit.rating.ratings), note: hit.rating.note, rated: true } : out;
 }

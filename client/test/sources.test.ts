@@ -223,6 +223,8 @@ describe("no definition from the AI through the look-up paths", () => {
       reliability: null,
       passage: "A subset of a group that is itself a group under the same operation.",
     });
+    // Not offered again unrated from the cache: its badge asks the AI again (the search itself is cached).
+    expect(cachedSources("Subgroup")).toBeUndefined();
     vi.restoreAllMocks();
   });
 });

@@ -1124,6 +1124,7 @@ export const en = {
   "sources.nothing": "Nothing was found for “{name}”. Write your own definition, or set up web search.",
   "sources.list": "Sources to choose from",
   "sources.meaning": "Meaning: {sense}",
+  "sources.otherMeaning": "Other sources (no meaning given)",
   "reliability.high": "Reliable",
   "reliability.medium": "Fairly reliable",
   "reliability.low": "Doubtful",

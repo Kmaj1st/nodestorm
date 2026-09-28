@@ -1110,6 +1110,7 @@ export const zh: Record<MessageKey, string> = {
   "sources.nothing": "没有找到“{name}”的任何来源。可以自己写定义，或者设置网页搜索。",
   "sources.list": "可选的来源",
   "sources.meaning": "含义：{sense}",
+  "sources.otherMeaning": "其他来源（未注明含义）",
   "reliability.high": "可靠",
   "reliability.medium": "较可靠",
   "reliability.low": "存疑",

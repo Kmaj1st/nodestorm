@@ -308,10 +308,18 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   reasons, the meaning label and the passage, and sorts (high → unusable, not rated last). Without an AI (or when the
   check fails: `assessError`) the sources stay unrated in the order found, each with a default passage
   (`defaultPassage`: an encyclopedia's whole definition, a page's first sentence or two, both substrings of the text).
-  Results are cached for the session per name, language and the sites/engines asked (an hour, 50 names, only when
-  no site or engine failed),
-  with the rating once there is one; the badge reopens the pop-up from it (`cachedSources`). The status bar says
-  "Searching sources for X…", then "Checking the sources for X…" (a relabel of the same cancellable task).
+  Results are cached per name, language and the sites/engines asked (only when no site or engine failed), with the
+  rating once there is one, in memory and in localStorage (`nodestorm-sources-cache`: a day, 50 names, about 500 KB of
+  JSON, oldest dropped first; damaged entries are ignored). `cachedSources` gives them back (not while an AI is set up
+  and the rating is missing: then it is gathered again); `forgetSources` drops a name ("Look up in…"), and `fresh`
+  skips it ("Search the web and compare…", "Search again"). The status bar says "Searching sources for X…", then
+  "Checking the sources for X…" (a relabel of the same cancellable task).
+- **The rating kept** (`SourceRef.rating`, `SourceRating` in `shared/src/model.ts`): `sourceRef(s)` of a rated source
+  records its reliability, the AI's reason (at most 500 characters) and `compared` (how many sources were rated
+  together; `mergeRatings` sets it). It goes into the concept's `source` (and the stored `senses`, so
+  `sourcesFromSenses` shows them rated), survives import repair (a damaged rating alone is dropped), share links and
+  the Markdown export ("· Reliable (AI check of 3 sources): reason"), and shows in the inspector's source line. A hand
+  edit sets `OWN_SOURCE`, which has none. Never text for the definition.
 - **The `assess` task** (`shared/src/ai/tasks.ts`, `[task:assess]`): `{name, hint?, context: names, sources: {id,
   kind, site, title, url, text}[]}` → per source `{id, reliability: high|medium|low|unusable (null when the answer's
   value is not one of them), reasons, sense, passage}` plus a `note` on agreement. The prompt says to quote only and to
@@ -324,8 +332,10 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   when rated high or medium, never an encyclopedia's near match (a page for another name), and not when equally
   reliable sources describe different meanings. Unrated: only an exact encyclopedia page found alone.
 - **The pop-up** (`SenseDialog`, "Sources for X"): the store's `clarifying` carries the gathered `sources` (or none:
-  then the session cache, or the passages stored on the concept as `senses` by `sourcesAsSenses`, unrated, with
-  "Search again"), and `replace` for an existing concept. Sources are grouped by meaning when the AI labels them
+  then the cache, or the passages stored on the concept as `senses` by `sourcesAsSenses`, with "Search again"), and
+  `replace` for an existing concept. A waiting concept's badge (and the inspector's "Choose a definition…") calls
+  `openSources`: with nothing cached it runs `compareSources(…, {ifOpen})`, and the pop-up says "Searching the
+  sources for X…" over the stored passages until they arrive (closing it cancels the search). Sources are grouped by meaning when the AI labels them
   differently (`groupBySense`), each with its site, a reliability badge (text, not only colour; "Why?" shows the AI's
   reasons), a link (new tab, `noopener noreferrer`), and its text as plain characters with the passage `<mark>`ed
   (shortened around the passage until "Show the whole text"). Choices, all radios of one group: a passage; "Use
