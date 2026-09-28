@@ -64,9 +64,15 @@ interface ViewState extends ViewPrefs {
   view3d: boolean;
   /** Concepts hidden by hand, per graph (see lib/view.ts HiddenMap). Hide with `hideConcepts`: it also deselects. */
   hidden: HiddenMap;
+  /**
+   * "Select several" (not remembered): taps and clicks on concepts add them to the selection or take them out, as
+   * Shift/Ctrl-click does, so Mix and Derive can be reached without a keyboard (GraphCanvas.tsx).
+   */
+  selecting: boolean;
   setPrefs(patch: Partial<ViewPrefs>): void;
   setFocus(focus: Focus | null): void;
   setView3d(open: boolean): void;
+  setSelecting(on: boolean): void;
   setHidden(hidden: HiddenMap): void;
   /** Show concepts of a graph again: `ids`, or all of them. */
   show(graphId: string, ids?: readonly string[]): void;
@@ -77,6 +83,7 @@ export const useView = create<ViewState>()((set, get) => ({
   focus: null,
   view3d: false,
   hidden: loadHidden(),
+  selecting: false,
   setPrefs(patch) {
     const { origins, edgeLabels, todoOnly, hops, kinds, layout, physics } = { ...get(), ...patch };
     const prefs = sanitizeView({ origins, edgeLabels, todoOnly, hops, kinds, layout, physics });
@@ -89,6 +96,7 @@ export const useView = create<ViewState>()((set, get) => ({
   },
   setFocus: (focus) => set({ focus }),
   setView3d: (view3d) => set({ view3d }),
+  setSelecting: (selecting) => set({ selecting }),
   setHidden(hidden) {
     if (hidden === get().hidden) return;
     saveHidden(hidden);

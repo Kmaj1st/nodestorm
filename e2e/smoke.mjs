@@ -3100,6 +3100,127 @@ try {
     await page.setViewportSize({ width: 1400, height: 900 });
   }
 
+  console.log("Phone selection");
+  {
+    // A touch phone has no Shift key: "Select several" (by the zoom buttons) or holding a card selects two for Mix.
+    const ctx = await browser.newContext({ viewport: { width: 390, height: 844 }, hasTouch: true, isMobile: true, locale: "en-US" });
+    await blockLookups(ctx);
+    await ctx.addInitScript(() => {
+      try {
+        if (localStorage.getItem("nodestorm-ui-language")) return;
+        localStorage.setItem("nodestorm-ui-language", "en");
+        localStorage.setItem("nodestorm-settings", JSON.stringify({ state: { provider: "mock", connection: "browser" }, version: 1 }));
+      } catch {}
+    });
+    const p = await ctx.newPage();
+    p.on("pageerror", (e) => console.error("pageerror:", e.message));
+    await p.goto(`http://localhost:${WEB_PORT}/`);
+    const axe = async (what) => {
+      await p.waitForTimeout(300);
+      const { violations } = await new AxeBuilder({ page: p }).withTags(["wcag2a", "wcag2aa", "wcag21a", "wcag21aa", "wcag22aa"]).analyze();
+      const report = violations.flatMap((v) => v.nodes.map((n) => `\n    ${v.id} (${v.impact}) at ${n.target.join(" ")}: ${n.failureSummary}`));
+      assert(!violations.length, `axe finds no WCAG A/AA violations: ${what}${report.join("")}`);
+    };
+    const overlap = (a, b) => a.x < b.x + b.width && b.x < a.x + a.width && a.y < b.y + b.height && b.y < a.y + a.height;
+    const card = (name) => p.getByTestId(`node-${name}`);
+    assert(await p.evaluate(() => matchMedia("(pointer: coarse)").matches), "phone: a touch screen is emulated (pointer: coarse)");
+    await p.getByRole("button", { name: "Load the Group theory example" }).tap();
+    await p.waitForFunction(() => document.querySelectorAll(".react-flow__node").length === 7);
+
+    // The notice that follows shows at the top, and an open dialog keeps clear of it.
+    const toast = p.getByTestId("toast");
+    await toast.waitFor();
+    assert((await toast.getAttribute("role")) === "status" && (await toast.textContent()).includes("Tap a concept"), "phone: the example's notice is announced (role=status)");
+    await p.getByRole("button", { name: "Add concept", exact: true }).tap();
+    const dlg = p.getByRole("dialog", { name: "Add concept" });
+    await dlg.getByRole("button", { name: "Add", exact: true }).waitFor();
+    const tb = await toast.boundingBox();
+    const covered = [];
+    for (const b of await dlg.getByRole("button").all()) {
+      const box = await b.boundingBox();
+      if (box && overlap(tb, box)) covered.push(await b.textContent());
+    }
+    const bar = await p.locator(".toolbar").boundingBox();
+    assert(tb.y >= bar.y + bar.height && tb.y < 300 && !covered.length, `phone: the notice sits under the toolbar and covers none of the dialog's buttons${covered.length ? ` (covers ${covered.join(", ")})` : ""}`);
+    await p.screenshot({ path: `${shots}phone-toast-dialog.png` });
+    await p.keyboard.press("Escape");
+    await dlg.waitFor({ state: "detached" });
+    await toast.tap();
+    await toast.waitFor({ state: "detached" });
+    assert(true, "a tap dismisses the notice");
+
+    // How to use names Select several on a touch screen, not Shift-click.
+    await p.getByRole("button", { name: "Show details" }).tap();
+    const help = p.locator(".inspector--help");
+    assert((await help.textContent()).includes("Select several") && !(await help.textContent()).includes("Shift/Ctrl-click"), "phone: How to use says Select several, not Shift/Ctrl-click");
+
+    // React Flow's attribution stays visible, under the zoom buttons instead of over the cards.
+    const attribution = p.locator(".react-flow__attribution");
+    const [ab, cb] = [await attribution.boundingBox(), await p.locator(".react-flow__controls").boundingBox()];
+    assert((await attribution.isVisible()) && ab.y >= cb.y + cb.height && ab.x < cb.x + cb.width, "phone: the React Flow attribution is shown under the zoom buttons");
+
+    // Select several: taps add concepts and take them out; Mix is enabled with two.
+    const toggle = p.getByTestId("select-several");
+    const mix = p.getByRole("button", { name: "Mix", exact: true });
+    const count = p.getByTestId("select-count");
+    await toggle.tap();
+    assert((await toggle.getAttribute("aria-pressed")) === "true" && (await count.textContent()) === "Tap concepts to select them", "Select several is on, and its bar says what to do");
+    assert((await mix.isDisabled()) && (await mix.getAttribute("title")).includes("pick exactly two"), "Mix is disabled, its tooltip says to pick two");
+    await card("Subgroup").tap();
+    await card("Homomorphism").tap();
+    assert((await textIs(count, "2 selected")) && (await mix.isEnabled()), "two taps select two concepts, and Mix is enabled");
+    await card("Group").tap();
+    assert((await textIs(count, "3 selected")) && (await mix.isDisabled()), "a third tap adds a third (Mix wants exactly two)");
+    await card("Group").tap();
+    assert(await textIs(count, "2 selected"), "tapping a selected concept takes it out again");
+    await p.locator(".react-flow__pane").tap({ position: { x: 370, y: 12 } });
+    assert((await textIs(count, "2 selected")) && (await help.isVisible()), "a tap on the empty canvas keeps the selection, and no concept opened in the details sheet");
+    await axe("phone, Select several with two concepts selected");
+    await p.screenshot({ path: `${shots}phone-select.png` });
+    await p.emulateMedia({ colorScheme: "dark" });
+    await axe("phone, Select several, dark theme");
+    await p.screenshot({ path: `${shots}phone-select-dark.png` });
+    await p.emulateMedia({ colorScheme: "light" });
+    await mix.tap();
+    await p.getByText(/No relation found between “Subgroup” and “Homomorphism”/).first().waitFor();
+    assert((await p.locator("path.relation--unrelated").count()) === 1, "Mix works on the two tapped concepts");
+    if (await toast.isVisible()) {
+      const sheet = await p.locator(".sheet").boundingBox();
+      assert(!overlap(await toast.boundingBox(), sheet), "phone: a notice doesn't cover the details sheet");
+    }
+
+    // Done (or Escape) leaves the mode and keeps the selection; holding a card starts it again with just that card.
+    await p.getByRole("button", { name: "Done" }).tap();
+    assert((await p.getByTestId("select-bar").count()) === 0 && (await toggle.getAttribute("aria-pressed")) === "false", "Done leaves Select several");
+    // Mix opened its relation in the details sheet: fold it away, so the cards have the canvas to themselves again.
+    await p.getByRole("button", { name: "Hide details" }).tap();
+    await p.getByRole("button", { name: "Fit everything in view" }).tap();
+    await p.waitForTimeout(500);
+    const cdp = await ctx.newCDPSession(p);
+    const hb = await card("Kernel").boundingBox();
+    const at = [{ x: hb.x + 20, y: hb.y + 12 }];
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: at });
+    await p.waitForTimeout(800);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await p.waitForTimeout(300);
+    assert((await textIs(count, "1 selected")) && (await card("Kernel").evaluate((el) => el.closest(".react-flow__node").classList.contains("selected"))), "holding a card starts Select several with just that card");
+    await card("Normal subgroup").tap();
+    assert((await textIs(count, "2 selected")) && (await mix.isEnabled()), "…and a tap on another adds it");
+    await p.keyboard.press("Escape");
+    assert((await p.getByTestId("select-bar").count()) === 0, "Escape leaves Select several");
+
+    // 中文
+    await p.evaluate(() => localStorage.setItem("nodestorm-ui-language", "zh"));
+    await p.reload();
+    await p.locator(".react-flow__node").nth(6).waitFor();
+    await p.getByTestId("select-several").tap();
+    await p.locator(".react-flow__node").nth(1).tap();
+    await p.locator(".react-flow__node").nth(2).tap();
+    assert(await textIs(p.getByTestId("select-count"), "已选 2 个"), "中文: the bar says 已选 2 个");
+    await p.screenshot({ path: `${shots}phone-select-zh.png` });
+    await ctx.close();
+  }
+
   console.log("Web search settings");
   {
     // Tavily answers from a fixture: the key "tvly-good" works, any other is rejected with a 401, as Tavily does.

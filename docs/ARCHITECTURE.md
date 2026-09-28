@@ -709,7 +709,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `preloadDialogs()`.
 - `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
   for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
-  `InspectorSheet` (a collapsible bottom sheet under 800px), toast, and the dialogs.
+  `InspectorSheet` (a collapsible bottom sheet under 800px), `Toast` (bottom centre; under the toolbar on a phone; it
+  sets `--toast-top`/`--toast-bottom`, the part of the screen open dialogs keep free for it), and the dialogs.
 - `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Absurd chain/Derive/Derive together,
   Tidy/Find/Focus/View, graph/sandbox selector and fork, Settings (an AI status chip), File (import, exports incl. PNG
   via lazily imported `html-to-image` and LaTeX, Extract, Quiz, Derive together, Absurd chain, Share, Versions,
@@ -725,6 +726,12 @@ which also clears the project's undo stacks. **Restore as new project** → `res
     (`useLabelLayer`) instead of using `<EdgeLabelRenderer>`, whose per-edge `querySelector` inside a store selector
     dominated big graphs; labels are dropped below zoom 0.45. `e2e/perf.mjs` measures a 300-concept graph.
   - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
+  - **Select several** (`client/src/panels/SelectSeveral.tsx`, `useView().selecting`): for touch screens, which have
+    no Shift key. Its button sits in the zoom controls; while on, `SelectSeveralSync` keeps React Flow's
+    `multiSelectionActive` set (as if Shift were held), `selectNodesOnDrag` is off (a tap toggles, a drag only moves),
+    a single selection doesn't open the inspector, and a pane click doesn't clear the selection. `useHoldToSelect`
+    starts it from a 500 ms touch hold on a card (cancelled by moving, a second finger or letting go; the tap ending
+    the hold is swallowed). `SelectBar` shows the count with Clear and Done; Escape (App.tsx) leaves it.
 - `client/src/panels/Inspector.tsx`: node view (kind select, dependency flow, install, rename, Theorem anatomy for theorem-like kinds, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
 - `client/src/graph/KindTag.tsx`: the small uppercase kind label on cards, walkthrough slides and glossary rows,
