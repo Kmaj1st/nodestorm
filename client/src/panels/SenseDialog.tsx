@@ -6,6 +6,7 @@ import type { MessageKey } from "../i18n";
 import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
+import { whenElement } from "../lib/whenElement";
 import { allSourcesFailed, cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
@@ -160,15 +161,17 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
     });
 
   // Settings opens over this pop-up (what was picked or typed stays), scrolled to its Web search part.
+  // The wait for that part (Settings and it may still be loading) ends when found, after 5 s, or when this pop-up goes.
+  const stopWaiting = useRef<() => void>(undefined);
+  useEffect(() => () => stopWaiting.current?.(), []);
   const openSearchSettings = () => {
     setSettingsOpen(true);
-    let tries = 0;
-    const scroll = () => {
-      const part = document.querySelector<HTMLElement>('[data-testid="web-search-settings"]');
-      if (part) part.scrollIntoView({ block: "start" });
-      else if (++tries < 40) setTimeout(scroll, 50);
-    };
-    scroll();
+    stopWaiting.current?.();
+    stopWaiting.current = whenElement(
+      () => document.querySelector<HTMLElement>('[data-testid="web-search-settings"]'),
+      (part) => part.scrollIntoView({ block: "start" }),
+      { timeoutMs: 5000 },
+    );
   };
   const on = (id: string) => choice?.kind !== "own" && choice?.id === id;
   const pickedSource = picked ? byId(picked.id) : undefined;
