@@ -32,7 +32,7 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
-const okCheck: CheckStepResponse = { verdict: "correct", comment: "Fine.", missing: [], cites: [], concepts: [], solved: false };
+const okCheck: CheckStepResponse = { verdict: "ok", comment: "Fine.", missing: [], cites: [], concepts: [], solved: false };
 
 beforeEach(async () => {
   graphs().reset();
@@ -154,7 +154,7 @@ describe("derive store: tutor calls", () => {
 
     vi.spyOn(api, "checkStep").mockResolvedValue(okCheck);
     await derive().check(id);
-    expect(current().steps[0].check).toMatchObject({ verdict: "correct", comment: "Fine." });
+    expect(current().steps[0].check).toMatchObject({ verdict: "ok", comment: "Fine." });
   });
 
   it("asks for stronger hints for the same step and stores each one on the session", async () => {
@@ -169,7 +169,7 @@ describe("derive store: tutor calls", () => {
     ]);
     // Saved to IndexedDB as well: a reload finds the session with its hints.
     const id = current().id;
-    await vi.waitFor(async () => expect((await db.listSessions(graphs().projectId)).find((s) => s.id === id)).toBeTruthy());
+    await vi.waitFor(async () => expect((await db.listSessions(graphs().projectId) as Derivation[]).find((s) => s.id === id)).toBeTruthy());
     await derive().load(graphs().projectId);
     expect(derive().sessions.find((s) => s.id === id)?.hints).toHaveLength(2);
   });
@@ -187,10 +187,10 @@ describe("derive store: tutor calls", () => {
   it("deleting a session clears the open one and removes it from IndexedDB", async () => {
     await startWithStep("Start.");
     const id = current().id;
-    await vi.waitFor(async () => expect((await db.listSessions(graphs().projectId)).map((s) => s.id)).toContain(id));
+    await vi.waitFor(async () => expect((await db.listSessions(graphs().projectId) as Derivation[]).map((s) => s.id)).toContain(id));
     await derive().deleteSession(id);
     expect(derive().currentId).toBeNull();
-    expect((await db.listSessions(graphs().projectId)).map((s) => s.id)).not.toContain(id);
+    expect((await db.listSessions(graphs().projectId) as Derivation[]).map((s) => s.id)).not.toContain(id);
   });
 });
 

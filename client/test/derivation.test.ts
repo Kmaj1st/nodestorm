@@ -53,7 +53,7 @@ describe("derivation sessions", () => {
     d = addHint(d, { text: "h", cites: [], concepts: [] }); // given with 2 steps
     const r = removeStep(d, second);
     expect(r.steps).toHaveLength(1);
-    expect(r.steps[0].check).toBeDefined();
+    expect(r.steps[0]).toMatchObject({ id: first, check: check() });
     expect(r.hints).toHaveLength(0);
   });
 

@@ -62,7 +62,10 @@ describe("duplicating a project mid-check", () => {
     addConcept({ name: "Group" }); // check running
     store().duplicateProject(store().projectId);
     await idle();
-    for (const g of Object.values(store().graphs)) expect(g.nodes.every((n) => n.status !== "checking")).toBe(true);
+    // Both projects have the concept (so the loop below isn't vacuous), and neither waits on a check.
+    const withGroup = Object.values(store().graphs).filter((g) => g.nodes.some((n) => n.name === "Group"));
+    expect(withGroup).toHaveLength(2);
+    for (const g of withGroup) expect(g.nodes.map((n) => n.status)).not.toContain("checking");
   });
 });
 
