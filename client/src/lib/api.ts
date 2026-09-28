@@ -6,7 +6,6 @@ import {
   type ProviderErrorInfo,
   type AbsurdChainRequest,
   type AnatomyRequest,
-  type ClarifyRequest,
   type ConnectRequest,
   providerMeta,
   type tasks,
@@ -130,7 +129,6 @@ export function visionModel(kind: ProviderKind): string | undefined {
 
 export const api = {
   name: (req: NameRequest, signal?: AbortSignal) => run("name", req, signal),
-  clarify: (req: Partial<ClarifyRequest> & { name: string }, signal?: AbortSignal) => run("clarify", req, signal),
   relate: (req: RelateRequest, signal?: AbortSignal) => run("relate", req, signal),
   deps: (req: DepsRequest, signal?: AbortSignal) => run("deps", req, signal),
   derive: (req: DeriveRequest, signal?: AbortSignal) => run("derive", req, signal),

@@ -368,9 +368,9 @@ Actions**, then run the workflow; the run shows the site's URL. To deploy on eve
 
 ```
 shared/   graph model + AI task schemas (zod), and the AI core: providers, prompts, tasks
-server/   optional Express API: POST /api/<task> (name, clarify, relate, deps, derive, explain, anatomy, extract, quiz,
-          resolveCycle, readPage, splitProblems, tutorHint, checkStep, refereeReport, absurdChain, mathlib),
-          GET /api/providers, GET /api/models
+server/   optional Express API: POST /api/<task> (name, relate, deps, derive, explain, anatomy, extract, quiz,
+          resolveCycle, readPage, splitProblems, tutorHint, checkStep, refereeReport, absurdChain, mathlib, connect,
+          assess), POST /api/search/<engine>, GET /api/providers, GET /api/models
 client/   Vite + React + React Flow UI; pure graph logic in client/src/lib/ (e.g. graphOps.ts)
 e2e/      Playwright smoke test (runs against the mock provider), PWA check, perf timing
 scripts/  live smoke tests against real providers, the encyclopedias and OpenAlex

@@ -169,17 +169,6 @@ function anatomyOf(node: { name: string; definition?: string }): TheoremAnatomy 
   };
 }
 
-/** Names with several meanings, for exercising the "what do you mean?" flow offline. */
-const AMBIGUOUS: Record<string, { name: string; domain: string; definition: string }[]> = {
-  expectation: [
-    { name: "Expectation (probability)", domain: "probability theory", definition: "The expected value $E[X]$ of a random variable: its probability-weighted average." },
-    { name: "Expectation (psychology)", domain: "psychology", definition: "A belief about what will happen in the future, which shapes perception and behaviour." },
-    { name: "Expectation value (quantum mechanics)", domain: "physics", definition: "The average outcome $\\langle A \\rangle$ of measuring an observable $A$ on a quantum state." },
-    { name: "Expectation (economics)", domain: "economics", definition: "Agents' forecasts of future economic variables, as in rational expectations." },
-    { name: "Expectation (sociology)", domain: "sociology", definition: "A social norm about how a person in a given role ought to behave." },
-  ],
-};
-
 /** Richer "explain more" material for a few KB concepts; the others get one built from their KB entry. */
 const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples: { title: string; body: string }[]; pitfalls: string[] }> = {
   homomorphism: {
@@ -441,8 +430,6 @@ export class MockProvider implements Provider {
     switch (task) {
       case "name":
         return JSON.stringify(this.name(String(inp.description ?? "")));
-      case "clarify":
-        return JSON.stringify(this.clarify(String(inp.name ?? ""), Number(inp.count ?? 3)));
       case "relate":
         return JSON.stringify(this.relate(inp.a.name, inp.b.name));
       case "deps":
@@ -711,16 +698,6 @@ export class MockProvider implements Provider {
     return {
       remove: [worst],
       reason: l ? `"${l.to.name}" builds on "${l.from.name}", not the other way round.` : "No link to remove.",
-    };
-  }
-
-  private clarify(name: string, count: number) {
-    const senses = AMBIGUOUS[normalizeName(name)];
-    if (senses) return { ambiguous: true, senses: senses.slice(0, count) };
-    const entry = kbGet(name);
-    return {
-      ambiguous: false,
-      senses: [{ name, domain: entry ? "algebra" : "general", definition: entry?.definition ?? "", kind: entry ? kindOf(entry.key) : kindFromName(name) }],
     };
   }
 

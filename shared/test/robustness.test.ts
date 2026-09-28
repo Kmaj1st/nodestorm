@@ -128,7 +128,6 @@ describe("output language", () => {
     const prompts: ChatMessage[][] = [];
     const answers: Record<string, unknown> = {
       name: { candidates: [{ name: "同态", definition: "保持运算的映射。", aliases: [] }] },
-      clarify: { ambiguous: false, senses: [{ name: "期望", domain: "概率", definition: "平均值。" }] },
       relate: { aToB: { kind: "使用", explanation: "…" }, bToA: { kind: "none", explanation: "…" } },
       deps: { prerequisites: [] },
       derive: { proposals: [] },
@@ -145,7 +144,6 @@ describe("output language", () => {
   }
   const bodies = {
     name: { description: "a map between groups that preserves the operation" },
-    clarify: { name: "Expectation" },
     relate: { a: { name: "A" }, b: { name: "B" } },
     deps: { node: { name: "X" } },
     derive: { selected: [{ name: "A" }] },

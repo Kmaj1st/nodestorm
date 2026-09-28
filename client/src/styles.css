@@ -209,7 +209,7 @@ code {
   padding: 0 4px; border-radius: 4px;
 }
 /* Counts and times line up. */
-.tabular, .status__time, .walk__progress, [data-testid="flash-count"], .quiz__count strong { font-variant-numeric: tabular-nums; }
+.status__time, .walk__progress, [data-testid="flash-count"], .quiz__count strong { font-variant-numeric: tabular-nums; }
 
 /* ---- Buttons: default (secondary), .primary, .danger, .icon-btn (ghost, icon only), .link; 32px, 28px dense ---- */
 button {
@@ -860,8 +860,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 }
 .keynote p { margin: 0; }
 
-/* "What do you mean?" dialog */
-.senses { display: flex; flex-direction: column; gap: var(--space-2); }
+/* Choices in the sources pop-up besides a source: selected text, your own definition */
 .sense {
   display: flex; gap: var(--space-3); align-items: flex-start; border: 1px solid var(--border); border-radius: var(--radius-md);
   padding: 10px var(--space-3); cursor: pointer; transition: border-color 0.12s, background-color 0.12s;
@@ -870,13 +869,7 @@ button.model--on, button.model--on:hover:not(:disabled) { background: var(--acce
 .sense > span { display: flex; flex-direction: column; gap: 3px; flex: 1; min-width: 0; }
 .sense--on, .sense--on:hover { border-color: var(--accent); background: var(--accent-soft); }
 .sense input[type="radio"] { margin-top: 3px; }
-.sense__head { display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
 .sense__other { gap: 6px !important; }
-.sense__source {
-  padding: 0 6px; border: 1px solid var(--border); border-radius: 999px; color: var(--muted); white-space: nowrap;
-}
-.sense__searched { color: var(--muted); margin-top: calc(-1 * var(--space-1)); }
-.sense__searched:empty { display: none; }
 
 /* Sources pop-up (panels/SenseDialog.tsx): sources rated by the AI, a passage of one to pick, or selected text. */
 .modal__body.sources-dialog { width: min(680px, calc(100vw - 32px)); }

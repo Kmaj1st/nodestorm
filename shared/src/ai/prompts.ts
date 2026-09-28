@@ -2,7 +2,6 @@ import type {
   AbsurdChainRequest,
   AbsurdStyle,
   AnatomyRequest,
-  ClarifyRequest,
   DepsRequest,
   DeriveRequest,
   ExplainLevel,
@@ -28,7 +27,7 @@ import type {
 import { normalizeName } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
-export type TaskKind = "name" | "clarify" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
+export type TaskKind = "name" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
   | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport" | "connect"
   | "assess";
 
@@ -90,22 +89,6 @@ ${KIND_GUIDE}
 Schema: {"candidates":[{"name":string,"definition":string (one or two sentences),"aliases":string[],"kind":${KIND_VALUES}|null}]}`,
     ),
     input(req, `${contextBlock(req.context)}\n\nDescription: ${req.description}`),
-  ];
-}
-
-export function clarifyPrompt(req: ClarifyRequest): ChatMessage[] {
-  return [
-    sys(
-      "clarify",
-      `The user added a concept by name only. Decide whether the name is ambiguous: does it have several established meanings, in different fields or within one field? (E.g. "expectation": expected value in probability, anticipation in psychology, expectation value in quantum mechanics…)
-Use the concepts already in the graph and any hint: if they make one meaning clearly intended, it is NOT ambiguous.
-If ambiguous: set "ambiguous": true and return exactly ${req.count} distinct senses, most likely first (given the graph).
-If not ambiguous: set "ambiguous": false and return a single sense with a precise definition.
-Each sense: "name" = display name, disambiguated with a parenthetical only if needed (e.g. "Expectation (probability)"); "domain" = short field label; "definition" = one or two sentences (for a result, its statement).
-${KIND_GUIDE}
-Schema: {"ambiguous":boolean,"senses":[{"name":string,"domain":string,"definition":string,"kind":${KIND_VALUES}|null}]}`,
-    ),
-    input(req, `${contextBlock(req.context)}\n\nName: ${req.name}${req.hint ? `\nHint: ${req.hint}` : ""}`),
   ];
 }
 

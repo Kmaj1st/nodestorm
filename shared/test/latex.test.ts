@@ -44,8 +44,8 @@ describe("LaTeX in model replies", () => {
   });
 
   it("the offline demo's formulas survive the JSON round trip", async () => {
-    const res = await tasks.clarify(new MockProvider(), { name: "First isomorphism theorem" });
-    expect(res.senses[0].definition).toContain(String.raw`$G / \ker\varphi$`);
+    const res = await tasks.anatomy(new MockProvider(), { node: { name: "First isomorphism theorem" } });
+    expect(res.conclusion).toContain(String.raw`$G / \ker\varphi \cong \operatorname{im}\varphi$`);
   });
 });
 

@@ -1,7 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
   AiConceptKind,
-  ClarifyResponse,
   ConceptNode,
   DepsResponse,
   DeriveResponse,
@@ -30,7 +29,6 @@ describe("concept kinds in AI answers", () => {
   it("still accepts answers from before kinds existed", () => {
     expect(DepsResponse.parse({ prerequisites: [] }).kind).toBeUndefined();
     expect(NameResponse.parse({ candidates: [{ name: "A", definition: "d" }] }).candidates[0].kind).toBeUndefined();
-    expect(ClarifyResponse.parse({ ambiguous: false, senses: [{ name: "A", domain: "x", definition: "d" }] }).senses[0].kind).toBeUndefined();
     expect(DeriveResponse.parse({ proposals: [{ name: "A", definition: "d", links: [] }] }).proposals[0].kind).toBeUndefined();
     expect(ExtractResponse.parse({ concepts: [{ name: "A" }] }).concepts[0].kind).toBeUndefined();
   });
@@ -70,9 +68,8 @@ describe("mock provider kinds", () => {
     expect((await tasks.deps(mock, { node: { name: "Something else" } })).kind).toBeNull();
   });
 
-  it("names, clarifies, derives and extracts with kinds", async () => {
+  it("names, derives and extracts with kinds", async () => {
     expect((await tasks.name(mock, { description: "a bijective map" })).candidates[0].kind).toBe("definition");
-    expect((await tasks.clarify(mock, { name: "Lagrange's theorem" })).senses[0].kind).toBe("theorem");
     expect((await tasks.derive(mock, { selected: [{ name: "Homomorphism" }] })).proposals[0].kind).toBe("definition");
     const ex = await tasks.extract(mock, { text: 'The first isomorphism theorem needs a kernel. We call it the "Main Lemma".' });
     expect(Object.fromEntries(ex.concepts.map((c) => [c.name, c.kind]))).toEqual({

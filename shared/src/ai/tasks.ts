@@ -5,8 +5,6 @@ import {
   type AbsurdHop,
   AnatomyRequest,
   AnatomyResponse,
-  ClarifyRequest,
-  ClarifyResponse,
   DepsRequest,
   DepsResponse,
   DeriveRequest,
@@ -51,7 +49,6 @@ import { ProviderError, type ChatMessage, type Provider, type RequestOptions } f
 import {
   absurdChainPrompt,
   anatomyPrompt,
-  clarifyPrompt,
   depsPrompt,
   derivePrompt,
   explainPrompt,
@@ -278,13 +275,6 @@ export function cleanQuiz(res: QuizResponse, multipleChoice: boolean): QuizRespo
 export const tasks = {
   name: async (p: Provider, body: unknown, o?: RequestOptions) =>
     runStructured(p, namePrompt(NameRequest.parse(body)), NameResponse, { ...o, search: true }),
-  clarify: async (p: Provider, body: unknown, o?: RequestOptions) => {
-    const req = ClarifyRequest.parse(body);
-    const res = await runStructured(p, clarifyPrompt(req), ClarifyResponse, { ...o, search: true });
-    // Models sometimes flag ambiguity but return only one sense; that's not a real choice.
-    const ambiguous = res.ambiguous && res.senses.length > 1;
-    return { ambiguous, senses: ambiguous ? res.senses.slice(0, req.count) : res.senses.slice(0, 1) };
-  },
   relate: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const res = await runStructured(p, relatePrompt(RelateRequest.parse(body)), RelateResponse, { ...o, search: true });
     const [aToB, bToA] = activeOnly(res.aToB, res.bToA);

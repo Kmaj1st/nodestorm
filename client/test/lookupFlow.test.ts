@@ -38,7 +38,8 @@ const FANDOM_KERNEL = "The Kernel is a block found deep underground, used to pow
 
 let routes: [RegExp, () => Response][] = [];
 const realFetch = globalThis.fetch;
-let clarify: { mock: { calls: unknown[] } };
+/** The AI writing a definition itself ("Describe it"): never part of a look-up. */
+let aiWrites: { mock: { calls: unknown[] } };
 let deps: { mock: { calls: unknown[] } };
 let assess: { mock: { calls: unknown[][] } };
 beforeEach(() => {
@@ -61,7 +62,7 @@ beforeEach(() => {
     clarify: { enabled: true, options: 3 },
     lookup: { enabled: true, proofwiki: true, wikipedia: true, baidu: true, fandom: "minecraft", bwiki: "" },
   });
-  clarify = vi.spyOn(api, "clarify");
+  aiWrites = vi.spyOn(api, "name");
   deps = vi.spyOn(api, "deps");
   assess = vi.spyOn(api, "assess");
 });
@@ -120,7 +121,7 @@ describe("adding a concept, asking first", () => {
     // Two meanings: the mathematical one and the game's block, grouped apart.
     expect(store().clarifying!.sources!.sources.map((s) => s.sense)).toEqual(["mathematics", "The Kernel is"]);
     expect(assess).toHaveBeenCalledTimes(1);
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
     expect(deps).not.toHaveBeenCalled();
   });
 
@@ -169,7 +170,7 @@ describe("adding a concept, asking first", () => {
       definition: "The kernel of a homomorphism is the set of elements sent to the identity.",
       source: { site: "demo-lecture-notes.example", title: "Kernel (algebra)", url: "https://demo-lecture-notes.example/kernel" },
     });
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
     expect(deps).not.toHaveBeenCalled();
   });
 
@@ -184,7 +185,7 @@ describe("adding a concept, asking first", () => {
     expect(checkWithAi(id)).toBe(true);
     await idle();
     expect(deps).toHaveBeenCalledTimes(1);
-    expect(clarify).not.toHaveBeenCalled(); // the definition is kept
+    expect(aiWrites).not.toHaveBeenCalled(); // the definition is kept
     expect(node(id).status).not.toBe("pending");
     expect(node(id).missingDeps.map((d) => d.name)).toContain("Homomorphism");
   });
@@ -195,7 +196,7 @@ describe("adding a concept, asking first", () => {
     expect(node(id)).toMatchObject({ status: "unclear", senses: [] });
     expect(store().clarifying?.nodeId).toBe(id);
     expect(store().clarifying?.sources?.sources).toEqual([]);
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
     expect(assess).not.toHaveBeenCalled(); // nothing to rate
   });
 
@@ -251,7 +252,7 @@ describe("adding a concept, asking first", () => {
     const id = addConcept({ name: "Widget", definition: "A small gadget.", source: ops.OWN_SOURCE });
     await idle();
     expect(node(id).status).toBe("pending");
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
     expect(deps).not.toHaveBeenCalled();
     store().undo();
     expect(graph().nodes.some((n) => n.id === id)).toBe(false); // adding and waiting are one step
@@ -285,7 +286,7 @@ describe("installing a prerequisite, asking first", () => {
     installDep(q, "Kernel");
     await idle();
     expect(byName("Kernel")).toMatchObject({ status: "pending", source: { site: "ProofWiki" } });
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
     expect(deps).not.toHaveBeenCalled();
   });
 
@@ -295,6 +296,6 @@ describe("installing a prerequisite, asking first", () => {
     await idle();
     expect(byName("Zorblax")).toMatchObject({ status: "unclear", senses: [] });
     expect(store().clarifying).toBe(null);
-    expect(clarify).not.toHaveBeenCalled();
+    expect(aiWrites).not.toHaveBeenCalled();
   });
 });

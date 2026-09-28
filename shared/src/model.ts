@@ -336,23 +336,6 @@ export const Sense = z.object({
 });
 export type Sense = z.infer<typeof Sense>;
 
-export const ClarifyRequest = z.object({
-  name: z.string().min(1),
-  /** Extra context, e.g. why a dependent node needs this concept. */
-  hint: z.string().optional(),
-  context: z.array(NodeBrief).default([]),
-  /** How many meanings to offer when the name is ambiguous. */
-  count: z.number().int().min(2).max(10).default(3),
-});
-export type ClarifyRequest = z.infer<typeof ClarifyRequest>;
-
-export const ClarifyResponse = z.object({
-  /** False when the name (in this graph's context) has one clear meaning — then senses[0] is it. */
-  ambiguous: z.boolean(),
-  senses: z.array(Sense).min(1),
-});
-export type ClarifyResponse = z.infer<typeof ClarifyResponse>;
-
 export const DeriveRequest = z.object({
   selected: z.array(NodeBrief).min(1),
   context: z.array(NodeBrief).default([]),

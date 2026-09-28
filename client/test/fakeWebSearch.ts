@@ -1,4 +1,4 @@
-import { MockProvider, tasks } from "@nodestorm/shared";
+import { kbDefinition, normalizeName } from "@nodestorm/shared";
 import type { WebSearchResult } from "../src/lib/webSearch";
 
 /**
@@ -13,17 +13,24 @@ export const fake = {
   pages: undefined as ((name: string) => WebSearchResult["results"]) | undefined,
 };
 
+/** Names with several meanings (the offline demo's knowledge base has one per name). */
+const AMBIGUOUS: Record<string, { name: string; definition: string }[]> = {
+  expectation: [
+    { name: "Expectation (probability)", definition: "The expected value $E[X]$ of a random variable: its probability-weighted average." },
+    { name: "Expectation (psychology)", definition: "A belief about what will happen in the future, which shapes perception and behaviour." },
+    { name: "Expectation value (quantum mechanics)", definition: "The average outcome $\\langle A \\rangle$ of measuring an observable $A$ on a quantum state." },
+  ],
+};
+
 export async function defaultPages(name: string): Promise<WebSearchResult["results"]> {
-  const { senses } = await tasks.clarify(new MockProvider(), { name, count: 3 });
-  return senses
-    .filter((s) => s.definition)
-    .map((s) => ({
-      engine: "demo" as const,
-      title: `${s.name} - Demo Encyclopedia`,
-      url: `https://demo-encyclopedia.example/wiki/${encodeURIComponent(s.name.replace(/\s+/g, "_"))}`,
-      site: "demo-encyclopedia.example",
-      text: s.definition,
-    }));
+  const kb = kbDefinition(name);
+  return (AMBIGUOUS[normalizeName(name)] ?? (kb ? [{ name, definition: kb.definition }] : [])).map((s) => ({
+    engine: "demo" as const,
+    title: `${s.name} - Demo Encyclopedia`,
+    url: `https://demo-encyclopedia.example/wiki/${encodeURIComponent(s.name.replace(/\s+/g, "_"))}`,
+    site: "demo-encyclopedia.example",
+    text: s.definition,
+  }));
 }
 
 export const ENGINE_NAME = { tavily: "Tavily", serper: "Serper", brave: "Brave Search", searxng: "SearXNG", demo: "Offline demo" };
