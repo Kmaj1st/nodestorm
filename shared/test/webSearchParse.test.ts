@@ -4,11 +4,10 @@ import {
   fetchWebSearch,
   parseWebSearch,
   readCapped,
-  searxngBase,
   webSearchError,
   webSearchRequest,
-  type SearchEngineId,
 } from "../src/lookup/webSearch";
+import { searxngBase, type SearchEngineId } from "../src/lookup/searchEngines";
 
 // Each engine's answer and failures, read the same way in the browser and the local server. The fetch is passed in.
 
