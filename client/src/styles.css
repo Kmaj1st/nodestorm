@@ -778,6 +778,8 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
   display: flex; flex-direction: column; gap: var(--space-4); font-size: var(--text-md);
 }
 .modal__body:not(:has(> .modal__header)) { padding-top: 20px; }
+/* A part scrolled to (or a field tabbed to) stops below the sticky header, not under it. */
+.modal__body:has(> .modal__header) { scroll-padding-top: 72px; }
 /* Header: title and close button, kept in view while the dialog scrolls. */
 .modal__header {
   position: sticky; top: 0; z-index: 3; display: flex; align-items: center; justify-content: space-between;
