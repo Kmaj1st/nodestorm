@@ -82,6 +82,7 @@
 - The pop-up says **Checking the sources for “X”…** (not "Searching…") while the AI rates them, like the status bar.
 - **Touch screens:** the zoom buttons and **Select several** are 40px (28px with a mouse), the open "N hidden" list moves clear of them, and the tour's Mix step says to tap **Select several** (or hold a concept) instead of Shift+click; its relation step says "tap".
 - **Focus comes back:** a dialog opened from the File or project menu (or the 3D view from View) returns the focus to that menu's button when it closes, instead of to the page. **Select several**'s Clear moves the focus to Done, and Done or Escape to its toggle by the zoom buttons. In the open "N hidden" list, Tab goes through the concepts before **Show all**, and tabbing out closes the list. A web search **Test** button keeps the focus while it tests.
+- **Tooling:** Vitest 3.2 → 5.0 (Vitest 3 gets no fix for the moderate dev-only advisory GHSA-82fw-gwwq-j7x9 in `@vitest/mocker`); `npm audit` now reports 0 vulnerabilities. No test or config changes were needed. Vite stays on 7.3.6 (the latest 7.x; Vite itself isn't affected), TypeScript on 5.9.3 and `@types/node` on 22.x to match CI's Node 22.
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 
