@@ -10,6 +10,8 @@ import { BAIKE_FRAME_SCRIPT } from "../src/lib/baikeFrame";
  * - style-src 'unsafe-inline': KaTeX's output positions every glyph with style attributes.
  * - connect-src: AI calls go to whatever endpoint the user sets up (a provider, or a local model on http://localhost),
  *   and look-ups to the encyclopedias, so any http(s) address.
+ * - No 'wasm-unsafe-eval': only PDF.js's worker compiles WebAssembly (its decoders for scanned pictures), and a
+ *   worker started from a file of the build isn't under this page's <meta> policy.
  * The dev server has no policy (Vite's hot reload injects inline scripts).
  */
 export function contentSecurityPolicy(): string {
