@@ -1156,6 +1156,8 @@ export const zh: Record<MessageKey, string> = {
   "sources.searched": "已搜索 {sites}。",
   "sources.noEngine": "没有设置网页搜索，所以只查询了百科和维基。",
   "sources.searchAgain": "重新搜索",
+  "sources.searchQuota": "重新搜索会再次询问搜索引擎，并消耗你的搜索额度。",
+  "sources.allFailed": "没能连上任何来源：所询问的网站都失败了。请检查网络连接或网页搜索设置，然后重新搜索。",
   "sources.openSettings": "网页搜索设置",
   "sources.use": "使用这段文字",
   "sources.searching": "正在搜索“{name}”的来源…",

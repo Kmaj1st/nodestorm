@@ -1171,6 +1171,8 @@ export const en = {
   "sources.searched": "Searched {sites}.",
   "sources.noEngine": "No web search is set up, so only encyclopedias and wikis were asked.",
   "sources.searchAgain": "Search again",
+  "sources.searchQuota": "Search again asks the search engines afresh, which uses your search quota.",
+  "sources.allFailed": "No source could be reached: every site asked failed. Check the connection or the web search settings, then search again.",
   "sources.openSettings": "Web search settings",
   "sources.use": "Use this text",
   "sources.searching": "Searching the sources for “{name}”…",

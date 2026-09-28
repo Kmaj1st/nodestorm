@@ -2283,6 +2283,11 @@ try {
     assert(/forum/i.test(await item("demo-forum.example").getByTestId("source-reasons").textContent()), "…with the AI's reason");
     assert((await dlg.getByTestId("sources-note").textContent()).includes("demo-forum.example"), "the AI's assessment says where the sources disagree");
     assert((await dlg.getByTestId("sense-searched").textContent()).includes("Offline demo"), "the footer says what was searched");
+    // Search again asks the engines past their cache: offered with a note that it uses search quota.
+    assert(
+      (await dlg.getByTestId("sources-search-again").isEnabled()) && /search quota/.test(await dlg.getByTestId("sources-quota").textContent()),
+      "Search again is offered, noting that it uses search quota",
+    );
     const link = item("demo-lecture-notes.example").getByRole("link");
     assert((await link.getAttribute("target")) === "_blank" && (await link.getAttribute("rel")) === "noopener noreferrer", "each page opens in a new tab, without opener");
     await audit("sources pop-up with web pages");

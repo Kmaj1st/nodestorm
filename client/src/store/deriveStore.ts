@@ -1,4 +1,4 @@
-import { toBrief, type SheetProblem } from "@nodestorm/shared";
+import { toBriefs, type SheetProblem } from "@nodestorm/shared";
 import { create } from "zustand";
 import { t } from "../i18n";
 import { analyzeNode, cancelTask, inViewer, withBusy } from "../lib/actions";
@@ -125,7 +125,7 @@ export const useDerive = create<DeriveStore>()((set, get) => {
 
   const context = () => {
     const g = graphs().graphs[graphs().activeId];
-    return (g?.nodes ?? []).slice(0, 80).map(toBrief);
+    return toBriefs(g?.nodes ?? [], 80);
   };
 
   return {

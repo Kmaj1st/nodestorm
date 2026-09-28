@@ -272,17 +272,27 @@ export type NodePapers = z.infer<typeof NodePapers>;
 
 // ---------- AI task I/O ----------
 
+/** Longest concept name a request names on its own (the concept looked up or rated, a name already linked). */
+export const NAME_MAX = 300;
+/** Longest definition in a NodeBrief (toBrief clips a longer one, so a real graph's request is never refused). */
+export const BRIEF_DEFINITION_MAX = 4000;
+/** Most aliases a NodeBrief carries. */
+export const BRIEF_ALIASES_MAX = 12;
+/** Most NodeBriefs in one list of a request (the graph as context, prerequisites…); see toBriefs. */
+export const BRIEF_LIST_MAX = 500;
+
 /** Lightweight description of a node sent to the AI as context. */
 export const NodeBrief = z.object({
-  name: z.string(),
-  definition: z.string().default(""),
-  aliases: z.array(z.string()).default([]),
+  name: z.string().max(NAME_MAX),
+  definition: z.string().max(BRIEF_DEFINITION_MAX).default(""),
+  aliases: z.array(z.string().max(NAME_MAX)).max(BRIEF_ALIASES_MAX).default([]),
 });
 export type NodeBrief = z.infer<typeof NodeBrief>;
+const BriefList = z.array(NodeBrief).max(BRIEF_LIST_MAX);
 
 export const NameRequest = z.object({
   description: z.string().min(1),
-  context: z.array(NodeBrief).default([]),
+  context: BriefList.default([]),
 });
 export type NameRequest = z.infer<typeof NameRequest>;
 
@@ -307,7 +317,7 @@ export type RelateResponse = z.infer<typeof RelateResponse>;
 
 export const DepsRequest = z.object({
   node: NodeBrief,
-  existing: z.array(NodeBrief).default([]),
+  existing: BriefList.default([]),
 });
 export type DepsRequest = z.infer<typeof DepsRequest>;
 
@@ -339,8 +349,8 @@ export const Sense = z.object({
 export type Sense = z.infer<typeof Sense>;
 
 export const DeriveRequest = z.object({
-  selected: z.array(NodeBrief).min(1),
-  context: z.array(NodeBrief).default([]),
+  selected: BriefList.min(1),
+  context: BriefList.default([]),
   goal: z.string().optional(),
 });
 export type DeriveRequest = z.infer<typeof DeriveRequest>;
@@ -377,7 +387,7 @@ export type ExplainRelation = z.infer<typeof ExplainRelation>;
 export const ExplainRequest = z.object({
   node: NodeBrief,
   /** Its prerequisites that are in the graph. */
-  prerequisites: z.array(NodeBrief).default([]),
+  prerequisites: BriefList.default([]),
   relations: z.array(ExplainRelation).default([]),
   level: ExplainLevel.default("intuitive"),
   voice: ExplainVoice.default("plain"),
@@ -390,7 +400,7 @@ export type ExplainResponse = Explanation;
 export const AnatomyRequest = z.object({
   node: NodeBrief.extend({ kind: ConceptKind.optional() }),
   /** Its prerequisites that are in the graph. */
-  prerequisites: z.array(NodeBrief).default([]),
+  prerequisites: BriefList.default([]),
 });
 export type AnatomyRequest = z.infer<typeof AnatomyRequest>;
 
@@ -407,7 +417,7 @@ export type QuizStyle = z.infer<typeof QuizStyle>;
 export const QuizRequest = z.object({
   node: NodeBrief.extend({ notes: z.string().max(4000).optional() }),
   /** Its prerequisites that are in the graph (a "connect" question picks one of them). */
-  prerequisites: z.array(NodeBrief).default([]),
+  prerequisites: BriefList.default([]),
   style: QuizStyle.default("recall"),
   /** Ask for four choices with one correct answer instead of a free-recall question. */
   multipleChoice: z.boolean().default(false),
@@ -456,7 +466,7 @@ export const ExtractRequest = z.object({
     .min(1, "Paste some text to extract concepts from.")
     .max(EXTRACT_MAX_CHARS, `The text is too long: at most ${EXTRACT_MAX_CHARS} characters per extraction.`),
   /** The graph's concepts, so the model reuses their exact names. */
-  existing: z.array(NodeBrief).default([]),
+  existing: BriefList.default([]),
   /** Optional hint on what to pick out, e.g. "only the theorems". */
   focus: z.string().max(500).optional(),
 });
@@ -594,8 +604,6 @@ export type MathlibResponse = z.infer<typeof MathlibResponse>;
 
 // ---------- Suggest connections ----------
 
-/** Longest concept name a request names on its own (the concept looked up or rated, a name already linked). */
-export const NAME_MAX = 300;
 /** Longest hint sent with a request (why a dependent concept needs this one, an absurd chain's fact). */
 export const HINT_MAX = 2000;
 
@@ -886,6 +894,45 @@ export function findByName<T extends { name: string; aliases?: string[] }>(
   );
 }
 
-export function toBrief(n: { name: string; definition: string; aliases: string[] }): NodeBrief {
-  return { name: n.name, definition: n.definition, aliases: n.aliases };
+/** `s` cut to at most `max` characters, ending in "…" when cut (never in the middle of a surrogate pair). */
+export function clipText(s: string, max: number): string {
+  if (s.length <= max) return s;
+  let end = Math.max(0, max - 1);
+  const c = s.charCodeAt(end - 1);
+  if (c >= 0xd800 && c <= 0xdbff) end--;
+  return `${s.slice(0, end).trimEnd()}…`;
+}
+
+/**
+ * A concept as a request describes it, within NodeBrief's caps: a longer name or definition is clipped (marked
+ * with "…"), and only the first aliases go. One parameter only, so `nodes.map(toBrief)` stays safe.
+ */
+export function toBrief(n: Briefable): NodeBrief {
+  return briefWithin(n, BRIEF_DEFINITION_MAX);
+}
+
+type Briefable = { name: string; definition: string; aliases: string[] };
+
+function briefWithin(n: Briefable, definitionMax: number): NodeBrief {
+  return {
+    name: clipText(n.name, NAME_MAX),
+    definition: clipText(n.definition ?? "", Math.min(definitionMax, BRIEF_DEFINITION_MAX)),
+    aliases: (n.aliases ?? []).slice(0, BRIEF_ALIASES_MAX).map((a) => clipText(a, NAME_MAX)),
+  };
+}
+
+/** Characters of definitions one list of briefs carries at most, so a big graph's request stays well under 1 MB. */
+const BRIEF_LIST_CHARS = 200_000;
+
+/**
+ * A list of concepts for a request: the first `max` (at most BRIEF_LIST_MAX), each through toBrief. On a big graph
+ * the definitions are clipped shorter, so the whole list stays within about BRIEF_LIST_CHARS characters.
+ */
+export function toBriefs(
+  nodes: readonly Briefable[],
+  max = BRIEF_LIST_MAX,
+): NodeBrief[] {
+  const list = nodes.slice(0, Math.min(max, BRIEF_LIST_MAX));
+  const perDefinition = Math.max(200, Math.floor(BRIEF_LIST_CHARS / Math.max(1, list.length)));
+  return list.map((n) => briefWithin(n, perDefinition));
 }

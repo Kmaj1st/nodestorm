@@ -6,7 +6,7 @@ import type { MessageKey } from "../i18n";
 import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
-import { cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
+import { allSourcesFailed, cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
 import { Icon } from "../ui/Icon";
 import { MathText } from "./MathText";
@@ -64,6 +64,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const mutate = useGraphStore((s) => s.mutate);
   const task = useGraphStore((s) => s.busy[relookupKey(graphId, node.id)]);
   const searching = Boolean(task);
+  const unreachable = Boolean(found && allSourcesFailed(found));
   // Without a fresh search (reopened after a reload), the passages stored on the concept, not rated.
   const sources = useMemo(() => found?.sources ?? sourcesFromSenses(node.senses ?? []), [found, node.senses]);
   const groups = useMemo(() => groupBySense(sources), [sources]);
@@ -202,8 +203,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         <p className="small muted">{t(sources.some((s) => s.reliability) ? "sources.storedRated" : "sources.stored")}</p>
       )}
       {!sources.length && !(searching && !found) && (
-        <p className="small" data-testid="sources-nothing">
-          {found || node.senses ? t("sources.nothing", { name: node.name }) : t("sense.nothingOff")}
+        <p className="small" data-testid="sources-nothing" role={unreachable ? "alert" : undefined}>
+          {unreachable ? t("sources.allFailed") : found || node.senses ? t("sources.nothing", { name: node.name }) : t("sense.nothingOff")}
         </p>
       )}
 
@@ -392,19 +393,26 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         {found && found.asked.length > 0 && t("sources.searched", { sites: listJoin(found.asked) })}
         {found && found.failed.length > 0 && <>{sp}{t("sense.failed", { sites: listJoin(found.failed) })}</>}
       </p>
-      {(!found || !found.web) && (
-        <div className="sources__engine small">
-          {found && !found.web && <span className="muted">{t("sources.noEngine")}</span>}
-          {!found && (
-            <button type="button" className="small-btn" disabled={searching} onClick={() => void compareSources(node.id, graphId, { fresh: true })} data-testid="sources-search-again">
-              {t("sources.searchAgain")}
-            </button>
-          )}
+      <div className="sources__engine small">
+        {found && !found.web && <span className="muted">{t("sources.noEngine")}</span>}
+        {/* An explicit Search again also asks the search engines past their 30-day cache. */}
+        <button
+          type="button"
+          className="small-btn"
+          disabled={searching}
+          onClick={() => void compareSources(node.id, graphId, { fresh: true, requery: true })}
+          aria-describedby={found?.web ? `${uid}-quota` : undefined}
+          data-testid="sources-search-again"
+        >
+          {t("sources.searchAgain")}
+        </button>
+        {found?.web && <span id={`${uid}-quota`} className="muted" data-testid="sources-quota">{t("sources.searchQuota")}</span>}
+        {(!found || !found.web || unreachable) && (
           <button type="button" className="small-btn" onClick={openSearchSettings} data-testid="sources-settings">
             {t("sources.openSettings")}
           </button>
-        </div>
-      )}
+        )}
+      </div>
 
       <div className="form__actions">
         {!replace && <button className="link small" onClick={remove}>{t("sense.remove")}</button>}

@@ -2,6 +2,7 @@ import { ControlButton, useStoreApi } from "@xyflow/react";
 import { CopyCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
 import { useT } from "../i18n";
+import { createHoldTracker } from "../lib/hold";
 import { activeGraph, useGraphStore } from "../store/graphStore";
 import { useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
@@ -90,77 +91,29 @@ export function SelectBar() {
   );
 }
 
-/** How long a finger rests on a card before Select several starts with it, and how far it may wander meanwhile. */
-const HOLD_MS = 500;
-const HOLD_SLOP = 10;
-
 /**
- * Holding a card (touch or pen, not a mouse: a mouse drags) calls `onHold(id)`. Moving the finger first (a drag, or
- * Physics' pull), a second finger (a pinch) or letting go early cancel it. The tap that ends a hold is swallowed, so
- * it doesn't toggle the card straight back out of the selection, and so is the long-press context menu.
- * Returns handlers for the canvas wrapper (capture phase, before React Flow sees the events).
+ * Holding a card on a touch screen calls `onHold(id)` (see createHoldTracker in lib/hold.ts). Returns handlers for the
+ * canvas wrapper (capture phase, before React Flow sees the events). A long press also opens the browser's context
+ * menu (or text selection): not on a card. Unmounting (also strict mode's trial one) ends a press under way.
  */
 export function useHoldToSelect(onHold: (id: string) => void) {
-  const hold = useRef<{ x: number; y: number; timer: number; fired: boolean } | null>(null);
-  const cleanup = useRef<() => void>(() => {});
-  useEffect(() => () => cleanup.current(), []);
+  const latest = useRef(onHold);
+  useEffect(() => {
+    latest.current = onHold;
+  }, [onHold]);
+  const tracker = useRef<ReturnType<typeof createHoldTracker> | null>(null);
+  useEffect(() => {
+    const t = createHoldTracker((id) => latest.current(id));
+    tracker.current = t;
+    return () => {
+      t.dispose();
+      tracker.current = null;
+    };
+  }, []);
 
-  const onPointerDownCapture = useCallback(
-    (e: ReactPointerEvent) => {
-      if (e.pointerType === "mouse") return;
-      if (hold.current) {
-        cleanup.current(); // a second finger: a pinch, not a hold
-        return;
-      }
-      const target = e.target instanceof Element ? e.target : null;
-      // The card's own buttons (a badge, "choose a definition") keep their tap.
-      if (!target || target.closest("button, a, input, select, textarea")) return;
-      const id = target.closest<HTMLElement>(".react-flow__node")?.dataset.id;
-      if (!id) return;
-      const move = (ev: PointerEvent) => {
-        const h = hold.current;
-        if (h && !h.fired && Math.hypot(ev.clientX - h.x, ev.clientY - h.y) > HOLD_SLOP) cleanup.current();
-      };
-      const swallow = (ev: Event) => {
-        ev.stopPropagation();
-        ev.preventDefault();
-      };
-      const up = () => {
-        if (!hold.current?.fired) return cleanup.current();
-        // The click (if any) follows pointerup at once; stop swallowing soon after either way.
-        window.removeEventListener("pointermove", move);
-        window.setTimeout(() => cleanup.current(), 400);
-      };
-      cleanup.current = () => {
-        if (hold.current) clearTimeout(hold.current.timer);
-        hold.current = null;
-        window.removeEventListener("pointermove", move);
-        window.removeEventListener("pointerup", up);
-        window.removeEventListener("pointercancel", up);
-        window.removeEventListener("click", swallow, true);
-        cleanup.current = () => {};
-      };
-      hold.current = {
-        x: e.clientX,
-        y: e.clientY,
-        fired: false,
-        timer: window.setTimeout(() => {
-          if (!hold.current) return;
-          hold.current.fired = true;
-          window.addEventListener("click", swallow, true);
-          onHold(id);
-        }, HOLD_MS),
-      };
-      window.addEventListener("pointermove", move);
-      window.addEventListener("pointerup", up);
-      window.addEventListener("pointercancel", up);
-    },
-    [onHold],
-  );
-
-  // A long press on a touch screen also opens the browser's context menu (or text selection): not on a card.
+  const onPointerDownCapture = useCallback((e: ReactPointerEvent) => tracker.current?.down(e), []);
   const onContextMenuCapture = useCallback((e: SyntheticEvent) => {
-    if (hold.current && e.target instanceof Element && e.target.closest(".react-flow__node")) e.preventDefault();
+    if (tracker.current?.holding() && e.target instanceof Element && e.target.closest(".react-flow__node")) e.preventDefault();
   }, []);
 
   return { onPointerDownCapture, onContextMenuCapture };
