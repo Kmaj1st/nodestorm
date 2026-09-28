@@ -2316,6 +2316,26 @@ try {
     await setTheme("light");
     await badge("Homomorphism").click();
     await item("demo-forum.example").waitFor();
+    // Keyboard only: the pop-up opens on the first source; only the source the keyboard is on has its actions in
+    // the Tab order, so "Use this text" is a few Tab presses away whatever the number of sources.
+    await page.waitForFunction(() => document.activeElement?.matches('.sources input[type="radio"]'));
+    await page.keyboard.press("Space");
+    let tabs = 0;
+    while (tabs < 40 && !(await page.evaluate(() => document.activeElement?.getAttribute("data-testid") === "source-use"))) {
+      await page.keyboard.press("Tab");
+      tabs++;
+    }
+    assert(tabs <= 8, `from the pop-up's first source, “Use this text” is ${tabs} Tab presses away (3 sources)`);
+    // Arrow keys move between the sources; Tab then reaches that source's actions, each naming its source.
+    await item("demo-encyclopedia.example").getByRole("radio").focus();
+    await page.keyboard.press("ArrowDown");
+    await page.keyboard.press("Tab");
+    assert(
+      (await page.evaluate(() => document.activeElement?.closest("[data-site]")?.getAttribute("data-site"))) === "demo-lecture-notes.example",
+      "arrow down to the next source, then Tab: that source's actions",
+    );
+    const copyNames = await dlg.getByTestId("source-edit-copy").evaluateAll((els) => els.map((e) => [e.closest("[data-site]").dataset.site, e.getAttribute("aria-label")]));
+    assert(copyNames.every(([site, name]) => name === `Edit a copy (${site})`), "each source's action names its source for screen readers");
     // Keyboard: Tab reaches the radios; arrow keys move between them.
     const notes = item("demo-lecture-notes.example");
     await notes.getByRole("radio").focus();

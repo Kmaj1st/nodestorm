@@ -300,6 +300,9 @@ function FileMenu() {
 
   const base = exportFileName(graph);
   const run = (fn: () => void | Promise<void>) => async () => {
+    // The item goes with the menu: the focus goes back to the menu's button, so a dialog opened from here returns it
+    // there when it closes (instead of to the page).
+    menuButton.current?.focus();
     setOpen(false);
     try {
       await fn();

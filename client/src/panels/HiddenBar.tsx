@@ -68,7 +68,15 @@ export function HiddenBar() {
   return (
     <>
       {status}
-      <div className="hidden-bar menu" ref={ref} role="group" aria-label={t("hide.bar")} data-testid="hidden-bar">
+      <div
+        className="hidden-bar menu"
+        ref={ref}
+        role="group"
+        aria-label={t("hide.bar")}
+        data-testid="hidden-bar"
+        // Tabbing out of the open list closes it, like the toolbar's menus.
+        onBlur={(e) => open && e.relatedTarget instanceof Node && !ref.current?.contains(e.relatedTarget) && setOpen(false)}
+      >
         <button
           ref={toggle}
           className="hidden-bar__toggle"
@@ -82,9 +90,6 @@ export function HiddenBar() {
           <Icon icon={EyeOff} size={14} />
           {t("hide.count", { n: count })}
           <Icon icon={ChevronDown} size={12} />
-        </button>
-        <button className="hidden-bar__all" onClick={showAll} title={t("hide.showAllTitle")} data-testid="hidden-show-all">
-          {t("hide.showAll")}
         </button>
         {open && (
           <div className="menu__list menu__list--left hidden-bar__list" id="hidden-list" role="dialog" aria-label={t("hide.listLabel")}>
@@ -105,6 +110,9 @@ export function HiddenBar() {
             </ul>
           </div>
         )}
+        <button className="hidden-bar__all" onClick={showAll} title={t("hide.showAllTitle")} data-testid="hidden-show-all">
+          {t("hide.showAll")}
+        </button>
       </div>
     </>
   );

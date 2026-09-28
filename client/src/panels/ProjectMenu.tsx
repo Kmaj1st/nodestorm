@@ -35,6 +35,8 @@ export function ProjectMenu() {
   }, [open]);
 
   const act = (fn: () => void) => () => {
+    // The item goes with the menu: focus on its button, where a dialog opened from here returns it.
+    ref.current?.querySelector("button")?.focus();
     setOpen(false);
     fn();
   };
