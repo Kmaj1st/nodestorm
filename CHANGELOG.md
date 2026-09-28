@@ -82,6 +82,17 @@
 - The pop-up says **Checking the sources for “X”…** (not "Searching…") while the AI rates them, like the status bar.
 - **Touch screens:** the zoom buttons and **Select several** are 40px (28px with a mouse), the open "N hidden" list moves clear of them, and the tour's Mix step says to tap **Select several** (or hold a concept) instead of Shift+click; its relation step says "tap".
 - **Focus comes back:** a dialog opened from the File or project menu (or the 3D view from View) returns the focus to that menu's button when it closes, instead of to the page. **Select several**'s Clear moves the focus to Done, and Done or Escape to its toggle by the zoom buttons. In the open "N hidden" list, Tab goes through the concepts before **Show all**, and tabbing out closes the list. A web search **Test** button keeps the focus while it tests.
+- **A newcomer's walkthrough, fixed along the way:**
+  - The welcome card and the tour's first step say that definitions come from sources you pick (encyclopedias and the web, rated by the AI) and that **Check with AI** finds the prerequisites (the tour still said every new concept was checked). The tour's Settings step names **Web search**; on a phone, whose tour has no Settings step, the **More tools** step says Settings is where an AI and web search are set up. The Settings button's tooltip names definitions and web search.
+  - "How to use" on a touch screen says **tap** an arrowhead and names the toolbar's undo/redo arrows and the details' Delete instead of keyboard keys; on a small screen **Fork sandbox** is said to be in the More tools menu.
+  - **Settings:** the list of models was squeezed to a thin empty line (it showed nothing); a checkbox's long label (Definitions, Ambiguous names, Dependency cycles) wraps beside its box instead of under it, most visibly on a phone.
+  - With the offline demo the toolbar's AI chip says **Offline demo** (离线演示) instead of the model name "mock-kb".
+  - A click on a concept's card opens it in the inspector even when the card was already selected (after a concept was added, or opened from a list, the inspector could stay on another one). A concept opened without a click on its card (added, installed, opened from Depends on or Find) becomes the selected card, so the highlight, and Delete, H and F, go with what the inspector shows.
+  - A concept never checked no longer shows **Re-check prerequisites** under its **Check prerequisites with AI**.
+  - The sources pop-up drops "Pick the passage…" when nothing was found. The View menu and Settings say **Prerequisite links** (前置知识连线) instead of "Dependency links".
+  - On a phone, React Flow's attribution sits on a small panel, legible where it meets a card above the details sheet.
+  - In Chinese: a first visit's project is called 我的头脑风暴 (it was "My brainstorm": it was named before the Chinese text had loaded); "来源：" and "定义（可选）" lose the stray space after the Chinese colon and before the bracket.
+  - The offline demo's pretend web writes "Lagrange's Theorem" (not "Lagrange'S") and "What is an isomorphism?".
 
 ## 2026-09-25: adding a concept shows the look-ups first; the AI only when you ask
 

@@ -948,14 +948,14 @@ try {
     if (!(await page.getByRole("dialog", { name: "View" }).isVisible())) await page.getByRole("button", { name: /^View/ }).click();
     return page.getByRole("dialog", { name: "View" });
   };
-  await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).uncheck();
+  await (await viewMenu()).getByRole("checkbox", { name: "Prerequisite links" }).uncheck();
   await waitCounts("7/2");
   assert((await page.locator(".relation--dependency").count()) === 0, "the View filter hides dependency links (concepts stay)");
   assert(
     (await page.getByRole("button", { name: "View (filters on)" }).getByTestId("view-filtered").count()) === 1,
     "the View button shows that a filter is on (a dot, and its name says so)",
   );
-  await (await viewMenu()).getByRole("checkbox", { name: "Dependency links" }).check();
+  await (await viewMenu()).getByRole("checkbox", { name: "Prerequisite links" }).check();
   await page.keyboard.press("Escape"); // the popover would cover Group
   // Group is selected and ready: the to-do view hides it, and then Delete must not remove it.
   await node("Group").click();
