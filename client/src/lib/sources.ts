@@ -127,6 +127,9 @@ export function sourceRef(s: Pick<Source, "site" | "title" | "url">): SourceRef 
   };
 }
 
+/** Only https pages are linked from the pop-up (never javascript:, data: or plain http). */
+const isHttps = (url: string | undefined): url is string => /^https:\/\/[^\s]/i.test(url ?? "");
+
 function fromLookup(l: LookupSense, i: number): Source {
   const text = l.definition.trim();
   return {
@@ -134,7 +137,7 @@ function fromLookup(l: LookupSense, i: number): Source {
     kind: "encyclopedia",
     site: l.source.site,
     title: l.source.title,
-    url: l.source.url || undefined,
+    url: isHttps(l.source.url) ? l.source.url : undefined,
     text,
     name: l.name,
     domain: l.domain,
@@ -154,7 +157,7 @@ export function mergeFound(found: LookupSense[], web: { title: string; url: stri
   web.forEach((w, i) => {
     const text = w.text.trim();
     const key = urlKey(w.url);
-    if (!text || seen.has(key)) return;
+    if (!text || !isHttps(w.url) || seen.has(key)) return;
     seen.add(key);
     const src: Source = {
       id: `w${i + 1}`,

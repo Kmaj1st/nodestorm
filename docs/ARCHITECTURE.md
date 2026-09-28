@@ -396,7 +396,9 @@ writes the definition). This layer only finds and cleans the pages; the rating a
 - **Engines** (`shared/src/lookup/webSearch.ts`, used by the browser and the server alike): `webSearchRequest` builds
   each request, `parseWebSearch` zod-checks the answer (a bad hit is skipped, a wrong shape is `malformed`),
   `webSearchError` codes the failures, `fetchWebSearch` runs one search with a 12 s deadline. Requests carry no
-  credentials (`credentials: "omit"`, no referrer).
+  credentials (`credentials: "omit"`, no referrer); the key engines' requests don't follow redirects (their key
+  headers would go along). An answer is read up to `SEARCH_BODY_MAX` (4 MB, `readCapped`; a larger Content-Length is
+  refused unread) and at most 100 hits of it are parsed.
   - **Tavily**: `POST api.tavily.com/search`, `Authorization: Bearer`, `search_depth: "basic"`, no answer or raw
     content; `results[].title/url/content/published_date`. 432/433 are used-up plans.
   - **Serper** (Google results): `POST google.serper.dev/search`, `X-API-KEY`, `{q, num, hl, gl}` (`zh-cn`/`cn`,
@@ -422,7 +424,7 @@ writes the definition). This layer only finds and cleans the pages; the rating a
     a trailing slash, `www.` and host case), at most `max` in all.
   - A localStorage cache (`nodestorm-websearch-cache`, 500 searches for 30 days, the oldest half dropped when storage
     is full) is keyed by language, engines (and SearXNG address), `max` and name. Only answers without a failed engine
-    are cached.
+    are cached. An entry is checked when read (strings only, https pages only); a bad one is searched again.
   - An engine that rejected the key, rate-limited or ran out of credits is paused for 10 minutes, per engine and key
     (a corrected key is tried at once). Settings shows the pause.
   - `testSearchEngine(engine, search, connection)` backs Settings' "Test". It uses the settings being edited, skips
@@ -763,7 +765,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `\(…\)`, `\[…\]`, `\$` escapes, a Pandoc-style currency rule; unbalanced delimiters stay text).
   `client/src/panels/MathText.tsx` renders a string with its formulas typeset; text without a formula never loads
   KaTeX. `client/src/lib/katexRender.ts` is the lazily imported chunk (KaTeX + its CSS; `trust: false`, errors fall
-  back to the source, results cached), and `katexWoff2Only` in `client/vite.config.ts` drops KaTeX's woff/ttf fonts
+  back to the source, as do formulas over 5 000 characters or whose HTML would pass 300 kB; results cached), and `katexWoff2Only` in `client/vite.config.ts` drops KaTeX's woff/ttf fonts
   so only the 19 woff2 files are built and precached. The inspector keeps definitions and relation explanations as
   plain textareas and shows a *Formatted* preview under them when they contain math. Use `<MathText text=… />` for any
   new place that shows definitions or AI prose (`inline` in tight spots such as cards). The AI is told about `$…$` in

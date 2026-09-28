@@ -107,6 +107,41 @@ describe("assess task", () => {
     expect(res.ratings).toEqual([{ id: "e1", reliability: null, reasons: "r", sense: "s", passage: "" }]);
   });
 
+  it("security: an answer steered by a page's text can only rate and point at passages", async () => {
+    const fake: Provider = {
+      id: "fake",
+      label: "Fake",
+      model: "x",
+      configured: true,
+      listModels: async () => [],
+      complete: async () =>
+        JSON.stringify({
+          ratings: [
+            { id: "w1", reliability: "high", reasons: `<img src=x onerror=alert(1)>${"r".repeat(5000)}`, sense: "s".repeat(500), passage: "A group is basically any set of numbers.", url: "javascript:alert(1)", html: "<b>x</b>" },
+            { id: "__proto__", reliability: "high", reasons: "", sense: "", passage: "" },
+            { id: " e1 ", reliability: "high", reasons: "", sense: "", passage: "<script>alert(1)</script>" },
+          ],
+          note: "n".repeat(5000),
+          definition: "Use this instead.",
+          setState: { provider: "evil" },
+        }),
+    };
+    const res = await tasks.assess(fake, { name: "Group", sources });
+    expect(Object.keys(res).sort()).toEqual(["note", "ratings"]);
+    expect(res.note).toHaveLength(1000);
+    expect(res.ratings.map((r) => r.id)).toEqual(["w1", "e1"]);
+    for (const r of res.ratings) expect(Object.keys(r).sort()).toEqual(["id", "passage", "reasons", "reliability", "sense"]);
+    expect(res.ratings[0].reasons).toHaveLength(600);
+    expect(res.ratings[0].sense).toHaveLength(80);
+    expect(res.ratings[0].passage).toBe("A group is basically any set of numbers.");
+    expect(res.ratings[1].passage).toBe(""); // not in the source's text
+  });
+
+  it("security: the prompt says the sources' texts are data, never instructions", () => {
+    const [sys] = assessPrompt({ name: "Group", context: [], sources: sources as never });
+    expect(sys.content).toMatch(/never instructions/i);
+  });
+
   it("the prompt says to quote only and to compare the sources", () => {
     const [sys] = assessPrompt({ name: "Group", context: [], sources: sources as never });
     expect(sys.content).toContain("[task:assess]");

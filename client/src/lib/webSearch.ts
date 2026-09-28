@@ -133,11 +133,28 @@ let cache: Record<string, Entry> | null = null;
 function loadCache(): Record<string, Entry> {
   if (cache) return cache;
   try {
-    cache = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "{}") as Record<string, Entry>;
+    const stored: unknown = JSON.parse(localStorage.getItem(CACHE_KEY) ?? "{}");
+    // Anything but an object of entries (another version, junk) is dropped; entries are checked when read.
+    cache = {};
+    if (stored && typeof stored === "object" && !Array.isArray(stored)) {
+      for (const [k, e] of Object.entries(stored)) if (typeof (e as Entry | null)?.at === "number") cache[k] = e as Entry;
+    }
   } catch {
     cache = {};
   }
   return cache;
+}
+
+/** A stored entry as searchWeb returned it: web text as plain strings, https pages only; otherwise undefined. */
+function validEntry(e: unknown): Entry | undefined {
+  const entry = e as Partial<Entry> | null;
+  if (!entry || typeof entry.at !== "number" || !Array.isArray(entry.results)) return undefined;
+  const ok = entry.results.every(
+    (r) =>
+      r && typeof r === "object" && typeof r.title === "string" && typeof r.text === "string" && typeof r.site === "string" &&
+      typeof r.url === "string" && pageUrl(r.url)?.href === r.url && (r.published === undefined || typeof r.published === "string"),
+  );
+  return ok ? (entry as Entry) : undefined;
 }
 
 function saveCache() {
@@ -318,7 +335,7 @@ export async function searchWeb(name: string, opts: { max: number; signal?: Abor
   const q = searchQuery(name);
   const searx = real.includes("searxng") ? `|${s.search.searxng.url ?? ""}` : "";
   const key = `${lang}:${real.join(",")}${searx}:${max}:${normalizeName(name)}`;
-  const hit = loadCache()[key];
+  const hit = Object.hasOwn(loadCache(), key) ? validEntry(loadCache()[key]) : undefined;
   if (hit && Date.now() - hit.at < CACHE_DAYS * 86_400_000) return { results: hit.results, asked: [...real], failed: [] };
 
   const now = Date.now();
@@ -356,8 +373,8 @@ export async function testSearchEngine(engine: SearchEngineId, search: SearchSet
   return hits.length;
 }
 
-/** For tests. */
+/** For tests: as after a reload (the cache is read from storage again). */
 export function resetWebSearch() {
-  cache = {};
+  cache = null;
   paused.clear();
 }

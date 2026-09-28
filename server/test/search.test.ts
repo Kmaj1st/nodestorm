@@ -110,4 +110,69 @@ describe("server: web search", () => {
     expect(upstream).toHaveLength(0);
     expect((await search("brave", { q: "x", count: 1, lang: "en" }, { origin: `http://localhost:5173` })).status).toBe(200);
   });
+
+  describe("security", () => {
+    it("fetches only http(s) SearXNG addresses: no file:, other schemes or credentials in the URL", async () => {
+      for (const url of ["file:///etc/passwd", "ftp://files.example/", "gopher://127.0.0.1:25/", "javascript:alert(1)", "http://user:pass@169.254.169.254/"]) {
+        const res = await search("searxng", { q: "x", count: 1, lang: "en", url });
+        expect(res.status, url).toBe(400);
+        expect(await res.json()).toMatchObject({ code: "noKey" });
+      }
+      expect(upstream).toHaveLength(0);
+    });
+
+    it("stops reading an engine's answer past a few megabytes (a hostile SearXNG instance sending a huge body)", async () => {
+      let sent = 0;
+      const chunk = new Uint8Array(1 << 20).fill(0x20); // 1 MB of spaces, 64 MB in all
+      reply = () =>
+        new Response(
+          new ReadableStream({
+            pull(c) {
+              if (sent >= 64 << 20) return c.close();
+              sent += chunk.length;
+              c.enqueue(chunk);
+            },
+          }),
+        );
+      const res = await search("searxng", { q: "x", count: 1, lang: "en", url: "https://searx.example.org" });
+      expect(res.status).toBe(502);
+      expect(await res.json()).toMatchObject({ code: "malformed" });
+      expect(sent).toBeLessThan(16 << 20);
+    });
+
+    it("refuses an answer whose Content-Length is too large without reading it", async () => {
+      reply = () => new Response('{"results":[]}', { headers: { "content-length": String(1 << 30) } });
+      const res = await search("searxng", { q: "x", count: 1, lang: "en", url: "https://searx.example.org" });
+      expect(await res.json()).toMatchObject({ code: "malformed", detail: "answer too large" });
+    });
+
+    it("keeps at most 100 hits of an answer", async () => {
+      const results = Array.from({ length: 5000 }, (_, i) => ({ title: `T${i}`, url: `https://e${i}.example.org/`, content: "x" }));
+      reply = () => new Response(JSON.stringify({ results }));
+      const res = await search("searxng", { q: "x", count: 20, lang: "en", url: "https://searx.example.org" });
+      expect((await res.json()).hits).toHaveLength(100);
+    });
+
+    it("the engines holding a key are never followed through a redirect (custom key headers survive redirects)", async () => {
+      await search("brave", { q: "x", count: 1, lang: "en" });
+      await search("tavily", { q: "x", count: 1, lang: "en", key: "tvly-key-123456" });
+      await search("serper", { q: "x", count: 1, lang: "en", key: "serper-key-123456" });
+      expect(upstream.map((u) => u.init.redirect)).toEqual(["error", "error", "error"]);
+    });
+
+    it("no part of a key reaches the error detail, even where the detail is cut short", async () => {
+      reply = () =>
+        new Response(JSON.stringify({ error: { code: "SUBSCRIPTION_TOKEN_INVALID", detail: `${"x".repeat(185)} token env-brave-key-123 is invalid` } }), { status: 422 });
+      const body = JSON.stringify(await (await search("brave", { q: "x", count: 1, lang: "en" })).json());
+      expect(body).toContain("invalidKey");
+      expect(body).not.toMatch(/env-brav|brave-key/);
+    });
+
+    it("a rejected request doesn't echo the key it carried", async () => {
+      const key = `secret-${"k".repeat(600)}`;
+      const res = await search("tavily", { q: "x", count: 1, lang: "en", key });
+      expect(res.status).toBe(400);
+      expect(await res.text()).not.toContain("secret-kkk");
+    });
+  });
 });
