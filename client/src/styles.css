@@ -569,6 +569,23 @@ button.edge-label--active:hover:not(:disabled) {
 @media (max-width: 800px) {
   .canvas .hidden-bar__list { left: 38px; max-width: calc(100vw - 38px - 2 * var(--space-3) - 2px); }
 }
+/* Select several: "2 selected · Clear · Done" at the bottom of the canvas (panels/SelectSeveral.tsx). */
+.select-bar {
+  position: absolute; bottom: var(--space-3); left: 50%; transform: translateX(-50%); z-index: 6; display: flex;
+  align-items: center; gap: var(--space-2); padding: 3px 3px 3px var(--space-3); background: var(--panel);
+  border: 1px solid var(--accent); border-radius: var(--radius-md); box-shadow: var(--shadow-md); font-size: var(--text-sm);
+  white-space: nowrap; max-width: calc(100% - 24px);
+}
+.select-bar__icon { color: var(--accent); flex-shrink: 0; }
+.select-bar__count { font-weight: 600; font-variant-numeric: tabular-nums; overflow: hidden; text-overflow: ellipsis; }
+.select-bar > button { min-height: var(--control-h-dense); padding: 0 var(--space-3); font-size: var(--text-sm); flex-shrink: 0; }
+@media (pointer: coarse) { .select-bar > button { min-height: 36px; } }
+.select-bar ~ .physics-badge { bottom: 60px; }
+/* Its toggle among the zoom buttons, pressed while on. */
+.react-flow__controls-button.select-several--on,
+.react-flow__controls-button.select-several--on:hover { background: var(--accent-soft); color: var(--accent); }
+/* Holding a card starts Select several: no iOS callout (or text selection) on the way. */
+.react-flow__node { -webkit-touch-callout: none; }
 
 /* ==========================================================================================================
    Inspector
@@ -1024,6 +1041,13 @@ button.toast__close:hover:not(:disabled) {
   background: var(--on-dark-hover); color: inherit; opacity: 1; border-color: transparent;
 }
 .toast__close:focus-visible { outline-color: var(--toast-text); }
+/* While a notice shows, an open dialog keeps its part of the screen free (App.tsx sets --toast-top/--toast-bottom),
+   so the notice never covers the dialog's buttons: the dialog sits above it here, below it on a phone. */
+.modal { padding-bottom: max(var(--space-4), var(--toast-bottom, 0px)); }
+.modal__body {
+  max-height: calc(100vh - 64px - var(--toast-bottom, 0px) - var(--toast-top, 0px));
+  max-height: calc(100dvh - 48px - var(--toast-bottom, 0px) - var(--toast-top, 0px));
+}
 .update-notice {
   position: fixed; bottom: var(--space-3); right: var(--space-3); z-index: 20; display: flex; gap: var(--space-2);
   align-items: center; padding: 6px 6px 6px var(--space-3); background: var(--panel); border: 1px solid var(--border);
@@ -1126,7 +1150,13 @@ kbd {
   .inspector { width: auto; border-left: none; overflow: visible; }
   .inspector__header { padding-top: var(--space-1); }
   .react-flow__minimap { display: none; }
-  .modal { padding: var(--space-2); }
+  .modal { padding: max(var(--space-2), var(--toast-top, 0px)) var(--space-2) var(--space-2); }
+  /* Notices show under the toolbar on a phone (App.tsx sets their top): the bottom holds the details sheet and dialog
+     footers. */
+  .toast { top: var(--space-2); bottom: auto; }
+  /* React Flow's attribution sits under the zoom buttons (bottom-left) instead of over the cards in the bottom-right. */
+  .react-flow__attribution.right { right: auto; left: 12px; }
+  .react-flow__controls { margin-bottom: 32px; }
   .modal__body { width: 100%; padding: 0 var(--space-4) var(--space-4); }
   .modal__body:not(:has(> .modal__header)) { padding-top: var(--space-4); }
   .modal__header { margin: 0 calc(-1 * var(--space-4)) calc(-1 * var(--space-1)); padding-left: var(--space-4); }
@@ -1136,7 +1166,7 @@ kbd {
     padding: var(--space-3) var(--space-4);
   }
   .modal__body.palette { padding: var(--space-2); }
-  .modal--top { padding-top: 8vh; }
+  .modal--top { padding-top: max(8vh, var(--toast-top, 0px)); }
   .candidates li { flex-wrap: wrap; }
   .shortcuts__group dl { grid-template-columns: 1fr; gap: 2px; }
   .shortcuts__group dd { margin-bottom: 6px; }

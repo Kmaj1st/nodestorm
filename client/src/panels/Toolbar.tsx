@@ -49,11 +49,12 @@ import type { ExtractReview } from "../lib/extract";
 import { ExtractDialog, FlashcardsDialog, GlossaryDialog, ShareDialog, VersionsDialog } from "./lazy";
 import { ProjectMenu } from "./ProjectMenu";
 import { FocusButton, PhysicsButton, ViewMenu } from "./ViewMenu";
+import { useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 
 /**
  * One row at ≥1200px: project · history · primary actions (Add, Mix, Derive) · canvas tools as icon buttons
- * (Tidy, Find, Focus, View) · graph/sandbox · Settings and the File menu (import, export, share). Merge back and
+ * (Tidy, Find, Focus, Physics, View) · graph/sandbox · Settings and the File menu (import, export, share). Merge back and
  * Discard live in the sandbox banner (App.tsx), and the theme and interface language in Settings.
  */
 export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDerive: () => void; onFind: () => void }) {
@@ -79,6 +80,8 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
   const busyMix = Object.keys(s.busy).some((k) => k.startsWith("mix:"));
   const canMix = selected.length === 2 && blocked.length === 0 && !busyMix;
   const canDerive = selected.length >= 1 && blocked.length === 0;
+  const selecting = useView((v) => v.selecting);
+  const mixHint = selecting ? t("toolbar.mixPickTwo", { n: selected.length }) : t("toolbar.mixSelectTwo");
   const blockReason = blocked.length ? t("toolbar.blockReason", { names: listJoin(blocked.map((n) => n.name)) }) : undefined;
 
   // The graph selector lists only the current project's graphs: its main graph, then its sandboxes.
@@ -115,7 +118,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
             if (document.activeElement === document.body) button.focus();
           }}
           disabled={!canMix}
-          title={blockReason ?? (selected.length !== 2 ? t("toolbar.mixSelectTwo") : t("toolbar.mixTitle"))}
+          title={blockReason ?? (selected.length !== 2 ? mixHint : t("toolbar.mixTitle"))}
         >
           {busyMix ? <span className="spinner" aria-hidden="true" /> : <Icon icon={Shuffle} />}
           {busyMix ? t("toolbar.mixing") : t("toolbar.mix")}

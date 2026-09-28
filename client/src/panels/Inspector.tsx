@@ -71,6 +71,7 @@ import { useQuiz } from "../store/quizStore";
 import { useSettings } from "../store/settingsStore";
 import { useWalkthrough } from "../store/walkthroughStore";
 import { StatusMark } from "../graph/ConceptNode";
+import { touchScreen } from "../lib/touch";
 import { Icon } from "../ui/Icon";
 import { MathText } from "./MathText";
 
@@ -136,7 +137,8 @@ export function Inspector() {
     <aside className="inspector inspector--help">
       <h3>{t("help.title")}</h3>
       <ol className="help">
-        {HELP.map((k) => <li key={k}>{rich(k)}</li>)}
+        {/* On a touch screen there is no Shift-click: Mix's step names "Select several" instead. */}
+        {HELP.map((k) => <li key={k}>{rich(k === "help.mix" && touchScreen() ? "help.mixTouch" : k)}</li>)}
       </ol>
     </aside>
   );

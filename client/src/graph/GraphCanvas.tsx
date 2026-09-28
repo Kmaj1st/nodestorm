@@ -23,6 +23,7 @@ import { registerViewport, viewport } from "../lib/viewport";
 import { ShortcutsButton } from "../panels/ShortcutsHelp";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { HiddenBar } from "../panels/HiddenBar";
+import { SelectBar, SelectSeveralButton, SelectSeveralSync, useHoldToSelect } from "../panels/SelectSeveral";
 import { activeFocus, hiddenIn, useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 import { BiRelationEdge, type RelationFlowEdge } from "./BiRelationEdge";
@@ -83,6 +84,7 @@ export function GraphCanvas() {
   // stored positions stay as they are, so switching back to the flat view restores the layout.
   const layout = useView((v) => v.layout);
   const physicsOn = useView((v) => v.physics) && graph.nodes.length <= PHYSICS_MAX_NODES;
+  const selecting = useView((v) => v.selecting);
   const layers = useMemo(() => (layout === "layered" ? dependencyLayers(graph) : null), [graph, layout]);
   const display = useMemo(() => (layers ? layeredView(graph, layers) : null), [graph, layers]);
   const displayRef = useRef({ display, layers, graph });
@@ -257,8 +259,12 @@ export function GraphCanvas() {
     );
   }, [focusKey, rf]); // graph.id only matters when the focus changes, so it isn't a dependency
 
+  // In Select several a tap on the empty canvas (often a pan that barely moved) keeps the selection: onPaneClick
+  // sets this just before React Flow deselects everything, and onNodesChange drops those changes.
+  const keepSelection = useRef(false);
   const onNodesChange = useCallback(
     (changes: NodeChange<ConceptFlowNode>[]) => {
+      if (keepSelection.current) changes = changes.filter((c) => !(c.type === "select" && !c.selected));
       // In the layered view a card slides along its layer's row: the layer comes from its prerequisites.
       const ls = displayRef.current.layers;
       const kept = ls
@@ -306,12 +312,33 @@ export function GraphCanvas() {
     ({ nodes }: OnSelectionChangeParams) => {
       const ids = nodes.map((n) => n.id);
       setSelection(ids);
-      if (ids.length === 1) setInspect({ kind: "node", id: ids[0] });
+      // While selecting several, a tap only selects: it doesn't open the concept (on a phone the details sheet would
+      // cover the canvas).
+      if (ids.length === 1 && !useView.getState().selecting) setInspect({ kind: "node", id: ids[0] });
     },
     [setSelection, setInspect],
   );
 
-  const onPaneClick = useCallback(() => setInspect(null), [setInspect]);
+  const onPaneClick = useCallback(() => {
+    setInspect(null);
+    if (!useView.getState().selecting) return;
+    keepSelection.current = true;
+    queueMicrotask(() => (keepSelection.current = false));
+  }, [setInspect]);
+
+  // Holding a card on a touch screen starts Select several with it (added to the selection if already selecting).
+  const onHold = useCallback(
+    (id: string) => {
+      const v = useView.getState();
+      const keep = new Set(v.selecting ? useGraphStore.getState().selection : []);
+      keep.add(id);
+      v.setSelecting(true);
+      setNodes((ns) => ns.map((n) => (!!n.selected === keep.has(n.id) ? n : { ...n, selected: keep.has(n.id) })));
+      setSelection([...keep]);
+    },
+    [setSelection],
+  );
+  const hold = useHoldToSelect(onHold);
   const focusName = focus && graph.nodes.find((n) => n.id === focus.nodeId)?.name;
 
   // React Flow's screen-reader texts and zoom-button names, in the interface language.
@@ -334,6 +361,8 @@ export function GraphCanvas() {
       ref={wrapper}
       className={`canvas${graph.parentId ? " canvas--sandbox" : ""}${chain ? " canvas--highlight" : ""}${layers ? " canvas--layered" : ""}${far ? " canvas--far" : ""}`}
       data-settled={physicsOn ? String(!physics.settling) : undefined}
+      data-selecting={selecting || undefined}
+      {...hold}
     >
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
@@ -350,6 +379,8 @@ export function GraphCanvas() {
         onSelectionChange={onSelectionChange}
         onPaneClick={onPaneClick}
         multiSelectionKeyCode={["Shift", "Meta", "Control"]}
+        // In Select several a drag only moves the cards; a tap or click (not the drag's start) toggles one.
+        selectNodesOnDrag={!selecting}
         deleteKeyCode={null} // Delete/Backspace are handled in App so deletions are undoable
         // A relation is reached from the keyboard by its two arrowheads (BiRelationEdge); the edge itself would be
         // an extra tab stop that does nothing, named by internal ids.
@@ -363,9 +394,14 @@ export function GraphCanvas() {
       >
         <Background gap={24} />
         {layers && <LayerPlates nodes={nodes} layers={layers} />}
-        <Controls showInteractive={false}><ShortcutsButton /></Controls>
+        <Controls showInteractive={false}>
+          {!viewing && <SelectSeveralButton />}
+          <ShortcutsButton />
+        </Controls>
         <MiniMap pannable zoomable ariaLabel={t("canvas.map")} />
+        <SelectSeveralSync />
       </ReactFlow>
+      <SelectBar />
       {physics.settling && (
         <div className="physics-badge" role="status" data-testid="physics-settling">
           <span className="spinner spinner--xs" aria-hidden="true" />

@@ -1,6 +1,6 @@
 import { ReactFlowProvider } from "@xyflow/react";
 import { ChevronDown, ChevronUp, CircleAlert, Eye, FlaskConical, History, Info, X } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { GraphCanvas } from "./graph/GraphCanvas";
 import { rich, t, useT } from "./i18n";
 import { errorMessage } from "./lib/errors";
@@ -19,7 +19,7 @@ import { StatusBar } from "./panels/StatusBar";
 import { Toolbar } from "./panels/Toolbar";
 import { UpdateNotice } from "./panels/UpdateNotice";
 import { useAbsurd } from "./store/absurdStore";
-import { activeGraph, isViewing, useGraphStore } from "./store/graphStore";
+import { activeGraph, isViewing, useGraphStore, type ToastKind } from "./store/graphStore";
 import { autoSnapshot } from "./store/snapshotStore";
 import { hideConcepts, hideOthers, toggleFocus, useView, visibleNow } from "./store/viewStore";
 import { Icon } from "./ui/Icon";
@@ -65,6 +65,10 @@ export function App() {
         e.preventDefault();
         if (key === "y" || e.shiftKey) s.redo();
         else s.undo();
+      } else if (e.key === "Escape" && useView.getState().selecting) {
+        // Leaves Select several first (the selection stays); a second Escape leaves focus mode.
+        if (t?.closest(".menu, .popover")) return;
+        useView.getState().setSelecting(false);
       } else if (e.key === "Escape" && useView.getState().focus) {
         // Menus and popovers close on Escape themselves; don't also leave focus mode behind them.
         if (t?.closest(".menu, .popover")) return;
@@ -135,19 +139,7 @@ export function App() {
           <Onboarding />
         </main>
         <StatusBar />
-        {toast && (
-          <div
-            className={`toast toast--${toastKind}`}
-            role={toastKind === "error" ? "alert" : "status"}
-            onClick={() => setToast(null)}
-          >
-            <Icon icon={toastKind === "error" ? CircleAlert : Info} className="toast__icon" />
-            <span className="toast__text">{toast}</span>
-            <button className="toast__close icon-btn" aria-label={t("common.dismiss")} title={t("common.dismiss")}>
-              <Icon icon={X} size={14} />
-            </button>
-          </div>
-        )}
+        {toast && <Toast text={toast} kind={toastKind} onDismiss={() => setToast(null)} />}
         {adding && <AddNodeDialog onClose={() => setAdding(false)} />}
         <SenseDialog />
         {settingsOpen && <SettingsDialog onClose={() => setSettingsOpen(false)} />}
@@ -159,6 +151,48 @@ export function App() {
         <WalkthroughHost />
       </div>
     </ReactFlowProvider>
+  );
+}
+
+/**
+ * A notice: bottom centre, or on a phone just under the toolbar (the bottom holds the details sheet and dialog
+ * footers there, the top the toolbar's buttons). While it shows, --toast-top / --toast-bottom say how much of the
+ * screen it takes from that edge, which open dialogs keep free (styles.css), so it never covers their buttons.
+ */
+function Toast({ text, kind, onDismiss }: { text: string; kind: ToastKind; onDismiss: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const root = document.documentElement.style;
+    const toolbar = document.querySelector(".toolbar");
+    const place = () => {
+      const top = Boolean(window.matchMedia?.(SMALL_SCREEN).matches);
+      el.style.top = top && toolbar ? `${toolbar.getBoundingClientRect().bottom + 8}px` : "";
+      const r = el.getBoundingClientRect();
+      root.setProperty("--toast-top", top ? `${Math.ceil(r.bottom) + 8}px` : "0px");
+      root.setProperty("--toast-bottom", top ? "0px" : `${Math.ceil(window.innerHeight - r.top) + 8}px`);
+    };
+    place();
+    const observer = typeof ResizeObserver === "function" ? new ResizeObserver(place) : null;
+    observer?.observe(el);
+    if (toolbar) observer?.observe(toolbar);
+    window.addEventListener("resize", place);
+    return () => {
+      observer?.disconnect();
+      window.removeEventListener("resize", place);
+      root.removeProperty("--toast-top");
+      root.removeProperty("--toast-bottom");
+    };
+  }, []);
+  return (
+    <div ref={ref} className={`toast toast--${kind}`} role={kind === "error" ? "alert" : "status"} onClick={onDismiss} data-testid="toast">
+      <Icon icon={kind === "error" ? CircleAlert : Info} className="toast__icon" />
+      <span className="toast__text">{text}</span>
+      <button className="toast__close icon-btn" aria-label={t("common.dismiss")} title={t("common.dismiss")}>
+        <Icon icon={X} size={14} />
+      </button>
+    </div>
   );
 }
 
