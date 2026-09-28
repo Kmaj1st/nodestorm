@@ -1,6 +1,6 @@
 import { request } from "node:http";
 import type { AddressInfo } from "node:net";
-import { EXTRACT_MAX_CHARS, MockProvider, type ChatMessage, type Provider } from "@nodestorm/shared";
+import { BRIEF_ALIASES_MAX, BRIEF_DEFINITION_MAX, BRIEF_LIST_MAX, EXTRACT_MAX_CHARS, MockProvider, toBrief, toBriefs, type ChatMessage, type Provider } from "@nodestorm/shared";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { createApp, parseTimeout } from "../src/app";
 import type { Registry } from "../src/providers/registry";
@@ -90,6 +90,40 @@ describe("server: request size", () => {
     expect(read.status).toBe(200);
     expect(await read.json()).toEqual({ text: "read" });
     expect((await post("deps", { node: { name: "X" }, padding: data })).status).toBe(413);
+  });
+});
+
+describe("server: concept brief caps", () => {
+  const provider: Provider = {
+    id: "rec", label: "Rec", model: "m", configured: true, listModels: async () => [],
+    complete: async () => '{"prerequisites":[]}',
+  };
+  const registry = { get: () => provider, info: () => ({ default: "mock", providers: [] }) } as unknown as Registry;
+  let server: ReturnType<ReturnType<typeof createApp>["listen"]>;
+  let base = "";
+  beforeAll(async () => {
+    server = createApp(registry).listen(0);
+    await new Promise((r) => server.once("listening", r));
+    base = `http://127.0.0.1:${(server.address() as AddressInfo).port}`;
+  });
+  afterAll(() => server.close());
+  const deps = (body: unknown) =>
+    fetch(`${base}/api/deps`, { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body) });
+  const long = { name: "N".repeat(400), definition: "d".repeat(9000), aliases: Array.from({ length: 30 }, (_, i) => `alias ${i} ${"a".repeat(400)}`) };
+  // A big graph with long definitions: 700 concepts of 3 000 characters each (2 MB as they are).
+  const graph = Array.from({ length: 700 }, (_, i) => ({ name: `Concept ${i}`, definition: "x".repeat(3000), aliases: [] }));
+
+  it("accepts what the client sends for a big graph with long definitions (clipped by toBrief/toBriefs)", async () => {
+    const res = await deps({ node: toBrief(long), existing: toBriefs(graph) });
+    expect(res.status).toBe(200);
+  });
+
+  it("refuses a hand-made request over the caps with a 400", async () => {
+    expect((await deps({ node: long })).status).toBe(400);
+    expect((await deps({ node: { name: "X", definition: "d".repeat(BRIEF_DEFINITION_MAX + 1) } })).status).toBe(400);
+    expect((await deps({ node: { name: "X", aliases: Array(BRIEF_ALIASES_MAX + 1).fill("a") } })).status).toBe(400);
+    const many = Array.from({ length: BRIEF_LIST_MAX + 1 }, (_, i) => ({ name: `C${i}` }));
+    expect((await deps({ node: { name: "X" }, existing: many })).status).toBe(400);
   });
 });
 

@@ -6,6 +6,7 @@ import {
   type AbsurdChainResponse,
   type AbsurdStyle,
   toBrief,
+  toBriefs,
   type DerivedProposal,
   type ExplainLevel,
   type ExplainVoice,
@@ -222,7 +223,7 @@ export async function analyzeNode(nodeId: string, graphId = store().activeId, hi
     key,
     t("task.deps", { name: current.name }),
     (signal) =>
-      api.deps({ node: toBrief(current), existing: g.nodes.filter((n) => n.id !== nodeId).map(toBrief) }, signal),
+      api.deps({ node: toBrief(current), existing: toBriefs(g.nodes.filter((n) => n.id !== nodeId)) }, signal),
     handlers,
   );
   if (!res) return;
@@ -396,7 +397,7 @@ export async function findInMathlib(nodeId: string, graphId = store().activeId) 
   const node = g?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
   const res = await withBusy(mathlibKey(graphId, nodeId), t("task.mathlib", { name: node.name }), async (signal) => {
-    const { candidates } = await api.mathlib({ node: toBrief(node), context: g.nodes.filter((n) => n.id !== nodeId).slice(0, 80).map(toBrief) }, signal);
+    const { candidates } = await api.mathlib({ node: toBrief(node), context: toBriefs(g.nodes.filter((n) => n.id !== nodeId), 80) }, signal);
     // All names at once; one that can't be checked (timeout, Loogle down) doesn't throw away the others.
     const found = await Promise.all(
       candidates.map((c) =>
@@ -650,7 +651,7 @@ export function suggestNames(description: string) {
   if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   return withBusy("name", t("task.name"), (signal) =>
-    api.name({ description, context: g.nodes.map(toBrief) }, signal).then((r) => r.candidates),
+    api.name({ description, context: toBriefs(g.nodes) }, signal).then((r) => r.candidates),
   );
 }
 
@@ -874,7 +875,7 @@ export async function explainNode(nodeId: string, level: ExplainLevel, graphId =
     const other = name(mine ? r.b : r.a);
     return other ? [{ other, toOther: mine ? r.aToB : r.bToA, fromOther: mine ? r.bToA : r.aToB }] : [];
   });
-  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const prerequisites = toBriefs(g.nodes.filter((n) => node.dependsOn.includes(n.id)));
   const res = await withBusy(explainKey(graphId, nodeId), t("task.explain", { name: node.name }), (signal) =>
     api.explain({ node: toBrief(node), prerequisites, relations, level, voice }, signal),
   );
@@ -900,7 +901,7 @@ export async function anatomyNode(nodeId: string, graphId = store().activeId) {
   const g = graph(graphId);
   const node = g?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
-  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const prerequisites = toBriefs(g.nodes.filter((n) => node.dependsOn.includes(n.id)));
   const res = await withBusy(anatomyKey(graphId, nodeId), t("task.anatomy", { name: node.name }), (signal) =>
     api.anatomy({ node: { ...toBrief(node), kind: node.kind }, prerequisites }, signal),
   );
@@ -921,7 +922,7 @@ export async function quizQuestion(nodeId: string, style: QuizStyle, multipleCho
   const g = graph(graphId);
   const node = g?.nodes.find((n) => n.id === nodeId);
   if (!node) return undefined;
-  const prerequisites = g.nodes.filter((n) => node.dependsOn.includes(n.id)).map(toBrief);
+  const prerequisites = toBriefs(g.nodes.filter((n) => node.dependsOn.includes(n.id)));
   return withBusy(quizKey(graphId), t("task.quiz", { name: node.name }), (signal) =>
     api.quiz({ node: { ...toBrief(node), notes: node.notes?.slice(0, 4000) }, prerequisites, style, multipleChoice }, signal),
   );
@@ -944,7 +945,7 @@ export function derive(selectedIds: string[], goal?: string) {
   const g = graph(store().activeId);
   const selected = g.nodes.filter((n) => selectedIds.includes(n.id));
   return withBusy("derive", t("task.derive"), (signal) =>
-    api.derive({ selected: selected.map(toBrief), context: g.nodes.map(toBrief), goal }, signal).then((r) => r.proposals),
+    api.derive({ selected: toBriefs(selected), context: toBriefs(g.nodes), goal }, signal).then((r) => r.proposals),
   );
 }
 
@@ -953,7 +954,7 @@ export function extractFromText(text: string, focus?: string) {
   if (inViewer(store().activeId)) return Promise.resolve(undefined);
   const g = graph(store().activeId);
   return withBusy("extract", t("task.extract"), (signal) =>
-    api.extract({ text, existing: g.nodes.map(toBrief), focus: focus?.trim() || undefined }, signal),
+    api.extract({ text, existing: toBriefs(g.nodes), focus: focus?.trim() || undefined }, signal),
   );
 }
 
@@ -1011,7 +1012,7 @@ export async function suggestConnections(nodeId: string, graphId = store().activ
     api.connect(
       {
         node: toBrief(node),
-        existing: g.nodes.filter((n) => n.id !== nodeId).slice(0, 200).map(toBrief),
+        existing: toBriefs(g.nodes.filter((n) => n.id !== nodeId), 200),
         linked: g.nodes.filter((n) => linkedIds.has(n.id)).slice(0, 200).map((n) => n.name.slice(0, NAME_MAX)),
       },
       signal,
@@ -1079,11 +1080,11 @@ export function absurdChain(
   const nodes = graph(graphId)?.nodes ?? [];
   const brief = (name: string, description = "") => {
     const n = findByName(nodes, name);
-    return n ? toBrief(n) : { name: name.trim(), definition: description.trim(), aliases: [] };
+    return toBrief(n ?? { name: name.trim(), definition: description.trim(), aliases: [] });
   };
   const [a, b] = [brief(from), brief(to)];
   const stops = via.map((s) => brief(s.name, s.description));
-  const context = nodes.slice(0, 80).map(toBrief);
+  const context = toBriefs(nodes, 80);
   return withBusy(
     absurdKey,
     t("task.absurd", { a: a.name, b: b.name }),
