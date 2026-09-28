@@ -139,7 +139,7 @@ model, so you can always tell them apart. **Look up in…** replaces such a defi
 
 - **Check with AI.** A concept with a definition shows a **check with AI** badge (or **Check prerequisites with AI**
   in the inspector). The AI lists the concept's direct prerequisites. Those already in the graph are linked with a
-  dashed dependency line, labelled from the concept that needs them ("using", "deriving", "assuming"). A missing one
+  dashed prerequisite link, labelled from the concept that needs them ("using", "deriving", "assuming"). A missing one
   **blocks** the concept.
   *Example:* add *Homomorphism*, then *First Isomorphism Theorem*. The theorem shows as blocked with *Isomorphism*
   missing. Install it and the theorem becomes ready.

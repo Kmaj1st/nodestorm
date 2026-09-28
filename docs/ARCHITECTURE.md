@@ -141,8 +141,13 @@ classDiagram
   of `BRIEF_DEFINITION_MAX` (4000) and `BRIEF_ALIASES_MAX` (12) aliases, and a list of briefs at most `BRIEF_LIST_MAX`
   (500). The client never hits them: `toBrief` clips with an ellipsis, and `toBriefs` (the graph as context) takes at
   most 500 concepts and shortens definitions on a big graph so the list stays within about 200,000 characters, well
-  under the server's 1 MB body limit. The `assess` task's name and hint (`HINT_MAX`) and the names sent to `connect`
-  are capped the same way.
+  under the server's 1 MB body limit. The rest is capped too: free text the user writes for a request (the `name`
+  task's description, Derive's goal) and hints (why a dependent needs a concept, a cycle link's reason, the `assess`
+  task's hint) at `HINT_MAX` (2000; the dialogs' fields stop there and the actions trim), the `assess` name and the
+  names sent to `connect` and Explain's relations (at most `BRIEF_LIST_MAX`), the concepts "Roll again" avoids
+  (`ABSURD_AVOID_MAX` 40, the latest ones, each at most `ABSURD_AVOID_NAME_MAX` 200 characters) and the pages of a
+  problem sheet in one `splitProblems` request (`PROBLEMS_MAX_PAGES` 200). `client/test/requestCaps.test.ts` checks
+  that the client stays inside every cap.
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
   crude plural folding for Latin words) and
   `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
@@ -372,7 +377,10 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   selected text" (a `selectionchange` listener accepts a selection inside one source's text that is a substring of it);
   "My own definition" ("Edit a copy" fills it with a source's text: cut down to a substring it keeps that source,
   any other change makes it `OWN_SOURCE`, and a live note says which). The AI's note is on top as its assessment; the
-  footer says what was searched and what failed, and without a search engine offers Settings → Web search.
+  footer says what was searched and what failed, and without a search engine (or when every source failed) offers
+  Settings → Web search: it opens Settings and waits for its Web search part with `whenElement`
+  (`client/src/lib/whenElement.ts`: a MutationObserver, 5 s at most, stopped when the pop-up closes), then scrolls
+  to it.
   Keyboard: the choices are one radio group (arrow keys); only the source the keyboard is on (`active`: its radio or
   an action had the focus last) has its actions in the Tab order (`tabIndex=-1` on the others'; a source without a
   passage keeps them), so "Use this text" stays a few Tab presses away (e2e: at most 8 with 3 sources). Each action's
@@ -770,7 +778,10 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
   for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
   `InspectorSheet` (a collapsible bottom sheet under 800px), `Toast` (bottom centre; under the toolbar on a phone; it
-  sets `--toast-top`/`--toast-bottom`, the part of the screen open dialogs keep free for it), and the dialogs.
+  sets `--toast-top`/`--toast-bottom`, the part of the screen open dialogs keep free for it; it is keyed by
+  `graphStore.toastSeq`, which `setToast` bumps, so the same message shown again restarts its 6 s and is announced
+  again), and the dialogs. `main.tsx` also renames a first visit's untouched "My brainstorm" to the interface
+  language's name once the Chinese messages have loaded (`nameFirstProject`).
 - `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Absurd chain/Derive/Derive together,
   Tidy/Find/Focus/View, graph/sandbox selector and fork, Settings (an AI status chip), File (import, exports incl. PNG
   via lazily imported `html-to-image` and LaTeX, Extract, Quiz, Derive together, Absurd chain, Share, Versions,
