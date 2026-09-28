@@ -1,6 +1,6 @@
 import type { DerivedProposal } from "@nodestorm/shared";
-import { ArrowRight, Check, Plus, RefreshCw } from "lucide-react";
-import { useEffect, useState } from "react";
+import { ArrowRight, Check, GitBranchPlus, Plus, RefreshCw } from "lucide-react";
+import { useEffect, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
 import { useT } from "../i18n";
 import { acceptProposal, derive } from "../lib/actions";
@@ -16,6 +16,18 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
   const [accepted, setAccepted] = useState<Set<string>>(new Set());
   const busy = useGraphStore((s) => Boolean(s.busy.derive));
   const names = graph.nodes.filter((n) => anchorIds.includes(n.id)).map((n) => n.name);
+  const goalRef = useRef<HTMLInputElement>(null);
+  // Set once "Fork a sandbox" was pressed here: says where accepted concepts now go.
+  const [forked, setForked] = useState<string | null>(null);
+
+  // Same as the toolbar's Fork sandbox. The copy keeps the concepts' ids, so the anchors, the proposals shown and a
+  // derivation still running carry on; what is accepted from now on goes into the sandbox.
+  const forkHere = () => {
+    useGraphStore.getState().forkActive();
+    const g = activeGraph(useGraphStore.getState());
+    if (g.parentId) setForked(g.name);
+    goalRef.current?.focus(); // the tip and its button are gone
+  };
 
   const run = async () => {
     setProposals(null);
@@ -26,10 +38,17 @@ export function DeriveDialog({ anchorIds, onClose }: { anchorIds: string[]; onCl
   return (
     <Modal label={t("derive.dialog")} title={t("derive.title", { names: names.join(" + ") })} onClose={onClose}>
       {!graph.parentId && (
-        <p className="hint">{t("derive.tip")}</p>
+        <p className="hint derive__tip">
+          <span>{t("derive.tip")}</span>
+          <button onClick={forkHere} title={t("toolbar.forkTitle")}>
+            <Icon icon={GitBranchPlus} size={14} />
+            {t("derive.fork")}
+          </button>
+        </p>
       )}
+      <p className={forked ? "hint" : "sr-only"} role="status">{forked && t("derive.forked", { name: forked })}</p>
       <div className="row derive__goal">
-        <input value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
+        <input ref={goalRef} value={goal} onChange={(e) => setGoal(e.target.value)} placeholder={t("derive.goalPlaceholder")} aria-label={t("derive.goal")} />
         <button onClick={run} disabled={busy}>
           {busy ? <span className="spinner spinner--xs" aria-hidden="true" /> : <Icon icon={RefreshCw} size={14} />}
           {busy ? t("derive.thinking") : t("derive.regenerate")}

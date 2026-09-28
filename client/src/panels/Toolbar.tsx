@@ -36,6 +36,7 @@ import { listJoin, t as tr, useT, type MessageKey } from "../i18n";
 import { mix, tidy } from "../lib/actions";
 import { errorMessage } from "../lib/errors";
 import { exportFileName, toMarkdown, toMermaid } from "../lib/export";
+import { graphDisplayName } from "../lib/graphOps";
 import { providerName } from "../lib/online";
 import { projectGraphs } from "../lib/projects";
 import { activeGraph, canRedo, canUndo, currentProject, isViewing, useGraphStore } from "../store/graphStore";
@@ -165,7 +166,7 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
       <div className="toolbar__more" id="toolbar-more">
         {!viewing && <div className="toolbar__group toolbar__sandbox" role="group" aria-label={t("toolbar.sandbox")}>
           <select className="graph-select" value={s.activeId} onChange={(e) => s.switchTo(e.target.value)} aria-label={t("toolbar.graph")}>
-            <option value={main.id}>{t("toolbar.mainGraph")}</option>
+            <option value={main.id}>{graphDisplayName(main)}</option>
             {sandboxes.length > 0 && (
               <optgroup label={t("toolbar.sandbox")}>
                 {sandboxes.map((g) => <option key={g.id} value={g.id}>{g.name}</option>)}
@@ -331,7 +332,7 @@ function FileMenu() {
       label: view ? "file.jsonGraph" : "file.jsonProject",
       title: view ? "file.jsonGraphTitle" : "file.jsonProjectTitle",
       icon: FileJson,
-      action: () => download(`${exportFileName({ ...graph, name: projectName })}.json`, text(exportJson(), "application/json")),
+      action: () => download(`${exportFileName({ name: projectName })}.json`, text(exportJson(), "application/json")),
     },
     {
       label: "file.markdown",

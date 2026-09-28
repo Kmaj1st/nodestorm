@@ -1,9 +1,9 @@
 import type { Graph, GraphExport } from "@nodestorm/shared";
 import { create } from "zustand";
 import { createJSONStorage, persist, type StateStorage } from "zustand/middleware";
-import { t } from "../i18n";
+import { t, useLocale } from "../i18n";
 import type { Gathered } from "../lib/sources";
-import { buildExample, EXAMPLES } from "../lib/examples";
+import { buildExample, EXAMPLES_BY_LANG } from "../lib/examples";
 import { fork, merge, uid } from "../lib/graphOps";
 import { repairImport, repairSaved } from "../lib/importRepair";
 import * as hist from "../lib/history";
@@ -94,7 +94,7 @@ interface Actions {
   renameProject(projectId: string, name: string): void;
   duplicateProject(projectId: string): void;
   deleteProject(projectId: string): void;
-  /** Build the Group theory example into the active (empty) graph as one undo step. */
+  /** Build the Group theory example (in the interface language) into the active (empty) graph as one undo step. */
   loadExample(): void;
   /** Copy the active graph into a new sandbox (named `name`, else "Sandbox n") and switch to it. */
   forkActive(name?: string): void;
@@ -249,7 +249,7 @@ export const useGraphStore = create<GraphStore>()(
         set(next.projectId === before.projectId ? { ...next, history } : { ...next, history, ...cleared });
       },
       loadExample() {
-        const data = EXAMPLES.groupTheory;
+        const data = EXAMPLES_BY_LANG[useLocale.getState().lang].groupTheory;
         get().mutate((g) => (g.nodes.length ? g : buildExample(g, data)));
         // A project that was never named takes the example's name.
         const p = get().projects[get().projectId];

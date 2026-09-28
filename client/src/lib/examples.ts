@@ -1,5 +1,7 @@
 import { ConceptKind, DepRole, DirRel, type ConceptNode, type Graph } from "@nodestorm/shared";
 import groupTheory from "../data/groupTheory.json";
+import groupTheoryZh from "../data/groupTheory.zh.json";
+import type { Lang } from "../i18n";
 import { depRelation, setPositions, uid, upsertRelation } from "./graphOps";
 import { layeredLayout } from "./layout";
 
@@ -21,6 +23,12 @@ export interface ExampleData {
 }
 
 export const EXAMPLES = { groupTheory: groupTheory as ExampleData };
+
+/** The example written in each interface language: same concepts, prerequisites and relations, in the same order. */
+export const EXAMPLES_BY_LANG: Record<Lang, typeof EXAMPLES> = {
+  en: EXAMPLES,
+  zh: { groupTheory: groupTheoryZh as ExampleData },
+};
 
 /** Build the example's concepts and relations into `g` (normally empty), laid out in layers. */
 export function buildExample(g: Graph, data: ExampleData): Graph {

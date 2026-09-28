@@ -217,8 +217,19 @@ export function toMermaid(g: Graph): string {
   return lines.join("\n") + "\n";
 }
 
-/** A filesystem-friendly base name, e.g. "nodestorm-main-2026-09-24". */
-export function exportFileName(g: Graph, date = new Date()): string {
-  const slug = g.name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+/**
+ * A filesystem-friendly base name, e.g. "nodestorm-main-graph-2026-09-24" or "nodestorm-主图谱-2026-09-24": the name
+ * as shown (a main graph stored as "Main" in the interface language), accents dropped, lower case, and anything but
+ * letters and digits (punctuation, spaces, characters file systems refuse) turned into hyphens. Chinese stays.
+ */
+export function exportFileName(g: Pick<Graph, "name" | "parentId">, date = new Date()): string {
+  const slug = graphDisplayName(g)
+    .normalize("NFKD")
+    .replace(/\p{M}+/gu, "")
+    .toLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60)
+    .replace(/-+$/, "");
   return ["nodestorm", slug, date.toISOString().slice(0, 10)].filter(Boolean).join("-");
 }
