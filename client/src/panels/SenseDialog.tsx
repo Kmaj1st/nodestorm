@@ -193,7 +193,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
       className="sources-dialog"
       dirty={choice?.kind === "own" && Boolean(ownDef.trim() || ownName.trim())}
     >
-      <p className="muted small">{t(replace ? "sources.introReplace" : "sources.intro")}</p>
+      {/* With nothing found there is no passage to pick: the "nothing found" line below says what to do instead. */}
+      {(sources.length > 0 || searching) && <p className="muted small">{t(replace ? "sources.introReplace" : "sources.intro")}</p>}
       {found?.rated && found.note && (
         <section className="sources__note small" aria-label={t("sources.assessment")} data-testid="sources-note">
           <b>{t("common.label", { label: t("sources.assessment") })}</b>{sp}{found.note}

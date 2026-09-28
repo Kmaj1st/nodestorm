@@ -498,8 +498,9 @@ function assessSources(name: string, sources: { id: string; kind: string; site: 
   return { ratings, note };
 }
 
+/** Title case: each word's first letter, not a letter after an apostrophe ("Lagrange's Theorem", not "Lagrange'S"). */
 function title(s: string) {
-  return s.replace(/\b\w/g, (c) => c.toUpperCase());
+  return s.replace(/(?<![\w'’])\w/g, (c) => c.toUpperCase());
 }
 
 function parseInput(messages: ChatMessage[]): any {

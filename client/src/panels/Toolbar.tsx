@@ -197,7 +197,10 @@ export function Toolbar({ onAdd, onDerive, onFind }: { onAdd: () => void; onDeri
               // A status chip: a dot (green once a provider is set up, amber before) and the model, or "Set up AI".
               <>
                 <span className={`status-dot status-dot--${ready ? "ok" : "warn"}`} aria-hidden="true" />
-                <span className="ai-button__label">{ready ? model.split("/").pop() : t("toolbar.setUpAi")}</span>
+                {/* The offline demo's one model ("mock-kb") means nothing to a newcomer: it says "Offline demo". */}
+                <span className="ai-button__label">
+                  {!ready ? t("toolbar.setUpAi") : settings.provider === "mock" ? providerName("mock") : model.split("/").pop()}
+                </span>
               </>
             )}
           </button>
