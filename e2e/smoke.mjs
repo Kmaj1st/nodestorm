@@ -408,34 +408,44 @@ try {
     assert(!overlapping(await cards()), "…and after a drag");
     // A double-click pins a card, also one that slides away under the pointer during each click (the canvas would
     // get the double-click and zoom in instead).
+    // A card with a point that nothing covers (a panel or the map may lie over part of the canvas).
+    const target = await page.evaluate(() => {
+      for (const el of document.querySelectorAll('.react-flow__node [data-testid^="node-"]')) {
+        const r = el.getBoundingClientRect();
+        for (const fy of [0.5, 0.25, 0.75]) {
+          for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+            const [x, y] = [r.left + r.width * fx, r.top + r.height * fy];
+            if (el.contains(document.elementFromPoint(x, y))) return { name: el.dataset.testid.slice(5), x, y };
+          }
+        }
+      }
+      return null;
+    });
     const pinnedBecomes = (want) =>
       page
-        .waitForFunction((want) => {
+        .waitForFunction(([name, want]) => {
           const st = JSON.parse(localStorage.getItem("nodestorm") ?? "{}").state;
-          return Boolean(st.graphs[st.activeId].nodes.find((n) => n.name === "Homomorphism")?.pinned) === want;
-        }, want, { timeout: 3000 })
+          return Boolean(st.graphs[st.activeId].nodes.find((n) => n.name === name)?.pinned) === want;
+        }, [target.name, want], { timeout: 3000 })
         .then(() => true, () => false);
-    const slideHom = (away) =>
-      page.evaluate((away) => {
-        const el = document.querySelector('[data-testid="node-Homomorphism"]').closest(".react-flow__node");
+    const slideTarget = (away) =>
+      page.evaluate(([name, away]) => {
+        const el = document.querySelector(`[data-testid="node-${name}"]`).closest(".react-flow__node");
         if (away) (el.dataset.was = el.style.transform), (el.style.transform += " translate(-4000px, -4000px)");
         else el.style.transform = el.dataset.was;
-      }, away);
+      }, [target.name, away]);
     const viewTransform = () => page.evaluate(() => document.querySelector(".react-flow__viewport").style.transform);
-    const hom = await node("Homomorphism").boundingBox();
-    await page.mouse.move(hom.x + hom.width / 2, hom.y + hom.height / 2);
+    await page.mouse.move(target.x, target.y);
     const zoomBefore = await viewTransform();
     for (const clickCount of [1, 2]) {
       await page.mouse.down({ clickCount });
-      await slideHom(true);
+      await slideTarget(true);
       await page.mouse.up({ clickCount });
-      await slideHom(false);
+      await slideTarget(false);
     }
-    assert(
-      (await pinnedBecomes(true)) && zoomBefore === (await viewTransform()),
-      "a double-click on a card that slid away under the pointer still pins it (and doesn't zoom)",
-    );
-    await node("Homomorphism").dblclick();
+    assert(await pinnedBecomes(true), "a double-click on a card that slid away under the pointer still pins it");
+    assert(zoomBefore === (await viewTransform()), "…and the canvas doesn't zoom in");
+    await page.mouse.dblclick(target.x, target.y);
     assert(await pinnedBecomes(false), "…and another double-click lets it go");
     await page.getByRole("button", { name: "Physics" }).click();
 
@@ -3390,17 +3400,29 @@ try {
     assert((await textIs(count, "2 selected")) && (await mix.isEnabled()), "…and a tap on another adds it");
     // A card that slides away from under the finger during a tap (the view animating) still gets the tap: a touch's
     // release goes to the card it first touched, its click to the empty canvas.
-    const gb = await card("Group").boundingBox();
-    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: gb.x + 20, y: gb.y + 12 }] });
-    const slideGroup = (away) =>
-      p.evaluate((away) => {
-        const el = document.querySelector('[data-testid="node-Group"]').closest(".react-flow__node");
+    // (An unselected card, at a point of it that nothing covers.)
+    const spot = await p.evaluate(() => {
+      for (const el of document.querySelectorAll('.react-flow__node:not(.selected) [data-testid^="node-"]')) {
+        const r = el.getBoundingClientRect();
+        for (const fy of [0.5, 0.25, 0.75]) {
+          for (const fx of [0.5, 0.25, 0.75, 0.1, 0.9]) {
+            const [x, y] = [r.left + r.width * fx, r.top + r.height * fy];
+            if (el.contains(document.elementFromPoint(x, y))) return { name: el.dataset.testid.slice(5), x, y };
+          }
+        }
+      }
+      return null;
+    });
+    const slideAway = (away) =>
+      p.evaluate(([name, away]) => {
+        const el = document.querySelector(`[data-testid="node-${name}"]`).closest(".react-flow__node");
         if (away) (el.dataset.was = el.style.transform), (el.style.transform += " translate(-4000px, -4000px)");
         else el.style.transform = el.dataset.was;
-      }, away);
-    await slideGroup(true);
+      }, [spot.name, away]);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: spot.x, y: spot.y }] });
+    await slideAway(true);
     await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
-    await slideGroup(false);
+    await slideAway(false);
     assert(await textIs(count, "3 selected"), "…also a card that slid away from under the finger during the tap");
     await p.keyboard.press("Escape");
     assert((await p.getByTestId("select-bar").count()) === 0, "Escape leaves Select several");
