@@ -59,7 +59,7 @@ describe("latexifyDefinition", () => {
   });
 
   it("without an AI set up, Settings opens and nothing is sent", async () => {
-    useSettings.setState({ provider: "openai", configs: {} });
+    useSettings.setState({ provider: "openai", configs: { ...useSettings.getState().configs, openai: { apiKey: "" } } });
     const id = addConcept({ name: "Homomorphism", definition: TEXT });
     const call = vi.spyOn(api, "latexify");
     await latexifyDefinition(id);
