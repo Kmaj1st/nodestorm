@@ -147,6 +147,19 @@ describe("graph store: projects", () => {
   });
 });
 
+describe("graph store: toasts", () => {
+  it("showing the same message again counts as a new toast (its timer restarts, screen readers hear it again)", () => {
+    store().setToast("Saved.", "info");
+    const first = store().toastSeq;
+    store().setToast("Saved.", "info");
+    expect(store().toast).toBe("Saved.");
+    expect(store().toastSeq).toBe(first + 1);
+    // Dismissing isn't a new toast.
+    store().setToast(null);
+    expect(store().toastSeq).toBe(first + 1);
+  });
+});
+
 describe("graph store: saved state", () => {
   it("reloads what was saved, and a check that was running when the page closed is marked failed", async () => {
     addNode("Group");

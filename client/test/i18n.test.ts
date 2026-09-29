@@ -100,6 +100,17 @@ describe("interface language", () => {
     for (const tag of ["en-US", "de", "ja-JP", "", "zu"]) expect(browserLang(tag)).toBe("en");
   });
 
+  it("fetches the Chinese messages early exactly when the app will show Chinese (i18n/early.ts)", async () => {
+    const { EARLY_KEY, earlyWantsZh } = await import("../src/i18n/early");
+    expect(EARLY_KEY).toBe("nodestorm-ui-language");
+    for (const stored of [null, "auto", "en", "zh"]) {
+      for (const tag of ["zh-CN", "ZH-tw", "en-US", "ja", ""]) {
+        const lang = stored === "en" || stored === "zh" ? stored : browserLang(tag);
+        expect(earlyWantsZh(stored, tag), `${stored} ${tag}`).toBe(lang === "zh");
+      }
+    }
+  });
+
   it("switches t() to the chosen language, and back", () => {
     useLocale.getState().setPref("zh");
     expect(t("toolbar.add")).toBe("添加概念");

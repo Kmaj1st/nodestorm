@@ -70,10 +70,11 @@ export function Modal({ label, title, onClose, className, top, dirty = false, ch
     const el = body.current!;
     stack.push(el);
     // Children may have autofocused a field already; otherwise focus the first control (not the header's close
-    // button), or the dialog itself.
+    // button), or the dialog itself. Without scrolling: the dialog opens at its top, unless its opener already scrolled
+    // it to a part (Settings' Web search, from the sources pop-up).
     if (!el.contains(document.activeElement)) {
       const first = [...el.querySelectorAll<HTMLElement>(FOCUSABLE)].find((n) => !n.classList.contains("modal__close"));
-      (first ?? el).focus();
+      (first ?? el).focus({ preventScroll: true });
     }
 
     const onKey = (e: KeyboardEvent) => {

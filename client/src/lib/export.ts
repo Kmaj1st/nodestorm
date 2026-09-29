@@ -9,12 +9,22 @@ import { splitMath } from "./math";
  * written in the interface language (the LaTeX document stays English, see latex.ts).
  */
 
+/** Sites stored by their English names that have a name of their own in the interface language. */
+const SITE_KEYS: Record<string, MessageKey> = { "Baidu Baike": "site.baidu", Moegirl: "site.moegirl" };
+
+/** A source's site as shown: Baidu Baike and Moegirl as 百度百科 and 萌娘百科 in Chinese, others unchanged. */
+export function siteLabel(site: string, lang: Lang = useLocale.getState().lang): string {
+  const key = SITE_KEYS[site];
+  return key ? translate(lang, key) : site;
+}
+
 /** "Site: Title, p. 3", or just the title; in `lang` (default: the interface language). */
 export function sourceLabel(s: SourceRef, lang: Lang = useLocale.getState().lang): string {
   if (s.site === "AI") return translate(lang, "source.ai", { model: s.title });
   if (s.site === "you") return translate(lang, "source.you");
   // A looked-up definition names its site ("Wikidata: Q83478" means little without it).
-  const title = s.site && s.title ? `${translate(lang, "common.label", { label: s.site })} ${s.title}` : s.site || s.title;
+  const site = s.site && siteLabel(s.site, lang);
+  const title = site && s.title ? `${translate(lang, "common.label", { label: site })} ${s.title}` : site || s.title;
   return s.page ? translate(lang, "dt.sourcePage", { title, page: s.page }) : title;
 }
 

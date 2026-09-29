@@ -1,4 +1,4 @@
-import { z } from "zod";
+import * as z from "zod/mini";
 import { CancelledError, ProviderError, redactSecret, withDeadline } from "../ai/provider";
 import { SEARCH_ENGINE_LABEL, searxngBase, type SearchEngineId } from "./searchEngines";
 
@@ -101,37 +101,41 @@ export function webSearchRequest(engine: SearchEngineId, query: WebSearchQuery, 
 }
 
 const str = z.string();
-const optStr = z.string().nullish();
-const HIT: Record<SearchEngineId, { list: (json: unknown) => unknown; item: z.ZodType<RawWebHit> }> = {
+const optStr = z.nullish(z.string());
+const HIT: Record<SearchEngineId, { list: (json: unknown) => unknown; item: z.ZodMiniType<RawWebHit> }> = {
   tavily: {
     list: (j) => z.object({ results: z.array(z.unknown()) }).parse(j).results,
-    item: z
-      .object({ title: optStr, url: str, content: optStr, published_date: optStr })
-      .transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.published_date ?? undefined })),
+    item: z.pipe(
+      z.object({ title: optStr, url: str, content: optStr, published_date: optStr }),
+      z.transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.published_date ?? undefined })),
+    ),
   },
   serper: {
     // No `organic` at all is a search without results.
-    list: (j) => z.object({ organic: z.array(z.unknown()).optional() }).parse(j).organic ?? [],
-    item: z
-      .object({ title: optStr, link: str, snippet: optStr, date: optStr })
-      .transform((r) => ({ title: r.title ?? "", url: r.link, text: r.snippet ?? "", date: r.date ?? undefined })),
+    list: (j) => z.object({ organic: z.optional(z.array(z.unknown())) }).parse(j).organic ?? [],
+    item: z.pipe(
+      z.object({ title: optStr, link: str, snippet: optStr, date: optStr }),
+      z.transform((r) => ({ title: r.title ?? "", url: r.link, text: r.snippet ?? "", date: r.date ?? undefined })),
+    ),
   },
   brave: {
-    list: (j) => z.object({ web: z.object({ results: z.array(z.unknown()) }).optional() }).parse(j).web?.results ?? [],
-    item: z
-      .object({ title: optStr, url: str, description: optStr, extra_snippets: z.array(z.string()).nullish(), page_age: optStr, age: optStr })
-      .transform((r) => ({
+    list: (j) => z.object({ web: z.optional(z.object({ results: z.array(z.unknown()) })) }).parse(j).web?.results ?? [],
+    item: z.pipe(
+      z.object({ title: optStr, url: str, description: optStr, extra_snippets: z.nullish(z.array(z.string())), page_age: optStr, age: optStr }),
+      z.transform((r) => ({
         title: r.title ?? "",
         url: r.url,
         text: [r.description ?? "", ...(r.extra_snippets ?? [])].filter((s) => s.trim()).join(" "),
         date: r.page_age ?? r.age ?? undefined,
       })),
+    ),
   },
   searxng: {
     list: (j) => z.object({ results: z.array(z.unknown()) }).parse(j).results,
-    item: z
-      .object({ title: optStr, url: str, content: optStr, publishedDate: optStr })
-      .transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.publishedDate ?? undefined })),
+    item: z.pipe(
+      z.object({ title: optStr, url: str, content: optStr, publishedDate: optStr }),
+      z.transform((r) => ({ title: r.title ?? "", url: r.url, text: r.content ?? "", date: r.publishedDate ?? undefined })),
+    ),
   },
 };
 

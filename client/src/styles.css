@@ -779,8 +779,7 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
   display: flex; flex-direction: column; gap: var(--space-4); font-size: var(--text-md);
 }
 .modal__body:not(:has(> .modal__header)) { padding-top: 20px; }
-/* A part scrolled into view (Settings opened at its AI part, "My own definition" opened) stops clear of the sticky
-   header and footer. */
+/* A part scrolled to (or a field tabbed to) stops below the sticky header and above the sticky footer, not under them. */
 .modal__body:has(> .modal__header) { scroll-padding-top: 72px; }
 .modal__body:has(> .form__actions:last-child) { scroll-padding-bottom: 72px; }
 /* Header: title and close button, kept in view while the dialog scrolls. */

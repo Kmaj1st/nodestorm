@@ -44,6 +44,11 @@ Layering inside the client, from the bottom up:
 ## 2. Data model
 
 Everything is defined with zod in `shared/src/model.ts`; the TypeScript types are `z.infer`s of the schemas.
+The schemas the browser uses (`model.ts`, `lookup/webSearch.ts`, `client/src/lib/baike.ts`) are written with
+`zod/mini`'s functional API (`z.optional(z.string().check(z.maxLength(300)))`), which the bundler tree-shakes: the
+classic method API cost ~58 kB more in the main chunk. `model.ts` installs zod's English messages (mini has none), so
+issues read exactly as before. Only the server's own request schema (`server/src/app.ts`) uses classic `zod`; it
+catches `$ZodError`, which both flavours throw. `scripts/zod-mini-codemod.mts` converts classic-style schemas.
 
 ```mermaid
 classDiagram
@@ -61,12 +66,13 @@ classDiagram
   }
   class ConceptNode {
     id, name, definition, aliases[]
-    status: ok|blocked|checking|unclear|error
+    status: ok|blocked|checking|unclear|pending|error
     position {x,y}
     dependsOn: node ids
     missingDeps: MissingDep[]
     error?, senses?: Sense[]
     kind?: definition|theorem|lemma|…
+    source?: SourceRef, basic?, pinned?
     explanation?, anatomy?, notes?, mastery?
   }
   class Relation {
@@ -89,7 +95,9 @@ classDiagram
   `role`: `uses`, `derives` or `assumes`, and a `reason`). Optional personal data: `explanation` (the latest
   "Explain more" answer with its level, its narrator `voice` if not plain, and time), `anatomy` (the latest "Theorem anatomy", `NodeAnatomy`), `notes`
   (free text) and `mastery` (quiz score, review count, last review time). Stored lookups: `formal` (Mathlib
-  declarations) and `papers` (OpenAlex works).
+  declarations) and `papers` (OpenAlex works). Graph content: `source` (`SourceRef`: where the definition came from,
+  with the AI's `rating` when it was a rated source; see "Sources for a definition"), `basic` (taken as given: never
+  missing prerequisites, never checked; `setBasic` in `graphOps.ts`) and `pinned` (Physics leaves it in place).
 - **Concept kind** (`ConceptKind`, optional `kind`): `definition`, `theorem`, `lemma`, `proposition`, `corollary`,
   `axiom`, `conjecture`, `example`, `notation`, `other`. Graph content (unlike the personal data above, it travels in
   share links). `THEOREM_KINDS` / `isTheoremLike` say which kinds get Theorem anatomy. In AI answers the kind is an
@@ -102,7 +110,11 @@ classDiagram
     `client/src/store/graphStore.ts` turns it into `error`) or an undo with no task running (`travel` in the same file).
   - `blocked`: it has `missingDeps`.
   - `ok`: checked, nothing missing.
-  - `unclear`: the name is ambiguous. `senses` holds the candidate meanings until the user picks one.
+  - `unclear`: waiting for a definition ("needs a definition" / "choose a definition"). `senses` holds the gathered
+    sources' passages (`sourcesAsSenses`, each with its `source`) until the user picks one; it may be empty when
+    nothing was found.
+  - `pending`: it has a definition but its prerequisites haven't been checked ("not checked"; the badge reads "check
+    with AI"). The AI is asked only when the user says so (`checkWithAi`).
   - `error`: the check failed or was cancelled; `error` holds the message and the badge is a Retry button.
 - **Relation.** Undirected pair `a`/`b` with **two directions**: `aToB` is what `a` does to `b` and `bToA` what `b`
   does to `a`. Each is a `DirRel` (`kind`, a short phrase or `"none"`, plus an `explanation`). The canvas draws one
@@ -129,6 +141,18 @@ classDiagram
   `ExplainVoice` (default `plain`). Requests carry `NodeBrief`s (`name`, `definition`, `aliases`),
   built with `toBrief`; `name`, `deps`, `derive` and `extract` answers carry a `kind` (`deps`: of the
   analysed concept).
+- **Request caps.** The schemas bound what a request may carry, so the server (and the in-page tasks) refuse a
+  hand-made oversize request with a 400: a `NodeBrief` has a name of at most `NAME_MAX` (300) characters, a definition
+  of `BRIEF_DEFINITION_MAX` (4000) and `BRIEF_ALIASES_MAX` (12) aliases, and a list of briefs at most `BRIEF_LIST_MAX`
+  (500). The client never hits them: `toBrief` clips with an ellipsis, and `toBriefs` (the graph as context) takes at
+  most 500 concepts and shortens definitions on a big graph so the list stays within about 200,000 characters, well
+  under the server's 1 MB body limit. The rest is capped too: free text the user writes for a request (the `name`
+  task's description, Derive's goal) and hints (why a dependent needs a concept, a cycle link's reason, the `assess`
+  task's hint) at `HINT_MAX` (2000; the dialogs' fields stop there and the actions trim), the `assess` name and the
+  names sent to `connect` and Explain's relations (at most `BRIEF_LIST_MAX`), the concepts "Roll again" avoids
+  (`ABSURD_AVOID_MAX` 40, the latest ones, each at most `ABSURD_AVOID_NAME_MAX` 200 characters) and the pages of a
+  problem sheet in one `splitProblems` request (`PROBLEMS_MAX_PAGES` 200). `client/test/requestCaps.test.ts` checks
+  that the client stays inside every cap.
 - **Name matching.** `normalizeName` (lowercase, strip Latin accents and punctuation, keep letters of every script,
   crude plural folding for Latin words) and
   `findByName` (name or alias) decide when two concepts are "the same" everywhere: dedupe on add, linking
@@ -146,6 +170,11 @@ Everything is in the user's browser. No account, no backend storage.
 | localStorage | `nodestorm-ui-language` | Interface language (absent = follow the browser). | `client/src/i18n/index.ts` |
 | localStorage | `nodestorm-theme` | Theme preference (absent = auto). | `client/src/lib/theme.ts` |
 | localStorage | `nodestorm-onboarding` | Welcome card / tour dismissed. | `client/src/lib/onboarding.ts` |
+| sessionStorage | `nodestorm-hidden` | Concepts hidden by hand, per graph, for this tab only (never exported or shared). | `client/src/store/viewStore.ts` |
+| localStorage | `nodestorm-edge-colors` | Relation colours chosen in Settings (`#rrggbb` per relation kind, sanitised when read). | `client/src/lib/theme.ts` |
+| localStorage | `nodestorm-lookup-cache` | Encyclopedia answers: 500 names for 30 days, clean answers only. | `client/src/lib/lookup.ts` |
+| localStorage | `nodestorm-websearch-cache` | Web search results: 500 searches for 30 days, checked when read. | `client/src/lib/webSearch.ts` |
+| localStorage | `nodestorm-sources-cache` | Gathered and rated sources: a day, 50 names, about 500 KB, checked when read. | `client/src/lib/sources.ts` |
 | localStorage | `nodestorm-chain-game` | "Guess the chain" best scores, `{score, max}` per ordered pair of ends (`pairKey`), at most 200 pairs. | `client/src/lib/chainGame.ts` |
 | IndexedDB | database `nodestorm-snapshots`, stores `meta` and `data` | Version snapshots: metadata for the list, and the JSON only loaded to compare or restore. | `client/src/lib/snapshotDb.ts` |
 | IndexedDB | database `nodestorm-docs`, stores `docs`, `pages` (key `[docId, page]`) and `sessions` | Derive together: imported documents (metadata plus problems found), their page text, and derivation sessions, per project. Deleted with the project. | `client/src/lib/docDb.ts` |
@@ -282,7 +311,8 @@ These are plain `fetch` calls to public APIs, not an AI task. They work the same
   - Every request sends `Api-User-Agent`, as Wikimedia's rules ask.
   - A Cloudflare challenge (`cf-mitigated`, a non-JSON answer, or a CORS or network failure) or a 429 is a `SiteBlockedError`; a 404 is "nothing there".
 - **Client (`lib/lookup.ts`)**:
-  - Settings: `lookup.enabled/proofwiki/wikipedia`.
+  - Settings: `lookup.enabled/proofwiki/wikipedia/baidu` and the `fandom` / `bwiki` wiki names; `everySite(name)`
+    adds Baidu Baike for Chinese names and Moegirl for Chinese or Japanese ones.
   - `lookupLanguage` goes from the answer language, or the name's script, to a Wikipedia code.
   - A localStorage cache holds 500 names for 30 days; only clean answers are cached.
   - A site that refused is paused for 10 minutes, and Settings shows that.
@@ -316,7 +346,9 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   A bad entry is dropped (that name is gathered again) and the others kept; stored JSON over the size cap is not read
   at all. Nothing in it is a key: the cache key names the engines, never their keys or the SearXNG address. `cachedSources` gives them back (not while an AI is set up
   and the rating is missing: then it is gathered again); `forgetSources` drops a name ("Look up in…"), and `fresh`
-  skips it ("Search the web and compare…", "Search again"). The status bar says "Searching sources for X…", then
+  skips it ("Search the web and compare…", "Search again"). `requery` (only the pop-up's "Search again") also passes
+  `fresh` to `searchWeb`, past the web search engines' 30-day cache, which costs search quota; everything else keeps
+  that cache. The status bar says "Searching sources for X…", then
   "Checking the sources for X…" (a relabel of the same cancellable task).
 - **The rating kept** (`SourceRef.rating`, `SourceRating` in `shared/src/model.ts`): `sourceRef(s)` of a rated source
   records its reliability, the AI's reason (at most 500 characters) and `compared` (how many sources were rated
@@ -350,7 +382,10 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   selected text" (a `selectionchange` listener accepts a selection inside one source's text that is a substring of it);
   "My own definition" ("Edit a copy" fills it with a source's text: cut down to a substring it keeps that source,
   any other change makes it `OWN_SOURCE`, and a live note says which). The AI's note is on top as its assessment; the
-  footer says what was searched and what failed, and without a search engine offers Settings → Web search.
+  footer says what was searched and what failed, and without a search engine (or when every source failed) offers
+  Settings → Web search: it opens Settings and waits for its Web search part with `whenElement`
+  (`client/src/lib/whenElement.ts`: a MutationObserver, 5 s at most, stopped when the pop-up closes), then scrolls
+  to it.
   Keyboard: the choices are one radio group (arrow keys); only the source the keyboard is on (`active`: its radio or
   an action had the focus last) has its actions in the Tab order (`tabIndex=-1` on the others'; a source without a
   passage keeps them), so "Use this text" stays a few Tab presses away (e2e: at most 8 with 3 sources). Each action's
@@ -406,14 +441,17 @@ The same pattern with no AI at all: real literature for a concept, where an AI's
   checks the query, parsing and headers with a fake fetch, `client/test/papers.test.ts` the action and exports, and
   the e2e "Papers" section serves fixtures. `npm run smoke:papers` (`scripts/papers-smoke.mts`) queries the real API.
 
-### Web search (`shared/src/lookup/webSearch.ts`, `client/src/lib/webSearch.ts`)
+### Web search (`shared/src/lookup/webSearch.ts`, `client/src/lib/webSearch.ts`, `client/src/lib/webSearchReady.ts`)
 
 Pages that define a concept, from web search engines, for the AI to rate and the user to quote from (the AI never
 writes the definition). This layer only finds and cleans the pages; the rating and the pop-up are built on its API.
 
-- **Contract** (`client/src/lib/webSearch.ts`): `searchEngines()` (the engines that are ticked, configured and can run
-  here), `searchReady()` (one of them usable now: online, not paused), and `searchWeb(name, {max, signal})` →
-  `{results: WebResult[], asked, failed}`. A `WebResult` is `{engine, title, url, site, text, published?}`: plain
+- **Contract**: `searchEngines()` (the engines that are ticked, configured and can run here, via `engineUsable`) and
+  `searchReady()` (one of them usable now: online, not paused) live in `client/src/lib/webSearchReady.ts` with the
+  engine pauses, so adding a concept can tell whether a search will run without loading the engines' code;
+  `shared/src/lookup/searchEngines.ts` holds the engine ids (`SEARCH_ENGINES`), their labels and `searxngBase` for the
+  same reason. `searchWeb(name, {max, signal, fresh})` in `client/src/lib/webSearch.ts` (loaded on demand, like
+  `sources.ts`) → `{results: WebResult[], asked, failed}`; `fresh` skips the cache. A `WebResult` is `{engine, title, url, site, text, published?}`: plain
   text, whitespace-normalised, at most `TEXT_MAX` (4000) characters, https pages only. Cancelling throws
   `CancelledError`; an engine that fails lands in `failed` (with a `console.warn`), the others still answer.
 - **Engines** (`shared/src/lookup/webSearch.ts`, used by the browser and the server alike): `webSearchRequest` builds
@@ -453,7 +491,7 @@ writes the definition). This layer only finds and cleans the pages; the rating a
     is full) is keyed by language, engines (and SearXNG address), `max` and name. Only answers without a failed engine
     are cached. An entry is checked when read (strings only, https pages only); a bad one is searched again.
   - An engine that rejected the key, rate-limited or ran out of credits is paused for 10 minutes, per engine and key
-    (a corrected key is tried at once). Settings shows the pause.
+    (a corrected key is tried at once; `pauseEngine` / `isPaused` in `webSearchReady.ts`). Settings shows the pause.
   - `testSearchEngine(engine, search, connection)` backs Settings' "Test". It uses the settings being edited, skips
     the cache and pauses, and clears the pause when it works.
 - **Offline demo** (`provider: "mock"`): `searchEngines()` is `["demo"]` and `lib/webSearchDemo.ts` (lazy, so the
@@ -567,13 +605,19 @@ Selectors: `activeGraph`, `isViewing`, `currentProject`, `canUndo`, `canRedo`.
 ### Other stores
 
 - `client/src/store/settingsStore.ts`: connection (`browser`/`server`), provider, per-provider `configs` (key,
-  base URL, model, timeout), `rememberKeys`, `serverModels`, clarify options, install-all limits, answer `language`,
-  `aiConcurrency`. `isReady(s)` says whether AI calls can run without opening Settings.
-- `client/src/store/viewStore.ts`: view filters (persisted) and focus mode (`focus`, not persisted); `visibleNow`
-  and `toggleFocus` helpers used by `App.tsx`.
+  base URL, model, timeout), `rememberKeys`, `serverModels`, `clarify` (how many meanings each site may give;
+  Settings' "Ambiguous names"), `newConcepts` (`ask`: the sources pop-up opens; `auto`: `autoPick`), `lookup` (sites,
+  Fandom/BWIKI names), `search` (web search engines), install-all limits, answer `language`, `aiConcurrency`.
+  `isReady(s)` says whether AI calls can run without opening Settings.
+- `client/src/store/viewStore.ts`: view filters (persisted), focus mode (`focus`, not persisted), concepts hidden by
+  hand (`hidden`, per tab), Select several (`selecting`); `visibleNow` and `toggleFocus` helpers used by `App.tsx`.
 - `client/src/store/snapshotStore.ts`: snapshot list and the functions described in [Persistence](#3-persistence).
 - `client/src/store/quizStore.ts`: which quiz dialog is open (progress itself is `mastery` on the nodes).
-- `client/src/store/deriveStore.ts`: Derive together. Panel state (open, tab, reader), the project's documents, pages
+- `client/src/store/deriveOpen.ts`: whether the Derive together panel is open (`useDeriveOpen`) and
+  `openDerivePanel` / `closeDerivePanel`, which the toolbar and inspector use; they load `deriveStore.ts` only then.
+  It also deletes a deleted project's documents and sessions from IndexedDB, whether or not the panel was ever opened.
+- `client/src/store/deriveStore.ts` (loaded with the Derive together panel's chunk): panel state (tab, reader; it
+  mirrors `open` into `useDeriveOpen`), the project's documents, pages
   and sessions (loaded from `docDb` per project; reloaded on project switch), and its actions: `importFile` (pdf.js
   text, then scanned pages through `readPage` one at a time), `findProblems` (`splitProblems` in batches of about 11,000
   characters), `hint` / `check` (BM25 retrieval over the reference documents, then the tutor task; a check whose step
@@ -602,7 +646,7 @@ All in `client/src/lib/`, no React or store imports (except `t` for messages in 
 | `extract.ts` | Extract-from-text review model: `buildReview`, `duplicateOf`, `resolveEndpoint`, `linkUsable`, `applyExtraction`. |
 | `derivation.ts` | Derive together sessions: `addStep`/`editStep`/`removeStep` (edits drop the checks after them), `setCheck`, `addHint`, `nextHintNumber`, `isSolved`, `numberReferences` (passages → `[n]` and back to doc/page), `sessionConcepts`, `buildGraphPlan` / `applyGraphPlan` (reuses `applyExtraction`, then sets `source` and notes), `toMarkdown`; Reviewer 2: `stepsKey` (a hash of the steps' text), `checksForReferee`, `setReferee`, `refereeOutdated` (the card says so; the Markdown copy leaves an outdated report out). |
 | `absurd.ts` | Absurd chain: `chainConcepts`, `intermediates`, `chainToText` (clipboard), `sandboxName`, `hopExplanation`, `surprisePair` ("Surprise me": two different random concepts of the graph, else its one concept and
-`FUN_ENDS`; avoids the pair on screen), and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
+`FUN_ENDS`, or `FUN_ENDS_ZH` in the Chinese interface; avoids the pair on screen), and `applyAbsurdChain` (reuses concepts by name or alias, places new ones between the ends or in a staircase, adds one relation per hop: `aToB` = kind plus fact and quoted narration, `bToA` = `none`, origin `mix`; never overwrites an existing relation; new concepts get a note naming the chain). |
 | `chainGame.ts` | "Guess the chain": `newGame` (the intermediate concepts become stops, with aliases from the graph), per stop `hidden` → `clued` → `guessed`, or `revealed`; `guess` (checks every open stop, any order; `known` for an end or a found concept, else counts a wrong guess), `clue`, `reveal`, `revealAll`, `score` / `maxScore` / `tally` (`POINTS`: 3 alone, 2 after a clue, 0 revealed); `matchesName` (`normalizeName`, leading article, aliases, `editDistance` with transpositions within `typoAllowance`: 0 up to 4 characters, 1 up to 8, else 2); `mask` blanks hidden names as whole words (longest name first, so a shown "Heat equation" keeps its "Heat"); `linkView` (fact and narration once both ends are known, else the masked narration as a clue); best scores `bestFor` / `recordBest` (storage injectable, errors ignored). |
 | `retrieve.ts` | `chunkPages` (~900-character chunks within a page, with overlap), `tokenize` (Latin words minus stopwords, LaTeX commands, CJK bigrams), BM25 `buildIndex` / `search`. |
 | `pdf.ts` / `docDb.ts` | pdf.js (legacy build, lazily loaded with its worker) text per page, `looksScanned` (no text, or little text plus a picture), `renderPageImage` (JPEG, longest side ≤ 1600px) / IndexedDB wrapper for documents, pages and sessions. pdf.js asks the page (`binaryDataFactory`) for its WebAssembly decoders (hashed assets), CMaps and standard fonts (`pdfData.ts`: the build's `pdfjs-<version>/cmaps/` and `standard_fonts/`). |
@@ -694,7 +738,8 @@ definition, anything else as typed; `withBusy("absurd", …)`, cancelled when th
 (`via`, at most `ABSURD_MAX_VIA`, reordered in the dialog's `StopsEditor`) go the same way, a custom stop with the
 user's description as its definition; `absurdHops` widens the hop range to at least stops + 1, and `checkAbsurdStops`
 (in `cleanAbsurdChain`) rejects an answer that misses a stop or takes them out of order, so `runStructured` asks once
-more with that note. Nothing touches the graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res, via)` (a new
+more with that note. Nothing touches the graph until **Add to a sandbox** → `addAbsurdChainToSandbox(res, via)` (in `lib/absurd.ts`, so
+it ships with the dialog's chunk rather than the main one; a new
 custom stop keeps the user's description, source "you"): `forkActive(sandboxName(title))` (switches to the
 new sandbox), one `mutate(applyAbsurdChain)` there (one undo step), then quiet `analyzeNode` for each new concept with
 the hop's fact as the hint for rating its sources. The user's graph only changes through **Merge back**.
@@ -738,7 +783,10 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
   for what's visible, `F`/Esc focus mode, Ctrl/Cmd+K find), share-link opening, `ViewerBanner`, `SandboxBanner`,
   `InspectorSheet` (a collapsible bottom sheet under 800px), `Toast` (bottom centre; under the toolbar on a phone; it
-  sets `--toast-top`/`--toast-bottom`, the part of the screen open dialogs keep free for it), and the dialogs.
+  sets `--toast-top`/`--toast-bottom`, the part of the screen open dialogs keep free for it; it is keyed by
+  `graphStore.toastSeq`, which `setToast` bumps, so the same message shown again restarts its 6 s and is announced
+  again), and the dialogs. `main.tsx` also renames a first visit's untouched "My brainstorm" to the interface
+  language's name once the Chinese messages have loaded (`nameFirstProject`).
 - `client/src/panels/Toolbar.tsx`: project menu, undo/redo, Add/Mix/Absurd chain/Derive/Derive together,
   Tidy/Find/Focus/View, graph/sandbox selector and fork, Settings (an AI status chip), File (import, exports incl. PNG
   via lazily imported `html-to-image` and LaTeX, Extract, Quiz, Derive together, Absurd chain, Share, Versions,
@@ -758,8 +806,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
     no Shift key. Its button sits in the zoom controls; while on, `SelectSeveralSync` keeps React Flow's
     `multiSelectionActive` set (as if Shift were held), `selectNodesOnDrag` is off (a tap toggles, a drag only moves),
     a single selection doesn't open the inspector, and a pane click doesn't clear the selection. `useHoldToSelect`
-    starts it from a 500 ms touch hold on a card (cancelled by moving, a second finger or letting go; the tap ending
-    the hold is swallowed). `SelectBar` shows the count with Clear and Done; Escape (App.tsx) leaves it.
+    starts it from a 500 ms touch hold on a card through `createHoldTracker` (`client/src/lib/hold.ts`, unit-tested
+    without a DOM): moving, a second finger or letting go cancel it; the tap ending the hold is swallowed once; every
+    timer and listener belongs to its own press, so a press right after a hold starts afresh; unmounting ends it. `SelectBar` shows the count with Clear and Done; Escape (App.tsx) leaves it.
 - `client/src/panels/Inspector.tsx`: node view (kind select, dependency flow, install, rename, Theorem anatomy for theorem-like kinds, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
 - `client/src/graph/KindTag.tsx`: the small uppercase kind label on cards, walkthrough slides and glossary rows,
@@ -767,9 +816,31 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 - `goToConcept(id)` (`client/src/store/viewStore.ts`): select and centre a concept, first turning off a to-do or kind
   filter that hides it (Find and the notation glossary use it).
 - **Lazy dialogs** (`client/src/panels/lazy.tsx`): Absurd chain, Add, Derive, Extract, Find, Flashcards, Glossary
-  (Notation…), Sense, Settings, Share, Shortcuts, Versions and Quiz are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
+  (Notation…), 3D view, Sense, Settings, Share, Shortcuts, Versions, Quiz, Walkthrough and the Derive together panel
+  are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
+- **Other parts loaded on demand**, to keep the main chunk small (about 760 kB, 244 kB gzipped): the in-browser AI
+  (`lib/aiBrowser.ts`: provider clients, prompts and tasks, through `loadAi` in `api.ts`; `shared/package.json` says
+  `"sideEffects": false` so the main chunk leaves the unused shared modules out), the sources flow (`lib/sources.ts`,
+  through `loadSources` in `actions.ts`) with the web search engines (`lib/webSearch.ts`; the cheap checks stay in
+  `webSearchReady.ts`), the encyclopedia clients (`lib/lookupClients.ts`), the offline demo's pretend web
+  (`lib/webSearchDemo.ts`), the Derive together store (`store/deriveOpen.ts` above), the Chinese messages (fetched
+  alongside the main chunk by `i18n/early.ts`, a tiny entry of its own that `pwa/earlyLocale.ts` puts first), LaTeX export
+  and import, KaTeX, PDF.js, `fflate` and `html-to-image`. The dialogs that need them import them statically, so
+  `preloadDialogs` fetches them when idle too, and the service worker precaches every chunk.
+  `client/test/lazyParts.test.ts` fails if a static import pulls the web search code or the Derive store back in.
+- **Performance** (reference numbers, 2026-09-28, this container's headless Chromium; compare like with like).
+  Production build, `node e2e/perf.mjs --built`, 300 concepts / 600 relations (dev server in brackets, where React's
+  development checks dominate): reload to edges painted ~650–900 ms (~2100 ms); 20 status updates of one concept
+  ~380–670 ms main-thread (~900 ms); 20 relation inspections ~230–310 ms (~530 ms); dragging a concept 30 steps
+  ~730–930 ms (~1600 ms); Physics ~75–85 ms of main thread per frame (~300 ms), so ~13 frames/s on this graph. First
+  load (`node e2e/firstload.mjs 5`, Fast 3G + 4x CPU, 390px, fresh profile): HTML at ~580 ms, the main chunk
+  (238 kB over the wire) arrives at ~2.6 s, canvas on screen ~3.0 s, first contentful paint ~3.15 s, main thread quiet
+  ~3.3 s; Chinese interface ~3.2 s / ~3.45 s. Nothing but the main chunk and `index.css` (15 kB) blocks: fonts are
+  the system's, KaTeX's CSS and fonts come with its chunk, the service worker registers after `load`, and the dialog
+  preloads start after the first paint. The remaining cost is the main chunk's download (react-dom ~210 kB,
+  React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of ~760 kB).
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
   Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
 - **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
@@ -819,8 +890,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 
 ## 9. Testing and CI
 
-- **Unit tests**: `npm test` runs vitest over `shared/test/`, `server/test/` and `client/test/` (`vitest.config.ts`,
-  Node environment). Client tests that touch stores install an in-memory `localStorage` with `vi.hoisted` (see
+- **Unit tests**: `npm test` runs vitest 5 over `shared/test/`, `server/test/` and `client/test/` (`vitest.config.ts`,
+  Node environment; `test-setup.ts` makes the encyclopedia, Loogle, OpenAlex and search engine hosts fail, so no test reaches them). For a coverage
+  report: `npm i --no-save @vitest/coverage-v8@<vitest version>` then `npx vitest run --coverage`. Client tests that touch stores install an in-memory `localStorage` with `vi.hoisted` (see
   `client/test/installAll.test.ts`) and use `fake-indexeddb` for snapshots. Flow tests (`installAll`, `quizActions`,
   `snapshots`, `reviewFixes*`) drive the real actions against the mock provider.
   `shared/test/robustness.test.ts` covers deadlines, retries and JSON extraction; `server/test/app.test.ts` the HTTP
@@ -837,15 +909,23 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   the notation glossary, parody voices & Reviewer 2 (a voiced explanation that fits the inspector and survives a
   reload, a referee report and its outdated note, Surprise me; axe in both themes), and Guess the chain (a wrong
   guess, a right one with a typo, a clue from the keyboard, a reveal, the summary and the kept best score, Play
-  again; 390px width; axe in both themes). The run is **pinned
+  again; 390px width; axe in both themes), plus physics and layers, basic concepts, hiding concepts, suggest
+  connections, definition sources, Baidu Baike, adding with look-ups, sources from the web, LaTeX import, small
+  screens, phone selection (Select several and holding a card) and web search settings. The run is **pinned
   to English** (an init script sets `nodestorm-ui-language`) because the
   selectors are English text. Ports: `E2E_SERVER_PORT` (default 8799) and `E2E_WEB_PORT` (default 5199);
-  `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`.
+  `DEBUG=1` shows child stderr. Screenshots go to `e2e/screenshots/`. `E2E_BUILT=1` runs it against the production
+  build (`npm run build` first) served by `vite preview`, and fails on any Content-Security-Policy violation.
 - **PWA e2e** (`npm run e2e:pwa` → build + `e2e/pwa.mjs`): serves `client/dist` with `vite preview` (port
   `E2E_WEB_PORT`, default 4273), checks the manifest and service worker, offline start, typesetting a formula offline
   (KaTeX chunk and fonts from the cache), a failed chunk load, the update notice, and a Chinese PDF whose font isn't
   embedded read offline once its CMaps were used online.
-- **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph; `PERF_PROFILE=1` prints hot functions.
+- **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph, a Physics run and each section's main-thread
+  time; `PERF_PROFILE=status|inspect|drag|physics` prints that section's hottest functions (`1` means `drag`).
+  `--built` (or `E2E_BUILT=1`) measures a production build instead (`client/dist-perf`, built with
+  `VITE_PERF_HOOKS=1`, which only adds `client/src/perfHooks.ts`: the stores the sections drive). `node
+  e2e/firstload.mjs` (after `npm run build`) times the first load on Fast 3G with a 4x slower CPU;
+  `FIRSTLOAD_LANG=zh` for the Chinese interface. Reference numbers: **Performance** in section 8.
 - **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
   once against a real provider using `server/.env`, validates against the same schemas, prints timings.
 - **CI** (`.github/workflows/ci.yml`): on every push and PR: `npm ci`, typecheck, test, install Chromium, e2e,
@@ -971,7 +1051,8 @@ and server-binding items are real problems worth fixing.
 - **Parody voices and Reviewer 2**: like the Absurd chain, correctness rests on the prompt; a model may still let a
   joke blur a statement or invent a nitpick. The UI labels both as parody and the referee card says to check each
   point. The referee report is per derivation and not re-run automatically when steps change (the card says it is
-  outdated). The fun ends of *Surprise me* are English names, whatever the interface language.
+  outdated). The fun ends of *Surprise me* follow the interface language (`FUN_ENDS` / `FUN_ENDS_ZH`), not the AI
+  answer language.
 - **Absurd chain**: the facts are only as true as the model makes them (the prompt insists, the UI says to check, and
   nothing reaches the graph except through a sandbox). Its relations have origin `mix`, so after a merge they can't be
   told apart or filtered separately; a dedicated origin would follow "Add a relation origin" above.

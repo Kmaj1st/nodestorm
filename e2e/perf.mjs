@@ -1,10 +1,14 @@
 // Rough performance check on a big graph (300 concepts, 600 relations). Not part of `npm run e2e`.
 // Usage: node e2e/perf.mjs   (E2E_WEB_PORT picks the Vite port; prints timings, asserts nothing but loose bounds)
-import { spawn } from "node:child_process";
+// `node e2e/perf.mjs --built` (or E2E_BUILT=1) measures a production build instead of the dev server, whose React
+// development checks dominate the timings: it builds client/dist-perf (VITE_PERF_HOOKS=1, which only adds the
+// stores the benchmark drives, see client/src/perfHooks.ts) and serves it with `vite preview`.
+import { execFileSync, spawn } from "node:child_process";
 import { writeFileSync } from "node:fs";
 import { chromium } from "playwright";
 
 const WEB_PORT = Number(process.env.E2E_WEB_PORT || 5199);
+const BUILT = process.argv.includes("--built") || process.env.E2E_BUILT === "1";
 const N = 300;
 const R = 600;
 
@@ -52,7 +56,14 @@ if (process.argv[2] === "--dump") {
   process.exit(0);
 }
 
-const vite = spawn("npx", ["vite", "client", "--port", String(WEB_PORT), "--strictPort"], { stdio: "ignore", detached: true });
+if (BUILT) {
+  execFileSync("npx", ["vite", "build", "client", "--outDir", "dist-perf", "--emptyOutDir", "--logLevel", "warn"], {
+    stdio: "inherit",
+    env: { ...process.env, VITE_PERF_HOOKS: "1" },
+  });
+}
+const viteArgs = BUILT ? ["preview", "client", "--outDir", "dist-perf"] : ["client"];
+const vite = spawn("npx", ["vite", ...viteArgs, "--port", String(WEB_PORT), "--strictPort"], { stdio: "ignore", detached: true });
 let browser;
 try {
   for (let i = 0; ; i++) {
@@ -61,12 +72,21 @@ try {
     await new Promise((r) => setTimeout(r, 200));
   }
   browser = await chromium.launch();
-  const page = await browser.newPage({ viewport: { width: 1400, height: 900 } });
+  // No service worker: in the built mode a reload would otherwise be served from its cache.
+  const context = await browser.newContext({ viewport: { width: 1400, height: 900 }, serviceWorkers: "block" });
+  const page = await context.newPage();
   page.on("pageerror", (e) => console.error("pageerror:", e.message));
   const ws = JSON.stringify(bigWorkspace());
   await page.addInitScript((data) => {
     localStorage.setItem("nodestorm", data);
     localStorage.setItem("nodestorm-view", JSON.stringify({ edgeLabels: true })); // same view for every run
+    // The stores and graph operations the sections drive: the perf build's hook, or imported by path from Vite.
+    window.__perfStores = async () =>
+      window.__nodestormPerf ?? {
+        useGraphStore: (await import("/src/store/graphStore.ts")).useGraphStore,
+        useView: (await import("/src/store/viewStore.ts")).useView,
+        updateNode: (await import("/src/lib/graphOps.ts")).updateNode,
+      };
   }, ws);
   // Warm Vite's module cache so the render timing measures React, not on-demand transpiling.
   await page.goto(`http://localhost:${WEB_PORT}/`);
@@ -107,8 +127,7 @@ try {
   await startProfile("status");
   let busy0 = await taskMs();
   results["20 status updates of one node"] = await page.evaluate(async () => {
-    const { useGraphStore } = await import("/src/store/graphStore.ts");
-    const { updateNode } = await import("/src/lib/graphOps.ts");
+    const { useGraphStore, updateNode } = await window.__perfStores();
     const tick = () => new Promise((r) => setTimeout(r));
     const start = performance.now();
     for (let i = 0; i < 20; i++) {
@@ -125,7 +144,7 @@ try {
   await startProfile("inspect");
   busy0 = await taskMs();
   results["20 relation inspections"] = await page.evaluate(async () => {
-    const { useGraphStore } = await import("/src/store/graphStore.ts");
+    const { useGraphStore } = await window.__perfStores();
     const tick = () => new Promise((r) => setTimeout(r));
     const start = performance.now();
     for (let i = 0; i < 20; i++) {
@@ -157,7 +176,7 @@ try {
 
   // Physics on the whole graph for 60 frames: the simulation steps twice a frame and every card moves each frame.
   await page.evaluate(async () => {
-    const { useView } = await import("/src/store/viewStore.ts");
+    const { useView } = await window.__perfStores();
     useView.getState().setPrefs({ physics: true });
   });
   await startProfile("physics");
@@ -172,7 +191,7 @@ try {
   results["physics 60 frames: wall time"] = Math.round(frames);
   await printProfile("physics");
   await page.evaluate(async () => {
-    const { useView } = await import("/src/store/viewStore.ts");
+    const { useView } = await window.__perfStores();
     useView.getState().setPrefs({ physics: false });
   });
 
@@ -188,6 +207,7 @@ try {
   );
   results["zoomed in: rendered nodes / edges / labels"] = zoomed;
 
+  console.log(BUILT ? "production build (vite preview)" : "dev server");
   for (const [k, v] of Object.entries(results)) console.log(`${k.padEnd(42)} ${v}${typeof v === "number" ? " ms" : ""}`);
   // Loose sanity bound only: catches a pathological regression, not normal machine-to-machine noise.
   if (results["20 status updates of one node"] > 20000) throw new Error("status updates are pathologically slow");

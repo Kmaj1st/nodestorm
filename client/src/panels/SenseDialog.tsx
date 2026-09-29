@@ -4,8 +4,10 @@ import { Fragment, memo, useEffect, useId, useMemo, useRef, useState, type React
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
 import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
+import { siteLabel } from "../lib/export";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
+import { whenElement } from "../lib/whenElement";
 import { allSourcesFailed, cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
 import { isReady, useSettings } from "../store/settingsStore";
@@ -185,30 +187,28 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
     });
 
   // Settings opens over this pop-up (what was picked or typed stays), scrolled to its Web search part.
+  // The wait for that part (Settings and it may still be loading) ends when found, after 5 s, or when this pop-up goes.
+  const stopWaiting = useRef<() => void>(undefined);
+  useEffect(() => () => stopWaiting.current?.(), []);
   const openSearchSettings = () => {
     setSettingsOpen(true);
-    let tries = 0;
-    const scroll = () => {
-      const part = document.querySelector<HTMLElement>('[data-testid="web-search-settings"]');
-      if (part) part.scrollIntoView({ block: "start" });
-      else if (++tries < 40) setTimeout(scroll, 50);
-    };
-    scroll();
+    stopWaiting.current?.();
+    stopWaiting.current = whenElement(
+      () => document.querySelector<HTMLElement>('[data-testid="web-search-settings"]'),
+      (part) => part.scrollIntoView({ block: "start" }),
+      { timeoutMs: 5000 },
+    );
   };
-  // The same, at its AI part (the provider and its key), once the lazily loaded Settings is on the page. Two frames
-  // later, so the dialog has focused its first field (which scrolls it to the top) by then.
+  // The same, at its AI part (the provider and its key). Two frames after it appears, so the dialog has focused its
+  // first field (which scrolls it to the top) by then.
   const openAiSettings = () => {
     setSettingsOpen(true);
-    const find = () => document.querySelector<HTMLElement>('[data-testid="ai-settings"]');
-    const scroll = () => requestAnimationFrame(() => requestAnimationFrame(() => find()?.scrollIntoView({ block: "start" })));
-    if (find()) return scroll();
-    const watch = new MutationObserver(() => {
-      if (!find()) return;
-      watch.disconnect();
-      scroll();
-    });
-    watch.observe(document.body, { childList: true, subtree: true });
-    setTimeout(() => watch.disconnect(), 5000);
+    stopWaiting.current?.();
+    stopWaiting.current = whenElement(
+      () => document.querySelector<HTMLElement>('[data-testid="ai-settings"]'),
+      (part) => requestAnimationFrame(() => requestAnimationFrame(() => part.scrollIntoView({ block: "start" }))),
+      { timeoutMs: 5000 },
+    );
   };
   const on = (id: string) => choice?.kind !== "own" && choice?.id === id;
   const pickedSource = picked ? byId(picked.id) : undefined;
@@ -268,7 +268,8 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               const open = expanded.has(s.id);
               // Out of the Tab order unless the keyboard is on this source; each names its source for screen readers.
               const tab = !s.passage || active === s.id ? undefined : -1;
-              const of = (action: string) => t("sources.actionOf", { action, site: s.site });
+              const site = siteLabel(s.site);
+              const of = (action: string) => t("sources.actionOf", { action, site });
               return (
                 <div
                   key={s.id}
@@ -288,7 +289,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                       aria-describedby={`${id}-text`}
                     />
                     <label htmlFor={id} className="src__label">
-                      <span className="src__site">{s.site}</span>
+                      <span className="src__site">{site}</span>
                       {/* An encyclopedia entry by its own name (Wikidata's page title is only an id). */}
                       {(s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title) !== s.site && (
                         <span className="src__title">{s.kind === "encyclopedia" && s.name?.trim() ? s.name : s.title}</span>
@@ -364,7 +365,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
               onChange={() => setChoice({ kind: "selection", ...picked })}
             />
             <span>
-              <b>{t("sources.selectionFrom", { site: pickedSource.site })}</b>
+              <b>{t("sources.selectionFrom", { site: siteLabel(pickedSource.site) })}</b>
               <span className="small src__quote">{picked.text}</span>
             </span>
           </label>
@@ -397,7 +398,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
                 />
                 {copy && ownDef.trim() && (
                   <span id={`${uid}-copy`} className={`small src__copy${copyKept ? "" : " src__copy--changed"}`} role="status" data-testid="source-copy-note">
-                    {t(copyKept ? "sources.copyExact" : "sources.copyChanged", { site: copy.site })}
+                    {t(copyKept ? "sources.copyExact" : "sources.copyChanged", { site: siteLabel(copy.site) })}
                   </span>
                 )}
               </>
@@ -428,7 +429,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
         <div className="sources__preview small" data-testid="source-preview">
           <span className="muted">
             {t("common.label", { label: t("sources.savedAs") })}{" "}
-            {result.source.site === OWN_SOURCE.site ? t("source.you") : result.source.site}
+            {result.source.site === OWN_SOURCE.site ? t("source.you") : siteLabel(result.source.site ?? "")}
           </span>
           <MathText text={result.definition} />
         </div>
