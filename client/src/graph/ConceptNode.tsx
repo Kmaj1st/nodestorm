@@ -73,7 +73,7 @@ function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
       )}
       {c.basic && (
         <span className="concept__basic" title={t("basic.cardTitle")} role="img" aria-label={t("basic.label")} data-testid="basic-mark">
-          <Icon icon={BrickWall} size={12} />
+          <Icon icon={BrickWall} size={16} />
         </span>
       )}
       {c.kind && <div className="concept__kind"><KindTag kind={c.kind} /></div>}

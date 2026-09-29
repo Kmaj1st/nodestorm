@@ -469,7 +469,7 @@ try {
     const st = await openSettings();
     await st.getByText("Directly from this browser").click();
     await st.getByLabel("Provider", { exact: true }).selectOption("mock");
-    await st.getByLabel("Number of meanings to offer").fill("4");
+    await st.getByLabel("Meanings to offer from each encyclopedia").fill("4");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
   {
@@ -2566,16 +2566,16 @@ try {
     await page.locator(".toast").filter({ hasText: "Chain copied" }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     assert(
-      copied.startsWith("What they don't want you to know") && copied.includes("1. Fourier transform → Heat equation (inventing a fix for)") && copied.includes("Moral: "),
+      copied.startsWith("What they don't want you to know") && /^1\. Fourier transform → .+ \(.+\)$/m.test(copied) && copied.includes("Moral: "),
       "Copy as text puts the whole chain on the clipboard",
     );
     await page.screenshot({ path: `${shots}30-absurd-chain.png` });
 
     // Into a sandbox: the graph itself stays as it was.
-    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.getByRole("button", { name: "Add to a new sandbox" }).click();
     await dlg.waitFor({ state: "detached" });
     await page.getByTestId("sandbox-banner").filter({ hasText: "What they don't want you to know" }).waitFor();
-    await node("Maillard reaction").waitFor();
+    await node("Heat equation").waitFor(); // after Roll again, the route through the exponential function
     assert((await page.locator(".react-flow__node").count()) === mainNodes + 5, "Add to a sandbox forks the graph under the chain's title and adds the chain's five concepts there");
     await page.getByRole("combobox", { name: "Graph" }).selectOption({ label: "Main graph" });
     await page.getByTestId("sandbox-banner").waitFor({ state: "detached" });
@@ -2594,7 +2594,13 @@ try {
     await dlg.getByRole("button", { name: "Swap the two ends" }).click();
     await dlg.getByRole("button", { name: "Build the chain" }).click();
     await result.waitFor();
-    assert((await hops.first().textContent()).includes("Group") && (await hops.count()) === 1, "Swap turns the chain around");
+    // The two are one link apart; for the medium length (4-5 links) the offline demo takes a longer, still true route.
+    assert(
+      (await hops.first().locator(".absurd-hop__ends strong").first().textContent()) === "Group" &&
+        (await hops.last().locator(".absurd-hop__ends strong").last().textContent()) === "Homomorphism" &&
+        (await hops.count()) >= 4 && (await hops.count()) <= 5,
+      "Swap turns the chain around, and the chain keeps to the length asked for",
+    );
     await audit("Absurd chain dialog, dark theme");
     await page.screenshot({ path: `${shots}31-absurd-chain-dark.png` });
     await dlg.getByRole("button", { name: "Close" }).click();
@@ -2640,7 +2646,7 @@ try {
     assert((await result.getByText("your stop").count()) === 2, "the user's stops are marked in the chain");
     await audit("Absurd chain dialog with stops");
     await page.screenshot({ path: `${shots}31b-absurd-chain-stops.png` });
-    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.getByRole("button", { name: "Add to a new sandbox" }).click();
     await dlg.waitFor({ state: "detached" });
     await node("Grandma's oven").click();
     assert(
@@ -3025,6 +3031,8 @@ try {
       await d.waitFor();
       await d.getByLabel("From", { exact: true }).fill("Homomorphism");
       await d.getByLabel("To", { exact: true }).fill("Toast");
+      // Long (5-7 links): the offline demo's six-link route through the Fourier transform and the Maillard reaction.
+      await d.getByLabel("Length").selectOption("long");
       await d.getByTestId("absurd-play").click();
       await d.getByTestId("chain-game").waitFor();
       return d;
@@ -3050,7 +3058,7 @@ try {
     assert(true, "the guess field has the focus");
     assert((await feedback.getAttribute("role")) === "status", "feedback is announced to screen readers");
     assert(
-      (await dlg.getByRole("button", { name: "Copy as text" }).count()) === 0 && (await dlg.getByRole("button", { name: "Add to a sandbox" }).count()) === 0,
+      (await dlg.getByRole("button", { name: "Copy as text" }).count()) === 0 && (await dlg.getByRole("button", { name: "Add to a new sandbox" }).count()) === 0,
       "copying or adding the chain would give it away, so they wait for the end",
     );
 
@@ -3143,7 +3151,8 @@ try {
     await page.screenshot({ path: `${shots}37-chain-game-dark.png` });
     await dlg.getByRole("button", { name: "Play again" }).click();
     await summary.waitFor({ state: "detached" });
-    await page.waitForFunction(() => document.querySelector('[data-testid="chain-game-score"]')?.textContent === "Score 0 / 15");
+    // Play again asks for another route between the same ends (it may be shorter, so the score is out of less).
+    await page.waitForFunction(() => /^Score 0 \/ \d+$/.test(document.querySelector('[data-testid="chain-game-score"]')?.textContent ?? ""));
     await page.waitForFunction(() => document.activeElement?.closest(".chain-game__guess"));
     assert(true, "Play again starts a new game between the same ends");
     await dlg.getByRole("button", { name: "Close" }).click();
@@ -3283,7 +3292,7 @@ try {
     const mix = p.getByRole("button", { name: "Mix", exact: true });
     const count = p.getByTestId("select-count");
     await toggle.tap();
-    assert((await toggle.getAttribute("aria-pressed")) === "true" && (await count.textContent()) === "Tap concepts to select them", "Select several is on, and its bar says what to do");
+    assert((await toggle.getAttribute("aria-pressed")) === "true" && (await count.textContent()) === "Tap to select", "Select several is on, and its bar says what to do");
     assert((await mix.isDisabled()) && (await mix.getAttribute("title")).includes("pick exactly two"), "Mix is disabled, its tooltip says to pick two");
     await card("Subgroup").tap();
     await card("Homomorphism").tap();

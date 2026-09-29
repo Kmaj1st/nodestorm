@@ -176,15 +176,20 @@ type XY = { x: number; y: number };
 
 /** Approximate on-canvas footprint of a concept node (positions are its top-left corner). */
 export const NODE_SIZE = { w: 220, h: 110 };
-const GAP = 40;
+/**
+ * Space added to NODE_SIZE between the origins of neighbouring cards, by the layered layout and for a new concept's
+ * spot. Taller cards (a kind tag, a name on three lines: up to about 175 high) still keep a real gap.
+ */
+export const LAYOUT_GAP = { x: 60, y: 90 };
 
 /**
  * The free spot (top-left) closest to `target` where a node overlaps none of `occupied` (other nodes' top-left
- * corners). Candidates are tried on rings of growing radius around the target, so the result is (roughly) the nearest.
+ * corners), as far from them as the layered layout's rows and columns. Candidates are tried on rings of growing
+ * radius around the target, so the result is (roughly) the nearest.
  */
 export function findFreeSpot(occupied: XY[], target: XY, size = NODE_SIZE): XY {
-  const w = size.w + GAP;
-  const h = size.h + GAP;
+  const w = size.w + LAYOUT_GAP.x;
+  const h = size.h + LAYOUT_GAP.y;
   const free = (p: XY) => occupied.every((o) => Math.abs(o.x - p.x) >= w || Math.abs(o.y - p.y) >= h);
   const step = { x: w / 2, y: h / 2 };
   for (let r = 0; r <= 40; r++) {

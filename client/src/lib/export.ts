@@ -97,11 +97,15 @@ function paperMd(w: PaperWork): string {
   return `[${mdEscape(w.title)}](${mdUrl(w.url)})${by ? ` — ${mdEscape(by)}` : ""}. ${t("md.citedBy", { n: w.citedBy })}${oa}`;
 }
 
-export function toMarkdown(g: Graph): string {
+/** The graph as Markdown notes; headed "Project — Main graph" when the project's name is given. */
+export function toMarkdown(g: Graph, opts: { project?: string } = {}): string {
   const byId = new Map(g.nodes.map((n) => [n.id, n]));
   const ordered = studyOrder(g);
   const rank = new Map(ordered.map((n, i) => [n.id, i]));
-  const lines: string[] = [`# ${mdEscape(graphDisplayName(g) || t("md.untitled"))}`, ""];
+  const graphName = graphDisplayName(g) || t("md.untitled");
+  const project = opts.project?.trim();
+  const heading = project && project !== graphName ? t("md.heading", { project, graph: graphName }) : graphName;
+  const lines: string[] = [`# ${mdEscape(heading)}`, ""];
   if (!g.nodes.length) return [...lines, `_${t("md.empty")}_`, ""].join("\n");
 
   lines.push(`## ${t("md.studyOrder")}`, "");

@@ -1,5 +1,5 @@
 import type { Graph } from "@nodestorm/shared";
-import { NODE_SIZE } from "./graphOps";
+import { LAYOUT_GAP, NODE_SIZE } from "./graphOps";
 
 /**
  * Layered ("Sugiyama-style") auto-layout. Prerequisites sit in rows above the concepts that depend on them;
@@ -40,7 +40,7 @@ export function dependencyLayers(g: Graph): Map<string, number> {
 }
 
 export function layeredLayout(g: Graph, opts: LayoutOptions = {}): Map<string, { x: number; y: number }> {
-  const { dx = NODE_SIZE.w + 60, dy = NODE_SIZE.h + 90, maxPerRow = 6 } = opts;
+  const { dx = NODE_SIZE.w + LAYOUT_GAP.x, dy = NODE_SIZE.h + LAYOUT_GAP.y, maxPerRow = 6 } = opts;
   const layer = dependencyLayers(g);
   const depth = Math.max(-1, ...layer.values()) + 1;
   const rows: string[][] = Array.from({ length: depth }, () => []);

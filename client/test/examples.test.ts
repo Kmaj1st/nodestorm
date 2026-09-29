@@ -2,7 +2,9 @@ import { GraphExport } from "@nodestorm/shared";
 import { describe, expect, it } from "vitest";
 import { loadLang, useLocale } from "../src/i18n";
 import { buildExample, EXAMPLES_BY_LANG } from "../src/lib/examples";
+import { sourceLabel, toMarkdown } from "../src/lib/export";
 import * as ops from "../src/lib/graphOps";
+import { decodeShare, encodeShare } from "../src/lib/share";
 
 // The example graph is written once per interface language; both versions are the same graph.
 
@@ -52,5 +54,17 @@ describe("example graph in each language", () => {
     } finally {
       useLocale.setState({ lang: prev });
     }
+  });
+
+  it("credits every definition to the example (a site without a page), through files, exports and share links", async () => {
+    expect([en.source, zh.source]).toEqual(["NodeStorm example", "NodeStorm 示例"]);
+    const g = buildExample(ops.emptyGraph(), en);
+    expect(g.nodes.every((n) => n.source?.site === "NodeStorm example" && !n.source.url)).toBe(true);
+    expect(sourceLabel(g.nodes[0].source!)).toBe("NodeStorm example");
+    const file = GraphExport.parse({ format: "nodestorm/v1", graphs: [g] });
+    expect(file.graphs[0].nodes[0].source).toEqual({ site: "NodeStorm example", title: "" });
+    expect(toMarkdown(g)).toContain("*Source:* NodeStorm example\n");
+    const shared = await decodeShare(await encodeShare(g, "Group theory"));
+    expect(shared.graph.nodes.every((n) => n.source?.site === "NodeStorm example")).toBe(true);
   });
 });

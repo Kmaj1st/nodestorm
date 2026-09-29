@@ -37,6 +37,11 @@ describe("study order", () => {
 });
 
 describe("markdown", () => {
+  it("is headed with the project's name when it is given (\"Project — Main graph\")", () => {
+    expect(toMarkdown(scenario().g, { project: "Algebra" }).split("\n")[0]).toMatch(/^# Algebra — ./);
+    expect(toMarkdown(scenario().g).split("\n")[0]).not.toContain("—");
+  });
+
   it("lists concepts with aliases, definitions and prerequisites in study order", () => {
     const md = toMarkdown(scenario().g);
     expect(md).toMatch(/^# Group theory\n/);

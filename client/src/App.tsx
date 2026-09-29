@@ -309,6 +309,12 @@ function InspectorSheet() {
   useEffect(() => {
     if (inspect) setOpen(true);
   }, [inspect]);
+  // Another concept or relation starts at the top of its details, not where the last one was scrolled to.
+  const content = useRef<HTMLDivElement>(null);
+  const inspected = inspect ? (inspect.kind === "node" ? inspect.id : `${inspect.relationId}:${inspect.dir}`) : "";
+  useEffect(() => {
+    if (content.current) content.current.scrollTop = 0;
+  }, [inspected]);
   // As a bottom sheet its content scrolls on its own, so it takes keyboard focus too (to scroll it with the arrow
   // keys when it holds only text, like the help shown when nothing is selected).
   const [small, setSmall] = useState(() => Boolean(window.matchMedia?.(SMALL_SCREEN).matches));
@@ -325,6 +331,7 @@ function InspectorSheet() {
         {t(open ? "sheet.hide" : "sheet.show")}
       </button>
       <div
+        ref={content}
         className="sheet__content"
         id="inspector-sheet"
         {...(small && { tabIndex: 0, role: "region", "aria-label": t("sheet.label") })}

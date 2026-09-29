@@ -183,20 +183,23 @@ function NodePanel({ node, graph }: { node: ConceptNode; graph: Graph }) {
             return r.error;
           }}
         />
-        <span className={`concept__badge concept__badge--${node.status}`}>
-          <StatusMark status={node.status} />
-          {t(node.status === "unclear" && lookedUp ? "badge.noDefinition" : STATUS_LABEL[node.status])}
+        {/* The pill and the hide button go under a long name together, never one without the other. */}
+        <span className="inspector__status">
+          <span className={`concept__badge concept__badge--${node.status}`}>
+            <StatusMark status={node.status} />
+            {t(node.status === "unclear" && lookedUp ? "badge.noDefinition" : STATUS_LABEL[node.status])}
+          </span>
+          {/* Hide from the canvas for now: a view choice, so also in the read-only viewer. */}
+          <button
+            className="icon-btn inspector__hide"
+            onClick={() => hideConcepts([node.id])}
+            aria-label={t("hide.button")}
+            title={t("hide.title")}
+            data-testid="hide-concept"
+          >
+            <Icon icon={EyeOff} size={16} />
+          </button>
         </span>
-        {/* Hide from the canvas for now: a view choice, so also in the read-only viewer. */}
-        <button
-          className="icon-btn inspector__hide"
-          onClick={() => hideConcepts([node.id])}
-          aria-label={t("hide.button")}
-          title={t("hide.title")}
-          data-testid="hide-concept"
-        >
-          <Icon icon={EyeOff} size={16} />
-        </button>
       </div>
       {node.aliases.length > 0 && <div className="muted small">{t("node.aliases", { aliases: listJoin(node.aliases) })}</div>}
       </header>

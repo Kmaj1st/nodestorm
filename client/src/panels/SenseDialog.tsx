@@ -10,6 +10,7 @@ import { mathRanges } from "../lib/math";
 import { whenElement } from "../lib/whenElement";
 import { allSourcesFailed, cachedSources, groupBySense, sourceRef, sourcesFromSenses, type Gathered, type Source } from "../lib/sources";
 import { useGraphStore } from "../store/graphStore";
+import { isReady, useSettings } from "../store/settingsStore";
 import { Icon } from "../ui/Icon";
 import { MathText } from "./MathText";
 import { Modal } from "./Modal";
@@ -68,6 +69,8 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
   const task = useGraphStore((s) => s.busy[relookupKey(graphId, node.id)]);
   const searching = Boolean(task);
   const unreachable = Boolean(found && allSourcesFailed(found));
+  // Without an AI the sources aren't rated: the pop-up offers to set one up.
+  const aiReady = useSettings(isReady);
   // Without a fresh search (reopened after a reload), the passages stored on the concept, not rated.
   const sources = useMemo(() => found?.sources ?? sourcesFromSenses(node.senses ?? []), [found, node.senses]);
   const groups = useMemo(() => groupBySense(sources), [sources]);
@@ -132,6 +135,17 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
       cancelAnimationFrame(frame);
     };
   }, [sources]);
+
+  // "My own definition" opens its fields under the list: bring them into view (the pop-up scrolls on its own).
+  const ownOpen = choice?.kind === "own";
+  const ownBox = useRef<HTMLLabelElement>(null);
+  const firstRender = useRef(true);
+  useEffect(() => {
+    if (firstRender.current) return void (firstRender.current = false);
+    if (!ownOpen) return;
+    const reduced = window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    ownBox.current?.scrollIntoView({ block: "nearest", behavior: reduced ? "auto" : "smooth" });
+  }, [ownOpen]);
 
   const copy = copyOf ?? undefined;
   // A copy cut down to a part of the source's text is still its words; any other change makes it the user's.
@@ -199,6 +213,17 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
       { timeoutMs: 5000 },
     );
   };
+  // The same, at its AI part (the provider and its key). Two frames after it appears, so the dialog has focused its
+  // first field (which scrolls it to the top) by then.
+  const openAiSettings = () => {
+    setSettingsOpen(true);
+    stopWaiting.current?.();
+    stopWaiting.current = whenElement(
+      () => document.querySelector<HTMLElement>('[data-testid="ai-settings"]'),
+      (part) => requestAnimationFrame(() => requestAnimationFrame(() => part.scrollIntoView({ block: "start" }))),
+      { timeoutMs: 5000 },
+    );
+  };
   const on = (id: string) => choice?.kind !== "own" && choice?.id === id;
   const pickedSource = picked ? byId(picked.id) : undefined;
   const sp = lang === "zh" ? "" : " ";
@@ -234,7 +259,11 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
       )}
       {!sources.length && !(searching && !found) && (
         <p className="small" data-testid="sources-nothing" role={unreachable ? "alert" : undefined}>
-          {unreachable ? t("sources.allFailed") : found || node.senses ? t("sources.nothing", { name: node.name }) : t("sense.nothingOff")}
+          {unreachable
+            ? t("sources.allFailed")
+            : found || node.senses
+              ? t(aiReady ? "sources.nothing" : "sources.nothingNoAi", { name: node.name })
+              : t("sense.nothingOff")}
         </p>
       )}
 
@@ -356,7 +385,7 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
           </label>
         )}
 
-        <label className={`sense${choice?.kind === "own" ? " sense--on" : ""}`} onFocus={() => setActive(null)}>
+        <label ref={ownBox} className={`sense${choice?.kind === "own" ? " sense--on" : ""}`} onFocus={() => setActive(null)}>
           <input type="radio" name={`${uid}-source`} checked={choice?.kind === "own"} onChange={() => setChoice({ kind: "own" })} data-testid="source-own" />
           <span className="sense__other">
             <b>{t("sense.own")}</b>
@@ -441,6 +470,11 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
         {(!found || !found.web || unreachable) && (
           <button type="button" className="small-btn" onClick={openSearchSettings} data-testid="sources-settings">
             {t("sources.openSettings")}
+          </button>
+        )}
+        {!aiReady && (
+          <button type="button" className="small-btn" onClick={openAiSettings} data-testid="sources-setup-ai">
+            {t("sources.setUpAi")}
           </button>
         )}
       </div>

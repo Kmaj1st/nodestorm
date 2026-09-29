@@ -286,4 +286,8 @@ export const BRIDGES_ZH: { kind: string; back: string; fact: string }[] = [
   { kind: "下", back: "孵出", fact: "母鸡下蛋。" },
   { kind: "写在", back: "承载", fact: "文字写在纸上已有大约两千年。" },
   { kind: "燃烧于", back: "点燃", fact: "纸加热到大约 230 °C 就会着火。" },
+  { kind: "总是构成", back: "包含每个", fact: "同态的核总是其定义域的正规子群。" },
+  { kind: "刻画", back: "出现于", fact: "第一同构定理指出 $G/\\ker\\varphi$ 同构于 $\\varphi$ 的像。" },
+  { kind: "给出解", back: "用到", fact: "热方程的基本解是高斯函数 $\\frac{1}{\\sqrt{4\\pi\\alpha t}} e^{-x^2/(4\\alpha t)}$。" },
+  { kind: "烤成", back: "需要", fact: "烤面包片是用干热把面包烤至焦黄而成的。" },
 ];

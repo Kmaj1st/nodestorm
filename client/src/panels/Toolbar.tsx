@@ -347,7 +347,7 @@ function FileMenu() {
       label: "file.markdown",
       title: "file.markdownTitle",
       icon: FileText,
-      action: () => download(`${base}.md`, text(toMarkdown(graph), "text/markdown")),
+      action: () => download(`${base}.md`, text(toMarkdown(graph, { project: projectName }), "text/markdown")),
     },
     {
       label: "file.latex",

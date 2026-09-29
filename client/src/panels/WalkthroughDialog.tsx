@@ -1,8 +1,9 @@
 import { KindTag } from "../graph/KindTag";
-import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, LocateFixed, X } from "lucide-react";
+import { ChevronLeft, ChevronRight, ChevronsLeft, ChevronsRight, ExternalLink, LocateFixed, X } from "lucide-react";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Icon } from "../ui/Icon";
-import { useT } from "../i18n";
+import { useLang, useT } from "../i18n";
+import { sourceLabel } from "../lib/export";
 import { viewport } from "../lib/viewport";
 import { buildWalkthrough } from "../lib/walkthrough";
 import { activeGraph, useGraphStore } from "../store/graphStore";
@@ -17,6 +18,7 @@ import "./walkthrough.css";
  */
 export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClose: () => void }) {
   const t = useT();
+  const lang = useLang();
   const graph = useGraphStore(activeGraph);
   const { slides, cyclic } = useMemo(() => buildWalkthrough(graph, rootId), [graph, rootId]);
   const [at, setAt] = useState(0);
@@ -80,6 +82,20 @@ export function WalkthroughDialog({ rootId, onClose }: { rootId?: string; onClos
           <p className={`walk__def${slide.definition.trim() ? "" : " muted"}`}>
             {slide.definition.trim() ? <MathText text={slide.definition} /> : t("walk.noDefinition")}
           </p>
+          {slide.source && (
+            <p className="walk__source muted" data-testid="walk-source">
+              {/* The Chinese colon has its own space. */}
+              {t("common.label", { label: t("node.source") })}{lang === "zh" ? "" : " "}
+              {slide.source.url ? (
+                <a href={slide.source.url} target="_blank" rel="noopener noreferrer">
+                  {sourceLabel(slide.source, lang)}
+                  <Icon icon={ExternalLink} size={12} />
+                </a>
+              ) : (
+                sourceLabel(slide.source, lang)
+              )}
+            </p>
+          )}
 
           {slide.buildsOn.length > 0 && (
             <section>

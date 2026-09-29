@@ -19,6 +19,8 @@
 .walk__kind .kind-tag { height: 22px; font-size: var(--text-xs); }
 .walk__name { margin: 0; font-size: clamp(30px, 5.5vw, 52px); line-height: 1.12; font-weight: 700; letter-spacing: -0.025em; color: var(--text); }
 .walk__def { margin: 0; font-size: 1.12em; color: var(--text); }
+.walk__source { margin: calc(var(--space-2) - var(--space-5)) 0 0; font-size: var(--text-sm); }
+.walk__source a { display: inline-flex; align-items: center; gap: 3px; }
 .walk__slide section { display: flex; flex-direction: column; gap: var(--space-2); }
 .walk__slide h3 { margin: 0; font-size: var(--text-sm); font-weight: 600; color: var(--muted); }
 .walk__slide ul { margin: 0; padding-left: 1.2em; display: flex; flex-direction: column; gap: 6px; }

@@ -121,7 +121,7 @@ describe("offline demo in Chinese, task by task", () => {
   it("absurd chain: Chinese links, quips, title and moral; stops and aliases found in Chinese", async () => {
     const res = await tasks.absurdChain(mock, { from: n("同态"), to: n("烤面包片"), style: "epic" });
     expect(res.title).toBe("同态与烤面包片的传奇");
-    expect(res.chain.map((h) => h.to)).toEqual(["指数函数", "傅里叶变换", "热方程", "热", "美拉德反应", "烤面包片"]);
+    expect(res.chain.map((h) => h.to)).toEqual(["指数函数", "傅里叶变换", "热方程", "热", "烤面包片"]);
     expect(res.chain[0]).toMatchObject({ kind: "包括", quip: "看哪，指数函数自同态中崛起，万古为之震颤。" });
     expect(res.moral).toMatch(HAN);
     const via = await tasks.absurdChain(mock, { from: n("歌剧"), to: n("鸡蛋"), via: [n("子群")], style: "deadpan" });
