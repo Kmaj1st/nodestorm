@@ -85,13 +85,16 @@ export function sortSources(sources: Source[]): Source[] {
  */
 const INJECTION = [
   /\b(ignore|disregard|forget|override)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|all|any|other|your)\b[^.\n]{0,20}\b(instructions?|rules|prompts?|directions|guidelines)\b/i,
-  /\b(rate|rank|mark|score|label|classify)\s+(this|that|the|these|all|every|each|any)?\s*(other\s+)?(sources?|pages?|sites?|texts?|results?|entry|entries|articles?)?\s*(as\s+)["']?(high(ly)?|medium|low|reliable|trustworthy|unreliable|unusable)\b/i,
+  /\b(rate|rank|mark|score|label|classify)\s+(this|that|the|these|all|every|each|any)?\s*(other\s+)?(sources?|pages?|sites?|texts?|results?|entry|entries|articles?)?\s*(as\s+)["']?(high(ly)?|medium|low|reliable|trustworthy|unreliable|unusable)\b(?!\s+as\b)/i, // not "a rate as high as 25%"
   /["']?\breliability["']?\s*[:=]\s*["']?(high|medium|low|unusable)\b/i,
-  /\b(note|message|instructions?|attention)\s+(to|for)\s+(the\s+)?(ai|llm|language model|assistant|model|rater|grader)\b/i,
+  // "Assistant" and "model" only as an address ("Note to the model:"), not "instructions for the model kit".
+  /\b(note|message|instructions?|attention)\s+(to|for)\s+(the\s+)?((ai|llm|language model|rater|grader)\b|(assistant|model)\s*:)/i,
   /\b(you are|you're)\s+(an?\s+)?(ai|llm|(large\s+)?language model|assistant|chatbot)\b/i,
   /\bnew instructions\s*:/i,
-  /(忽略|无视|忽视|不要理会)[^。\n]{0,10}(指令|指示|规则|提示词?|要求)/,
-  /(评为|评定为|标记为|打分为|判定为|评级为)[^。\n]{0,3}(高可靠|高度可靠|可靠|不可用|不可靠)/,
+  // Earlier or all instructions (as in English), not "处理器忽略未定义的指令" or "无视规则的人".
+  /(忽略|无视|忽视|不要理会)[^。\n]{0,6}(以上|上述|之前|此前|先前|前面|前述|所有|全部|其他|你的)[^。\n]{0,6}(指令|指示|规则|提示词?|要求)/,
+  // Said of a source or page, not "坏扇区被标记为不可用".
+  /(来源|网页|页面|本页|此页|条目|资料|文本|结果)[^。\n]{0,12}(评为|评定为|标记为|打分为|判定为|评级为)[^。\n]{0,3}(高可靠|高度可靠|可靠|不可用|不可靠)/,
   /(可靠性|可信度)\s*[:：=]\s*(高|中|低|high|medium|low)/i,
 ];
 
