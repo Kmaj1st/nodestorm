@@ -1141,6 +1141,7 @@ export const en = {
   "sources.intro": "Pick the passage to use as the definition: the source's own words, saved with a link to it. You can also select other words of a source, or write your own.",
   "sources.introReplace": "Pick a passage to replace the current definition (Undo brings it back): the source's own words, saved with a link to it.",
   "sources.assessment": "The AI's assessment",
+  "sources.injected": "Set aside: the page's text gives instructions to the AI that checks the sources, so it was not rated or taken as a definition.",
   "sources.notRated": "Not rated: with an AI set up in Settings, the sources are checked against each other.",
   "sources.assessFailed": "The sources couldn't be checked, so they aren't rated: {error}",
   "sources.stored": "The passages found earlier (not rated). Search again to see the whole texts and ratings.",

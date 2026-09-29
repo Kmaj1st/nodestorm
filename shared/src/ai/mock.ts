@@ -1,6 +1,7 @@
 import { normalizeName, type ConceptKind, type TheoremAnatomy } from "../model";
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 import { ABSURD_VOICE_ZH, ANATOMY_ZH, BRIDGE_NAME_ZH, BRIDGES_ZH, EXPLAIN_VOICE_ZH, EXPLAIN_ZH, KB_ZH, MATHLIB_WHY_ZH } from "./mockZh";
+import { unwrapSourceBlock } from "./prompts";
 
 /** The offline demo's Mathlib names for its concepts (real Mathlib declarations), plus one that doesn't exist. */
 const MATHLIB: Record<string, { name: string; why: string }[]> = {
@@ -580,7 +581,10 @@ export class MockProvider implements Provider {
       case "anatomy":
         return JSON.stringify(anatomyOf(inp.node ?? { name: "" }, nodeZh()));
       case "assess":
-        return JSON.stringify(assessSources(String(inp.name ?? ""), inp.sources ?? [], zhFor(inp.name)));
+        // Each text arrives in its labelled block (see sourceBlock); the demo quotes the text inside.
+        return JSON.stringify(
+          assessSources(String(inp.name ?? ""), (inp.sources ?? []).map((x: { text: string }) => ({ ...x, text: unwrapSourceBlock(String(x.text ?? "")) })), zhFor(inp.name)),
+        );
       default:
         return "{}";
     }

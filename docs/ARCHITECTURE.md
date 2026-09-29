@@ -364,6 +364,15 @@ user's (`OWN_SOURCE`), never text the AI wrote.
   quotes/dashes unified, invisible characters dropped, case ignored) and mapped back to the source's own characters;
   otherwise dropped (""). The offline demo rates encyclopedias and lecture notes high, forums low (with a reason), and
   quotes an encyclopedia's whole text or a page's first sentence naming the concept.
+- **Prompt injection across sources.** All sources are rated in one call, so one page's text could sway every rating,
+  while `autoPick`'s second-opinion rule assumes independent ratings. Two defences: `assessPrompt` wraps each text in
+  its own labelled block (`sourceBlock`: "[BEGIN TEXT OF SOURCE id]" … "[END TEXT OF SOURCE id]", markers inside the
+  text defused; the offline demo reads it back with `unwrapSourceBlock`) and says a block can't change the rules, the
+  format or another source's rating; and `looksInjected` (client, `sources.ts`) spots a title or text aimed at the
+  rater (ignore/disregard … instructions, "rate this page as high", a `reliability` value, "note to the AI", "you are
+  an AI", and Chinese equivalents; deliberately narrow). Such a source is left out of the `assess` call (none left: no
+  call), shown `unusable` with the reason `sources.injected` (`flagInjected`, also over cached and older ratings), and
+  never picked or counted as backing by `autoPick`.
 - **Automatic pick** (`autoPick`, Settings "use the AI right away" and Install all): the most reliable source's passage
   when rated high or medium, never an encyclopedia's near match (a page for another name), and not when equally
   reliable sources describe different meanings. A web page's text can steer the AI that rates it (prompt injection),
@@ -808,7 +817,9 @@ which also clears the project's undo stacks. **Restore as new project** → `res
     a single selection doesn't open the inspector, and a pane click doesn't clear the selection. `useHoldToSelect`
     starts it from a 500 ms touch hold on a card through `createHoldTracker` (`client/src/lib/hold.ts`, unit-tested
     without a DOM): moving, a second finger or letting go cancel it; the tap ending the hold is swallowed once; every
-    timer and listener belongs to its own press, so a press right after a hold starts afresh; unmounting ends it. `SelectBar` shows the count with Clear and Done; Escape (App.tsx) leaves it.
+    timer and listener belongs to its own press, so a press right after a hold starts afresh; unmounting ends it. `SelectBar` shows the count with Clear and Done; Escape (App.tsx) leaves it. It ends when the active graph, project or viewer
+    changes (a `useGraphStore` subscription in `viewStore.ts`; those all clear the selection) and when the canvas
+    unmounts; `setSelecting(true)` does nothing in the read-only viewer, where the bar is never shown.
 - `client/src/panels/Inspector.tsx`: node view (kind select, dependency flow, install, rename, Theorem anatomy for theorem-like kinds, explain, notes, learning path,
   quiz) and relation-direction view (edit, delete, cycle "remove this link").
 - `client/src/graph/KindTag.tsx`: the small uppercase kind label on cards, walkthrough slides and glossary rows,

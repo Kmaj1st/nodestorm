@@ -1126,6 +1126,7 @@ export const zh: Record<MessageKey, string> = {
   "sources.intro": "选出用作定义的段落：它是来源的原话，保存时附上来源链接。你也可以在来源中选取其他文字，或者自己写。",
   "sources.introReplace": "选出一个段落来替换当前定义（可以撤销）：它是来源的原话，保存时附上来源链接。",
   "sources.assessment": "AI 的评估",
+  "sources.injected": "已排除：该页面的文字在向核查来源的 AI 下指令，因此未参与评估，也不会被用作定义。",
   "sources.notRated": "未评估：在设置中配置 AI 后，会把各个来源相互对照核查。",
   "sources.assessFailed": "无法核查这些来源，因此没有评估：{error}",
   "sources.stored": "之前找到的段落（未评估）。重新搜索可查看全文和评估。",
