@@ -25,18 +25,19 @@ const badge: Record<CN["status"], MessageKey> = {
 function ConceptNodeView({ data, selected }: NodeProps<ConceptFlowNode>) {
   const t = useT();
   const c = data.concept;
-  const graphId = useGraphStore((s) => s.activeId);
+  // The card is on the active graph; read when clicked rather than subscribed to (one fewer listener per card).
+  const graphId = () => useGraphStore.getState().activeId;
   // Error, unclear and pending badges are buttons: retry, reopen the "what do you mean?" dialog, or check with the AI.
   // In the read-only share viewer the badges are plain labels (not buttons you can Tab to).
   const viewing = useGraphStore(isViewing);
   const action = viewing
     ? undefined
     : c.status === "error"
-      ? () => analyzeNode(c.id, graphId)
+      ? () => analyzeNode(c.id, graphId())
       : c.status === "unclear"
-        ? () => openSources(c.id, graphId)
+        ? () => openSources(c.id, graphId())
         : c.status === "pending"
-          ? () => checkWithAi(c.id, graphId)
+          ? () => checkWithAi(c.id, graphId())
           : undefined;
   // An unclear concept with nothing to choose from yet needs a definition; with what the look-ups found, a choice of
   // definitions. The viewer names the state, not an action it can't take.

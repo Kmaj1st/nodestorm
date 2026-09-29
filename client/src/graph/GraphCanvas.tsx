@@ -1,3 +1,4 @@
+import type { Graph } from "@nodestorm/shared";
 import {
   applyNodeChanges,
   Background,
@@ -13,10 +14,10 @@ import {
 } from "@xyflow/react";
 import { Focus, Network, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { rich, useT } from "../i18n";
+import { rich, useLang, useT } from "../i18n";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
 import { dependencyLayers, fromLayered, LAYERED, layeredView } from "../lib/layout";
-import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
+import { cycleInfo, linkKey, prerequisiteClosure, sameDependencies, type CycleInfo } from "../lib/paths";
 import { useTheme } from "../lib/theme";
 import { DEFAULT_VIEW, MAX_HOPS, showsEverything, visibleParts } from "../lib/view";
 import { registerViewport, viewport } from "../lib/viewport";
@@ -41,6 +42,7 @@ export const FAR_ZOOM = 0.6;
 
 export function GraphCanvas() {
   const t = useT();
+  const lang = useLang(); // `t` is one function for every language: memos of translated text depend on this
   const graph = useGraphStore(activeGraph);
   const mutate = useGraphStore((s) => s.mutate);
   const setSelection = useGraphStore((s) => s.setSelection);
@@ -57,7 +59,14 @@ export function GraphCanvas() {
   // React Flow keeps measurement/selection state on its node objects, so we hold a local copy
   // and re-sync the concept data from the store whenever the graph changes.
   const highlight = useGraphStore((s) => s.highlight);
-  const cycles = useMemo(() => cycleInfo(graph), [graph]);
+  // Cycles only depend on the concepts' prerequisites: a status update or a move keeps the last result (and so the
+  // cards and edges it marks stay the same objects).
+  const cyclesOf = useRef<{ graph: Graph; info: CycleInfo } | null>(null);
+  const cycles = useMemo(() => {
+    const last = cyclesOf.current;
+    if (!last || !sameDependencies(last.graph, graph)) cyclesOf.current = { graph, info: cycleInfo(graph) };
+    return cyclesOf.current!.info;
+  }, [graph]);
   // Learning-path highlight: the chosen node plus everything it (transitively) depends on.
   const chain = useMemo(() => {
     const root = highlight?.graphId === graph.id ? graph.nodes.find((n) => n.id === highlight.nodeId) : undefined;
@@ -204,9 +213,13 @@ export function GraphCanvas() {
   // Edge objects are reused while their relation, classes and visibility stay the same (as for nodes above),
   // and so is the array itself when no edge changed: dragging a node or a status update then leaves edges alone.
   const edgeCache = useRef<RelationFlowEdge[]>([]);
+  const edgeLang = useRef(lang);
   const edges = useMemo<RelationFlowEdge[]>(() => {
     const deps = new Map(graph.nodes.map((n) => [n.id, n.dependsOn]));
     const names = new Map(graph.nodes.map((n) => [n.id, n.name]));
+    // A relation's screen-reader name only changes with its concepts' names or the language: not reformatted each time.
+    const sameLang = edgeLang.current === lang;
+    edgeLang.current = lang;
     const isDep = (x: string, y: string) => Boolean(deps.get(x)?.includes(y));
     const prev = new Map(edgeCache.current.map((e) => [e.id, e]));
     const next = graph.relations.map((r): RelationFlowEdge => {
@@ -216,15 +229,18 @@ export function GraphCanvas() {
       const cycle = cycles.links.has(linkKey(r.a, r.b)) || cycles.links.has(linkKey(r.b, r.a));
       const hidden = visible ? !visible.relations.has(r.id) : false;
       // Not a tab stop (edgesFocusable is off; its arrowheads are), so a named group rather than React Flow's "img".
-      const ariaLabel = t("canvas.relation", { a: names.get(r.a) ?? "?", b: names.get(r.b) ?? "?" });
       const old = prev.get(r.id);
-      if (old?.data?.relation === r && old.data.cycle === cycle && old.className === className && !!old.hidden === hidden && old.ariaLabel === ariaLabel) return old;
-      return { id: r.id, source: r.a, target: r.b, type: "bi" as const, className, hidden, ariaRole: "group", ariaLabel, data: { relation: r, cycle } };
+      const aName = names.get(r.a) ?? "?";
+      const bName = names.get(r.b) ?? "?";
+      const sameNames = old?.data?.relation.a === r.a && old.data.relation.b === r.b && old.data.aName === aName && old.data.bName === bName;
+      const ariaLabel = sameNames && sameLang && old.ariaLabel ? old.ariaLabel : t("canvas.relation", { a: aName, b: bName });
+      if (old?.data?.relation === r && sameNames && old.data.cycle === cycle && old.className === className && !!old.hidden === hidden && old.ariaLabel === ariaLabel) return old;
+      return { id: r.id, source: r.a, target: r.b, type: "bi" as const, className, hidden, ariaRole: "group", ariaLabel, data: { relation: r, cycle, aName, bName } };
     });
     const cached = edgeCache.current;
     if (next.length !== cached.length || next.some((e, i) => e !== cached[i])) edgeCache.current = next;
     return edgeCache.current;
-  }, [graph, chain, cycles, visible, t]);
+  }, [graph, chain, cycles, visible, t, lang]);
 
   // What gets hidden leaves the selection and the inspector, so Delete can't remove something that isn't shown.
   useEffect(() => {
@@ -382,7 +398,7 @@ export function GraphCanvas() {
       "node.a11yDescription.keyboardDisabled": t("canvas.nodeHelp"),
       "node.a11yDescription.ariaLiveMessage": ({ x, y }: { x: number; y: number }) => t("canvas.nodeMoved", { x, y }),
     }),
-    [t],
+    [t, lang],
   );
 
   return (

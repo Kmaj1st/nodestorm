@@ -131,6 +131,16 @@ export interface CycleInfo {
 
 export const linkKey = (dependentId: string, prereqId: string) => `${dependentId}>${prereqId}`;
 
+/**
+ * Whether two versions of a graph have the same concepts with the same prerequisites (the very same `dependsOn`
+ * arrays, which graph operations keep for the concepts they don't touch), so its cycles are the same too.
+ */
+export function sameDependencies(a: Graph, b: Graph): boolean {
+  if (a === b) return true;
+  if (a.nodes.length !== b.nodes.length) return false;
+  return a.nodes.every((n, i) => n.id === b.nodes[i].id && n.dependsOn === b.nodes[i].dependsOn);
+}
+
 /** Which nodes and dependency links take part in a cycle, for warnings on the canvas. */
 export function cycleInfo(g: Graph): CycleInfo {
   const nodes = new Set<string>();

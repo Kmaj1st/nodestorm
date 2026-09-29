@@ -56,13 +56,17 @@ if (process.argv[2] === "--dump") {
   process.exit(0);
 }
 
-if (BUILT) {
-  execFileSync("npx", ["vite", "build", "client", "--outDir", "dist-perf", "--emptyOutDir", "--logLevel", "warn"], {
+// PERF_DIST=<dir under client/> measures a build made earlier (the same way) instead, e.g. to compare two versions.
+const DIST = process.env.PERF_DIST || "dist-perf";
+if (BUILT && !process.env.PERF_DIST) {
+  // PERF_NOMINIFY=1 keeps function names readable in the PERF_PROFILE output (slightly slower code).
+  const minify = process.env.PERF_NOMINIFY === "1" ? ["--minify", "false"] : [];
+  execFileSync("npx", ["vite", "build", "client", "--outDir", "dist-perf", "--emptyOutDir", "--logLevel", "warn", ...minify], {
     stdio: "inherit",
     env: { ...process.env, VITE_PERF_HOOKS: "1" },
   });
 }
-const viteArgs = BUILT ? ["preview", "client", "--outDir", "dist-perf"] : ["client"];
+const viteArgs = BUILT ? ["preview", "client", "--outDir", DIST] : ["client"];
 const vite = spawn("npx", ["vite", ...viteArgs, "--port", String(WEB_PORT), "--strictPort"], { stdio: "ignore", detached: true });
 let browser;
 try {
@@ -104,7 +108,19 @@ try {
 
   const cdp = await page.context().newCDPSession(page);
   await cdp.send("Performance.enable");
-  const taskMs = async () => (await cdp.send("Performance.getMetrics")).metrics.find((m) => m.name === "TaskDuration").value * 1000;
+  const metric = async () => {
+    const m = (await cdp.send("Performance.getMetrics")).metrics;
+    const v = (name) => m.find((x) => x.name === name).value * 1000;
+    return { busy: v("TaskDuration"), cpu: v("ThreadTime") };
+  };
+  // "busy": how long the main thread's tasks took, in wall time, so it grows when other processes load the machine.
+  // "CPU": the main thread's CPU time, which barely does; compare two versions by it (runs of both, interleaved).
+  const record = async (label, start, per = 1) => {
+    const now = await metric();
+    const each = per > 1 ? " / frame" : "";
+    results[`${label}: main-thread busy${each}`] = Math.round((now.busy - start.busy) / per);
+    results[`${label}: main-thread CPU${each}`] = Math.round((now.cpu - start.cpu) / per);
+  };
   // PERF_PROFILE=<section> (status, inspect, drag or physics; 1 means drag) prints that section's hottest functions.
   const profiling = (section) => (process.env.PERF_PROFILE === "1" ? "drag" : process.env.PERF_PROFILE) === section;
   const startProfile = async (section) => {
@@ -120,12 +136,12 @@ try {
       const k = `${f.functionName || "(anonymous)"} ${f.url.split("/").pop().split("?")[0]}:${f.lineNumber}`;
       self.set(k, (self.get(k) ?? 0) + (p.timeDeltas[i] ?? 0) / 1000);
     });
-    for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 15)) console.log(`  ${v.toFixed(1).padStart(7)} ms  ${k}`);
+    for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, Number(process.env.PERF_TOP || 15))) console.log(`  ${v.toFixed(1).padStart(7)} ms  ${k}`);
   };
 
   // 20 AI-style status updates of one node, each rendered before the next (background mutations, as in actions.ts).
   await startProfile("status");
-  let busy0 = await taskMs();
+  let busy0 = await metric();
   results["20 status updates of one node"] = await page.evaluate(async () => {
     const { useGraphStore, updateNode } = await window.__perfStores();
     const tick = () => new Promise((r) => setTimeout(r));
@@ -137,12 +153,12 @@ try {
     }
     return Math.round(performance.now() - start);
   });
-  results["20 status updates: main-thread busy"] = Math.round((await taskMs()) - busy0);
+  await record("20 status updates", busy0);
   await printProfile("status");
 
   // 20 inspector changes (opening one relation after another, as clicking arrowheads does).
   await startProfile("inspect");
-  busy0 = await taskMs();
+  busy0 = await metric();
   results["20 relation inspections"] = await page.evaluate(async () => {
     const { useGraphStore } = await window.__perfStores();
     const tick = () => new Promise((r) => setTimeout(r));
@@ -154,14 +170,14 @@ try {
     useGraphStore.getState().setInspect(null);
     return Math.round(performance.now() - start);
   });
-  results["20 relation inspections: main-thread busy"] = Math.round((await taskMs()) - busy0);
+  await record("20 relation inspections", busy0);
   await printProfile("inspect");
 
   // Drag one node 30 steps. Wall time here is mostly Playwright round trips, so report the renderer's
   // main-thread busy time (Chrome's TaskDuration metric) instead: that is what makes a drag janky.
   const box = await page.getByTestId("node-Concept 150").boundingBox();
   await startProfile("drag");
-  busy0 = await taskMs();
+  busy0 = await metric();
   await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
   await page.mouse.down();
   for (let i = 1; i <= 30; i++) {
@@ -169,7 +185,7 @@ try {
     await page.evaluate(() => new Promise((r) => requestAnimationFrame(() => r())));
   }
   await page.mouse.up();
-  results["drag one node 30 steps: main-thread busy"] = Math.round((await taskMs()) - busy0);
+  await record("drag one node 30 steps", busy0);
   await printProfile("drag");
   const moved = await page.getByTestId("node-Concept 150").boundingBox();
   if (Math.abs(moved.x - box.x) < 100) throw new Error(`the drag did not move the node: ${JSON.stringify([box, moved])}`);
@@ -180,14 +196,14 @@ try {
     useView.getState().setPrefs({ physics: true });
   });
   await startProfile("physics");
-  busy0 = await taskMs();
+  busy0 = await metric();
   const frames = await page.evaluate(() => new Promise((r) => {
     const start = performance.now();
     let n = 0;
     const f = () => (++n >= 60 ? r(performance.now() - start) : requestAnimationFrame(f));
     requestAnimationFrame(f);
   }));
-  results["physics 60 frames: main-thread busy / frame"] = Math.round(((await taskMs()) - busy0) / 60);
+  await record("physics 60 frames", busy0, 60);
   results["physics 60 frames: wall time"] = Math.round(frames);
   await printProfile("physics");
   await page.evaluate(async () => {
@@ -208,7 +224,7 @@ try {
   results["zoomed in: rendered nodes / edges / labels"] = zoomed;
 
   console.log(BUILT ? "production build (vite preview)" : "dev server");
-  for (const [k, v] of Object.entries(results)) console.log(`${k.padEnd(42)} ${v}${typeof v === "number" ? " ms" : ""}`);
+  for (const [k, v] of Object.entries(results)) console.log(`${k.padEnd(46)} ${v}${typeof v === "number" ? " ms" : ""}`);
   // Loose sanity bound only: catches a pathological regression, not normal machine-to-machine noise.
   if (results["20 status updates of one node"] > 20000) throw new Error("status updates are pathologically slow");
 } catch (e) {
