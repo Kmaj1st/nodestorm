@@ -43,10 +43,11 @@ export function usePhysics(opts: {
 
   // What the simulation is built from: which cards, which springs, which are pinned. Positions aren't part of it.
   const structure = useMemo(() => {
+    if (!enabled) return ""; // off: nothing to build, so no need to work this out on every change
     const ids = graph.nodes.filter((n) => !visible || visible.has(n.id)).map((n) => `${n.id}${n.pinned ? "*" : ""}`);
     const links = graphLinks(graph, visible ?? undefined).map((l) => `${l.a}>${l.b}${l.prereq ? "!" : ""}`);
     return `${graph.id}|${lockY}|${ids.join(",")}|${links.sort().join(",")}`;
-  }, [graph, visible, lockY]);
+  }, [enabled, graph, visible, lockY]);
 
   const key = useCallback(() => `physics:${latest.current.graph.id}:${heat.current}`, []);
 

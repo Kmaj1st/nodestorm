@@ -1,14 +1,14 @@
 import type { Relation } from "@nodestorm/shared";
-import { useInternalNode, useStore, type Edge, type EdgeProps, type InternalNode, type ReactFlowState } from "@xyflow/react";
-import { memo, useLayoutEffect, useState } from "react";
+import { useStore, useStoreApi, type Edge, type EdgeProps, type InternalNode, type ReactFlowState } from "@xyflow/react";
+import { memo, useCallback, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useT } from "../i18n";
 import { isUnrelated } from "../lib/graphOps";
 import { useGraphStore } from "../store/graphStore";
 import { useView } from "../store/viewStore";
 
-/** `cycle`: this is a dependency link on a dependency cycle (drawn as a warning). */
-export type RelationFlowEdge = Edge<{ relation: Relation; cycle?: boolean }, "bi">;
+/** `cycle`: this is a dependency link on a dependency cycle (drawn as a warning). `aName`/`bName`: its concepts' names. */
+export type RelationFlowEdge = Edge<{ relation: Relation; cycle?: boolean; aName: string; bName: string }, "bi">;
 
 type Pt = { x: number; y: number };
 
@@ -53,22 +53,45 @@ function useLabelLayer() {
   return layer;
 }
 
+/** The line between the two cards' borders: where it ends at A (`p1`) and at B (`p2`), its angle and length. */
+function geometry(s: InternalNode, t: InternalNode) {
+  const p1 = borderPoint(s, center(t)); // end at A
+  const p2 = borderPoint(t, center(s)); // end at B
+  return { p1, p2, ang: Math.atan2(p2.y - p1.y, p2.x - p1.x), len: Math.hypot(p2.x - p1.x, p2.y - p1.y) };
+}
+
+/** On short edges the labels would cover the arrowheads, so they're hidden (the inspector still shows them). */
+const LABEL_MIN_LENGTH = 170;
+
 /**
- * Arrowhead with its tip at `tip`, pointing along angle `ang`. Wide invisible hit area for easy clicking.
- * It is also a keyboard button (Tab to it, Enter/Space opens that direction in the inspector).
+ * Draws an arrowhead group (`Arrow`) with its tip at `tip`, pointing along angle `ang`. (Absolute coordinates rather
+ * than a transform on the group: hundreds of transformed groups made every repaint of the canvas slower.)
  */
-function Arrow({ tip, ang, active, kind, onClick, testId, label, tone }: {
-  tip: Pt; ang: number; active: boolean; kind: string; onClick: () => void; testId: string; label: string;
-  /** Colour class: the relation's origin, or "unrelated" when Mix found nothing either way. */
-  tone: string;
-}) {
+function aim(g: SVGGElement | null, tip: Pt, ang: number) {
+  const hit = g?.firstElementChild;
+  const head = g?.lastElementChild;
+  if (!hit || !head) return;
   const back = { x: tip.x - Math.cos(ang) * HEAD, y: tip.y - Math.sin(ang) * HEAD };
   const nx = -Math.sin(ang) * (HEAD / 2);
   const ny = Math.cos(ang) * (HEAD / 2);
-  const pts = `${tip.x},${tip.y} ${back.x + nx},${back.y + ny} ${back.x - nx},${back.y - ny}`;
+  hit.setAttribute("cx", String(tip.x - Math.cos(ang) * 8));
+  hit.setAttribute("cy", String(tip.y - Math.sin(ang) * 8));
+  head.setAttribute("points", `${tip.x},${tip.y} ${back.x + nx},${back.y + ny} ${back.x - nx},${back.y - ny}`);
+}
+
+/**
+ * Arrowhead (placed by the edge through `gRef`). Wide invisible hit area for easy clicking.
+ * It is also a keyboard button (Tab to it, Enter/Space opens that direction in the inspector).
+ */
+function Arrow({ gRef, active, kind, onClick, testId, label, tone }: {
+  gRef: (el: SVGGElement | null) => void; active: boolean; kind: string; onClick: () => void; testId: string; label: string;
+  /** Colour class: the relation's origin, or "unrelated" when Mix found nothing either way. */
+  tone: string;
+}) {
   const none = kind === "none";
   return (
     <g
+      ref={gRef}
       className={`arrow arrow--${tone}${active ? " arrow--active" : ""}${none && tone !== "unrelated" ? " arrow--none" : ""}`}
       onClick={(e) => { e.stopPropagation(); onClick(); }}
       onKeyDown={(e) => {
@@ -83,76 +106,128 @@ function Arrow({ tip, ang, active, kind, onClick, testId, label, tone }: {
       aria-pressed={active}
       data-testid={testId}
     >
-      <circle cx={tip.x - Math.cos(ang) * 8} cy={tip.y - Math.sin(ang) * 8} r={16} className="arrow__hit" />
-      <polygon points={pts} className="arrow__head" />
+      <circle r={16} className="arrow__hit" />
+      <polygon className="arrow__head" />
     </g>
   );
 }
 
+type Parts = { path: SVGPathElement | null; aToB: SVGGElement | null; bToA: SVGGElement | null; labels: Partial<Record<"aToB" | "bToA", HTMLElement | null>> };
+
+/**
+ * The line, arrowheads and labels are placed outside React: when a card moves (a drag, or Physics moving every card
+ * each frame) the edge sets a few attributes itself instead of re-rendering, which dominated those frames on big
+ * graphs. React never renders those attributes, so the two can't disagree. The edge re-renders only when its
+ * relation, the open direction, the cards' names, the zoom threshold or whether its labels fit change.
+ */
 function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlowEdge>) {
   const tr = useT(); // `t` is the target node here
-  const s = useInternalNode(source);
-  const t = useInternalNode(target);
+  const store = useStoreApi();
   // Only the direction of *this* relation that is open, so opening one relation doesn't re-render every edge.
   const activeDir = useGraphStore((st) =>
     st.inspect?.kind === "edge" && st.inspect.relationId === data?.relation.id ? st.inspect.dir : null,
   );
-  const setInspect = useGraphStore((st) => st.setInspect);
   // A boolean selector: edges re-render when the zoom crosses the threshold, not on every zoom step.
   const tooSmall = useStore(zoomedOut);
   const labelsOn = useView((v) => v.edgeLabels) && !tooSmall;
   const labelLayer = useLabelLayer();
-  if (!s || !t || !data) return null;
+  const unrelated = data ? isUnrelated(data.relation) : false;
+
+  const parts = useRef<Parts>({ path: null, aToB: null, bToA: null, labels: {} });
+  const refs = useMemo(() => {
+    const p = parts.current;
+    return {
+      path: (el: SVGPathElement | null) => void (p.path = el),
+      aToB: (el: SVGGElement | null) => void (p.aToB = el),
+      bToA: (el: SVGGElement | null) => void (p.bToA = el),
+      label: {
+        aToB: (el: HTMLElement | null) => void (p.labels.aToB = el),
+        bToA: (el: HTMLElement | null) => void (p.labels.bToA = el),
+      },
+    };
+  }, []);
+  const [long, setLong] = useState(() => {
+    const { nodeLookup } = store.getState();
+    const [s, t] = [nodeLookup.get(source), nodeLookup.get(target)];
+    return s && t ? geometry(s, t).len > LABEL_MIN_LENGTH : false;
+  });
+  const longRef = useRef(long);
+  const unrelatedRef = useRef(unrelated);
+  unrelatedRef.current = unrelated;
+  const place = useCallback(() => {
+    const { nodeLookup } = store.getState();
+    const [s, t] = [nodeLookup.get(source), nodeLookup.get(target)];
+    if (!s || !t) return;
+    const { p1, p2, ang, len } = geometry(s, t);
+    const { path, aToB, bToA, labels } = parts.current;
+    path?.setAttribute("d", `M${p1.x},${p1.y} L${p2.x},${p2.y}`);
+    aim(aToB, p2, ang);
+    aim(bToA, p1, ang + Math.PI);
+    // Labels sit near the arrowhead they describe, nudged off the line so the arrowheads stay clickable.
+    const off = { x: -Math.sin(ang) * 14, y: Math.cos(ang) * 14 };
+    const put = (el: HTMLElement | null | undefined, k: number) => {
+      if (el) el.style.transform = `translate(-50%, -50%) translate(${p1.x + (p2.x - p1.x) * k + off.x}px, ${p1.y + (p2.y - p1.y) * k + off.y}px)`;
+    };
+    put(labels.aToB, unrelatedRef.current ? 0.5 : 0.7);
+    put(labels.bToA, 0.3);
+    // Only when it flips: a same-value setState from 600 edges each frame still costs React work.
+    if (len > LABEL_MIN_LENGTH !== longRef.current) setLong((longRef.current = len > LABEL_MIN_LENGTH));
+  }, [store, source, target]);
+  // After every render (its elements may be new, or a label was just shown) and whenever either card moves or resizes.
+  useLayoutEffect(place);
+  useLayoutEffect(() => {
+    // React Flow replaces a card's internal node object when it moves or is measured (what useInternalNode relies on).
+    let lastS: InternalNode | undefined;
+    let lastT: InternalNode | undefined;
+    return store.subscribe(({ nodeLookup }) => {
+      const s = nodeLookup.get(source);
+      const t = nodeLookup.get(target);
+      if (s === lastS && t === lastT) return;
+      lastS = s;
+      lastT = t;
+      place();
+    });
+  }, [store, source, target, place]);
+
+  // (React Flow renders an edge only while both its cards are in its store.)
+  if (!data) return null;
+  const { aName, bName } = data;
   const rel = data.relation;
-  const unrelated = isUnrelated(rel);
   const tone = unrelated ? "unrelated" : rel.origin;
-  const nameOf = (n: InternalNode) => (n.data as { concept?: { name: string } }).concept?.name ?? "?";
-  const [aName, bName] = [nameOf(s), nameOf(t)];
   // The stored keyword "none" is read out in the interface language.
   const shown = (kind: string) => (kind.trim() === "none" ? tr("edge.unrelatedLabel") : kind);
-
-  const p1 = borderPoint(s, center(t)); // end at A
-  const p2 = borderPoint(t, center(s)); // end at B
-  const ang = Math.atan2(p2.y - p1.y, p2.x - p1.x);
-  const open = (dir: "aToB" | "bToA") => setInspect({ kind: "edge", relationId: rel.id, dir });
-
-  // Labels sit near the arrowhead they describe, nudged off the line so the arrowheads stay clickable.
-  // On short edges they'd cover the arrowheads, so they're hidden (the inspector still shows them).
-  const len = Math.hypot(p2.x - p1.x, p2.y - p1.y);
-  const showLabels = labelsOn && len > 170;
-  const off = { x: -Math.sin(ang) * 14, y: Math.cos(ang) * 14 };
-  const lerp = (k: number) => ({ x: p1.x + (p2.x - p1.x) * k + off.x, y: p1.y + (p2.y - p1.y) * k + off.y });
-  const nearB = lerp(0.7);
-  const nearA = lerp(0.3);
+  // Read when clicked rather than subscribed to: one fewer store listener per edge on every graph change.
+  const open = (dir: "aToB" | "bToA") => useGraphStore.getState().setInspect({ kind: "edge", relationId: rel.id, dir });
 
   return (
     <>
-      <path id={id} d={`M${p1.x},${p1.y} L${p2.x},${p2.y}`} className={`relation relation--${rel.origin}${unrelated ? " relation--unrelated" : ""}${data.cycle ? " relation--cycle" : ""}`} />
+      <path ref={refs.path} id={id} className={`relation relation--${rel.origin}${unrelated ? " relation--unrelated" : ""}${data.cycle ? " relation--cycle" : ""}`} />
       <Arrow
-        tip={p2} ang={ang} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} tone={tone}
+        gRef={refs.aToB} active={activeDir === "aToB"} kind={rel.aToB.kind} onClick={() => open("aToB")} tone={tone}
         testId={`arrow-${rel.id}-aToB`}
         label={unrelated ? tr("edge.unrelated", { a: aName, b: bName }) : tr("edge.arrow", { a: aName, b: bName, kind: shown(rel.aToB.kind) })}
       />
       <Arrow
-        tip={p1} ang={ang + Math.PI} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} tone={tone}
+        gRef={refs.bToA} active={activeDir === "bToA"} kind={rel.bToA.kind} onClick={() => open("bToA")} tone={tone}
         testId={`arrow-${rel.id}-bToA`}
         label={unrelated ? tr("edge.unrelated", { a: bName, b: aName }) : tr("edge.arrow", { a: bName, b: aName, kind: shown(rel.bToA.kind) })}
       />
       {labelLayer &&
-        showLabels &&
+        labelsOn &&
+        long &&
         createPortal(
           (unrelated
-            ? [{ dir: "aToB" as const, at: lerp(0.5), kind: tr("edge.unrelatedLabel") }]
+            ? [{ dir: "aToB" as const, kind: tr("edge.unrelatedLabel") }]
             : [
-                { dir: "aToB" as const, at: nearB, kind: rel.aToB.kind },
-                { dir: "bToA" as const, at: nearA, kind: rel.bToA.kind },
+                { dir: "aToB" as const, kind: rel.aToB.kind },
+                { dir: "bToA" as const, kind: rel.bToA.kind },
               ]
-          ).map(({ dir, at, kind }) =>
+          ).map(({ dir, kind }) =>
             kind === "none" ? null : (
               <button
                 key={dir}
+                ref={refs.label[dir]}
                 className={`edge-label nodrag nopan${unrelated ? " edge-label--unrelated" : ""}${activeDir === dir ? " edge-label--active" : ""}`}
-                style={{ transform: `translate(-50%, -50%) translate(${at.x}px, ${at.y}px)` }}
                 onClick={() => open(dir)}
                 title={tr(dir === "aToB" ? "edge.aToB" : "edge.bToA")}
                 tabIndex={-1} // the arrowheads are the keyboard stops; these just repeat them for the mouse
@@ -167,4 +242,12 @@ function BiRelationEdgeView({ id, source, target, data }: EdgeProps<RelationFlow
   );
 }
 
-export const BiRelationEdge = memo(BiRelationEdgeView);
+/**
+ * React Flow re-renders an edge whenever its cards move, passing their new coordinates, which this edge doesn't use
+ * (it places itself, above): compare only what it does use.
+ */
+export const BiRelationEdge = memo(
+  BiRelationEdgeView,
+  (a: EdgeProps<RelationFlowEdge>, b: EdgeProps<RelationFlowEdge>) =>
+    a.id === b.id && a.source === b.source && a.target === b.target && a.data === b.data,
+);
