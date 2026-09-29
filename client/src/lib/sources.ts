@@ -561,6 +561,8 @@ export function allSourcesFailed(g: Pick<Gathered, "sources" | "asked" | "failed
 export function cachedSources(name: string): Gathered | undefined {
   const hit = loadCache().get(cacheKey(name));
   if (!hit || Date.now() - hit.at > CACHE_MS) return undefined;
+  // Found while the search engine couldn't search (paused), and now it can: gathered again, as gatherSources does.
+  if (!hit.found.web && searchReady()) return undefined;
   // Found but not rated while an AI is set up: the rating is still running (or failed), so gather again.
   if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState())) return undefined;
   const out: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources), note: "", rated: false };

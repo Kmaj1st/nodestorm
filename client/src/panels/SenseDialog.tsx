@@ -26,11 +26,12 @@ export function SenseDialog() {
     s.clarifying ? s.graphs[s.clarifying.graphId]?.nodes.find((n) => n.id === s.clarifying!.nodeId) : undefined,
   );
   if (!clarifying || !node) return null;
-  // Keyed so a picked passage or typed text never carries over to another concept or a new set of sources.
+  // Keyed so nothing picked or typed carries over to another concept. A new set of sources for the same concept (a
+  // search finished while it was open) only drops what was picked among the old ones (see SourcesChoice).
   // Reopened from its badge: what this session found for the name, if it is still cached.
   const found = clarifying.sources ?? cachedSources(node.name);
-  const key = `${clarifying.graphId}:${node.id}:${found ? found.sources.map((s) => s.url ?? s.id).join("|") : (node.senses ?? []).map((x) => x.name).join("|")}`;
-  return <SourcesChoice key={key} graphId={clarifying.graphId} node={node} found={found} replace={Boolean(clarifying.replace)} />;
+  const set = found ? found.sources.map((s) => s.url ?? s.id).join("|") : (node.senses ?? []).map((x) => x.name).join("|");
+  return <SourcesChoice key={`${clarifying.graphId}:${node.id}`} set={set} graphId={clarifying.graphId} node={node} found={found} replace={Boolean(clarifying.replace)} />;
 }
 
 type Choice = { kind: "passage"; id: string } | { kind: "selection"; id: string; text: string } | { kind: "own" };
@@ -58,7 +59,7 @@ function limits(text: string): { short: number; around: number } {
   return dense ? { short: SHORT / 2, around: AROUND / 2 } : { short: SHORT, around: AROUND };
 }
 
-function SourcesChoice({ graphId, node, found, replace }: { graphId: string; node: ConceptNode; found?: Gathered; replace: boolean }) {
+function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string; node: ConceptNode; found?: Gathered; replace: boolean; set: string }) {
   const t = useT();
   const lang = useLang(); // Chinese sentences follow each other without a space
   const setClarifying = useGraphStore((s) => s.setClarifying);
@@ -75,7 +76,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const [ownName, setOwnName] = useState("");
   const [ownDef, setOwnDef] = useState("");
   /** The source whose text was copied into "My own definition" ("Edit a copy"). */
-  const [copyOf, setCopyOf] = useState<string | null>(null);
+  const [copyOf, setCopyOf] = useState<Source | null>(null);
   const [selection, setSelection] = useState<{ id: string; text: string } | null>(null);
   const [picked, setPicked] = useState<{ id: string; text: string } | null>(null);
   const [expanded, setExpanded] = useState<Set<string>>(() => new Set());
@@ -89,6 +90,19 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   const [active, setActive] = useState<string | null>(null);
   const ownRef = useRef<HTMLTextAreaElement>(null);
   const uid = useId();
+
+  // A new set of sources while open (the search started from the badge, or Search again, finished): a pick among the
+  // old ones goes (their ids are reused by the new ones), what the user typed stays, and so does the dialog (its focus).
+  const [shownSet, setShownSet] = useState(set);
+  if (shownSet !== set) {
+    setShownSet(set);
+    const typed = choice?.kind === "own" && Boolean(ownDef.trim() || ownName.trim());
+    setChoice(typed ? choice : sources.length ? null : { kind: "own" });
+    setSelection(null);
+    setPicked(null);
+    setExpanded(new Set());
+    setActive(null);
+  }
 
   // What the user selected with the mouse or a finger, when it lies inside one source's text: exactly those
   // characters of the source (anything else, such as a selection across two sources, doesn't count). A drag fires
@@ -119,7 +133,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
     };
   }, [sources]);
 
-  const copy = copyOf ? byId(copyOf) : undefined;
+  const copy = copyOf ?? undefined;
   // A copy cut down to a part of the source's text is still its words; any other change makes it the user's.
   const copyKept = Boolean(copy && ownDef.trim() && copy.text.includes(ownDef.trim()));
 
@@ -160,7 +174,7 @@ function SourcesChoice({ graphId, node, found, replace }: { graphId: string; nod
   };
   const editCopy = (s: Source) => {
     setOwnDef(s.text);
-    setCopyOf(s.id);
+    setCopyOf(s);
     setChoice({ kind: "own" });
     requestAnimationFrame(() => ownRef.current?.focus());
   };

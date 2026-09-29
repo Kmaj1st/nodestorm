@@ -30,6 +30,7 @@ beforeEach(() => {
   fake.ready = true;
   fake.pages = undefined;
   fake.calls = 0;
+  fake.paused = false;
   useSettings.setState({
     connection: "browser",
     provider: "mock",
@@ -88,5 +89,19 @@ describe("the stored sources when the storage is full", () => {
     resetSources(false);
     expect(cachedSources("Ring")).toBeDefined();
     expect(cachedSources("Group")).toBeUndefined();
+  });
+});
+
+describe("sources cached while the web search was paused", () => {
+  it("aren't reopened as they were once the engine can search again (the badge searches, as adding would)", async () => {
+    fake.ready = false;
+    fake.paused = true; // set up, but paused after a refusal: the encyclopedias only
+    await gatherSources("Group");
+    expect(cachedSources("Group")).toMatchObject({ web: false });
+    fake.ready = true; // the pause is over
+    expect(cachedSources("Group")).toBeUndefined();
+    const again = await gatherSources("Group");
+    expect(again.web).toBe(true);
+    expect(fake.calls).toBe(1);
   });
 });

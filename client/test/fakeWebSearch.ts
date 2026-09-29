@@ -6,7 +6,7 @@ import type { WebSearchResult } from "../src/lib/webSearch";
  * one engine that finds a demo encyclopedia's page and a lecture notes page for each meaning the offline demo knows
  * for a name (its knowledge base's definition; pages for several meanings for an ambiguous name such as
  * "Expectation"), which the offline demo's source check rates reliable. `fake.pages` replaces the pages, `fake.ready = false` turns search off; `fake.calls` counts.
- * `fake.failed` lists engines reported as failed, `fake.error` makes the search throw; `fake.fresh` is the last `fresh`.
+ * `fake.failed` lists engines reported as failed, `fake.error` makes the search throw; `fake.fresh` is the last `fresh`; `fake.paused` (with `ready` false) is an engine set up but paused.
  */
 export const fake = {
   ready: true,
@@ -15,6 +15,8 @@ export const fake = {
   failed: [] as WebSearchResult["failed"],
   error: undefined as Error | undefined,
   fresh: undefined as boolean | undefined,
+  /** Set up but not usable right now (paused after a refusal): listed by searchEngines, not searchReady. */
+  paused: false,
 };
 
 /** Names with several meanings (the offline demo's knowledge base has one per name). */
@@ -39,7 +41,7 @@ export async function defaultPages(name: string): Promise<WebSearchResult["resul
 }
 
 export const ENGINE_NAME = { tavily: "Tavily", serper: "Serper", brave: "Brave Search", searxng: "SearXNG", demo: "Offline demo" };
-export const searchEngines = () => (fake.ready ? ["demo" as const] : []);
+export const searchEngines = () => (fake.ready || fake.paused ? ["demo" as const] : []);
 export const searchReady = () => fake.ready;
 export async function searchWeb(name: string, opts: { max: number; signal?: AbortSignal; fresh?: boolean }): Promise<WebSearchResult> {
   fake.calls++;
