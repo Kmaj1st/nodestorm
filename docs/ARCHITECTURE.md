@@ -820,7 +820,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
-- **Other parts loaded on demand**, to keep the main chunk small (about 757 kB, 243 kB gzipped): the in-browser AI
+- **Other parts loaded on demand**, to keep the main chunk small (about 760 kB, 244 kB gzipped): the in-browser AI
   (`lib/aiBrowser.ts`: provider clients, prompts and tasks, through `loadAi` in `api.ts`; `shared/package.json` says
   `"sideEffects": false` so the main chunk leaves the unused shared modules out), the sources flow (`lib/sources.ts`,
   through `loadSources` in `actions.ts`) with the web search engines (`lib/webSearch.ts`; the cheap checks stay in
@@ -840,7 +840,7 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   ~3.3 s; Chinese interface ~3.2 s / ~3.45 s. Nothing but the main chunk and `index.css` (15 kB) blocks: fonts are
   the system's, KaTeX's CSS and fonts come with its chunk, the service worker registers after `load`, and the dialog
   preloads start after the first paint. The remaining cost is the main chunk's download (react-dom ~210 kB,
-  React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of 757 kB).
+  React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of ~760 kB).
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
   Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
 - **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
