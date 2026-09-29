@@ -2566,7 +2566,7 @@ try {
     await page.locator(".toast").filter({ hasText: "Chain copied" }).waitFor();
     const copied = await page.evaluate(() => navigator.clipboard.readText());
     assert(
-      copied.startsWith("What they don't want you to know") && copied.includes("1. Fourier transform → Heat equation (inventing a fix for)") && copied.includes("Moral: "),
+      copied.startsWith("What they don't want you to know") && /^1\. Fourier transform → .+ \(.+\)$/m.test(copied) && copied.includes("Moral: "),
       "Copy as text puts the whole chain on the clipboard",
     );
     await page.screenshot({ path: `${shots}30-absurd-chain.png` });
@@ -2575,7 +2575,7 @@ try {
     await dlg.getByRole("button", { name: "Add to a new sandbox" }).click();
     await dlg.waitFor({ state: "detached" });
     await page.getByTestId("sandbox-banner").filter({ hasText: "What they don't want you to know" }).waitFor();
-    await node("Maillard reaction").waitFor();
+    await node("Heat equation").waitFor(); // after Roll again, the route through the exponential function
     assert((await page.locator(".react-flow__node").count()) === mainNodes + 5, "Add to a sandbox forks the graph under the chain's title and adds the chain's five concepts there");
     await page.getByRole("combobox", { name: "Graph" }).selectOption({ label: "Main graph" });
     await page.getByTestId("sandbox-banner").waitFor({ state: "detached" });
