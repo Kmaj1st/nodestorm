@@ -354,6 +354,18 @@ describe("the sources cache", () => {
     expect(cachedSources("Group")).toBeUndefined();
   });
 
+  it("gives the same objects each time for the same cached entry, so the pop-up's memoised texts don't re-render", async () => {
+    await gatherSources("Group");
+    const a = cachedSources("Group")!;
+    const b = cachedSources("Group")!;
+    expect(b).toBe(a);
+    expect(b.sources).toBe(a.sources);
+    expect(b.sources[0]).toBe(a.sources[0]);
+    // A new entry (searched again) gives new ones.
+    await gatherSources("Group", { fresh: true });
+    expect(cachedSources("Group")).not.toBe(a);
+  });
+
   it("the badge of a concept with nothing gathered yet searches (web and rating), and one with a cached search doesn't", async () => {
     const g = ops.addNode(graph(), { name: "Group" });
     store().mutate(() => ops.updateNode(g.graph, g.id, { status: "unclear", senses: [] }));

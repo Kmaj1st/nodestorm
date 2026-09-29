@@ -3,7 +3,7 @@ import { CopyCheck } from "lucide-react";
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent, type SyntheticEvent } from "react";
 import { useT } from "../i18n";
 import { createHoldTracker } from "../lib/hold";
-import { activeGraph, useGraphStore } from "../store/graphStore";
+import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
 import { useView } from "../store/viewStore";
 import { Icon } from "../ui/Icon";
 
@@ -63,8 +63,9 @@ export function SelectBar() {
   const store = useStoreApi();
   const on = useView((v) => v.selecting);
   const n = useGraphStore((s) => s.selection.length);
+  const viewing = useGraphStore(isViewing);
   const doneRef = useRef<HTMLButtonElement>(null);
-  if (!on) return null;
+  if (!on || viewing) return null;
   // Clear disables itself and Done takes the bar away: the keyboard goes on to Done, then back to the toggle.
   const clear = () => {
     store.getState().unselectNodesAndEdges();

@@ -358,6 +358,7 @@ export function GraphCanvas() {
   // Holding a card on a touch screen starts Select several with it (added to the selection if already selecting).
   const onHold = useCallback(
     (id: string) => {
+      if (isViewing(useGraphStore.getState())) return; // nothing to mix or derive in the read-only viewer
       const v = useView.getState();
       const keep = new Set(v.selecting ? useGraphStore.getState().selection : []);
       keep.add(id);
@@ -368,6 +369,8 @@ export function GraphCanvas() {
     [setSelection],
   );
   const hold = useHoldToSelect(onHold);
+  // Select several ends with the canvas (e.g. the empty-graph start screen replaces it): nothing would show its bar.
+  useEffect(() => () => useView.getState().setSelecting(false), []);
   const focusName = focus && graph.nodes.find((n) => n.id === focus.nodeId)?.name;
 
   // React Flow's screen-reader texts and zoom-button names, in the interface language.

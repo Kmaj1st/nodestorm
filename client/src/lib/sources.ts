@@ -78,6 +78,33 @@ export function sortSources(sources: Source[]): Source[] {
   return [...sources].sort((a, b) => rank(a) - rank(b));
 }
 
+/**
+ * Words a page aims at the AI that rates it (a prompt injection): "ignore the previous instructions", "rate this page as
+ * high", a "reliability" value, "note to the AI". Every source is rated in one call, so such a text could steer the
+ * rating of all of them. Deliberately narrow: an ordinary definition that mentions reliability or ignoring terms passes.
+ */
+const INJECTION = [
+  /\b(ignore|disregard|forget|override)\b[^.\n]{0,40}\b(previous|prior|above|earlier|preceding|all|any|other|your)\b[^.\n]{0,20}\b(instructions?|rules|prompts?|directions|guidelines)\b/i,
+  /\b(rate|rank|mark|score|label|classify)\s+(this|that|the|these|all|every|each|any)?\s*(other\s+)?(sources?|pages?|sites?|texts?|results?|entry|entries|articles?)?\s*(as\s+)["']?(high(ly)?|medium|low|reliable|trustworthy|unreliable|unusable)\b/i,
+  /["']?\breliability["']?\s*[:=]\s*["']?(high|medium|low|unusable)\b/i,
+  /\b(note|message|instructions?|attention)\s+(to|for)\s+(the\s+)?(ai|llm|language model|assistant|model|rater|grader)\b/i,
+  /\b(you are|you're)\s+(an?\s+)?(ai|llm|(large\s+)?language model|assistant|chatbot)\b/i,
+  /\bnew instructions\s*:/i,
+  /(忽略|无视|忽视|不要理会)[^。\n]{0,10}(指令|指示|规则|提示词?|要求)/,
+  /(评为|评定为|标记为|打分为|判定为|评级为)[^。\n]{0,3}(高可靠|高度可靠|可靠|不可用|不可靠)/,
+  /(可靠性|可信度)\s*[:：=]\s*(高|中|低|high|medium|low)/i,
+];
+
+/** A source whose title or text addresses the AI rater (see INJECTION): never sent to it, never taken unasked. */
+export function looksInjected(s: Pick<Source, "title" | "text">): boolean {
+  return INJECTION.some((re) => re.test(s.title) || re.test(s.text));
+}
+
+/** Such a source as shown: unusable, saying why (whatever an AI said of it before). */
+function flagInjected(s: Source): Source {
+  return looksInjected(s) ? { ...s, reliability: "unusable", reasons: t("sources.injected"), pointed: false } : s;
+}
+
 /** A look-up site's name as shown, with the wiki for Fandom and BWIKI. */
 export function siteName(site: Site): string {
   const { lookup } = useSettings.getState();
@@ -199,6 +226,7 @@ export function mergeRatings(sources: Source[], ratings: AssessRating[]): Source
   return sortSources(
     sources.map((s) => {
       const r = by.get(s.id);
+      if (looksInjected(s)) return flagInjected(s);
       if (!r) return s;
       // A quote is kept only when it really is this source's text (the task checked it against the trimmed text).
       const pointed = Boolean(r.passage && s.text.includes(r.passage));
@@ -249,8 +277,11 @@ const reliable = (s: Source) => s.reliability === "high" || s.reliability === "m
 function backed(top: Source, sources: Source[]): boolean {
   const meaning = normalizeName(top.sense);
   const site = (s: Source) => (s.kind === "web" ? (s.url && hostOf(s.url)) || s.site : s.site).toLowerCase();
+  // A page that tries to instruct the AI backs nothing (and can't be backed): see looksInjected.
+  if (looksInjected(top)) return false;
   return sources.some(
-    (s) => s !== top && reliable(s) && normalizeName(s.sense) === meaning && (s.kind === "encyclopedia" || site(s) !== site(top)),
+    (s) =>
+      s !== top && reliable(s) && normalizeName(s.sense) === meaning && (s.kind === "encyclopedia" || site(s) !== site(top)) && !looksInjected(s),
   );
 }
 
@@ -265,7 +296,7 @@ function backed(top: Source, sources: Source[]): boolean {
 export function autoPick(g: Pick<Gathered, "sources" | "rated">): Source | undefined {
   if (g.rated) {
     // An encyclopedia's near match (a page for another name, "Normal subgroup" for "Normal") is never taken unasked.
-    const top = g.sources.find((s) => s.passage && reliable(s) && (s.kind === "web" || s.exact));
+    const top = g.sources.find((s) => s.passage && reliable(s) && (s.kind === "web" || s.exact) && !looksInjected(s));
     if (!top) return undefined;
     const peers = g.sources.filter((s) => s.passage && s.reliability === top.reliability);
     const meanings = new Set(peers.map((s) => normalizeName(s.sense)).filter(Boolean));
@@ -274,7 +305,7 @@ export function autoPick(g: Pick<Gathered, "sources" | "rated">): Source | undef
     return alone || backed(top, g.sources) ? top : undefined;
   }
   const [only] = g.sources;
-  return g.sources.length === 1 && only.kind === "encyclopedia" && only.exact && only.passage ? only : undefined;
+  return g.sources.length === 1 && only.kind === "encyclopedia" && only.exact && only.passage && !looksInjected(only) ? only : undefined;
 }
 
 /** The sources as meanings stored on a concept waiting for a choice: each with its passage and source (never the AI). */
@@ -520,12 +551,14 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
       saveCache();
     } else if (had) saveCache();
   }
-  const out: Gathered = { name, ...found, sources: sortSources(found.sources), note: "", rated: false };
+  const out: Gathered = { name, ...found, sources: sortSources(found.sources.map(flagInjected)), note: "", rated: false };
   if (!found.sources.length || !isReady(useSettings.getState())) return out;
   let rating = hit?.rating;
+  // A page that addresses the AI is not sent at all: its text can't steer the ratings of the others.
+  const sent = found.sources.filter((s) => !looksInjected(s)).slice(0, ASSESS_MAX);
+  if (!rating && !sent.length) rating = { ratings: [], note: "" };
   if (!rating) {
     opts.onChecking?.();
-    const sent = found.sources.slice(0, ASSESS_MAX);
     try {
       rating = await api.assess(
         {
@@ -565,9 +598,16 @@ export function cachedSources(name: string): Gathered | undefined {
   if (!hit.found.web && searchReady()) return undefined;
   // Found but not rated while an AI is set up: the rating is still running (or failed), so gather again.
   if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState())) return undefined;
-  const out: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources), note: "", rated: false };
-  return hit.rating ? { ...out, sources: mergeRatings(hit.found.sources, hit.rating.ratings), note: hit.rating.note, rated: true } : out;
+  // The same objects while the entry (and its rating, set on it later) stays the same: the pop-up asks on every render,
+  // and new source objects would re-render each memoised source text and re-attach its selection listener.
+  const made = madeFrom.get(hit);
+  if (made && made.name === name && made.rating === hit.rating) return made.out;
+  const plain: Gathered = { name, ...hit.found, sources: sortSources(hit.found.sources.map(flagInjected)), note: "", rated: false };
+  const out = hit.rating ? { ...plain, sources: mergeRatings(hit.found.sources, hit.rating.ratings), note: hit.rating.note, rated: true } : plain;
+  madeFrom.set(hit, { name, rating: hit.rating, out });
+  return out;
 }
+const madeFrom = new WeakMap<Entry, { name: string; rating: Entry["rating"]; out: Gathered }>();
 
 /** For tests: `stored` also clears localStorage's copy; otherwise the next use reads it again (as after a reload). */
 export function resetSources(stored = true) {

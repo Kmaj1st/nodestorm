@@ -15,7 +15,7 @@ import {
   type Visible,
 } from "../lib/view";
 import { viewport } from "../lib/viewport";
-import { useGraphStore, type GraphStore } from "./graphStore";
+import { isViewing, useGraphStore, type GraphStore } from "./graphStore";
 
 /**
  * Canvas view state: filters (remembered per browser), concepts hidden by hand (remembered for the browser tab's
@@ -68,7 +68,8 @@ interface ViewState extends ViewPrefs {
   hiddenSaid: string;
   /**
    * "Select several" (not remembered): taps and clicks on concepts add them to the selection or take them out, as
-   * Shift/Ctrl-click does, so Mix and Derive can be reached without a keyboard (GraphCanvas.tsx).
+   * Shift/Ctrl-click does, so Mix and Derive can be reached without a keyboard (GraphCanvas.tsx). It ends when another
+   * graph or project opens (see the subscription below) and can't start in the read-only viewer.
    */
   selecting: boolean;
   setPrefs(patch: Partial<ViewPrefs>): void;
@@ -99,7 +100,7 @@ export const useView = create<ViewState>()((set, get) => ({
   },
   setFocus: (focus) => set({ focus }),
   setView3d: (view3d) => set({ view3d }),
-  setSelecting: (selecting) => set({ selecting }),
+  setSelecting: (on) => set({ selecting: on && !isViewing(useGraphStore.getState()) }),
   setHidden(hidden) {
     if (hidden === get().hidden) return;
     saveHidden(hidden);
@@ -218,6 +219,13 @@ export function toggleFocus() {
   if (v.focus && v.focus.graphId === s.activeId) v.setFocus(null);
   else if (target) v.setFocus({ graphId: s.activeId, nodeId: target });
 }
+
+// Select several belongs to the graph it was started on: opening another graph or project, or the viewer (a share
+// link, a version), ends it (those all clear the selection too). Clearing the selection or editing doesn't.
+useGraphStore.subscribe((s, prev) => {
+  if (!useView.getState().selecting) return;
+  if (s.activeId !== prev.activeId || s.projectId !== prev.projectId || s.view !== prev.view) useView.getState().setSelecting(false);
+});
 
 // Selecting another concept while focused re-centres the focus on it.
 useGraphStore.subscribe((s, prev) => {
