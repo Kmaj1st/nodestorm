@@ -1,6 +1,7 @@
 import react from "@vitejs/plugin-react";
 import { defineConfig, type Plugin } from "vite";
 import { csp } from "./pwa/csp";
+import { earlyLocale } from "./pwa/earlyLocale";
 import { pdfjsData } from "./pwa/pdfjsData";
 import { serviceWorker } from "./pwa/plugin";
 
@@ -23,7 +24,7 @@ export default defineConfig({
   // serviceWorker() only runs in `vite build`: the dev server never has a service worker.
   // csp() too: the Content-Security-Policy <meta> goes into the built index.html only.
   // pdfjsData() serves PDF.js's CMaps and standard fonts (copied into the build; from node_modules in dev).
-  plugins: [react(), katexWoff2Only(), pdfjsData(), csp(), serviceWorker()],
+  plugins: [react(), katexWoff2Only(), pdfjsData(), csp(), earlyLocale(), serviceWorker()],
   // Relative asset paths so the built site works from any folder or static host.
   base: "./",
   server: {

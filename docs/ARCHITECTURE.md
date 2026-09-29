@@ -44,6 +44,11 @@ Layering inside the client, from the bottom up:
 ## 2. Data model
 
 Everything is defined with zod in `shared/src/model.ts`; the TypeScript types are `z.infer`s of the schemas.
+The schemas the browser uses (`model.ts`, `lookup/webSearch.ts`, `client/src/lib/baike.ts`) are written with
+`zod/mini`'s functional API (`z.optional(z.string().check(z.maxLength(300)))`), which the bundler tree-shakes: the
+classic method API cost ~58 kB more in the main chunk. `model.ts` installs zod's English messages (mini has none), so
+issues read exactly as before. Only the server's own request schema (`server/src/app.ts`) uses classic `zod`; it
+catches `$ZodError`, which both flavours throw. `scripts/zod-mini-codemod.mts` converts classic-style schemas.
 
 ```mermaid
 classDiagram
@@ -815,15 +820,27 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   are each a chunk, wrapped by `lazyDialog` in `Suspense` plus an error boundary (`LoadBoundary`)
   that shows "couldn't be loaded — Reload" instead of unmounting the app. `preloadDialogs` fetches all chunks when idle,
   and the service worker precaches them. `client/src/panels/QuizHost.tsx` mounts the quiz dialog while a quiz is open.
-- **Other parts loaded on demand**, to keep the main chunk small (about 815 kB, 259 kB gzipped): the in-browser AI
+- **Other parts loaded on demand**, to keep the main chunk small (about 760 kB, 244 kB gzipped): the in-browser AI
   (`lib/aiBrowser.ts`: provider clients, prompts and tasks, through `loadAi` in `api.ts`; `shared/package.json` says
   `"sideEffects": false` so the main chunk leaves the unused shared modules out), the sources flow (`lib/sources.ts`,
   through `loadSources` in `actions.ts`) with the web search engines (`lib/webSearch.ts`; the cheap checks stay in
   `webSearchReady.ts`), the encyclopedia clients (`lib/lookupClients.ts`), the offline demo's pretend web
-  (`lib/webSearchDemo.ts`), the Derive together store (`store/deriveOpen.ts` above), the Chinese messages, LaTeX export
+  (`lib/webSearchDemo.ts`), the Derive together store (`store/deriveOpen.ts` above), the Chinese messages (fetched
+  alongside the main chunk by `i18n/early.ts`, a tiny entry of its own that `pwa/earlyLocale.ts` puts first), LaTeX export
   and import, KaTeX, PDF.js, `fflate` and `html-to-image`. The dialogs that need them import them statically, so
   `preloadDialogs` fetches them when idle too, and the service worker precaches every chunk.
   `client/test/lazyParts.test.ts` fails if a static import pulls the web search code or the Derive store back in.
+- **Performance** (reference numbers, 2026-09-28, this container's headless Chromium; compare like with like).
+  Production build, `node e2e/perf.mjs --built`, 300 concepts / 600 relations (dev server in brackets, where React's
+  development checks dominate): reload to edges painted ~650–900 ms (~2100 ms); 20 status updates of one concept
+  ~380–670 ms main-thread (~900 ms); 20 relation inspections ~230–310 ms (~530 ms); dragging a concept 30 steps
+  ~730–930 ms (~1600 ms); Physics ~75–85 ms of main thread per frame (~300 ms), so ~13 frames/s on this graph. First
+  load (`node e2e/firstload.mjs 5`, Fast 3G + 4x CPU, 390px, fresh profile): HTML at ~580 ms, the main chunk
+  (238 kB over the wire) arrives at ~2.6 s, canvas on screen ~3.0 s, first contentful paint ~3.15 s, main thread quiet
+  ~3.3 s; Chinese interface ~3.2 s / ~3.45 s. Nothing but the main chunk and `index.css` (15 kB) blocks: fonts are
+  the system's, KaTeX's CSS and fonts come with its chunk, the service worker registers after `load`, and the dialog
+  preloads start after the first paint. The remaining cost is the main chunk's download (react-dom ~210 kB,
+  React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of ~760 kB).
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
   Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
 - **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
@@ -905,6 +922,10 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   embedded read offline once its CMaps were used online.
 - **Perf** (`node e2e/perf.mjs`, not in CI): times a 300-concept graph, a Physics run and each section's main-thread
   time; `PERF_PROFILE=status|inspect|drag|physics` prints that section's hottest functions (`1` means `drag`).
+  `--built` (or `E2E_BUILT=1`) measures a production build instead (`client/dist-perf`, built with
+  `VITE_PERF_HOOKS=1`, which only adds `client/src/perfHooks.ts`: the stores the sections drive). `node
+  e2e/firstload.mjs` (after `npm run build`) times the first load on Fast 3G with a 4x slower CPU;
+  `FIRSTLOAD_LANG=zh` for the Chinese interface. Reference numbers: **Performance** in section 8.
 - **Live providers** (`npm run smoke:live [-- <provider> [language]]` → `scripts/live-smoke.mts`): runs every task
   once against a real provider using `server/.env`, validates against the same schemas, prints timings.
 - **CI** (`.github/workflows/ci.yml`): on every push and PR: `npm ci`, typecheck, test, install Chromium, e2e,
