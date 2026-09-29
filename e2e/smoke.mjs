@@ -469,7 +469,7 @@ try {
     const st = await openSettings();
     await st.getByText("Directly from this browser").click();
     await st.getByLabel("Provider", { exact: true }).selectOption("mock");
-    await st.getByLabel("Number of meanings to offer").fill("4");
+    await st.getByLabel("Meanings to offer from each encyclopedia").fill("4");
     await st.getByRole("button", { name: "Save", exact: true }).click();
   }
   {
