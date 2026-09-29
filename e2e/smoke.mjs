@@ -919,6 +919,8 @@ try {
   const focusButton = page.getByRole("button", { name: "Focus", exact: true });
   assert(await focusButton.isDisabled(), "Focus needs a selected concept");
   await node("Kernel").click();
+  // Checked at once, not waited for: the click itself selects the card (even while the view still fits the example).
+  assert(await focusButton.isEnabled(), "a click on a card selects it straight away (Focus is ready for F)");
   await page.keyboard.press("f");
   await page.getByTestId("focus-bar").waitFor();
   await waitCounts("4/4");
@@ -938,11 +940,32 @@ try {
   await waitCounts("7/11");
   assert((await page.getByTestId("focus-bar").count()) === 0, "Esc leaves focus mode and shows everything again");
   await node("Kernel").click();
+  assert(await focusButton.isEnabled(), "…also while the view returns to where it was before focus mode");
   await focusButton.click();
   await waitCounts("4/4");
   await page.getByRole("button", { name: "Leave focus mode" }).click();
   await waitCounts("7/11");
   assert(true, "the toolbar button and the close (X) button of the focus control do the same");
+  // A card that slides away under the pointer between press and release (the view animating) still gets the click:
+  // the browser gives it to the empty canvas, which would deselect everything and close the inspector.
+  await page.locator(".react-flow__pane").click({ position: { x: 5, y: 5 } });
+  const groupBox = await node("Group").boundingBox();
+  await page.mouse.move(groupBox.x + groupBox.width / 2, groupBox.y + groupBox.height / 2);
+  await page.mouse.down();
+  const slide = (away) =>
+    page.evaluate((away) => {
+      const el = document.querySelector('[data-testid="node-Group"]').closest(".react-flow__node");
+      if (away) (el.dataset.was = el.style.transform), (el.style.transform += " translate(-4000px, -4000px)");
+      else el.style.transform = el.dataset.was;
+    }, away);
+  await slide(true);
+  await page.mouse.up();
+  await slide(false);
+  assert(
+    (await focusButton.isEnabled()) && (await page.getByLabel("Rename concept").inputValue()) === "Group" &&
+      (await page.locator(".react-flow__node.selected").count()) === 1,
+    "a card that slid away between press and release still gets the click (selected and open)",
+  );
 
   const viewMenu = async () => {
     if (!(await page.getByRole("dialog", { name: "View" }).isVisible())) await page.getByRole("button", { name: /^View/ }).click();

@@ -12,13 +12,14 @@ import {
   type Viewport,
 } from "@xyflow/react";
 import { Focus, Network, X } from "lucide-react";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent, type PointerEvent as ReactPointerEvent } from "react";
 import { rich, useT } from "../i18n";
 import { NODE_SIZE, updateNode } from "../lib/graphOps";
 import { dependencyLayers, fromLayered, LAYERED, layeredView } from "../lib/layout";
 import { cycleInfo, linkKey, prerequisiteClosure } from "../lib/paths";
 import { useTheme } from "../lib/theme";
 import { DEFAULT_VIEW, MAX_HOPS, showsEverything, visibleParts } from "../lib/view";
+import { clickedSelection, createPressTracker } from "../lib/press";
 import { registerViewport, viewport } from "../lib/viewport";
 import { ShortcutsButton } from "../panels/ShortcutsHelp";
 import { activeGraph, isViewing, useGraphStore } from "../store/graphStore";
@@ -369,6 +370,50 @@ export function GraphCanvas() {
     [setSelection],
   );
   const hold = useHoldToSelect(onHold);
+
+  // A card that slid away under the pointer between press and release (the view animating) still gets the click: the
+  // browser would give it to the empty canvas, deselecting everything and closing the inspector (see lib/press.ts).
+  const press = useMemo(createPressTracker, []);
+  const strayClick = useRef<string | null>(null);
+  const holdDown = hold.onPointerDownCapture;
+  const onPointerDownCapture = useCallback(
+    (e: ReactPointerEvent) => {
+      holdDown(e);
+      press.down(e);
+    },
+    [holdDown, press],
+  );
+  const onPointerUpCapture = useCallback(
+    (e: ReactPointerEvent) => {
+      const id = press.up(e);
+      strayClick.current = id;
+      // Released over a panel, the click goes to neither: forget it once this input is handled.
+      if (id) setTimeout(() => strayClick.current === id && (strayClick.current = null));
+    },
+    [press],
+  );
+  const onClickCapture = useCallback(
+    (e: ReactMouseEvent) => {
+      const id = strayClick.current;
+      strayClick.current = null;
+      if (!id || !nodesRef.current.some((n) => n.id === id && !n.hidden)) return;
+      e.stopPropagation(); // not a click on the canvas
+      const toggle = e.shiftKey || e.ctrlKey || e.metaKey || useView.getState().selecting;
+      const next = clickedSelection(
+        nodesRef.current.filter((n) => n.selected).map((n) => n.id),
+        id,
+        toggle,
+      );
+      const keep = new Set(next);
+      setNodes((ns) => ns.map((n) => (!!n.selected === keep.has(n.id) ? n : { ...n, selected: keep.has(n.id) })));
+      setSelection(next);
+      if (!toggle) {
+        synced.current = id; // the card is selected already
+        setInspect({ kind: "node", id });
+      }
+    },
+    [setSelection, setInspect],
+  );
   // Select several ends with the canvas (e.g. the empty-graph start screen replaces it): nothing would show its bar.
   useEffect(() => () => useView.getState().setSelecting(false), []);
   const focusName = focus && graph.nodes.find((n) => n.id === focus.nodeId)?.name;
@@ -395,6 +440,9 @@ export function GraphCanvas() {
       data-settled={physicsOn ? String(!physics.settling) : undefined}
       data-selecting={selecting || undefined}
       {...hold}
+      onPointerDownCapture={onPointerDownCapture}
+      onPointerUpCapture={onPointerUpCapture}
+      onClickCapture={onClickCapture}
     >
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}
