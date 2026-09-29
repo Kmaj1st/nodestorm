@@ -1,5 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import * as ops from "../src/lib/graphOps";
+import { decodeShare, encodeShare } from "../src/lib/share";
 import { touchScreen } from "../src/lib/touch";
+import { activeGraph, useGraphStore } from "../src/store/graphStore";
 import { useView } from "../src/store/viewStore";
 
 // "Select several" (taps add concepts to the selection, for touch screens): a view state of this tab only.
@@ -23,6 +26,53 @@ describe("Select several", () => {
     expect(localStorage.getItem("nodestorm-view")).not.toContain("selecting");
     useView.getState().setSelecting(false);
     expect(useView.getState().selecting).toBe(false);
+  });
+});
+
+describe("Select several ends", () => {
+  const store = () => useGraphStore.getState();
+  const start = () => {
+    store().reset();
+    store().mutate((g) => ops.addNode(ops.addNode(g, { name: "Group" }).graph, { name: "Ring" }).graph);
+    store().setSelection(activeGraph(store()).nodes.map((n) => n.id));
+    useView.getState().setSelecting(true);
+  };
+  afterEach(() => useView.getState().setSelecting(false));
+
+  it("when another graph (a sandbox) is opened, and the selection goes", () => {
+    start();
+    store().forkActive("S");
+    expect(useView.getState().selecting).toBe(false);
+    expect(store().selection).toEqual([]);
+    useView.getState().setSelecting(true);
+    store().switchTo(activeGraph(store()).parentId!);
+    expect(useView.getState().selecting).toBe(false);
+  });
+
+  it("when another project is opened", () => {
+    start();
+    store().newProject("P2");
+    expect(useView.getState().selecting).toBe(false);
+    expect(store().selection).toEqual([]);
+  });
+
+  it("when a share link opens the read-only viewer, and can't be started there", async () => {
+    start();
+    const shared = (await decodeShare(await encodeShare(activeGraph(store()), "Shared"))).graph;
+    store().openView(shared, "Shared");
+    expect(useView.getState().selecting).toBe(false);
+    useView.getState().setSelecting(true);
+    expect(useView.getState().selecting).toBe(false);
+    store().closeView();
+    useView.getState().setSelecting(true);
+    expect(useView.getState().selecting).toBe(true);
+  });
+
+  it("but not when the selection is cleared or concepts change", () => {
+    start();
+    store().setSelection([]);
+    store().mutate((g) => ops.addNode(g, { name: "Field" }).graph);
+    expect(useView.getState().selecting).toBe(true);
   });
 });
 
