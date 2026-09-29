@@ -326,14 +326,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
 
       <fieldset className="choice">
         <legend>{t("settings.ambiguous")}</legend>
-        <label className="check">
-          <input
-            type="checkbox"
-            checked={clarify.enabled}
-            onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
-          />
-          {t("settings.askMeaning")}
-        </label>
+        {/* How many meanings each encyclopedia gives for a name (every look-up); the stored key is still "clarify". */}
         <label className="check">
           {t("settings.offer")}
           <input
@@ -341,12 +334,20 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             min={2}
             max={10}
             value={clarify.options}
-            disabled={!clarify.enabled}
             onChange={(e) => setClarify({ ...clarify, options: Math.min(10, Math.max(2, Number(e.target.value) || 3)) })}
             aria-label={t("settings.offerAria")}
             className="num"
           />
           {t("settings.offerSuffix")}
+        </label>
+        {/* Only "Look up in…" asks first; off, it takes the first meaning found. */}
+        <label className="check">
+          <input
+            type="checkbox"
+            checked={clarify.enabled}
+            onChange={(e) => setClarify({ ...clarify, enabled: e.target.checked })}
+          />
+          {t("settings.askMeaning")}
         </label>
       </fieldset>
 

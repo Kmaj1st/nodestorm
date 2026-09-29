@@ -878,6 +878,10 @@ button.path__walk { align-self: flex-start; margin-bottom: var(--space-2); }
 /* A checkbox's long label wraps beside the box, not under it (only the rows with number fields wrap as a whole). */
 .choice .check:has(> input[type="checkbox"]:first-child) { flex-wrap: nowrap; align-items: flex-start; }
 .choice .check > input[type="checkbox"]:first-child { flex: none; margin-top: 3px; }
+/* A sentence with number fields in it ("Offer [3] meanings…") flows as text: the words sit on the fields' baseline and
+   a wrapped line never leaves one word alone. */
+.choice .check:not(:has(> input[type="checkbox"])):has(> input.num) { display: block; line-height: 2.4; text-wrap: pretty; }
+.choice .check > input.num { margin: 0 6px; vertical-align: baseline; line-height: normal; }
 .check { display: flex; flex-direction: row; gap: var(--space-2); align-items: center; font-size: var(--text-md); cursor: pointer; }
 .form label.check { flex-direction: row; font-weight: 400; font-size: var(--text-md); }
 .field .row input { flex: 1; min-width: 0; }
