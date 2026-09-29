@@ -163,7 +163,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
         <EdgeColorsField value={edgeColors} onChange={setEdgeColors} />
       </fieldset>
 
-      <h4 className="settings__head">{t("settings.ai")}</h4>
+      <h4 className="settings__head" data-testid="ai-settings">{t("settings.ai")}</h4>
       <fieldset className="choice">
         <legend>{t("settings.connection")}</legend>
         <label>
