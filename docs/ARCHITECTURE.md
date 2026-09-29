@@ -787,6 +787,11 @@ which also clears the project's undo stacks. **Restore as new project** → `res
 
 ## 8. UI structure
 
+- `client/index.html`: a **loading shell** inside `#root` (static markup and an inline `<style>`: the app's name and a
+  skeleton of the toolbar, canvas and side panel, sized like the first screen at each width, `aria-busy`), which React
+  replaces on its first render, and one inline script that sets `<html data-theme>` before the first paint as
+  `initTheme` does later. The build's Content-Security-Policy allows index.html's inline scripts by hash
+  (`inlineScripts` in `client/pwa/csp.ts`); anything else inline would be blocked.
 - `client/src/main.tsx`: `initTheme()`, `registerServiceWorker()`, `startAutoSnapshots()`, render `<App>`, then
   `preloadDialogs()`.
 - `client/src/App.tsx`: shell and global keyboard handling (undo/redo, Delete/Backspace only from the canvas and only
@@ -810,6 +815,14 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   - `client/src/graph/BiRelationEdge.tsx` portals its labels into React Flow's label layer found once per edge
     (`useLabelLayer`) instead of using `<EdgeLabelRenderer>`, whose per-edge `querySelector` inside a store selector
     dominated big graphs; labels are dropped below zoom 0.45. `e2e/perf.mjs` measures a 300-concept graph.
+  - **Edges place themselves:** `BiRelationEdge` doesn't re-render when its cards move (its `memo` ignores the
+    coordinates React Flow passes). It subscribes to React Flow's store and, when either card's internal node object
+    changes, sets its path's `d`, the arrowheads' `points`/`cx`/`cy` and the labels' `transform` itself; React never
+    renders those attributes, so the two can't disagree. Absolute coordinates, not a `transform` per arrowhead group:
+    1200 transformed groups made every repaint slower. The cards' names come with the edge data, and `setInspect` is
+    read when clicked, to keep store listeners per edge few (every store update calls all of them).
+  - A status update keeps the cycle info (`sameDependencies`, `client/src/lib/paths.ts`) and each relation's
+    screen-reader name unless names or the language changed.
   - Delete is handled in `App.tsx` (`deleteKeyCode={null}`) so deletions go through `mutate` and undo.
   - **Select several** (`client/src/panels/SelectSeveral.tsx`, `useView().selecting`): for touch screens, which have
     no Shift key. Its button sits in the zoom controls; while on, `SelectSeveralSync` keeps React Flow's
@@ -843,15 +856,18 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   `client/test/lazyParts.test.ts` fails if a static import pulls the web search code or the Derive store back in.
 - **Performance** (reference numbers, 2026-09-28, this container's headless Chromium; compare like with like).
   Production build, `node e2e/perf.mjs --built`, 300 concepts / 600 relations (dev server in brackets, where React's
-  development checks dominate): reload to edges painted ~650–900 ms (~2100 ms); 20 status updates of one concept
-  ~380–670 ms main-thread (~900 ms); 20 relation inspections ~230–310 ms (~530 ms); dragging a concept 30 steps
-  ~730–930 ms (~1600 ms); Physics ~75–85 ms of main thread per frame (~300 ms), so ~13 frames/s on this graph. First
-  load (`node e2e/firstload.mjs 5`, Fast 3G + 4x CPU, 390px, fresh profile): HTML at ~580 ms, the main chunk
-  (238 kB over the wire) arrives at ~2.6 s, canvas on screen ~3.0 s, first contentful paint ~3.15 s, main thread quiet
-  ~3.3 s; Chinese interface ~3.2 s / ~3.45 s. Nothing but the main chunk and `index.css` (15 kB) blocks: fonts are
-  the system's, KaTeX's CSS and fonts come with its chunk, the service worker registers after `load`, and the dialog
-  preloads start after the first paint. The remaining cost is the main chunk's download (react-dom ~210 kB,
-  React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of ~760 kB).
+  development checks dominate): reload to edges painted ~650–900 ms (~2100 ms); main-thread CPU for 20 status
+  updates of one concept ~370–400 ms (~900 ms); 20 relation inspections ~210–240 ms (~530 ms); dragging a concept 30
+  steps ~750–830 ms (~1600 ms); Physics ~50–55 ms per frame (~300 ms), ~21 frames/s on this graph (it was ~75 ms and
+  ~13 frames/s before the edges placed themselves). perf.mjs prints both "busy" (TaskDuration, wall time, which
+  grows with any other load on the machine) and "CPU" (ThreadTime, which barely does): compare versions by CPU, with
+  runs of each interleaved (`PERF_DIST=<dir>` measures a prebuilt `client/<dir>`). First load
+  (`node e2e/firstload.mjs 5`, Fast 3G + 4x CPU, 390px, fresh profile): HTML at ~580 ms, first contentful paint (the
+  loading shell) ~1.4 s (~3.15 s before it), the main chunk (239 kB over the wire) arrives at ~2.6 s, canvas on
+  screen ~3.0 s, main thread quiet ~3.2 s; Chinese interface ~3.2 s / ~3.45 s. Nothing but the main chunk and
+  `index.css` (15 kB) blocks: fonts are the system's, KaTeX's CSS and fonts come with its chunk, the service worker
+  registers after `load`, and the dialog preloads start after the first paint. The remaining cost is the main chunk's
+  download (react-dom ~210 kB, React Flow + d3 ~180 kB, `en.ts` ~71 kB, zod ~31 kB of ~760 kB).
 - `client/src/panels/Modal.tsx`: the accessible dialog every dialog uses: `aria-modal`, focus moves in and is trapped,
   Escape/backdrop close, focus returns to the opener; a stack so only the top dialog reacts.
 - **i18n** (`client/src/i18n/`): `en.ts` is the **source of truth** for message keys (`MessageKey = keyof typeof en`);
@@ -861,7 +877,8 @@ which also clears the project's undo stacks. **Restore as new project** → `res
   Plurals: `{n, plural, one {…} other {…}}` (see `client/src/i18n/format.ts`). The interface language is independent of
   the AI answer language (`settingsStore.language`).
 - **Theming**: CSS variables on `:root` and `:root[data-theme="dark"]` in `client/src/styles.css`; `initTheme` sets
-  `<html data-theme>` from the preference or `prefers-color-scheme`, and React Flow gets `colorMode`. Feature CSS lives
+  `<html data-theme>` from the preference or `prefers-color-scheme` (index.html's inline script already did, before the
+  first paint), and React Flow gets `colorMode`. Feature CSS lives
   next to its component (`client/src/graph/mastery.css`, `client/src/panels/quiz.css`,
   `client/src/panels/versions.css`, `client/src/panels/onboarding.css`, `client/src/panels/absurd.css`).
   - **Design tokens** (top of `styles.css`): spacing `--space-1..5` (4/8/12/16/24), radius `--radius-sm/md/lg`

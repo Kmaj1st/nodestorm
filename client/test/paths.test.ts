@@ -76,6 +76,16 @@ describe("cycle detection", () => {
     expect(paths.cycleInfo(g).links.has(paths.linkKey(id(g, "C"), id(g, "D")))).toBe(false);
   });
 
+  it("sameDependencies: a status update or a move keeps the cycles, new prerequisites or concepts don't", () => {
+    const g = build({ A: ["B"], B: ["A"], C: [] });
+    expect(paths.sameDependencies(g, g)).toBe(true);
+    expect(paths.sameDependencies(g, ops.updateNode(g, id(g, "A"), { status: "checking" }))).toBe(true);
+    expect(paths.sameDependencies(g, ops.updateNode(g, id(g, "C"), { position: { x: 9, y: 9 } }))).toBe(true);
+    expect(paths.sameDependencies(g, ops.applyDeps(g, id(g, "C"), [pre("A")]))).toBe(false);
+    expect(paths.sameDependencies(g, ops.addNode(g, { name: "D" }).graph)).toBe(false);
+    expect(paths.sameDependencies(g, ops.removeNode(g, id(g, "C")))).toBe(false);
+  });
+
   it("removing one link of a cycle breaks it", () => {
     const g = build({ A: ["B"], B: ["C"], C: ["A"] });
     const out = ops.removeDependency(g, id(g, "C"), id(g, "A"));

@@ -11,9 +11,40 @@
     <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#1c1f26" media="(prefers-color-scheme: dark)" />
     <title>NodeStorm</title>
+    <!-- The theme before the first paint, as lib/theme.ts's initTheme sets it later (the stored Light/Dark choice, else
+         the system's), so neither the loading shell nor the app flashes the other theme. The build's
+         Content-Security-Policy allows this one inline script by its hash (pwa/csp.ts). -->
+    <script>try{var p=localStorage.getItem("nodestorm-theme")}catch(e){}document.documentElement.dataset.theme=p==="light"||p==="dark"?p:matchMedia("(prefers-color-scheme: dark)").matches?"dark":"light"</script>
+    <!-- The loading shell's look (below): the toolbar, canvas and side panel of the first screen, in the theme's colours
+         (styles.css tokens), so the app replaces it without a jump. Self-contained, as the dev server loads styles.css
+         only with the app. -->
+    <style>
+      .boot{--b-bg:#f6f7f9;--b-panel:#fff;--b-border:#e3e5ea;--b-pill:#f2f3f6;--b-text:#1b1e25;--b-a:#4f46e5;--b-a2:#8b5cf6;
+        position:fixed;inset:0;display:flex;flex-direction:column;background:var(--b-bg);color:var(--b-text);
+        font:700 15px/1 Inter,ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",Arial,sans-serif}
+      :root[data-theme="dark"] .boot{--b-bg:#0f1115;--b-panel:#171a20;--b-border:#282c35;--b-pill:#1f232b;--b-text:#e8eaef;--b-a:#8e95ff;--b-a2:#a78bfa}
+      @media (prefers-color-scheme:dark){:root:not([data-theme]) .boot{--b-bg:#0f1115;--b-panel:#171a20;--b-border:#282c35;--b-pill:#1f232b;--b-text:#e8eaef;--b-a:#8e95ff;--b-a2:#a78bfa}}
+      .boot *{box-sizing:border-box}
+      .boot__bar{display:flex;flex-wrap:wrap;align-items:center;align-content:center;gap:8px;min-height:51px;padding:9px 12px;
+        background:var(--b-panel);border-bottom:1px solid var(--b-border)}
+      .boot__brand{display:flex;align-items:center;gap:8px;margin-right:8px;letter-spacing:-0.01em;white-space:nowrap}
+      .boot__brand::before{content:"";width:18px;height:18px;border-radius:5px;background:linear-gradient(135deg,var(--b-a),var(--b-a2))}
+      .boot__bar i{width:72px;height:32px;border-radius:8px;background:var(--b-pill)}
+      .boot__main{flex:1;display:flex;min-height:0}
+      .boot__canvas{flex:1}
+      .boot__side{width:360px;background:var(--b-panel);border-left:1px solid var(--b-border)}
+      @media (max-width:1199px){.boot__bar{min-height:89px}}
+      @media (max-width:799px){.boot__bar{min-height:121px}.boot__main{flex-direction:column}
+        .boot__side{width:auto;height:41px;border-left:0;border-top:1px solid var(--b-border)}}
+      @media (prefers-reduced-motion:no-preference){.boot__bar i{animation:boot-pulse 1.6s ease-in-out infinite alternate}}
+      @keyframes boot-pulse{to{opacity:0.45}}
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <!-- The loading shell, painted while the app's code downloads (seconds on a slow connection). React replaces
+         everything inside #root when the app first renders, so nothing has to remove it. Static text, so only the
+         app's name; aria-busy tells assistive technology the page is still loading. -->
+    <div id="root"><div class="boot" aria-busy="true"><div class="boot__bar"><span class="boot__brand">NodeStorm</span><i></i><i></i><i></i><i></i><i></i><i></i></div><div class="boot__main"><div class="boot__canvas"></div><div class="boot__side"></div></div></div></div>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>
