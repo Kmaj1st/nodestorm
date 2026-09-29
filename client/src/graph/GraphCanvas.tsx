@@ -390,34 +390,38 @@ export function GraphCanvas() {
   // A card that slid away under the pointer between press and release (the view animating) still gets the click: the
   // browser would give it to the empty canvas, deselecting everything and closing the inspector (see lib/press.ts).
   const press = useMemo(createPressTracker, []);
-  const strayClick = useRef<string | null>(null);
-  const strayDouble = useRef<string | null>(null);
+  // The card and when (event time) its redirected click is due. A touch's click comes a moment after the release, in a
+  // task of its own; a click from the keyboard (detail 0) or long after is never one of these.
+  const strayClick = useRef<{ id: string; at: number } | null>(null);
+  const strayDouble = useRef<{ id: string; at: number } | null>(null);
+  const stray = (ref: typeof strayClick, e: ReactMouseEvent) => {
+    const s = ref.current;
+    ref.current = null;
+    return s && e.detail > 0 && e.timeStamp - s.at < 1000 ? s.id : null;
+  };
   const holdDown = hold.onPointerDownCapture;
   const onPointerDownCapture = useCallback(
     (e: ReactPointerEvent) => {
       holdDown(e);
       press.down(e);
+      strayClick.current = null;
     },
     [holdDown, press],
   );
   const onPointerUpCapture = useCallback(
     (e: ReactPointerEvent) => {
-      const id = press.up(e);
-      strayClick.current = id;
-      // Released over a panel, the click goes to neither: forget it once this input is handled.
-      if (id) setTimeout(() => strayClick.current === id && (strayClick.current = null));
+      const id = press.up(e, document.elementFromPoint(e.clientX, e.clientY));
+      strayClick.current = id ? { id, at: e.timeStamp } : null;
     },
     [press],
   );
   const onClickCapture = useCallback(
     (e: ReactMouseEvent) => {
-      const id = strayClick.current;
-      strayClick.current = null;
+      const id = stray(strayClick, e);
       if (!id || !nodesRef.current.some((n) => n.id === id && !n.hidden)) return;
       e.stopPropagation(); // not a click on the canvas
       // A double-click ending with such a click is one on the card too (see onDoubleClickCapture).
-      strayDouble.current = id;
-      setTimeout(() => strayDouble.current === id && (strayDouble.current = null));
+      strayDouble.current = { id, at: e.timeStamp };
       const toggle = e.shiftKey || e.ctrlKey || e.metaKey || useView.getState().selecting;
       const next = clickedSelection(
         nodesRef.current.filter((n) => n.selected).map((n) => n.id),
@@ -437,8 +441,7 @@ export function GraphCanvas() {
   // ...and so does a double-click (with Physics on it pins the card; the canvas would zoom in instead).
   const onDoubleClickCapture = useCallback(
     (e: ReactMouseEvent) => {
-      const id = strayDouble.current;
-      strayDouble.current = null;
+      const id = stray(strayDouble, e);
       const node = id ? nodesRef.current.find((n) => n.id === id && !n.hidden) : undefined;
       if (!node) return;
       e.stopPropagation();

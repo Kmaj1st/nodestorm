@@ -99,6 +99,12 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
   - The inspector's status pill and hide button go under a long name together; the basic-concept mark on a card is larger (16px); "None: this concept is ready." matches "None: a basic concept…".
   - **Absurd chain:** the offline demo keeps to the length asked for (Medium could give 9 links): four more true facts give other routes, the whole chain is searched through the stops, and when no route fits the closest one is taken and the plausibility line says so. **Add to a new sandbox** (添加到新沙盒) says what it does.
 
+### Fixes from reviewing the above
+
+- A card that slides away during a **tap** (touch) now gets it too, as a click already did: a touch's release goes to the card it first touched, so the canvas asks what is under the finger. A **double-click** on such a card pins it with Physics on (the canvas zoomed in instead).
+- New concepts' larger spacing no longer pushes the **absurd chain's** staircase off its steps or an **installed prerequisite** a further step aside.
+- The injection filter on sources no longer flags everyday phrasings: "an unemployment rate as high as 25%", "instructions for the model", 坏扇区"被标记为不可用", "无视规则的人", "处理器忽略未定义的指令".
+
 ### Tests, tooling and cleanup
 
 - **Vitest 3.2 → 5.0** (Vitest 3 gets no fix for the moderate dev-only advisory GHSA-82fw-gwwq-j7x9 in `@vitest/mocker`); `npm audit` now reports 0 vulnerabilities. No test or config changes were needed. Vite stays on 7.3.6 (the latest 7.x; Vite itself isn't affected), TypeScript on 5.9.3 and `@types/node` on 22.x to match CI's Node 22.

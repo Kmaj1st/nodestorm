@@ -3388,6 +3388,20 @@ try {
     assert((await textIs(count, "1 selected")) && (await card("Kernel").evaluate((el) => el.closest(".react-flow__node").classList.contains("selected"))), "holding a card starts Select several with just that card");
     await card("Normal subgroup").tap();
     assert((await textIs(count, "2 selected")) && (await mix.isEnabled()), "…and a tap on another adds it");
+    // A card that slides away from under the finger during a tap (the view animating) still gets the tap: a touch's
+    // release goes to the card it first touched, its click to the empty canvas.
+    const gb = await card("Group").boundingBox();
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchStart", touchPoints: [{ x: gb.x + 20, y: gb.y + 12 }] });
+    const slideGroup = (away) =>
+      p.evaluate((away) => {
+        const el = document.querySelector('[data-testid="node-Group"]').closest(".react-flow__node");
+        if (away) (el.dataset.was = el.style.transform), (el.style.transform += " translate(-4000px, -4000px)");
+        else el.style.transform = el.dataset.was;
+      }, away);
+    await slideGroup(true);
+    await cdp.send("Input.dispatchTouchEvent", { type: "touchEnd", touchPoints: [] });
+    await slideGroup(false);
+    assert(await textIs(count, "3 selected"), "…also a card that slid away from under the finger during the tap");
     await p.keyboard.press("Escape");
     assert((await p.getByTestId("select-bar").count()) === 0, "Escape leaves Select several");
 

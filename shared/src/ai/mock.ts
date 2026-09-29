@@ -1206,7 +1206,7 @@ export class MockProvider implements Provider {
                   : { kind: "measuring the injectivity of", explanation: "The kernel is the preimage of the identity under a homomorphism." },
                 toNew: zh
                   ? { kind: "决定", explanation: "每个同态都有核，它是定义域的一个正规子群。" }
-                  : { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain.", shortcut: true },
+                  : { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
               },
             ],
           },

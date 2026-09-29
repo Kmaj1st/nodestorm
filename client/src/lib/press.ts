@@ -20,6 +20,8 @@ function cardAt(target: EventTarget | null): string | null {
  * the pointer meanwhile (the view animating after Load example, entering or leaving focus mode, Physics). The browser
  * then sends the click to what holds both (the empty canvas), which would deselect everything and close the inspector.
  * `up` returns the pressed card's id for such a release, null otherwise (released on the card itself, moved, no card).
+ * `under` is what the pointer is over at the release: a touch's events all go to what it first touched (implicit pointer
+ * capture), while its click goes to what is under the finger, so the canvas passes `elementFromPoint` there.
  */
 export function createPressTracker() {
   let press: { id: string; pointerId: number; x: number; y: number } | null = null;
@@ -28,11 +30,11 @@ export function createPressTracker() {
       const id = cardAt(e.target);
       press = id ? { id, pointerId: e.pointerId, x: e.clientX, y: e.clientY } : null;
     },
-    up(e: Pointer): string | null {
+    up(e: Pointer, under: EventTarget | null = e.target): string | null {
       const p = press;
       if (!p || p.pointerId !== e.pointerId) return null;
       press = null;
-      if (cardAt(e.target) === p.id) return null;
+      if (cardAt(under) === p.id) return null;
       return Math.hypot(e.clientX - p.x, e.clientY - p.y) <= CLICK_SLOP ? p.id : null;
     },
   };

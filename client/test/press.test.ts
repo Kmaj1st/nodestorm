@@ -33,6 +33,14 @@ describe("press tracker", () => {
     expect(t.up(at(on(null)))).toBeNull(); // a release with no press
   });
 
+  it("a touch's release (sent to the card it first touched) counts where the finger is", () => {
+    const t = createPressTracker();
+    t.down(at(on("kernel")));
+    expect(t.up(at(on("kernel")), on(null))).toBe("kernel"); // the card slid away from under the finger
+    t.down(at(on("kernel")));
+    expect(t.up(at(on("kernel")), on("kernel"))).toBeNull(); // still on the card: React Flow's own click
+  });
+
   it("a press is used once, and another finger's release doesn't end it", () => {
     const t = createPressTracker();
     t.down(at(on("kernel")));
