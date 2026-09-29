@@ -1,4 +1,4 @@
-import { normalizeName, type ConceptKind, type TheoremAnatomy } from "../model";
+import { ABSURD_HARD_MAX, normalizeName, type ConceptKind, type TheoremAnatomy } from "../model";
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 import { ABSURD_VOICE_ZH, ANATOMY_ZH, BRIDGE_NAME_ZH, BRIDGES_ZH, EXPLAIN_VOICE_ZH, EXPLAIN_ZH, KB_ZH, MATHLIB_WHY_ZH } from "./mockZh";
 
@@ -216,11 +216,11 @@ const EXPLAIN: Record<string, { intuition: string; keyPoints: string[]; examples
 };
 
 /**
- * True facts linking the KB with a few everyday things, for the offline "absurd chain": a Homomorphism is three
- * links from the Fourier transform, which is four from Toast. `kind` reads from a to b, `back` from b to a; both are
+ * True facts linking the KB with a few everyday things, for the offline "absurd chain": a Homomorphism is two
+ * links from the Fourier transform, which is three or four from Toast. `kind` reads from a to b, `back` from b to a; both are
  * active labels (never "is … by"), since a chain can walk a link either way.
  */
-const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string }[] = [
+const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string; shortcut?: boolean }[] = [
   { a: "Subgroup", b: "Group", kind: "living inside", back: "containing", fact: "A subgroup is a subset of a group that is itself a group under the same operation." },
   { a: "Normal subgroup", b: "Subgroup", kind: "being a kind of", back: "narrowing down to", fact: "A normal subgroup is a subgroup that is invariant under conjugation." },
   { a: "Quotient group", b: "Normal subgroup", kind: "building on", back: "giving rise to", fact: "The quotient group $G/N$ is made of the cosets of a normal subgroup $N$." },
@@ -239,6 +239,11 @@ const BRIDGES: { a: string; b: string; kind: string; back: string; fact: string 
   // Anything the demo doesn't know joins through the page it is written on.
   { a: "Written language", b: "Paper", kind: "living on", back: "carrying", fact: "Written language has been recorded on paper for about two thousand years." },
   { a: "Paper", b: "Heat", kind: "burning in", back: "igniting", fact: "Paper catches fire when heated to roughly 230 °C." },
+  // Shortcuts, taken only to make a chain shorter or longer to fit the length asked for.
+  { a: "Kernel", b: "Normal subgroup", kind: "always being", back: "including every", fact: "The kernel of a homomorphism is always a normal subgroup of its domain.", shortcut: true },
+  { a: "First isomorphism theorem", b: "Quotient group", kind: "identifying", back: "featuring in", fact: "The first isomorphism theorem says that $G/\\ker\\varphi$ is isomorphic to the image of $\\varphi$.", shortcut: true },
+  { a: "Exponential function", b: "Heat equation", kind: "shaping the solutions of", back: "using", fact: "The heat equation's fundamental solution is a Gaussian, $\\frac{1}{\\sqrt{4\\pi\\alpha t}} e^{-x^2/(4\\alpha t)}$.", shortcut: true },
+  { a: "Heat", b: "Toast", kind: "making", back: "needing", fact: "Toast is bread browned by dry heat.", shortcut: true },
 ];
 const WRITTEN = "Written language";
 
@@ -587,13 +592,17 @@ export class MockProvider implements Provider {
   }
 
   /**
-   * The shortest route through BRIDGES (avoiding earlier rolls' concepts when another route exists). An end the demo
-   * doesn't know joins through "Written language" (its name is written with letters, which is true of anything).
+   * A route through BRIDGES of the length asked for (`hops`; the longest that fits, avoiding earlier rolls' concepts
+   * when another route exists). When no route fits, the closest length, and the plausibility line says so. An end the
+   * demo doesn't know joins through "Written language" (its name is written with letters, which is true of anything).
    * The narration comes from the style's templates; a "Roll again" (with an avoid list) starts one template later.
-   * The user's stops (`via`) are visited in order, one shortest route per leg, never through a concept an earlier leg
-   * used; a leg with no such route (two unknown stops in a row both need "Written language") is one generic hop.
+   * The user's stops (`via`) are visited in order, never through a concept an earlier leg used; a leg with no such
+   * route (two unknown stops in a row both need "Written language") is one generic hop.
    */
-  private absurdChain(inp: { from: { name: string }; to: { name: string }; via?: { name: string }[]; style?: string; avoid?: string[] }, zh = false) {
+  private absurdChain(
+    inp: { from: { name: string }; to: { name: string }; via?: { name: string }[]; style?: string; avoid?: string[]; hops?: { min: number; max: number } },
+    zh = false,
+  ) {
     const from = inp.from.name;
     const to = inp.to.name;
     const via = (inp.via ?? []).map((v) => v.name);
@@ -616,13 +625,14 @@ export class MockProvider implements Provider {
     /** The chain's own name for a stop it knows, else the stop's name. */
     const canonical = (name: string) => known(name) ?? name;
     const stops = named.map(canonical);
-    type Edge = { next: string; kind: string; fact: string };
-    type Hop = { from: string; to: string; kind: string; fact: string };
+    type Edge = { next: string; kind: string; fact: string; shortcut?: boolean };
+    type Hop = { from: string; to: string; kind: string; fact: string; shortcut?: boolean };
     const edges = new Map<string, Edge[]>();
     const add = (x: string, e: Edge) => edges.set(normalizeName(x), [...(edges.get(normalizeName(x)) ?? []), e]);
-    for (const l of bridges) {
-      add(l.a, { next: l.b, kind: l.kind, fact: l.fact });
-      add(l.b, { next: l.a, kind: l.back, fact: l.fact });
+    for (const [i, l] of bridges.entries()) {
+      const { shortcut } = BRIDGES[i];
+      add(l.a, { next: l.b, kind: l.kind, fact: l.fact, shortcut });
+      add(l.b, { next: l.a, kind: l.back, fact: l.fact, shortcut });
     }
     for (const end of stops) {
       if (known(end)) continue;
@@ -630,50 +640,79 @@ export class MockProvider implements Provider {
       add(end, { next: written, kind: zh ? "借用字符于" : "using the letters of", fact });
       add(written, { next: end, kind: zh ? "书写" : "writing", fact });
     }
-    /** The shortest route from `a` to `b` that passes through none of `blocked`. */
-    const route = (a: string, b: string, blocked: Set<string>): Hop[] | null => {
-      const prev = new Map<string, { at: string; edge: Edge }>();
-      const queue = [a];
-      const seen = new Set([normalizeName(a)]);
-      while (queue.length) {
-        const at = queue.shift()!;
-        if (normalizeName(at) === normalizeName(b)) break;
+    /** Every simple route from `a` to `b` through none of `blocked`, at most `budget` links long (BRIDGES is small). */
+    const routes = (a: string, b: string, blocked: Set<string>, budget: number): Hop[][] => {
+      const out: Hop[][] = [];
+      const walk = (at: string, seen: Set<string>, path: Hop[]) => {
+        if (normalizeName(at) === normalizeName(b)) return void out.push(path);
+        if (path.length >= budget) return;
         for (const e of edges.get(normalizeName(at)) ?? []) {
           const k = normalizeName(e.next);
           if (seen.has(k) || (blocked.has(k) && k !== normalizeName(b))) continue;
-          seen.add(k);
-          prev.set(k, { at, edge: e });
-          queue.push(e.next);
+          walk(e.next, new Set([...seen, k]), [...path, { from: at, to: e.next, kind: e.kind, fact: e.fact, shortcut: e.shortcut }]);
         }
-      }
-      const hops: Hop[] = [];
-      for (let k = normalizeName(b); prev.has(k); ) {
-        const { at, edge } = prev.get(k)!;
-        hops.unshift({ from: at, to: edge.next, kind: edge.kind, fact: edge.fact });
-        k = normalizeName(at);
-      }
-      return hops.length ? hops : null;
+      };
+      walk(a, new Set([normalizeName(a)]), []);
+      return out;
     };
     const avoid = inp.avoid ?? [];
-    const avoided = avoid.map((a) => normalizeName(canonical(a)));
-    const used = new Set<string>();
-    const hops: Hop[] = [];
-    for (let s = 0; s + 1 < stops.length; s++) {
+    // A stop is never avoided, whatever earlier rolls went through.
+    const avoided = new Set(avoid.map((a) => normalizeName(canonical(a))).filter((a) => !stops.some((s) => normalizeName(s) === a)));
+    const { min, max } = inp.hops ?? { min: 1, max: ABSURD_HARD_MAX };
+    /**
+     * How well a whole chain fits, lower first: links short of or past the range asked for, then concepts of earlier
+     * rolls on it, then shortcuts taken, then (within the range) links left unused. On a tie the first found stays.
+     */
+    const score = (hs: Hop[]) => [
+      hs.length < min ? min - hs.length : Math.max(0, hs.length - max),
+      hs.slice(1).filter((h) => avoided.has(normalizeName(h.from))).length,
+      hs.filter((h) => h.shortcut).length,
+      Math.max(0, max - hs.length),
+    ];
+    const better = (a: number[], b: number[]) => {
+      const i = a.findIndex((x, j) => x !== b[j]);
+      return i >= 0 && a[i] < b[i];
+    };
+    let best: { hops: Hop[]; score: number[] } | null = null;
+    let tries = 0;
+    // Leg by leg through the stops, never through a concept already on the chain nor a stop still to come. A leg
+    // with no route at all (two unknown stops in a row both need "Written language") is one generic hop.
+    const legs = (s: number, used: Set<string>, sofar: Hop[]) => {
+      if (++tries > 20000) return;
+      if (s + 1 >= stops.length) {
+        const sc = score(sofar);
+        if (!best || better(sc, best.score)) best = { hops: sofar, score: sc };
+        return;
+      }
       const [a, b] = [stops[s], stops[s + 1]];
-      // Never through a concept already on the chain, nor through a stop still to come.
       const blocked = new Set([...used, ...stops.slice(s + 2).map(normalizeName)]);
-      const leg = route(a, b, new Set([...blocked, ...avoided])) ??
-        route(a, b, blocked) ?? [
-          zh
-            ? { from: a, to: b, kind: "同句提及", fact: `“${named[s]}”和“${named[s + 1]}”可以在同一个句子里提到，就像这句话一样。` }
-            : { from: a, to: b, kind: "sharing a sentence with", fact: `“${named[s]}” and “${named[s + 1]}” can be named in the same sentence, as this one does.` },
-        ];
-      for (const h of leg) used.add(normalizeName(h.from));
-      // The ends and stops keep the names the user gave them.
-      leg[0] = { ...leg[0], from: named[s] };
-      leg[leg.length - 1] = { ...leg[leg.length - 1], to: named[s + 1] };
-      hops.push(...leg);
-    }
+      // Leave a link for each leg still to come; a chain past ABSURD_HARD_MAX would be rejected.
+      const budget = ABSURD_HARD_MAX - sofar.length - (stops.length - s - 2);
+      const found = budget > 0 ? routes(a, b, blocked, budget) : [];
+      const options = found.length || routes(a, b, blocked, Infinity).length
+        ? found
+        : [[
+            zh
+              ? { from: a, to: b, kind: "同句提及", fact: `“${named[s]}”和“${named[s + 1]}”可以在同一个句子里提到，就像这句话一样。` }
+              : { from: a, to: b, kind: "sharing a sentence with", fact: `“${named[s]}” and “${named[s + 1]}” can be named in the same sentence, as this one does.` },
+          ]];
+      for (const route of options) {
+        // The ends and stops keep the names the user gave them.
+        const leg = route.map((h) => ({ ...h }));
+        leg[0].from = named[s];
+        leg[leg.length - 1].to = named[s + 1];
+        legs(s + 1, new Set([...used, ...route.map((h) => normalizeName(h.from))]), [...sofar, ...leg]);
+      }
+    };
+    legs(0, new Set(), []);
+    const hops = ((best as { hops: Hop[] } | null)?.hops ?? []).map(({ shortcut: _, ...h }) => h);
+    const range = min === max ? `${min}` : `${min}–${max}`;
+    // Honest about a length it could not match (the demo knows only a few facts).
+    const off = hops.length < min || hops.length > max
+      ? zh
+        ? `离线演示的事实列表里没有 ${range} 个连线的链，所以这条有 ${hops.length} 个连线。`
+        : ` The demo's short list of facts has no chain of ${range} links here, so this one has ${hops.length}.`
+      : "";
     const voice = (zh ? ABSURD_VOICE_ZH : ABSURD_VOICE)[inp.style ?? "deadpan"] ?? (zh ? ABSURD_VOICE_ZH : ABSURD_VOICE).deadpan;
     const n = voice.quips.length;
     return {
@@ -683,9 +722,9 @@ export class MockProvider implements Provider {
         quip: voice.quips[(i + (avoid.length ? 1 : 0)) % n](h.from, h.to),
       })),
       moral: voice.moral,
-      plausibility: zh
+      plausibility: (zh
         ? "离线演示：连线来自一份内置的简短真实事实列表，笑话来自模板。"
-        : "Offline demo: the links come from a short built-in list of true facts, and the jokes from templates.",
+        : "Offline demo: the links come from a short built-in list of true facts, and the jokes from templates.") + off,
     };
   }
 
@@ -1163,7 +1202,7 @@ export class MockProvider implements Provider {
                   : { kind: "measuring the injectivity of", explanation: "The kernel is the preimage of the identity under a homomorphism." },
                 toNew: zh
                   ? { kind: "决定", explanation: "每个同态都有核，它是定义域的一个正规子群。" }
-                  : { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain." },
+                  : { kind: "determining", explanation: "Every homomorphism has a kernel, a normal subgroup of its domain.", shortcut: true },
               },
             ],
           },

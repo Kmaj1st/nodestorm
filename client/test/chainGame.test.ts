@@ -26,10 +26,10 @@ import {
 } from "../src/lib/chainGame";
 
 // The offline demo's deterministic chain: Homomorphism → Exponential function → Fourier transform → Heat equation →
-// Heat → Maillard reaction → Toast (six links, five hidden concepts).
+// Heat → Maillard reaction → Toast (six links, five hidden concepts), asked for as a long chain (5-7 links).
 let chain: AbsurdChainResponse;
 beforeAll(async () => {
-  chain = await tasks.absurdChain(new MockProvider(), { from: { name: "Homomorphism" }, to: { name: "Toast" }, style: "deadpan" });
+  chain = await tasks.absurdChain(new MockProvider(), { from: { name: "Homomorphism" }, to: { name: "Toast" }, style: "deadpan", hops: { min: 5, max: 7 } });
 });
 
 const memoryStorage = () => {

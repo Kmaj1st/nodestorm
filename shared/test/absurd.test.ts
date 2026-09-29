@@ -97,8 +97,11 @@ describe("absurdChain task", () => {
   it("links Homomorphism to Toast offline through true facts", async () => {
     const out = await tasks.absurdChain(mock, { from: { name: "Homomorphism" }, to: { name: "Toast" }, style: "epic" });
     expect([out.chain[0].from, ...out.chain.map((h) => h.to)]).toEqual([
-      "Homomorphism", "Exponential function", "Fourier transform", "Heat equation", "Heat", "Maillard reaction", "Toast",
+      "Homomorphism", "Exponential function", "Fourier transform", "Heat equation", "Heat", "Toast",
     ]);
+    // A length that fits the demo's main route takes it, without shortcuts.
+    const long = await tasks.absurdChain(mock, { from: { name: "Homomorphism" }, to: { name: "Toast" }, hops: { min: 5, max: 7 } });
+    expect(long.chain.map((h) => h.to)).toEqual(["Exponential function", "Fourier transform", "Heat equation", "Heat", "Maillard reaction", "Toast"]);
     expect(out.chain.every((h) => h.fact && h.quip && h.kind)).toBe(true);
     expect(out.title).toBe("The Saga of Homomorphism and Toast");
     expect(out.moral).toMatch(/prophecy/);
@@ -114,6 +117,32 @@ describe("absurdChain task", () => {
     expect(odd.chain[0].fact).toContain("“Opera”");
     const both = await tasks.absurdChain(mock, { from: { name: "Opera" }, to: { name: "Jazz" } });
     expect(both.chain.map((h) => h.to)).toEqual(["Written language", "Jazz"]);
+  });
+
+  it("offline, keeps to the length asked for, and says so when no chain of that length exists", async () => {
+    const ends = { from: { name: "Homomorphism" }, to: { name: "Toast" } };
+    for (const [min, max] of [[3, 4], [4, 5], [5, 7]]) {
+      const out = await tasks.absurdChain(mock, { ...ends, hops: { min, max } });
+      expect(out.chain.length).toBeGreaterThanOrEqual(min);
+      expect(out.chain.length).toBeLessThanOrEqual(max);
+      expect(out.plausibility).not.toMatch(/no chain of/);
+      // Each concept at most once.
+      const all = [out.chain[0].from, ...out.chain.map((h) => h.to)];
+      expect(new Set(all.map(normalizeName)).size).toBe(all.length);
+    }
+    // A stop, and a medium length: the chain passes through it and still fits.
+    const via = await tasks.absurdChain(mock, { ...ends, via: [{ name: "Heat equation" }], hops: { min: 4, max: 5 } });
+    expect(via.chain.length).toBeGreaterThanOrEqual(4);
+    expect(via.chain.length).toBeLessThanOrEqual(5);
+    expect(via.chain.map((h) => h.to)).toContain("Heat equation");
+    // Too short to be possible: the shortest there is, and a note.
+    const short = await tasks.absurdChain(mock, { ...ends, hops: { min: 1, max: 2 } });
+    expect(short.chain.map((h) => h.to)).toEqual(["Exponential function", "Heat equation", "Heat", "Toast"]);
+    expect(short.plausibility).toContain("no chain of 1–2 links here, so this one has 4");
+    // Too long to be possible: Jazz is only ever two links from Opera.
+    const long = await tasks.absurdChain(mock, { from: { name: "Opera" }, to: { name: "Jazz" }, hops: { min: 5, max: 7 } });
+    expect(long.chain).toHaveLength(2);
+    expect(long.plausibility).toMatch(/this one has 2\.$/);
   });
 
   it("asks again when the chain is broken, and gives up with a ProviderError", async () => {

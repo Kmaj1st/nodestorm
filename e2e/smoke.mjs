@@ -2594,7 +2594,13 @@ try {
     await dlg.getByRole("button", { name: "Swap the two ends" }).click();
     await dlg.getByRole("button", { name: "Build the chain" }).click();
     await result.waitFor();
-    assert((await hops.first().textContent()).includes("Group") && (await hops.count()) === 1, "Swap turns the chain around");
+    // The two are one link apart; for the medium length (4-5 links) the offline demo takes a longer, still true route.
+    assert(
+      (await hops.first().locator(".absurd-hop__ends strong").first().textContent()) === "Group" &&
+        (await hops.last().locator(".absurd-hop__ends strong").last().textContent()) === "Homomorphism" &&
+        (await hops.count()) >= 4 && (await hops.count()) <= 5,
+      "Swap turns the chain around, and the chain keeps to the length asked for",
+    );
     await audit("Absurd chain dialog, dark theme");
     await page.screenshot({ path: `${shots}31-absurd-chain-dark.png` });
     await dlg.getByRole("button", { name: "Close" }).click();
@@ -3025,6 +3031,8 @@ try {
       await d.waitFor();
       await d.getByLabel("From", { exact: true }).fill("Homomorphism");
       await d.getByLabel("To", { exact: true }).fill("Toast");
+      // Long (5-7 links): the offline demo's six-link route through the Fourier transform and the Maillard reaction.
+      await d.getByLabel("Length").selectOption("long");
       await d.getByTestId("absurd-play").click();
       await d.getByTestId("chain-game").waitFor();
       return d;
