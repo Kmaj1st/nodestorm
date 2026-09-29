@@ -391,6 +391,7 @@ export function GraphCanvas() {
   // browser would give it to the empty canvas, deselecting everything and closing the inspector (see lib/press.ts).
   const press = useMemo(createPressTracker, []);
   const strayClick = useRef<string | null>(null);
+  const strayDouble = useRef<string | null>(null);
   const holdDown = hold.onPointerDownCapture;
   const onPointerDownCapture = useCallback(
     (e: ReactPointerEvent) => {
@@ -414,6 +415,9 @@ export function GraphCanvas() {
       strayClick.current = null;
       if (!id || !nodesRef.current.some((n) => n.id === id && !n.hidden)) return;
       e.stopPropagation(); // not a click on the canvas
+      // A double-click ending with such a click is one on the card too (see onDoubleClickCapture).
+      strayDouble.current = id;
+      setTimeout(() => strayDouble.current === id && (strayDouble.current = null));
       const toggle = e.shiftKey || e.ctrlKey || e.metaKey || useView.getState().selecting;
       const next = clickedSelection(
         nodesRef.current.filter((n) => n.selected).map((n) => n.id),
@@ -429,6 +433,18 @@ export function GraphCanvas() {
       }
     },
     [setSelection, setInspect],
+  );
+  // ...and so does a double-click (with Physics on it pins the card; the canvas would zoom in instead).
+  const onDoubleClickCapture = useCallback(
+    (e: ReactMouseEvent) => {
+      const id = strayDouble.current;
+      strayDouble.current = null;
+      const node = id ? nodesRef.current.find((n) => n.id === id && !n.hidden) : undefined;
+      if (!node) return;
+      e.stopPropagation();
+      onNodeDoubleClick(e, node);
+    },
+    [onNodeDoubleClick],
   );
   // Select several ends with the canvas (e.g. the empty-graph start screen replaces it): nothing would show its bar.
   useEffect(() => () => useView.getState().setSelecting(false), []);
@@ -459,6 +475,7 @@ export function GraphCanvas() {
       onPointerDownCapture={onPointerDownCapture}
       onPointerUpCapture={onPointerUpCapture}
       onClickCapture={onClickCapture}
+      onDoubleClickCapture={onDoubleClickCapture}
     >
       <ReactFlow<ConceptFlowNode, RelationFlowEdge>
         key={graph.id}

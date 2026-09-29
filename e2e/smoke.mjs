@@ -406,6 +406,37 @@ try {
     await page.mouse.up();
     await settled();
     assert(!overlapping(await cards()), "…and after a drag");
+    // A double-click pins a card, also one that slides away under the pointer during each click (the canvas would
+    // get the double-click and zoom in instead).
+    const pinnedBecomes = (want) =>
+      page
+        .waitForFunction((want) => {
+          const st = JSON.parse(localStorage.getItem("nodestorm") ?? "{}").state;
+          return Boolean(st.graphs[st.activeId].nodes.find((n) => n.name === "Homomorphism")?.pinned) === want;
+        }, want, { timeout: 3000 })
+        .then(() => true, () => false);
+    const slideHom = (away) =>
+      page.evaluate((away) => {
+        const el = document.querySelector('[data-testid="node-Homomorphism"]').closest(".react-flow__node");
+        if (away) (el.dataset.was = el.style.transform), (el.style.transform += " translate(-4000px, -4000px)");
+        else el.style.transform = el.dataset.was;
+      }, away);
+    const viewTransform = () => page.evaluate(() => document.querySelector(".react-flow__viewport").style.transform);
+    const hom = await node("Homomorphism").boundingBox();
+    await page.mouse.move(hom.x + hom.width / 2, hom.y + hom.height / 2);
+    const zoomBefore = await viewTransform();
+    for (const clickCount of [1, 2]) {
+      await page.mouse.down({ clickCount });
+      await slideHom(true);
+      await page.mouse.up({ clickCount });
+      await slideHom(false);
+    }
+    assert(
+      (await pinnedBecomes(true)) && zoomBefore === (await viewTransform()),
+      "a double-click on a card that slid away under the pointer still pins it (and doesn't zoom)",
+    );
+    await node("Homomorphism").dblclick();
+    assert(await pinnedBecomes(false), "…and another double-click lets it go");
     await page.getByRole("button", { name: "Physics" }).click();
 
     console.log("Layered view");
