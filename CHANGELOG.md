@@ -16,6 +16,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **Sources pop-up polish:** Chinese (and Japanese, Korean) texts are shortened at half the length, and a short view no longer runs to the end of a text without spaces; a cut starts at a word. Rated sources without a meaning label are headed "Other sources" instead of "Not rated". A long title keeps its radio button on the first line. The inspector's source link, its rating and the link icon flow as one line of text.
 - **Sources pop-up from the keyboard:** only the source you're on (its radio, reached with the arrow keys) has its actions (Why?, Open page, Show the whole text, Edit a copy) in the Tab order, so **Use this text** is 6 Tab presses from the first source instead of about 30 with 8 sources. Each action names its source for screen readers ("Edit a copy (demo-encyclopedia.example)"), and the list says how the keys work. Mouse, touch and a screen reader's reading mode reach every action as before.
 - **Web search settings** from the sources pop-up waits for Settings' Web search part to appear (up to 5 s, it may still be loading) and scrolls to it, instead of checking every 50 ms; closing the pop-up ends the wait. It really shows now: opening a dialog no longer scrolls it back to its first field, and a part scrolled to (or a field tabbed to) stops below a dialog's sticky header instead of under it.
+- **No AI set up:** the sources pop-up offers **Set up AI** next to **Web search settings** (it opens Settings at its AI part), and "nothing found" mentions an AI as well as web search. Choosing **My own definition** scrolls its fields into view (smoothly, unless reduced motion is on), and a part scrolled into view in a dialog stops clear of its sticky header and footer.
 
 ### Security
 
@@ -35,6 +36,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **Touch targets:** the zoom buttons and **Select several** are 40px (28px with a mouse), the open "N hidden" list moves clear of them, and the tour's Mix step says to tap **Select several** (or hold a concept) instead of Shift+click; its relation step says "tap".
 - **Notices on phones** show just under the toolbar instead of over the bottom of dialogs and the details sheet, and an open dialog (on any screen) keeps clear of a notice, so its buttons are never covered. They are still announced and dismissed with a tap.
 - **The React Flow attribution** sits under the zoom buttons on a phone instead of over the cards in the bottom-right corner. It sits on a small panel, legible where it meets a card above the details sheet (see the newcomer's walkthrough).
+- **Help and tour:** on a touch screen the canvas button that opens the keyboard shortcuts, the only way back to the tour there, is **Help and tour** (帮助与导览) and starts with **Show tour again**. The **Select several** bar says "Tap to select" and wraps instead of cutting it off on a 390px phone. The details sheet starts at the top when another concept or relation is inspected.
 
 ### Keyboard and focus
 
@@ -48,6 +50,7 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
 - **File names:** exports of the main graph are named in the interface language ("nodestorm-main-graph-…", "nodestorm-主图谱-…"), and Chinese (or accented) graph and project names are kept in the file name instead of dropped. The graph menu shows a main graph that was renamed by its name.
 - **Chinese PDFs** whose fonts aren't embedded are read: see PDF import.
 - **中文, leftovers:** a definition from Baidu Baike or Moegirl names its source 百度百科 or 萌娘百科 (in the sources pop-up, the inspector, Derive together and the Markdown notes; saved definitions included), and the repairs listed after an import or a reload, and the cycles an **Install all** stopped at, are separated by ； instead of "; ". A first visit's project is called 我的头脑风暴 (it was "My brainstorm": it was named before the Chinese text had loaded); "来源：" and "定义（可选）" lose the stray space after the Chinese colon and before the bracket.
+- "无法连接：{sites}。" instead of a space before Chinese site names; "无：这个概念已就绪。" like "无：基础概念视为已知。".
 
 ### Derive together and PDF import
 
@@ -82,6 +85,12 @@ by theme. Bullets that later work changed carry a short *later:* note instead of
   - The sources pop-up drops "Pick the passage…" when nothing was found. The View menu and Settings say **Prerequisite links** (前置知识连线) instead of "Dependency links".
   - On a phone, React Flow's attribution sits on a small panel, legible where it meets a card above the details sheet.
   - The offline demo's pretend web writes "Lagrange's Theorem" (not "Lagrange'S") and "What is an isomorphism?".
+- **A newcomer's walkthrough, second round:**
+  - The example graph's definitions say **Source: NodeStorm example** (NodeStorm 示例) instead of "not recorded"; files, exports and share links keep it. Each walkthrough slide shows its definition's source, and the Markdown notes are headed "Project — Main graph".
+  - **Settings → Meanings from encyclopedias** (was "Ambiguous names / Ask what I mean…"): "Offer up to [3] meanings from each encyclopedia" (every look-up uses it, so it is no longer greyed out with the checkbox), and the checkbox says it is about **Look up in…**. Rows with number fields read as a sentence, on the fields' baseline, without a lone word on the last line.
+  - A new concept keeps the layered layout's distance from the cards around it (it could land 6px under a tall card).
+  - The inspector's status pill and hide button go under a long name together; the basic-concept mark on a card is larger (16px); "None: this concept is ready." matches "None: a basic concept…".
+  - **Absurd chain:** the offline demo keeps to the length asked for (Medium could give 9 links): four more true facts give other routes, the whole chain is searched through the stops, and when no route fits the closest one is taken and the plausibility line says so. **Add to a new sandbox** (添加到新沙盒) says what it does.
 
 ### Tests, tooling and cleanup
 
