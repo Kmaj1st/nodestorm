@@ -3291,7 +3291,7 @@ try {
     const mix = p.getByRole("button", { name: "Mix", exact: true });
     const count = p.getByTestId("select-count");
     await toggle.tap();
-    assert((await toggle.getAttribute("aria-pressed")) === "true" && (await count.textContent()) === "Tap concepts to select them", "Select several is on, and its bar says what to do");
+    assert((await toggle.getAttribute("aria-pressed")) === "true" && (await count.textContent()) === "Tap to select", "Select several is on, and its bar says what to do");
     assert((await mix.isDisabled()) && (await mix.getAttribute("title")).includes("pick exactly two"), "Mix is disabled, its tooltip says to pick two");
     await card("Subgroup").tap();
     await card("Homomorphism").tap();

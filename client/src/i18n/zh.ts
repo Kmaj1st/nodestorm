@@ -608,6 +608,7 @@ export const zh: Record<MessageKey, string> = {
   "update.later": "稍后",
   "shortcuts.title": "键盘快捷键",
   "shortcuts.button": "键盘快捷键（?）",
+  "shortcuts.buttonTouch": "帮助与导览",
   "shortcuts.or": "或",
   "shortcuts.general": "通用",
   "shortcuts.canvas": "画布",

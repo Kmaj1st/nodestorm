@@ -1,8 +1,9 @@
 import { ControlButton } from "@xyflow/react";
-import { Keyboard } from "lucide-react";
-import { useEffect } from "react";
+import { CircleHelp, Keyboard } from "lucide-react";
+import { useEffect, useMemo } from "react";
 import { create } from "zustand";
 import { useT } from "../i18n";
+import { touchScreen } from "../lib/touch";
 import { ShortcutsDialog } from "./lazy";
 import { Icon } from "../ui/Icon";
 
@@ -26,12 +27,17 @@ export function ShortcutsHelp() {
   return open ? <ShortcutsDialog onClose={() => setOpen(false)} /> : null;
 }
 
-/** The keyboard-shortcuts button among the canvas zoom controls ("?" opens it too). */
+/**
+ * The keyboard-shortcuts button among the canvas zoom controls ("?" opens it too). On a touch screen, where it is the
+ * way back to the tour, it is "Help and tour".
+ */
 export function ShortcutsButton() {
   const t = useT();
+  const touch = useMemo(touchScreen, []);
+  const label = t(touch ? "shortcuts.buttonTouch" : "shortcuts.button");
   return (
-    <ControlButton onClick={() => setOpen(true)} title={t("shortcuts.button")} aria-label={t("shortcuts.button")} className="shortcuts-button">
-      <Icon icon={Keyboard} size={14} />
+    <ControlButton onClick={() => setOpen(true)} title={label} aria-label={label} className="shortcuts-button">
+      <Icon icon={touch ? CircleHelp : Keyboard} size={14} />
     </ControlButton>
   );
 }
