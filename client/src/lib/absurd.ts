@@ -67,7 +67,8 @@ export function chainToText(res: AbsurdChainResponse): string {
   return lines.join("\n");
 }
 
-const STEP = { x: 140, y: ops.NODE_SIZE.h + 70 };
+// A step down is at least the gap kept around new concepts (LAYOUT_GAP), so addNode leaves each on its step.
+const STEP = { x: 140, y: ops.NODE_SIZE.h + ops.LAYOUT_GAP.y };
 
 /**
  * Put a chain into a graph (meant for a fresh sandbox): concepts not already there are added (by name or alias,

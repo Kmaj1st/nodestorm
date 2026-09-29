@@ -447,10 +447,12 @@ export function installPosition(g: Graph, dependentId: string, index: number) {
   const d = g.nodes.find((n) => n.id === dependentId);
   const base = d?.position ?? defaultPosition(g);
   const spot = { x: base.x + (index - 0.5) * 300, y: base.y - 240 };
-  // Slide sideways past nodes already there (recursive installs stack whole chains up).
+  // Slide sideways past nodes already there (recursive installs stack whole chains up), as far as addNode keeps new
+  // concepts from others (LAYOUT_GAP), so it leaves the spot as it is.
+  const w = NODE_SIZE.w + LAYOUT_GAP.x;
   const taken = (p: { x: number; y: number }) =>
-    g.nodes.some((n) => Math.abs(n.position.x - p.x) < 240 && Math.abs(n.position.y - p.y) < 160);
-  for (let i = 0; i < 20 && taken(spot); i++) spot.x += 260;
+    g.nodes.some((n) => Math.abs(n.position.x - p.x) < w && Math.abs(n.position.y - p.y) < NODE_SIZE.h + LAYOUT_GAP.y);
+  for (let i = 0; i < 20 && taken(spot); i++) spot.x += w;
   return spot;
 }
 

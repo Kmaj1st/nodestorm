@@ -122,6 +122,9 @@ describe("applyAbsurdChain", () => {
     expect(ys[0]).toBeLessThan(ys[1]);
     expect(ys[1]).toBeLessThan(ys[2]);
     expect(graph.nodes.every((n) => Math.abs(n.position.x - 1000) < 600)).toBe(true);
+    // Evenly spaced steps: no concept pushed off the staircase by the spacing kept around new concepts.
+    const steps = graph.nodes.slice(1).map((n, i) => `${n.position.x - graph.nodes[i].position.x},${n.position.y - graph.nodes[i].position.y}`);
+    expect(new Set(steps).size, steps.join(" ")).toBe(1);
   });
 });
 

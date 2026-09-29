@@ -74,6 +74,9 @@ describe("dependencies", () => {
     const second = ops.installPosition(g2, thmId, 0);
     expect(second.y).toBe(first.y);
     expect(second.x - first.x).toBeGreaterThanOrEqual(240);
+    // ...clear enough for addNode (which keeps LAYOUT_GAP around a new concept) to leave it on that spot.
+    const g3 = ops.addNode(g2, { name: "Kernel", position: second });
+    expect(g3.graph.nodes.find((n) => n.id === g3.id)?.position).toEqual(second);
   });
 
   it("removing a node cleans up relations and dependsOn", () => {
