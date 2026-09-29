@@ -3151,7 +3151,8 @@ try {
     await page.screenshot({ path: `${shots}37-chain-game-dark.png` });
     await dlg.getByRole("button", { name: "Play again" }).click();
     await summary.waitFor({ state: "detached" });
-    await page.waitForFunction(() => document.querySelector('[data-testid="chain-game-score"]')?.textContent === "Score 0 / 15");
+    // Play again asks for another route between the same ends (it may be shorter, so the score is out of less).
+    await page.waitForFunction(() => /^Score 0 \/ \d+$/.test(document.querySelector('[data-testid="chain-game-score"]')?.textContent ?? ""));
     await page.waitForFunction(() => document.activeElement?.closest(".chain-game__guess"));
     assert(true, "Play again starts a new game between the same ends");
     await dlg.getByRole("button", { name: "Close" }).click();
