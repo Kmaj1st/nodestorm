@@ -23,13 +23,14 @@ import type {
   MathlibRequest,
   ConnectRequest,
   AssessRequest,
+  LatexifyRequest,
 } from "../model";
 import { normalizeName } from "../model";
 import { normalizeLanguage, type ChatMessage } from "./provider";
 
 export type TaskKind = "name" | "relate" | "deps" | "derive" | "explain" | "extract" | "quiz" | "resolveCycle"
   | "readPage" | "splitProblems" | "tutorHint" | "checkStep" | "mathlib" | "absurdChain" | "anatomy" | "refereeReport" | "connect"
-  | "assess";
+  | "assess" | "latexify";
 
 export const BASE_PROMPT = `You are NodeStorm, an assistant inside a concept-graph brainstorming tool.
 Nodes are concepts (definitions, theorems, ideas, techniques...). Be precise and use standard terminology of the relevant field.
@@ -297,6 +298,25 @@ Schema: {"remove":number[],"reason":string}`,
         .map(brief)
         .join("\n")}\n\nLinks on the cycle:\n${list}`,
     ),
+  ];
+}
+
+/** "Formulas → LaTeX": only the formulas written with Unicode symbols are rewritten; every other character stays. */
+export function latexifyPrompt(req: LatexifyRequest): ChatMessage[] {
+  return [
+    sys(
+      "latexify",
+      `The text below is a definition from a concept graph. Some of its formulas are written with Unicode symbols
+(e.g. "φ(ab) = φ(a)φ(b)", "x² ≤ y", "f: A → B", "∀ε > 0") instead of LaTeX. Rewrite ONLY those formulas as LaTeX
+between single dollar signs (e.g. "$\\varphi(ab) = \\varphi(a)\\varphi(b)$", "$x^2 \\le y$", "$f\\colon A \\to B$").
+Everything else must stay exactly as it is: do not reword, translate, correct, shorten or add anything; keep every
+word, punctuation mark and line break outside the formulas; keep formulas that are already LaTeX unchanged; a single
+variable written as a plain letter inside a formula belongs in the formula's dollars. If nothing needs rewriting,
+return the text unchanged.
+"text": the whole definition with its formulas rewritten.
+Schema: {"text":string}`,
+    ),
+    input(req, "Definition:"),
   ];
 }
 

@@ -29,7 +29,9 @@ beforeEach(() => {
   resetSources();
   fake.ready = true;
   fake.pages = undefined;
-  useSettings.setState({ connection: "browser", provider: "mock" });
+  useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
+    connection: "browser", provider: "mock" });
 });
 
 describe("looksInjected", () => {

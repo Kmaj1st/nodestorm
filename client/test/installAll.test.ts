@@ -38,7 +38,9 @@ function seed(name: string, missing: string[]) {
 
 beforeEach(() => {
   store().reset();
-  useSettings.setState({ connection: "browser", provider: "mock", installAll: { maxDepth: 3, maxNodes: 15 } });
+  useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
+    connection: "browser", provider: "mock", installAll: { maxDepth: 3, maxNodes: 15 } });
 });
 
 describe("install all missing", () => {

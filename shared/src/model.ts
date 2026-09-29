@@ -469,6 +469,23 @@ export const ResolveCycleResponse = z.object({
 });
 export type ResolveCycleResponse = z.infer<typeof ResolveCycleResponse>;
 
+/** Longest definition "Formulas → LaTeX" rewrites (characters). */
+export const LATEXIFY_MAX = 4000;
+
+/** A text whose formulas are written with Unicode symbols ("φ(ab) = φ(a)φ(b)", "x² ≤ y") rather than LaTeX. */
+export const LatexifyRequest = z.object({
+  text: z.string().check(z.minLength(1), z.maxLength(LATEXIFY_MAX)),
+});
+export type LatexifyRequest = z.infer<typeof LatexifyRequest>;
+
+export const LatexifyResponse = z.object({
+  /** The same text with only its formulas rewritten as LaTeX between $…$. */
+  text: z.string(),
+  /** Set by the app (not the AI): the answer changed more than the formulas, so `text` is the original. */
+  rejected: z.optional(z.boolean()),
+});
+export type LatexifyResponse = z.infer<typeof LatexifyResponse>;
+
 /** Longest text "Extract from text" accepts (characters): a few pages, which fits every provider's context. */
 export const EXTRACT_MAX_CHARS = 12_000;
 

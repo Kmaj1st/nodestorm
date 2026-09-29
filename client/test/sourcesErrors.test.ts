@@ -34,6 +34,7 @@ beforeEach(() => {
   resetSources();
   Object.assign(fake, { ready: true, pages: undefined, failed: [], error: undefined, fresh: undefined });
   useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
     newConcepts: "ask",
     connection: "browser",
     provider: "mock",

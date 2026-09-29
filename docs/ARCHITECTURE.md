@@ -226,7 +226,7 @@ never races a write.
   message when the user picked an answer language (`"auto"` means "match the input").
 - `shared/src/ai/tasks.ts`: the `tasks` object, one entry per task:
   `name`, `relate`, `deps`, `derive`, `explain`, `anatomy`, `extract`, `quiz`, `resolveCycle`, `absurdChain`,
-  `mathlib`, `connect`, `assess`, and for Derive together `readPage`, `splitProblems`, `tutorHint`, `checkStep` and `refereeReport`. Each parses the request with its zod
+  `mathlib`, `connect`, `assess`, `latexify`, and for Derive together `readPage`, `splitProblems`, `tutorHint`, `checkStep` and `refereeReport`. Each parses the request with its zod
   schema, builds the prompt and calls `runStructured`, which:
   1. calls `provider.complete(messages, { json: true, … })`,
   2. pulls the JSON object out of the reply with **`extractJson`** (tolerates code fences, prose, and a leading
@@ -236,6 +236,11 @@ never races a write.
   Timeouts and cancellation are not retried there. Some tasks post-process: `relate` turns a passive side into "none" (`activeOnly`), `extract` runs `cleanExtraction` (dedupe, cap 40 concepts, drop relations with unknown
   ends), `quiz` runs `cleanQuiz` (a multiple-choice set only if it's four distinct options with a valid index),
   `anatomy` runs `cleanAnatomy` (trimmed, no empty hypotheses, at most 8 hypotheses and 3 examples / non-examples).
+  `latexify` ("Formulas → LaTeX", `latexifyDefinition` in actions.ts) rewrites a definition's Unicode formulas as
+  LaTeX without the output-language paragraph, and returns `{text: <the original>, rejected: true}` unless
+  `onlyFormulasChanged` (`shared/src/latexify.ts`: the words outside formulas, `proseWords`, are the same in order);
+  the inspector offers it when `hasUnicodeMath`. The offline demo's `latexifyDemo` wraps runs of Unicode symbols with
+  the letters and operators around them.
 
 **Concept kinds in prompts.** `KIND_GUIDE` / `KIND_VALUES` in `prompts.ts` describe the kinds; the `name`,
 `deps`, `derive` and `extract` prompts ask for one, and `languageInstruction` keeps the kind values in English.
@@ -333,8 +338,11 @@ user's (`OWN_SOURCE`), never text the AI wrote.
 
 - **Gathering** (`gatherSources(name, {signal, hint, context, onChecking, fresh})`): `lookupEverywhere` (every enabled
   encyclopedia and wiki) and `searchWeb` (when `searchReady()`) side by side; `mergeFound` makes one `Source` list
-  (encyclopedias first, a web page's site is its host, one source per URL). With an AI ready, one `api.assess` call
-  rates up to `ASSESS_MAX` (10) sources, texts cut to `ASSESS_TEXT_MAX` (2500); `mergeRatings` adds reliability,
+  (encyclopedias first, a web page's site is its host, one source per URL). The AI rates them only when asked
+  (`rate`: the pop-up's "Check reliability with AI", i.e. `compareSources(…, {rate: true})`), or by itself with
+  Settings' `autoRate` or `newConcepts: "auto"`; unrated results are cached like rated ones. Then one `api.assess`
+  call rates up to 8 sources (of `ASSESS_MAX`), each text a window of 1200 characters around its passage
+  (`assessExcerpt`, within `ASSESS_TEXT_MAX`); `mergeRatings` adds reliability,
   reasons, the meaning label and the passage, and sorts (high → unusable, not rated last). Without an AI (or when the
   check fails: `assessError`) the sources stay unrated in the order found, each with a default passage
   (`defaultPassage`: an encyclopedia's whole definition, a page's first sentence or two, both substrings of the text).

@@ -3,7 +3,7 @@ import { ExternalLink } from "lucide-react";
 import { Fragment, memo, useEffect, useId, useMemo, useRef, useState, type ReactNode } from "react";
 import { listJoin, useLang, useT } from "../i18n";
 import type { MessageKey } from "../i18n";
-import { cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
+import { aiSource, cancelTask, chooseSense, compareSources, relookupKey, replaceDefinition } from "../lib/actions";
 import { siteLabel } from "../lib/export";
 import { OWN_SOURCE, removeNode } from "../lib/graphOps";
 import { mathRanges } from "../lib/math";
@@ -244,9 +244,37 @@ function SourcesChoice({ graphId, node, found, replace, set }: { graphId: string
         </section>
       )}
       {found && !found.rated && sources.length > 0 && (
-        <p className="sources__unrated small muted" data-testid="sources-unrated">
-          {found.assessError ? t("sources.assessFailed", { error: found.assessError }) : t("sources.notRated")}
-        </p>
+        <div className="sources__unrated small" data-testid="sources-unrated">
+          {searching && task?.phase === "rating" ? (
+            <p role="status" data-testid="sources-rating">
+              <span className="spinner spinner--xs" aria-hidden="true" />
+              {t("sources.rating")}{" "}
+              <button type="button" className="link" onClick={() => cancelTask(relookupKey(graphId, node.id))}>
+                {t("sources.rateCancel")}
+              </button>
+            </p>
+          ) : (
+            <>
+              <p className="muted">
+                {found.assessError
+                  ? t("sources.assessFailed", { error: found.assessError })
+                  : t(aiReady ? "sources.notRatedYet" : "sources.notRated")}
+              </p>
+              {/* The AI rates only when asked: an AI call can take a long while, and the sources are usable without it. */}
+              {aiReady && !searching && (
+                <button
+                  type="button"
+                  className="small-btn"
+                  onClick={() => void compareSources(node.id, graphId, { rate: true, ifOpen: true })}
+                  title={t("sources.rateTitle", { model: aiSource().title })}
+                  data-testid="sources-rate"
+                >
+                  {t("sources.rate")}
+                </button>
+              )}
+            </>
+          )}
+        </div>
       )}
       {!found && searching && (
         <p className="small sources__searching" role="status" data-testid="sources-searching">

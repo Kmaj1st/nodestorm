@@ -42,7 +42,10 @@ import {
   AssessRequest,
   AssessResponse,
   type AssessRating,
+  LatexifyRequest,
+  LatexifyResponse,
 } from "../model";
+import { onlyFormulasChanged } from "../latexify";
 import type * as z from "zod/mini";
 import { isLeanName } from "../lookup/loogle";
 import { ProviderError, type ChatMessage, type Provider, type RequestOptions } from "./provider";
@@ -65,6 +68,7 @@ import {
   refereeReportPrompt,
   relatePrompt,
   assessPrompt,
+  latexifyPrompt,
   withLanguage,
 } from "./prompts";
 
@@ -379,6 +383,15 @@ export const tasks = {
   assess: async (p: Provider, body: unknown, o?: RequestOptions) => {
     const req = AssessRequest.parse(body);
     return cleanAssessment(await runStructured(p, assessPrompt(req), AssessResponse, o), req);
+  },
+  latexify: async (p: Provider, body: unknown, o?: RequestOptions): Promise<LatexifyResponse> => {
+    const req = LatexifyRequest.parse(body);
+    // The text keeps its language whatever the interface language is, so no language paragraph.
+    const res = await runStructured(p, latexifyPrompt(req), LatexifyResponse, { ...o, language: undefined, maxTokens: 4096 });
+    const text = res.text.trim();
+    // Only the formulas may change: an answer that reworded, dropped or added words is refused.
+    if (!text || !onlyFormulasChanged(req.text, text)) return { text: req.text, rejected: true };
+    return { text };
   },
 };
 export type TaskName = keyof typeof tasks;

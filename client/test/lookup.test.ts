@@ -48,6 +48,7 @@ beforeEach(() => {
   fake.ready = false;
   fake.pages = undefined;
   useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
     newConcepts: "auto", // the automatic flow (lookupFlow.test.ts has the asking one)
     connection: "browser",
     provider: "mock",

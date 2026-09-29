@@ -1,4 +1,4 @@
-import { isTheoremLike, leanEditorUrl, loogleSearchUrl, mathlibDocUrl, openAlexSearchUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
+import { hasUnicodeMath, isTheoremLike, leanEditorUrl, loogleSearchUrl, mathlibDocUrl, openAlexSearchUrl, type ConceptKind, type ConceptNode, type ExplainLevel, ExplainVoice, type Graph, type RelationOrigin } from "@nodestorm/shared";
 import {
   ArrowDown,
   ArrowLeftRight,
@@ -21,6 +21,7 @@ import {
   Presentation,
   RefreshCw,
   Search,
+  Sigma,
   Sparkles,
   Trash2,
   TriangleAlert,
@@ -37,6 +38,8 @@ import { listJoin, rich, useLang, useT, type MessageKey } from "../i18n";
 import {
   aiSource,
   analyzeNode,
+  latexifyDefinition,
+  latexifyKey,
   checkWithAi,
   compareSources,
   openSources,
@@ -651,6 +654,7 @@ function DefinitionField({ node, graphId, viewing }: { node: ConceptNode; graphI
   const mutate = useGraphStore((s) => s.mutate);
   const [editing, setEditing] = useState(false);
   const editButton = useRef<HTMLButtonElement>(null);
+  const latexifying = useGraphStore((s) => Boolean(s.busy[latexifyKey(graphId, node.id)]));
   const done = () => {
     setEditing(false);
     requestAnimationFrame(() => editButton.current?.focus());
@@ -669,6 +673,18 @@ function DefinitionField({ node, graphId, viewing }: { node: ConceptNode; graphI
           >
             <Icon icon={editing ? Check : Pencil} size={14} />
             {t(editing ? "def.done" : "def.edit")}
+          </button>
+        )}
+        {!viewing && (latexifying || hasUnicodeMath(node.definition)) && (
+          <button
+            className="small-btn"
+            onClick={() => void latexifyDefinition(node.id, graphId)}
+            disabled={latexifying}
+            title={t("latexify.title", { model: aiSource().title })}
+            data-testid="definition-latexify"
+          >
+            {latexifying ? <span className="spinner" aria-hidden="true" /> : <Icon icon={Sigma} size={14} />}
+            {t(latexifying ? "latexify.running" : "latexify.button")}
           </button>
         )}
       </div>

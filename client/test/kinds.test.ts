@@ -30,7 +30,9 @@ const byName = (name: string) => graph().nodes.find((n) => n.name === name);
 
 beforeEach(() => {
   store().reset();
-  useSettings.setState({ connection: "browser", provider: "mock" });
+  useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
+    connection: "browser", provider: "mock" });
 });
 
 describe("kind graph operations", () => {

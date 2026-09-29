@@ -30,6 +30,7 @@ import {
   type RelateRequest,
   type TaskName,
   type AssessRequest,
+  type LatexifyRequest,
 } from "@nodestorm/shared";
 import { t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
@@ -146,6 +147,7 @@ export const api = {
     run("checkStep", req, signal),
   refereeReport: (req: Partial<RefereeRequest> & Pick<RefereeRequest, "problem">, signal?: AbortSignal) =>
     run("refereeReport", req, signal),
+  latexify: (req: LatexifyRequest, signal?: AbortSignal) => run("latexify", req, signal),
   assess: (req: Partial<AssessRequest> & Pick<AssessRequest, "name" | "sources">, signal?: AbortSignal) => run("assess", req, signal),
   absurdChain: (req: Partial<AbsurdChainRequest> & Pick<AbsurdChainRequest, "from" | "to">, signal?: AbortSignal) =>
     run("absurdChain", req, signal),

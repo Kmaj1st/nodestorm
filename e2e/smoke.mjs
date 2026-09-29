@@ -1932,6 +1932,25 @@ try {
     await definition.fill(source);
     await card.locator(".katex").first().waitFor();
 
+    // "Formulas → LaTeX": offered only for Unicode formulas; the AI rewrites them and nothing else, as one undo step.
+    const latexify = page.getByTestId("definition-latexify");
+    assert((await latexify.count()) === 0, "no “Formulas → LaTeX” for a definition already in LaTeX");
+    const unicode = "A map φ: G → H with φ(ab) = φ(a)φ(b) for all a, b ∈ G.";
+    await definition.fill(unicode);
+    await page.getByTestId("definition-edit").click(); // done editing (the typing is its own undo step)
+    await latexify.click();
+    await latexify.waitFor({ state: "detached" });
+    const rewritten = await (await definitionField()).inputValue();
+    assert(
+      rewritten === "A map $\\varphi: G \\to H$ with $\\varphi(ab) = \\varphi(a)\\varphi(b)$ for all a, $b \\in G$.",
+      `“Formulas → LaTeX” rewrote only the formulas (${rewritten})`,
+    );
+    assert((await page.locator(".toast").textContent()).includes("LaTeX"), "…and says so");
+    await page.getByRole("button", { name: "Undo", exact: true }).click();
+    assert((await definition.inputValue()) === unicode, "one Undo brings the Unicode formulas back");
+    await definition.fill(source);
+    await card.locator(".katex").first().waitFor();
+
     await setTheme("dark");
     await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
     const [mathColor, textColor] = await card.locator(".concept__def").evaluate((el) => [
@@ -2198,9 +2217,13 @@ try {
     await dlg.getByTestId("source-item").first().waitFor();
     const sources = await dlg.getByTestId("source-item").evaluateAll((els) => els.map((e) => e.dataset.site));
     assert(sources[0] === "ProofWiki" && sources.includes("Fandom (minecraft)"), `the pop-up lists every source, the encyclopedias with the web pages: ${sources}`);
+    const tasksBefore = await page.getByTestId("task").count();
+    assert(tasksBefore === 0 && (await dlg.getByTestId("sources-rate").count()) === 1, "adding a concept runs no AI task: the sources wait unrated, with “Check reliability with AI”");
+    await dlg.getByTestId("sources-rate").click();
+    await dlg.getByRole("heading", { name: /^Meaning:/ }).first().waitFor();
     assert(
       (await dlg.getByRole("heading", { name: /^Meaning:/ }).count()) === 2,
-      "the Minecraft wiki's block is another meaning of the name: the sources are grouped by meaning",
+      "the Minecraft wiki's block is another meaning of the name: once rated, the sources are grouped by meaning",
     );
     assert((await dlg.getByTestId("sense-searched").textContent()).includes("Searched ProofWiki, Wikipedia, Fandom (minecraft)"), "…and says what was searched");
     assert((await dlg.getByTestId("sense-ask-ai").count()) === 0 && (await dlg.getByRole("button", { name: "Ask the AI" }).count()) === 0, "there is no “Ask the AI”: the AI doesn't write definitions");
@@ -2355,7 +2378,15 @@ try {
 
     await addByName("Homomorphism");
     await dlg.getByTestId("source-item").first().waitFor();
-    const rated = await dlg.getByTestId("source-item").evaluateAll((els) =>
+    // The sources show at once, unrated: the AI checks them only when asked (an AI call can take a long while).
+    assert(
+      (await dlg.getByTestId("sources-unrated").count()) === 1 && (await dlg.getByTestId("source-reliability").count()) === 0,
+      "the sources show at once, not rated by the AI yet",
+    );
+    await dlg.getByTestId("sources-rate").click();
+    await dlg.getByTestId("sources-note").waitFor();
+    assert((await dlg.getByTestId("sources-unrated").count()) === 0, "“Check reliability with AI” rates them");
+    const rated =await dlg.getByTestId("source-item").evaluateAll((els) =>
       els.map((e) => `${e.dataset.site}:${e.querySelector('[data-testid="source-reliability"]').textContent}`),
     );
     assert(rated.includes("demo-encyclopedia.example:Reliable") && rated.includes("demo-lecture-notes.example:Reliable"), `the sources are listed with reliability badges: ${rated}`);
@@ -2542,6 +2573,9 @@ try {
       const zh = p.getByRole("dialog", { name: "来源" });
       await zh.getByText("“Kernel”的来源").waitFor();
       await zh.getByTestId("source-item").first().waitFor();
+      assert((await zh.getByRole("button", { name: "用 AI 检查可靠性" }).count()) === 1, "in 中文 the sources wait for “用 AI 检查可靠性”");
+      await zh.getByRole("button", { name: "用 AI 检查可靠性" }).click();
+      await zh.getByText("存疑").waitFor();
       assert((await zh.getByText("存疑").count()) === 1 && (await zh.getByRole("button", { name: "使用这段文字" }).count()) === 1, "in 中文 the pop-up is Chinese");
       await p.screenshot({ path: `${shots}39-sources-zh.png` });
       await zh.getByRole("button", { name: "稍后" }).click();
@@ -2574,6 +2608,8 @@ try {
         `a Chinese name finds the demo's Chinese pages (${sites})`,
       );
       const forum = zh.locator('[data-site="zh.demo-forum.example"]');
+      await zh.getByTestId("sources-rate").click();
+      await zh.getByTestId("sources-note").waitFor();
       await forum.getByText("原因").click();
       const reasons = await zh.getByTestId("source-reasons").allTextContents();
       assert(

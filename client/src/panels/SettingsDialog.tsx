@@ -47,6 +47,7 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
   const [autoResolveCycles, setAutoResolveCycles] = useState(saved.autoResolveCycles);
   const [lookup, setLookup] = useState(saved.lookup);
   const [newConcepts, setNewConcepts] = useState(saved.newConcepts);
+  const [autoRate, setAutoRate] = useState(saved.autoRate);
   const [language, setLanguage] = useState(saved.language);
   // The custom-text box shows when the saved language isn't a preset, or once "Other…" is picked.
   const [customLanguage, setCustomLanguage] = useState(!LANGUAGES.some((l) => l.value === saved.language));
@@ -109,14 +110,14 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
     useTheme.getState().setEdgeColors(edgeColors);
     const lang = normalizeLanguage(language) ?? "auto";
     saved.update({
-      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language: lang, aiConcurrency, search,
+      connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoRate, autoResolveCycles, language: lang, aiConcurrency, search,
     });
     useGraphStore.getState().setToast(null); // any "set up AI" error is now stale
     onClose();
   };
 
   // Anything changed and not saved: Escape, the backdrop and X ask before throwing it away.
-  const draft = { connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoResolveCycles, language, aiConcurrency, search };
+  const draft = { connection, provider, configs, serverModels, visionModels, rememberKeys, clarify, installAll, lookup, newConcepts, autoRate, autoResolveCycles, language, aiConcurrency, search };
   const stored = Object.fromEntries(Object.keys(draft).map((k) => [k, saved[k as keyof typeof draft]]));
   const dirty =
     uiLang !== useLocale.getState().pref ||
@@ -388,6 +389,10 @@ export function SettingsDialog({ onClose }: { onClose: () => void }) {
             data-testid="new-concepts-ask"
           />
           {t("settings.newConceptsAsk")}
+        </label>
+        <label className="check">
+          <input type="checkbox" checked={autoRate} onChange={(e) => setAutoRate(e.target.checked)} data-testid="auto-rate" />
+          {t("settings.autoRate")}
         </label>
         <label className="check">
           <input type="checkbox" checked={lookup.enabled} onChange={(e) => setLookup({ ...lookup, enabled: e.target.checked })} />

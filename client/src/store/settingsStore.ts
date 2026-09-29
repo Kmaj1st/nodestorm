@@ -35,6 +35,11 @@ interface SettingsState {
    * asks; "auto" takes the most reliable source's passage and checks prerequisites right away.
    */
   newConcepts: "ask" | "auto";
+  /**
+   * Have the AI rate the sources for a definition as soon as they are found. Off by default: an AI call can take a long
+   * while, so the sources show at once and the user asks for a rating ("Check reliability with AI").
+   */
+  autoRate: boolean;
   /** When a prerequisite check closes a dependency cycle, let the AI pick the wrong link and remove it. */
   autoResolveCycles: boolean;
   /** Language the AI writes names, definitions and relations in: "auto" (match the input) or a language name. */
@@ -171,6 +176,7 @@ export const useSettings = create<SettingsStore>()(
       installAll: { maxDepth: 3, maxNodes: 15 },
       lookup: { enabled: true, proofwiki: true, wikipedia: true, baidu: true, fandom: "", bwiki: "" },
       newConcepts: "ask",
+      autoRate: false,
       autoResolveCycles: true,
       language: "auto",
       aiConcurrency: DEFAULT_CONCURRENCY,

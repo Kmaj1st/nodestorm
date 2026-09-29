@@ -92,7 +92,12 @@ When you add a concept by name, NodeStorm asks these sources at the same time:
   server. A SearXNG instance must allow JSON output and requests from the site. On the https site, the browser blocks
   an http:// address other than localhost, and Settings warns you about that.
 
-With an AI set up, the AI **rates the sources against each other** as **Reliable**, **Fairly reliable**,
+The sources show as soon as they are found, not rated yet: an AI call can take a while, so the AI checks them only
+when you click **Check reliability with AI** in the pop-up (you can keep choosing meanwhile, or stop it). Turn on
+*Rate sources with AI automatically* in Settings to have it done right away; the fully automatic way of adding
+concepts always does.
+
+When asked, the AI **rates the sources against each other** as **Reliable**, **Fairly reliable**,
 **Doubtful** or **Unusable**. It says why: the site's authority, whether the source agrees with the others, whether
 the page is a forum or an advert, or whether it describes another meaning of the name. The AI also marks a passage in
 each source's text. It is told that page texts are data, never instructions, and a page that tries to steer it is
@@ -232,6 +237,9 @@ model, so you can always tell them apart. **Look up in…** replaces such a defi
 
 - **Formulas** as LaTeX (`$…$`, `\(…\)`, `$$…$$`, `\[…\]`) are typeset with KaTeX on cards, in the inspector, in
   explanations, quizzes and proposals. Prices such as "$5 and $10" stay text.
+- **Formulas → LaTeX** (inspector, next to the definition's **Edit**): when a definition writes its formulas with
+  Unicode symbols ("φ(ab) = φ(a)φ(b)", "x² ≤ y"), the AI rewrites just those formulas as LaTeX. An answer that changed
+  any other word is refused, the source is kept, and one Undo brings the old text back.
 - **Concept kinds:** *definition*, *theorem*, *lemma*, *proposition*, *corollary*, *axiom*, *conjecture*, *example*,
   *notation* or *other*, shown as a small label on each card. The AI suggests a kind only while it is unset, so your
   own choice is never overridden.

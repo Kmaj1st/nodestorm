@@ -32,6 +32,7 @@ beforeEach(() => {
   fake.calls = 0;
   fake.paused = false;
   useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
     connection: "browser",
     provider: "mock",
     language: "auto",

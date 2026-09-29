@@ -530,7 +530,33 @@ export interface GatherOptions {
   requery?: boolean;
   /** Search again instead of using the sources found before (this cache: a day, also across reloads). */
   fresh?: boolean;
+  /**
+   * Have the AI rate the sources: the user's "Check reliability with AI" (or Settings' "Rate sources with AI
+   * automatically"). Otherwise they come back unrated at once; an AI call can take a long while.
+   */
+  rate?: boolean;
 }
+
+/** At most this many sources, of this many characters each, go to the AI's check: a big prompt makes it slow. */
+const ASSESS_SEND = 8;
+const ASSESS_SEND_TEXT = 1200;
+
+/** The part of a source's text the AI reads: a window around its default passage (else the start). */
+export function assessExcerpt(s: Pick<Source, "text" | "passage">): string {
+  const max = Math.min(ASSESS_TEXT_MAX, ASSESS_SEND_TEXT);
+  if (s.text.length <= max) return s.text;
+  const at = s.passage ? s.text.indexOf(s.passage) : -1;
+  const from = at < 0 ? 0 : Math.max(0, Math.min(at - 200, s.text.length - max));
+  return s.text.slice(from, from + max);
+}
+
+/** Whether a gathering asks the AI to rate what it found (only on the user's request, unless Settings says always). */
+/** Whether the AI rates the sources by itself: "Rate sources with AI automatically", or the fully automatic way of adding concepts (which lets the AI choose). */
+const autoRating = () => {
+  const s = useSettings.getState();
+  return s.autoRate || s.newConcepts === "auto";
+};
+const wantsRating = (opts: GatherOptions) => Boolean(opts.rate || autoRating());
 
 /**
  * Every source for `name`: the encyclopedias and wikis, and the web search engines when one is set up, asked side by
@@ -555,10 +581,12 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
     } else if (had) saveCache();
   }
   const out: Gathered = { name, ...found, sources: sortSources(found.sources.map(flagInjected)), note: "", rated: false };
-  if (!found.sources.length || !isReady(useSettings.getState())) return out;
   let rating = hit?.rating;
+  // Rated before (kept with what was found): shown as it is. Otherwise the AI is asked only when the user wants it.
+  if (rating) return { ...out, sources: mergeRatings(found.sources, rating.ratings), note: rating.note, rated: true };
+  if (!found.sources.length || !isReady(useSettings.getState()) || !wantsRating(opts)) return out;
   // A page that addresses the AI is not sent at all: its text can't steer the ratings of the others.
-  const sent = found.sources.filter((s) => !looksInjected(s)).slice(0, ASSESS_MAX);
+  const sent = found.sources.filter((s) => !looksInjected(s)).slice(0, Math.min(ASSESS_MAX, ASSESS_SEND));
   if (!rating && !sent.length) rating = { ratings: [], note: "" };
   if (!rating) {
     opts.onChecking?.();
@@ -568,7 +596,7 @@ export async function gatherSources(name: string, opts: GatherOptions = {}): Pro
           name: name.slice(0, NAME_MAX),
           hint: opts.hint?.slice(0, HINT_MAX),
           context: (opts.context ?? []).slice(0, 40).map((c) => c.slice(0, 200)),
-          sources: sent.map((s) => ({ id: s.id, kind: s.kind, site: s.site, title: s.title, url: s.url ?? "", text: s.text.slice(0, ASSESS_TEXT_MAX) })),
+          sources: sent.map((s) => ({ id: s.id, kind: s.kind, site: s.site, title: s.title, url: s.url ?? "", text: assessExcerpt(s) })),
         },
         signal,
       );
@@ -599,8 +627,9 @@ export function cachedSources(name: string): Gathered | undefined {
   if (!hit || Date.now() - hit.at > CACHE_MS) return undefined;
   // Found while the search engine couldn't search (paused), and now it can: gathered again, as gatherSources does.
   if (!hit.found.web && searchReady()) return undefined;
-  // Found but not rated while an AI is set up: the rating is still running (or failed), so gather again.
-  if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState())) return undefined;
+  // Found but not rated while Settings rates them automatically: the rating is still running (or failed), so gather
+  // again. Otherwise unrated sources are what the user gets until they ask the AI to check them.
+  if (!hit.rating && hit.found.sources.length && isReady(useSettings.getState()) && autoRating()) return undefined;
   // The same objects while the entry (and its rating, set on it later) stays the same: the pop-up asks on every render,
   // and new source objects would re-render each memoised source text and re-attach its selection listener.
   const made = madeFrom.get(hit);

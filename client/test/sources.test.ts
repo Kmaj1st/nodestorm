@@ -69,6 +69,7 @@ beforeEach(() => {
   fake.ready = true;
   fake.pages = undefined;
   useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
     newConcepts: "ask",
     connection: "browser",
     provider: "mock",

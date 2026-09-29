@@ -26,6 +26,7 @@ import {
   loogleDeclaration,
   findPapers as searchPapers,
   SiteBlockedError,
+  LATEXIFY_MAX,
 } from "@nodestorm/shared";
 import { listJoin, t } from "../i18n";
 import { useGraphStore } from "../store/graphStore";
@@ -331,7 +332,12 @@ export async function relookup(nodeId: string, graphId = store().activeId, from?
  * chooses as when it was added. `fresh`: skip what was found before (the menu and "Search again"). `requery`: the web
  * search engines are asked again too, past their cache ("Search again" only: it uses search quota).
  */
-export async function compareSources(nodeId: string, graphId = store().activeId, opts: { fresh?: boolean; requery?: boolean; ifOpen?: boolean } = {}) {
+export async function compareSources(
+  nodeId: string,
+  graphId = store().activeId,
+  /** `rate`: the pop-up's "Check reliability with AI" (the sources found are reused; only the AI is asked). */
+  opts: { fresh?: boolean; requery?: boolean; ifOpen?: boolean; rate?: boolean } = {},
+) {
   if (inViewer(graphId)) return;
   const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
   if (!node) return;
@@ -342,6 +348,7 @@ export async function compareSources(nodeId: string, graphId = store().activeId,
       signal,
       fresh: opts.fresh,
       requery: opts.requery,
+      rate: opts.rate,
       context: relatedNames(graph(graphId), nodeId),
       onChecking: () => store().setBusy(key, t("task.assess", { name: node.name }), undefined, "rating"),
     }),
@@ -930,6 +937,39 @@ export async function anatomyNode(nodeId: string, graphId = store().activeId) {
     graphId,
     { history: "background" },
   );
+}
+
+export const latexifyKey = (graphId: string, nodeId: string) => `latexify:${graphId}:${nodeId}`;
+
+/**
+ * "Formulas → LaTeX": the AI rewrites the formulas of a definition that are written with Unicode symbols ("φ(ab) =
+ * φ(a)φ(b)") as LaTeX. Only the formulas may change (the task refuses an answer that reworded anything); the source
+ * is kept and the change is one undo step.
+ */
+export async function latexifyDefinition(nodeId: string, graphId = store().activeId) {
+  if (inViewer(graphId)) return;
+  const node = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!node?.definition.trim()) return;
+  if (!isReady(useSettings.getState())) {
+    store().setToast(t("toast.setUpAi"), "info");
+    store().setSettingsOpen(true);
+    return;
+  }
+  const text = node.definition;
+  if (text.length > LATEXIFY_MAX) {
+    store().setToast(t("latexify.tooLong"), "info");
+    return;
+  }
+  const res = await withBusy(latexifyKey(graphId, nodeId), t("task.latexify", { name: node.name }), (signal) => api.latexify({ text }, signal));
+  if (!res) return;
+  const now = graph(graphId)?.nodes.find((n) => n.id === nodeId);
+  if (!now) return;
+  // Edited meanwhile: the answer is for the old text, so it isn't applied over the user's words.
+  if (now.definition !== text) return store().setToast(t("latexify.changed"), "info");
+  if (res.rejected) return store().setToast(t("latexify.rejected"), "info");
+  if (res.text === text) return store().setToast(t("latexify.nothing"), "info");
+  store().mutate((g) => ops.updateNode(g, nodeId, { definition: res.text }), graphId);
+  store().setToast(t("latexify.done", { name: node.name }), "info");
 }
 
 export const quizKey = (graphId: string) => `quiz:${graphId}`;

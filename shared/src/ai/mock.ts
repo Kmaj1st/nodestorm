@@ -2,6 +2,7 @@ import { ABSURD_HARD_MAX, normalizeName, type ConceptKind, type TheoremAnatomy }
 import { textOf, withDeadline, type ChatMessage, type CompleteOptions, type ModelInfo, type Provider, type RequestOptions } from "./provider";
 import { ABSURD_VOICE_ZH, ANATOMY_ZH, BRIDGE_NAME_ZH, BRIDGES_ZH, EXPLAIN_VOICE_ZH, EXPLAIN_ZH, KB_ZH, MATHLIB_WHY_ZH } from "./mockZh";
 import { unwrapSourceBlock } from "./prompts";
+import { UNICODE_MATH } from "../latexify";
 
 /** The offline demo's Mathlib names for its concepts (real Mathlib declarations), plus one that doesn't exist. */
 const MATHLIB: Record<string, { name: string; why: string }[]> = {
@@ -590,6 +591,8 @@ export class MockProvider implements Provider {
         return JSON.stringify(
           assessSources(String(inp.name ?? ""), (inp.sources ?? []).map((x: { text: string }) => ({ ...x, text: unwrapSourceBlock(String(x.text ?? "")) })), zhFor(inp.name)),
         );
+      case "latexify":
+        return JSON.stringify({ text: latexifyDemo(String(inp.text ?? "")) });
       default:
         return "{}";
     }
@@ -1246,4 +1249,96 @@ export class MockProvider implements Provider {
       ],
     };
   }
+}
+
+/** LaTeX for the Unicode symbols the offline demo rewrites (Greek letters, operators, arrows, relations). */
+const LATEX_SYMBOL: Record<string, string> = {
+  α: "\\alpha", β: "\\beta", γ: "\\gamma", δ: "\\delta", ε: "\\varepsilon", ϵ: "\\epsilon", ζ: "\\zeta", η: "\\eta",
+  θ: "\\theta", ϑ: "\\vartheta", ι: "\\iota", κ: "\\kappa", λ: "\\lambda", μ: "\\mu", ν: "\\nu", ξ: "\\xi", π: "\\pi",
+  ρ: "\\rho", σ: "\\sigma", ς: "\\varsigma", τ: "\\tau", υ: "\\upsilon", φ: "\\varphi", ϕ: "\\phi", χ: "\\chi", ψ: "\\psi",
+  ω: "\\omega", Γ: "\\Gamma", Δ: "\\Delta", Θ: "\\Theta", Λ: "\\Lambda", Ξ: "\\Xi", Π: "\\Pi", Σ: "\\Sigma",
+  Υ: "\\Upsilon", Φ: "\\Phi", Ψ: "\\Psi", Ω: "\\Omega",
+  "∈": "\\in", "∉": "\\notin", "∋": "\\ni", "≤": "\\le", "≥": "\\ge", "≠": "\\neq", "→": "\\to", "←": "\\leftarrow",
+  "↦": "\\mapsto", "⇒": "\\Rightarrow", "⇔": "\\Leftrightarrow", "↔": "\\leftrightarrow", "⟹": "\\implies",
+  "×": "\\times", "·": "\\cdot", "⋅": "\\cdot", "∘": "\\circ", "⊆": "\\subseteq", "⊂": "\\subset", "⊇": "\\supseteq",
+  "⊃": "\\supset", "∩": "\\cap", "∪": "\\cup", "∀": "\\forall", "∃": "\\exists", "∞": "\\infty", "≅": "\\cong",
+  "≈": "\\approx", "≡": "\\equiv", "√": "\\sqrt", "∑": "\\sum", "∏": "\\prod", "∫": "\\int", "∂": "\\partial",
+  "∇": "\\nabla", "±": "\\pm", "÷": "\\div", "∅": "\\emptyset", "⊕": "\\oplus", "⊗": "\\otimes", "¬": "\\neg",
+  "∧": "\\wedge", "∨": "\\vee", "⟨": "\\langle", "⟩": "\\rangle", "‖": "\\|", "∣": "\\mid", "⊥": "\\perp",
+  "∼": "\\sim", "≃": "\\simeq", "⊲": "\\triangleleft", "⊴": "\\trianglelefteq", "−": "-",
+};
+const SUPER = "⁰¹²³⁴⁵⁶⁷⁸⁹⁺⁻⁼⁽⁾ⁿⁱ";
+const SUPER_PLAIN = "0123456789+-=()ni";
+const SUB = "₀₁₂₃₄₅₆₇₈₉₊₋₌₍₎ₐₑₒₓₕₖₗₘₙₚₛₜᵢⱼ";
+const SUB_PLAIN = "0123456789+-=()aeoxhklmnpstij";
+
+/** One formula's Unicode symbols as LaTeX ("x² ≤ φ(a)" → "x^2 \\le \\varphi(a)"). */
+function formulaLatex(f: string): string {
+  let out = "";
+  const chars = [...f];
+  for (let i = 0; i < chars.length; i++) {
+    const c = chars[i];
+    for (const [marks, plain, op] of [[SUPER, SUPER_PLAIN, "^"], [SUB, SUB_PLAIN, "_"]] as const) {
+      if (!marks.includes(c)) continue;
+      let run = "";
+      while (i < chars.length && marks.includes(chars[i])) run += plain[marks.indexOf(chars[i++])];
+      i--;
+      out += run.length === 1 ? `${op}${run}` : `${op}{${run}}`;
+    }
+    if (SUPER.includes(c) || SUB.includes(c)) continue;
+    const cmd = LATEX_SYMBOL[c];
+    if (!cmd) out += c;
+    else out += cmd.startsWith("\\") && /[A-Za-z]/.test(chars[i + 1] ?? "") ? `${cmd} ` : cmd;
+  }
+  return out;
+}
+
+/**
+ * The offline demo's "Formulas → LaTeX": runs of words holding a Unicode math symbol, together with the single letters,
+ * numbers and operators around them, become $…$ formulas. Existing LaTeX and every other word stay as they are.
+ */
+export function latexifyDemo(text: string): string {
+  const latex = /\$\$[\s\S]+?\$\$|\$(?!\s)[^$\n]+?\$|\\\([\s\S]+?\\\)|\\\[[\s\S]+?\\\]/g;
+  let out = "";
+  let last = 0;
+  for (const m of text.matchAll(latex)) {
+    out += plainLatexify(text.slice(last, m.index)) + m[0];
+    last = m.index + m[0].length;
+  }
+  return out + plainLatexify(text.slice(last));
+}
+
+function plainLatexify(text: string): string {
+  // Words are split at spaces and at Chinese/Japanese text and full-width punctuation, which never join a formula.
+  const parts = text.split(/(\s+|[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}，。；：！？、（）“”]+)/u);
+  const spaced = (i: number) => /^\s+$/.test(parts[2 * i + 1] ?? "");
+  const strong = (w: string) => UNICODE_MATH.test(w);
+  // A single letter, a number, an operator or a bracketed variable ("(ab)", "G,") can belong to a formula next to it.
+  const weak = (w: string) => /^[([]*([A-Za-z]|\d+(\.\d+)?|[=+\-*/<>|^_:]|[A-Za-z]?\([A-Za-z0-9, ]*\))[)\]]*[,.;:]?$/.test(w);
+  const words = parts.filter((_, i) => i % 2 === 0);
+  const kind = words.map((w) => (strong(w) ? 2 : weak(w) ? 1 : 0));
+  // A run is a stretch of strong and weak words holding at least one strong word; it stops after trailing punctuation.
+  const inRun = words.map(() => false);
+  for (let i = 0; i < words.length; i++) {
+    if (kind[i] !== 2) continue;
+    inRun[i] = true;
+    for (let j = i - 1; j >= 0 && kind[j] && spaced(j) && !/[,.;!?]$/.test(words[j]) && !inRun[j]; j--) inRun[j] = true;
+    for (let j = i + 1; j < words.length && kind[j] && spaced(j - 1) && !/[,.;!?]$/.test(words[j - 1]); j++) inRun[j] = true;
+  }
+  let out = "";
+  for (let i = 0; i < words.length; ) {
+    if (!inRun[i]) {
+      out += words[i] + (parts[2 * i + 1] ?? "");
+      i++;
+      continue;
+    }
+    let j = i;
+    while (j + 1 < words.length && inRun[j + 1] && spaced(j) && !/[,.;!?]$/.test(words[j])) j++;
+    let formula = parts.slice(2 * i, 2 * j + 1).join("");
+    const tail = /[,.;:!?]+$/.exec(formula)?.[0] ?? "";
+    formula = formula.slice(0, formula.length - tail.length);
+    out += (formula ? `$${formulaLatex(formula)}$` : "") + tail + (parts[2 * j + 1] ?? "");
+    i = j + 1;
+  }
+  return out;
 }

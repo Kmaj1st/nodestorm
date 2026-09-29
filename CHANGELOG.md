@@ -3,6 +3,12 @@
 The three overnight sessions after 2026-09-25 are listed by the date their work finished, newest first, and grouped
 by theme. Bullets that later work changed carry a short *later:* note instead of being repeated.
 
+## 2026-09-29: the AI only when asked, formulas to LaTeX
+
+- **Sources show at once; the AI rates them only when asked.** Checking the sources with the AI could keep the pop-up at "Checking the sources…" for up to 90 seconds. Now the encyclopedias' and web pages' texts show as soon as they are found, not rated, and **Check reliability with AI** in the pop-up has the AI compare them (you can keep choosing meanwhile, or **Stop checking**). Settings' new *Rate sources with AI automatically* (off by default) does it right away; the fully automatic way of adding concepts always does, since it lets the AI choose. Unrated sources are kept (a day) like rated ones, so reopening the pop-up doesn't search again. Adding a concept by name makes no AI call at all.
+- **A shorter source check:** when asked, the AI reads at most 8 sources, each a window of 1200 characters around its passage (was 10 of 2500), so the answer comes sooner.
+- **Formulas → LaTeX** (inspector, next to the definition's **Edit**, shown when a definition writes formulas with Unicode symbols such as "φ(ab) = φ(a)φ(b)" or "x² ≤ y"): the AI rewrites only those formulas as LaTeX. An answer that changed any other word is refused ("The AI changed more than the formulas"), a definition edited meanwhile isn't overwritten, the source is kept, and one Undo brings the old text back. The offline demo rewrites Greek letters, operators, arrows, superscripts and subscripts.
+
 ## 2026-09-28: sources you can trust, phones and touch, Chinese PDFs, smaller first load
 
 ### Sources and web search

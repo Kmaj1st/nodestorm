@@ -46,6 +46,7 @@ function seedCycle(): string[] {
 beforeEach(() => {
   store().reset();
   useSettings.setState({
+    autoRate: true, // these tests follow the AI's rating of the sources (off by default)
     newConcepts: "auto", // these tests follow the automatic flow (lookupFlow.test.ts has the asking one)
     connection: "browser",
     provider: "mock",
