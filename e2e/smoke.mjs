@@ -2510,6 +2510,8 @@ try {
     await addByName("Normal Subgroup");
     const enc = item("demo-encyclopedia.example");
     await enc.waitFor();
+    await dlg.getByTestId("sources-rate").click(); // the AI's passage starts at the definition ("A subgroup $N$ …")
+    await dlg.getByTestId("sources-note").waitFor();
     await enc.locator(".src__math .katex").first().waitFor();
     assert(true, "formulas in a source's text are typeset");
     await enc.getByTestId("source-passage").evaluate((mark) => {
