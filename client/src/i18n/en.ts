@@ -1036,6 +1036,7 @@ export const en = {
   "dt.referee.outdated": "Your steps have changed since this report. Ask Reviewer 2 again for an up-to-date one.",
   // Markdown notes (File → Markdown notes, and "Copy as Markdown" in Derive together): headings and labels
   "md.untitled": "NodeStorm graph",
+  "md.heading": "{project} — {graph}",
   "md.empty": "No concepts yet.",
   "md.studyOrder": "Study order",
   "md.concepts": "Concepts",

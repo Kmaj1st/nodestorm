@@ -1,5 +1,6 @@
 {
   "name": "群论",
+  "source": "NodeStorm 示例",
   "concepts": [
     {
       "name": "群",

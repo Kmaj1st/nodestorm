@@ -1022,6 +1022,7 @@ export const zh: Record<MessageKey, string> = {
   "dt.referee.outdated": "在这份意见之后，你的步骤有了改动。再请二号审稿人看一次，以获得最新意见。",
   // Markdown 笔记（文件 → Markdown 笔记，以及“一起推导”中的“复制为 Markdown”）：标题与标签
   "md.untitled": "NodeStorm 图谱",
+  "md.heading": "{project}：{graph}",
   "md.empty": "还没有概念。",
   "md.studyOrder": "学习顺序",
   "md.concepts": "概念",

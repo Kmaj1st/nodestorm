@@ -1,4 +1,4 @@
-import type { ConceptNode, DirRel, Graph } from "@nodestorm/shared";
+import type { ConceptNode, DirRel, Graph, SourceRef } from "@nodestorm/shared";
 import { studyOrder } from "./export";
 import { findCycles, learningPath } from "./paths";
 
@@ -21,6 +21,8 @@ export interface Slide {
   id: string;
   name: string;
   definition: string;
+  /** Where the definition came from (only with a definition). */
+  source?: SourceRef;
   /** Direct in-graph prerequisites ("builds on"). */
   buildsOn: { id: string; name: string }[];
   relations: SlideRelation[];
@@ -76,6 +78,7 @@ function slideFor(g: Graph, n: ConceptNode, byId: Map<string, ConceptNode>): Sli
     id: n.id,
     name: n.name,
     definition: n.definition,
+    ...(n.source && n.definition.trim() ? { source: n.source } : {}),
     buildsOn,
     relations,
     explanation: ex ? { summary: ex.summary, keyPoints: ex.keyPoints.filter((k) => k.trim()) } : undefined,

@@ -18,6 +18,8 @@ interface ExampleDep {
 
 export interface ExampleData {
   name: string;
+  /** The site every definition is credited to ("NodeStorm example"): written for the example, with no page to link. */
+  source?: string;
   concepts: { name: string; kind?: string; definition: string; aliases: string[]; dependsOn?: ExampleDep[]; missing?: ExampleDep[] }[];
   relations: { a: string; b: string; aToB: DirRel; bToA: DirRel }[];
 }
@@ -50,6 +52,7 @@ export function buildExample(g: Graph, data: ExampleData): Graph {
       dependsOn: (c.dependsOn ?? []).map((d) => id(d.name)),
       missingDeps,
       ...(c.kind ? { kind: ConceptKind.parse(c.kind) } : {}),
+      ...(data.source ? { source: { site: data.source, title: "" } } : {}),
     };
   });
   let out: Graph = { ...g, nodes: [...g.nodes, ...nodes] };
