@@ -11,11 +11,26 @@ const shots = new URL("./screenshots/", import.meta.url).pathname;
 mkdirSync(shots, { recursive: true });
 
 const procs = [];
+let stopping = false;
 function start(cmd, args, env) {
   const p = spawn(cmd, args, { env: { ...process.env, ...env }, stdio: ["ignore", "pipe", "pipe"], detached: true });
   p.stderr.on("data", (d) => process.env.DEBUG && process.stderr.write(d));
+  // Our server going away mid-run fails whatever step comes next in a puzzling way (a lost page, a reload); say why.
+  p.on("exit", (code) => stopping || console.error(`e2e: \`${cmd} ${args.join(" ")}\` exited (${code}) during the run`));
   procs.push(p);
   return p;
+}
+/**
+ * Refuse a port something still answers on after a few seconds (a run just before may still be shutting down): vite's
+ * --strictPort would fail quietly and this run would test that other server (a leftover from an earlier run, or
+ * another run on the same ports) and break in a puzzling place when it goes away.
+ */
+async function refuseBusy(port) {
+  for (let i = 0; i < 20; i++) {
+    if (!(await fetch(`http://localhost:${port}/`, { signal: AbortSignal.timeout(1000) }).then(() => true, () => false))) return;
+    await new Promise((r) => setTimeout(r, 250));
+  }
+  throw new Error(`port ${port} is already in use; stop what runs there or pick other ports (E2E_SERVER_PORT, E2E_WEB_PORT)`);
 }
 async function waitFor(url) {
   for (let i = 0; i < 100; i++) {
@@ -29,6 +44,8 @@ function assert(cond, msg) {
   console.log(`  ✓ ${msg}`);
 }
 
+await refuseBusy(SERVER_PORT);
+await refuseBusy(WEB_PORT);
 start("npx", ["tsx", "server/src/index.ts"], { AI_PROVIDER: "mock", PORT: String(SERVER_PORT) });
 // E2E_BUILT=1 runs everything against the production build (`npm run build` first) served by `vite preview`, which
 // proxies /api like the dev server; that build has the Content-Security-Policy, and any violation fails the run.
@@ -3492,6 +3509,7 @@ try {
   console.error(e);
   process.exitCode = 1;
 } finally {
+  stopping = true;
   await browser?.close();
   for (const p of procs) try { process.kill(-p.pid); } catch {}
 }
