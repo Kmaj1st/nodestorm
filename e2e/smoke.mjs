@@ -2383,7 +2383,8 @@ try {
     await dlg.getByTestId("source-item").first().waitFor();
     // The sources show at once, unrated: the AI checks them only when asked (an AI call can take a long while).
     assert(
-      (await dlg.getByTestId("sources-unrated").count()) === 1 && (await dlg.getByTestId("source-reliability").count()) === 0,
+      (await dlg.getByTestId("sources-unrated").count()) === 1 &&
+        (await dlg.locator('[data-testid="source-reliability"]:not(.src__rel--none)').count()) === 0,
       "the sources show at once, not rated by the AI yet",
     );
     await dlg.getByTestId("sources-rate").click();
