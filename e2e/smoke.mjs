@@ -2572,7 +2572,7 @@ try {
     await page.screenshot({ path: `${shots}30-absurd-chain.png` });
 
     // Into a sandbox: the graph itself stays as it was.
-    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.getByRole("button", { name: "Add to a new sandbox" }).click();
     await dlg.waitFor({ state: "detached" });
     await page.getByTestId("sandbox-banner").filter({ hasText: "What they don't want you to know" }).waitFor();
     await node("Maillard reaction").waitFor();
@@ -2646,7 +2646,7 @@ try {
     assert((await result.getByText("your stop").count()) === 2, "the user's stops are marked in the chain");
     await audit("Absurd chain dialog with stops");
     await page.screenshot({ path: `${shots}31b-absurd-chain-stops.png` });
-    await dlg.getByRole("button", { name: "Add to a sandbox" }).click();
+    await dlg.getByRole("button", { name: "Add to a new sandbox" }).click();
     await dlg.waitFor({ state: "detached" });
     await node("Grandma's oven").click();
     assert(
@@ -3058,7 +3058,7 @@ try {
     assert(true, "the guess field has the focus");
     assert((await feedback.getAttribute("role")) === "status", "feedback is announced to screen readers");
     assert(
-      (await dlg.getByRole("button", { name: "Copy as text" }).count()) === 0 && (await dlg.getByRole("button", { name: "Add to a sandbox" }).count()) === 0,
+      (await dlg.getByRole("button", { name: "Copy as text" }).count()) === 0 && (await dlg.getByRole("button", { name: "Add to a new sandbox" }).count()) === 0,
       "copying or adding the chain would give it away, so they wait for the end",
     );
 

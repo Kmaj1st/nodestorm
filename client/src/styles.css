@@ -677,6 +677,7 @@ button.edge-label--active:hover:not(:disabled) {
 .draft { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .inspector__title .draft { flex: 1 1 11rem; }
 .inspector__title > :last-child:not(.draft) { margin-left: auto; } /* wrapped under the name, still at the right */
+.inspector__status { display: flex; align-items: center; gap: var(--space-2); min-width: 0; }
 .rel-kind .draft { flex: 1; }
 .draft input, .draft textarea {
   border-color: transparent; background: transparent; padding: 3px 6px; margin-left: -6px;
@@ -1261,8 +1262,8 @@ span.paper__title { color: var(--text); }
 .pin-toggle { align-self: flex-start; }
 /* A basic concept (taken as given): a mark on the card's top-left corner, and its toggle in the inspector. */
 .concept__basic {
-  position: absolute; top: -9px; left: -9px; display: inline-flex; align-items: center; justify-content: center;
-  width: 20px; height: 20px; border-radius: 50%; background: var(--panel); color: var(--text);
+  position: absolute; top: -12px; left: -12px; display: inline-flex; align-items: center; justify-content: center;
+  width: 26px; height: 26px; border-radius: 50%; background: var(--panel); color: var(--text);
   border: 1px solid var(--border-strong); box-shadow: var(--shadow-sm);
 }
 .basic-toggle { display: flex; flex-direction: column; gap: 2px; }
