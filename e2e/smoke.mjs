@@ -2370,6 +2370,9 @@ try {
     const s1 = await openSettings();
     await s1.getByTestId("new-concepts-ask").check();
     await s1.getByRole("button", { name: "Save", exact: true }).click();
+    // The automatic sections above had the AI rate some of these names: start from no saved sources.
+    await page.evaluate(() => localStorage.removeItem("nodestorm-sources-cache"));
+    await page.reload();
     await projectMenu("New project");
     await page.getByLabel("Project name").press("Enter");
     await page.locator(".canvas__empty").waitFor();
